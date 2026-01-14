@@ -287,7 +287,7 @@ const AskQuestionModal = ({ onClose, onSuccess, studentId, studentName, subjects
   const [aiLoading, setAiLoading] = useState(false);
 
   const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  const MODEL = 'gemini-2.0-flash-exp';
+  const MODEL = 'gemini-2.5-flash';
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
