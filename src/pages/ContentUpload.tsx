@@ -284,9 +284,9 @@ const ContentUpload = () => {
           throw new Error('Title is required');
         }
 
-        if (!formData.file) {
+     /*   if (!formData.file) {
           throw new Error('Please select a file to upload');
-        }
+        } */
 
         if (formData.courseId) {
           // Adding lesson to course
@@ -822,7 +822,7 @@ const ContentUpload = () => {
                         className="hidden"
                         id="file-upload"
                         accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.mp4,.avi,.mov,.webm"
-                        required
+                       // required
                       />
                       <label
                         htmlFor="file-upload"
