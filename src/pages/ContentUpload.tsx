@@ -812,7 +812,7 @@ const ContentUpload = () => {
                 {uploadType !== 'mcq' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-2">
-                      Upload File *
+                      Upload File 
                     </label>
                     <div className="border-2 border-dashed border-background-600 rounded-lg p-6 text-center hover:border-primary-500 transition-colors">
                       <Upload size={48} className="mx-auto text-gray-400 mb-4" />
