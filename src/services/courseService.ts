@@ -26,6 +26,7 @@ export interface CourseLesson {
   pdfUrl?: string;
   content?: string;
   order: number;
+  topics?: string[];
 }
 
 export interface Course {
@@ -44,11 +45,13 @@ export interface Course {
   category: string;
   tags: string[];
   thumbnail: string;
-  thumbnailUrl?: string; // For backward compatibility
+  thumbnailUrl?: string;
   previewVideo?: string;
   lessons: CourseLesson[];
   requirements: string[];
   whatYouWillLearn: string[];
+  hasQnA: boolean;
+  hasStudyPlanner: boolean;
   isPublished: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -103,11 +106,58 @@ export const courseService = {
     }
   },
 
+  // Calculate total duration from lessons
+  calculateTotalDuration(lessons: CourseLesson[]): string {
+    if (!lessons || lessons.length === 0) return '0 hours';
+
+    let totalMinutes = 0;
+
+    lessons.forEach(lesson => {
+      const duration = lesson.duration.toLowerCase();
+      
+      // Parse hours
+      const hoursMatch = duration.match(/(\d+)\s*h/);
+      if (hoursMatch) {
+        totalMinutes += parseInt(hoursMatch[1]) * 60;
+      }
+
+      // Parse minutes
+      const minutesMatch = duration.match(/(\d+)\s*m/);
+      if (minutesMatch) {
+        totalMinutes += parseInt(minutesMatch[1]);
+      }
+    });
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours === 0) {
+      return `${minutes} minutes`;
+    } else if (minutes === 0) {
+      return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    } else {
+      return `${hours} ${hours === 1 ? 'hour' : 'hours'} ${minutes} min`;
+    }
+  },
+
   // Course CRUD operations
   async createCourse(course: Omit<Course, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
+      // Calculate duration if lessons exist
+      const duration = course.lessons && course.lessons.length > 0 
+        ? this.calculateTotalDuration(course.lessons)
+        : '0 hours';
+
       const docRef = await addDoc(collection(db, 'courses'), {
         ...course,
+        duration,
+        rating: course.rating || 0,
+        reviewCount: course.reviewCount || 0,
+        studentCount: course.studentCount || 0,
+        hasQnA: course.hasQnA || false,
+        hasStudyPlanner: course.hasStudyPlanner || false,
+        isPublished: course.isPublished || false,
+        lessons: course.lessons || [],
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
@@ -198,6 +248,12 @@ export const courseService = {
   async updateCourse(courseId: string, updates: Partial<Course>): Promise<void> {
     try {
       const courseRef = doc(db, 'courses', courseId);
+      
+      // Recalculate duration if lessons are being updated
+      if (updates.lessons) {
+        updates.duration = this.calculateTotalDuration(updates.lessons);
+      }
+
       await updateDoc(courseRef, {
         ...updates,
         updatedAt: Timestamp.now()
@@ -215,9 +271,94 @@ export const courseService = {
     }
   },
 
+  // Add lesson to existing course
+  async addLessonToCourse(courseId: string, lesson: Omit<CourseLesson, 'id' | 'order'>): Promise<void> {
+    try {
+      const course = await this.getCourseById(courseId);
+      if (!course) {
+        throw new Error('Course not found');
+      }
+
+      const newLesson: CourseLesson = {
+        ...lesson,
+        id: `lesson_${Date.now()}`,
+        order: course.lessons.length + 1
+      };
+
+      const updatedLessons = [...course.lessons, newLesson];
+      const newDuration = this.calculateTotalDuration(updatedLessons);
+
+      await this.updateCourse(courseId, {
+        lessons: updatedLessons,
+        duration: newDuration
+      });
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  // Update specific lesson in a course
+  async updateCourseLesson(courseId: string, lessonId: string, updates: Partial<CourseLesson>): Promise<void> {
+    try {
+      const course = await this.getCourseById(courseId);
+      if (!course) {
+        throw new Error('Course not found');
+      }
+
+      const updatedLessons = course.lessons.map(lesson =>
+        lesson.id === lessonId ? { ...lesson, ...updates } : lesson
+      );
+
+      const newDuration = this.calculateTotalDuration(updatedLessons);
+
+      await this.updateCourse(courseId, {
+        lessons: updatedLessons,
+        duration: newDuration
+      });
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  // Delete lesson from course
+  async deleteCourseLesson(courseId: string, lessonId: string): Promise<void> {
+    try {
+      const course = await this.getCourseById(courseId);
+      if (!course) {
+        throw new Error('Course not found');
+      }
+
+      const updatedLessons = course.lessons
+        .filter(lesson => lesson.id !== lessonId)
+        .map((lesson, index) => ({ ...lesson, order: index + 1 }));
+
+      const newDuration = this.calculateTotalDuration(updatedLessons);
+
+      await this.updateCourse(courseId, {
+        lessons: updatedLessons,
+        duration: newDuration
+      });
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
   // Enrollment operations
   async enrollStudent(enrollment: Omit<Enrollment, 'id' | 'enrolledAt'>): Promise<string> {
     try {
+      // Check if already enrolled
+      const enrollmentsCollection = collection(db, 'enrollments');
+      const q = query(
+        enrollmentsCollection,
+        where('courseId', '==', enrollment.courseId),
+        where('studentId', '==', enrollment.studentId)
+      );
+      const existingEnrollments = await getDocs(q);
+
+      if (!existingEnrollments.empty) {
+        throw new Error('Student is already enrolled in this course');
+      }
+
       const docRef = await addDoc(collection(db, 'enrollments'), {
         ...enrollment,
         enrolledAt: Timestamp.now()
@@ -242,7 +383,6 @@ export const courseService = {
     }
   },
 
-  // New function to get all enrollments
   async getAllEnrollments(): Promise<Enrollment[]> {
     try {
       const enrollmentsCollection = collection(db, 'enrollments');
@@ -291,7 +431,9 @@ export const courseService = {
           accessLevel: lesson.isPreview ? 'preview' : 'full',
           instructor: course.instructor,
           videoUrl: lesson.videoUrl,
+          pdfUrl: lesson.pdfUrl,
           content: lesson.content,
+          topics: lesson.topics || [],
           createdBy: course.instructorId,
           enrolledStudentId: studentId,
           createdAt: Timestamp.now()
@@ -319,6 +461,8 @@ export const courseService = {
         thumbnail: course.thumbnail,
         rating: course.rating,
         studentCount: course.studentCount,
+        hasQnA: course.hasQnA,
+        hasStudyPlanner: course.hasStudyPlanner,
         createdBy: course.instructorId,
         enrolledStudentId: studentId,
         createdAt: Timestamp.now()
@@ -354,6 +498,7 @@ export const courseService = {
       throw new Error(error.message);
     }
   },
+
   async getStudentEnrollments(studentId: string): Promise<Enrollment[]> {
     try {
       const enrollmentsCollection = collection(db, 'enrollments');
@@ -370,7 +515,6 @@ export const courseService = {
         lastAccessedAt: doc.data().lastAccessedAt.toDate()
       })) as Enrollment[];
       
-      // Sort by enrolledAt in descending order after fetching
       return enrollments.sort((a, b) => b.enrolledAt.getTime() - a.enrolledAt.getTime());
     } catch (error: any) {
       throw new Error(error.message);
@@ -421,7 +565,6 @@ export const courseService = {
         lastAccessedAt: Timestamp.now()
       });
       
-      // Record gamification activity for course completion
       if (!wasCompleted && isNowCompleted) {
         try {
           await gamificationService.recordActivity(enrollmentData.studentId, 'course_completed', {
@@ -445,7 +588,6 @@ export const courseService = {
         createdAt: Timestamp.now()
       });
       
-      // Update course rating
       await this.updateCourseRating(review.courseId);
       
       return docRef.id;
@@ -485,7 +627,7 @@ export const courseService = {
       
       const courseRef = doc(db, 'courses', courseId);
       await updateDoc(courseRef, {
-        rating: Math.round(averageRating * 10) / 10, // Round to 1 decimal place
+        rating: Math.round(averageRating * 10) / 10,
         reviewCount: reviews.length
       });
     } catch (error: any) {
@@ -552,4 +694,3 @@ export const courseService = {
     }
   }
 };
-
