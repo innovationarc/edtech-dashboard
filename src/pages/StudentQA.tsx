@@ -699,7 +699,7 @@ ${isFollowUp ? 'Follow-up Question' : 'Question'}: ${questionToSolve}${knowledge
                   required
                 >
                   <option value="">Select a course</option>
-                  <option value="help-support">🆘 Help & Support</option>
+                  <option value="help-support">Help & Support</option>
                   {enrolledCoursesWithQnA.map(course => (
                     <option key={course.id} value={course.id}>{course.title}</option>
                   ))}
