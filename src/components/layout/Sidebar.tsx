@@ -1,4 +1,4 @@
-//src/components/layout/Sidebar.tsx
+/* /src/components/layout/Sidebar.tsx*/
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
