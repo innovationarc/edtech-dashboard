@@ -6,7 +6,7 @@ import { useDashboard } from '../contexts/DashboardContext';
 import { qaService, Question } from '../services/qaService';
 import { courseService, Course } from '../services/courseService';
 import { useNavigate } from 'react-router-dom';
-import 'katex/dist/katex.min.css';
+
 import { InlineMath, BlockMath } from 'react-katex';
 
 const StudentQA = () => {
