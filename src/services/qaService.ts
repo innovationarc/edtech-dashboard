@@ -1,4 +1,4 @@
-// src/services/qaService.ts - Updated with Supabase Upload
+// src/services/qaService.ts - Enhanced with Ratings and Save Features
 import {
   collection,
   doc,
@@ -12,6 +12,7 @@ import {
   getDoc,
   onSnapshot,
   deleteDoc,
+  setDoc,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { uploadService } from './uploadService';
@@ -78,6 +79,14 @@ export interface Knowledge {
   updatedAt?: Date;
 }
 
+export interface AnswerRating {
+  questionId: string;
+  answerId: string;
+  answerType: 'teacher' | 'ai';
+  rating: number;
+  createdAt: Date;
+}
+
 export const qaService = {
   async uploadToSupabase(file: File, folder: string): Promise<{ url: string }> {
     return uploadService.uploadToSupabase(file, folder);
@@ -105,6 +114,25 @@ export const qaService = {
       return docRef.id;
     } catch (error: any) {
       throw new Error(`Failed to ask question: ${error.message}`);
+    }
+  },
+
+  async updateQuestion(id: string, updates: Partial<Question>): Promise<void> {
+    try {
+      const updateData: any = {
+        ...updates,
+        updatedAt: Timestamp.now(),
+      };
+
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+
+      await updateDoc(doc(db, 'questions', id), updateData);
+    } catch (error: any) {
+      throw new Error(`Failed to update question: ${error.message}`);
     }
   },
 
@@ -290,6 +318,88 @@ export const qaService = {
       await deleteDoc(doc(db, 'answers', id));
     } catch (error: any) {
       throw new Error(`Failed to delete answer: ${error.message}`);
+    }
+  },
+
+  async rateAnswer(
+    questionId: string,
+    answerId: string,
+    answerType: 'teacher' | 'ai',
+    rating: number
+  ): Promise<void> {
+    try {
+      const ratingData = {
+        questionId,
+        answerId,
+        answerType,
+        rating,
+        createdAt: Timestamp.now(),
+      };
+
+      await setDoc(doc(db, 'answer_ratings', `${questionId}_${answerId}`), ratingData);
+    } catch (error: any) {
+      throw new Error(`Failed to rate answer: ${error.message}`);
+    }
+  },
+
+  async getRating(questionId: string, answerId: string): Promise<number | null> {
+    try {
+      const ratingDoc = await getDoc(doc(db, 'answer_ratings', `${questionId}_${answerId}`));
+      if (!ratingDoc.exists()) {
+        return null;
+      }
+      return ratingDoc.data().rating;
+    } catch (error: any) {
+      throw new Error(`Failed to get rating: ${error.message}`);
+    }
+  },
+
+  async getAnswerRatings(answerType: 'teacher' | 'ai'): Promise<AnswerRating[]> {
+    try {
+      const q = query(
+        collection(db, 'answer_ratings'),
+        where('answerType', '==', answerType)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((doc) => ({
+        ...doc.data(),
+        createdAt: doc.data().createdAt.toDate(),
+      })) as AnswerRating[];
+    } catch (error: any) {
+      throw new Error(`Failed to get answer ratings: ${error.message}`);
+    }
+  },
+
+  async saveQuestion(userId: string, questionId: string): Promise<void> {
+    try {
+      await setDoc(doc(db, 'saved_questions', `${userId}_${questionId}`), {
+        userId,
+        questionId,
+        savedAt: Timestamp.now(),
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to save question: ${error.message}`);
+    }
+  },
+
+  async unsaveQuestion(userId: string, questionId: string): Promise<void> {
+    try {
+      await deleteDoc(doc(db, 'saved_questions', `${userId}_${questionId}`));
+    } catch (error: any) {
+      throw new Error(`Failed to unsave question: ${error.message}`);
+    }
+  },
+
+  async getSavedQuestions(userId: string): Promise<string[]> {
+    try {
+      const q = query(
+        collection(db, 'saved_questions'),
+        where('userId', '==', userId)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map((doc) => doc.data().questionId);
+    } catch (error: any) {
+      throw new Error(`Failed to get saved questions: ${error.message}`);
     }
   },
 
@@ -505,6 +615,12 @@ export const qaService = {
       const answers = await this.getAnswersForQuestion(questionId);
       for (const answer of answers) {
         await this.deleteAnswer(answer.id);
+        
+        try {
+          await deleteDoc(doc(db, 'answer_ratings', `${questionId}_${answer.id}`));
+        } catch (err) {
+          // Rating might not exist
+        }
       }
 
       const followUps = await this.getFollowUpQuestions(questionId);
