@@ -13,29 +13,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Detect correct MIME type (CRITICAL FIX)
-const getContentType = (fileName: string): string => {
+const getContentType = (fileName: string) => {
   const ext = fileName.split('.').pop()?.toLowerCase();
-
-  switch (ext) {
-    case 'pdf':
-      return 'application/pdf';
-    case 'png':
-      return 'image/png';
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'webp':
-      return 'image/webp';
-    case 'mp3':
-      return 'audio/mpeg';
-    case 'wav':
-      return 'audio/wav';
-    case 'webm':
-      return 'audio/webm';
-    default:
-      return 'application/octet-stream';
-  }
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'mp3') return 'audio/mpeg';
+  if (ext === 'wav') return 'audio/wav';
+  return 'application/octet-stream';
 };
 
 export default async function handler(req, res) {
@@ -50,30 +36,28 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing fileName or file' });
     }
 
-    // Convert Base64 → Buffer
     const buffer = Buffer.from(file, 'base64');
 
-    // Upload to Supabase (UNCHANGED behavior, FIXED MIME)
-    const { error: uploadError } = await supabase.storage
+    const { error } = await supabase.storage
       .from('uploads')
       .upload(fileName, buffer, {
         upsert: false,
-        contentType: getContentType(fileName), // ✅ FIX
+        contentType: getContentType(fileName),
+        metadata: {
+          contentDisposition: 'inline', // 🔥 THIS IS THE KEY
+        },
       });
 
-    if (uploadError) {
-      return res.status(500).json({ error: uploadError.message });
+    if (error) {
+      return res.status(500).json({ error: error.message });
     }
 
-    // Return PUBLIC URL (same as before)
     const { data } = supabase.storage
       .from('uploads')
       .getPublicUrl(fileName);
 
-    return res.status(200).json({
-      url: data.publicUrl,
-    });
+    return res.status(200).json({ url: data.publicUrl });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Server error' });
+    return res.status(500).json({ error: err.message });
   }
 }
