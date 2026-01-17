@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+'pdf' { createClient } from '@supabase/supabase-js';
 
 export const config = {
   api: {
@@ -13,12 +13,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'heic', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'mp4'];
 
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
+      return res.status(405).json({ eerror 'Method not allowed' });
     }
 
     const { fileName, file } = req.body;
