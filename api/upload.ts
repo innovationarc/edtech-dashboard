@@ -1,4 +1,4 @@
-'pdf' { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
 export const config = {
   api: {
@@ -17,7 +17,7 @@ const supabase = createClient(
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') {
-      return res.status(405).json({ eerror 'Method not allowed' });
+      return res.status(405).json({ error: 'Method not allowed' });
     }
 
     const { fileName, file } = req.body;
@@ -32,9 +32,7 @@ export default async function handler(req, res) {
     // }
 
     const ext = fileName.split('.').pop()?.toLowerCase();
-    if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
-      return res.status(400).json({ error: 'File type not allowed' });
-    }
+    
 
     const buffer = Buffer.from(file, 'base64');
 
