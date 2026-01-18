@@ -606,7 +606,6 @@ const QuestionDetail = () => {
             )}
           </div>
         </Card>
-// src/pages/QuestionDetail.tsx - Part 2 of 3 (Answer Cards and Follow-up Questions)
 
         {isClosed ? (
           <Card>
