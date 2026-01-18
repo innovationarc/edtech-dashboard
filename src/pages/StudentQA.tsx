@@ -246,7 +246,7 @@ const StudentQA = () => {
               className="bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="all">All Courses</option>
-              <option value="help-support">🆘 Help & Support</option>
+              <option value="help-support">Help & Support</option>
               {enrolledCoursesWithQnA.length === 0 ? (
                 <option disabled>You don't have any courses with Q&A enabled</option>
               ) : (
@@ -1180,7 +1180,7 @@ ${isFollowUp ? 'Follow-up Question' : 'Question'}: ${questionToSolve}${knowledge
                   )}
 
                   <div className="mt-4 pt-4 border-t border-background-700 text-sm text-gray-400">
-                    <p>💡 Click on any question to expand and view the full answer. If none of these match your question, click "Submit as New" above.</p>
+                    <p>Click on any question to expand and view the full answer. If none of these match your question, click "Submit as New" above.</p>
                   </div>
                 </div>
               ) : showAiSolution ? (
@@ -1295,7 +1295,7 @@ ${isFollowUp ? 'Follow-up Question' : 'Question'}: ${questionToSolve}${knowledge
                         Supports Bengali (বাংলা), Banglish (keno, kivabe), and English
                       </p>
                       <p className="text-xs text-purple-400">
-                        ✨ Can analyze images (JPG, PNG, HEIC) • LaTeX math rendering
+                          Can analyze images (JPG, PNG, HEIC) • LaTeX math rendering
                       </p>
                     </>
                   )}
