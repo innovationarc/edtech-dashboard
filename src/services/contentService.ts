@@ -12,19 +12,22 @@ import {
   where,
   Timestamp 
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import { db } from '../config/firebase';
+import { uploadService } from './uploadService';
 
 export interface MCQQuestion {
   id: string;
   question: string;
   questionImage?: string;
   options: string[];
-  correctOption: number;
+  correctOptions: number[]; // Changed to array for multiple correct answers
   correctMarks: number;
   wrongMarks: number;
   skipMarks: number;
   solution: string;
+  solutionImage?: string;
+  isLocked?: boolean; // Whether this question position is locked
+  lockedPosition?: 'first' | 'last' | null; // Where it's locked
 }
 
 export interface WrittenQuestion {
@@ -32,6 +35,9 @@ export interface WrittenQuestion {
   question: string;
   questionImage?: string;
   solution: string;
+  solutionImage?: string;
+  isLocked?: boolean; // Whether this question position is locked
+  lockedPosition?: 'first' | 'last' | null; // Where it's locked
 }
 
 export interface Content {
@@ -69,8 +75,8 @@ export interface Content {
 }
 
 export const contentService = {
-  // Upload file to Firebase Storage
-  async uploadFile(file: File, path: string): Promise<{ url: string; fileName: string }> {
+  // Upload file using Supabase
+  async uploadFile(file: File, folder: string): Promise<{ url: string; fileName: string }> {
     try {
       if (!file) {
         throw new Error('No file provided');
@@ -79,37 +85,17 @@ export const contentService = {
       const timestamp = Date.now();
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileName = `${timestamp}_${sanitizedFileName}`;
-      const storageRef = ref(storage, `${path}/${fileName}`);
       
-      console.log('Uploading file:', fileName, 'to path:', path);
+      console.log('Uploading file:', fileName, 'to folder:', folder);
       
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const result = await uploadService.uploadToSupabase(file, folder);
       
-      console.log('File uploaded successfully:', url);
+      console.log('File uploaded successfully:', result.url);
       
-      return { url, fileName };
+      return { url: result.url, fileName };
     } catch (error: any) {
       console.error('Error uploading file:', error);
       throw new Error(`Failed to upload file: ${error.message}`);
-    }
-  },
-
-  // Delete file from Firebase Storage
-  async deleteFile(fileName: string, path: string): Promise<void> {
-    try {
-      if (!fileName || !path) {
-        throw new Error('File name and path are required');
-      }
-      const storageRef = ref(storage, `${path}/${fileName}`);
-      await deleteObject(storageRef);
-      console.log('File deleted successfully:', fileName);
-    } catch (error: any) {
-      // Don't throw error if file doesn't exist
-      if (error.code !== 'storage/object-not-found') {
-        console.error('Error deleting file:', error);
-        throw new Error(`Failed to delete file: ${error.message}`);
-      }
     }
   },
 
@@ -276,57 +262,8 @@ export const contentService = {
         throw new Error('Content not found');
       }
 
-      // Delete video file from storage if it exists
-      if (content.videoUrl && content.videoFileName) {
-        try {
-          const path = `content/${content.type}/videos`;
-          await this.deleteFile(content.videoFileName, path);
-        } catch (error) {
-          console.error('Error deleting video file from storage:', error);
-        }
-      }
-
-      // Delete note file from storage if it exists
-      if (content.noteUrl && content.noteFileName) {
-        try {
-          const path = `content/${content.type}/notes`;
-          await this.deleteFile(content.noteFileName, path);
-        } catch (error) {
-          console.error('Error deleting note file from storage:', error);
-        }
-      }
-
-      // Delete question images if exam type
-      if (content.type === 'exam') {
-        if (content.mcqQuestions) {
-          for (const q of content.mcqQuestions) {
-            if (q.questionImage) {
-              try {
-                const fileName = q.questionImage.split('/').pop()?.split('?')[0];
-                if (fileName) {
-                  await this.deleteFile(fileName, 'content/exam/question-images');
-                }
-              } catch (error) {
-                console.error('Error deleting question image:', error);
-              }
-            }
-          }
-        }
-        if (content.writtenQuestions) {
-          for (const q of content.writtenQuestions) {
-            if (q.questionImage) {
-              try {
-                const fileName = q.questionImage.split('/').pop()?.split('?')[0];
-                if (fileName) {
-                  await this.deleteFile(fileName, 'content/exam/question-images');
-                }
-              } catch (error) {
-                console.error('Error deleting question image:', error);
-              }
-            }
-          }
-        }
-      }
+      // Note: We're not deleting files from Supabase here as they're managed separately
+      // If you need to delete files from Supabase, you'll need to implement that separately
 
       // Delete the document from Firestore
       await deleteDoc(doc(db, 'content', id));
