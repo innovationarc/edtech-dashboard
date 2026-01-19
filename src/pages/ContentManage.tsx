@@ -3,8 +3,6 @@ import { useState } from 'react';
 import { Plus, BookOpen, FileText, PenTool, BrainCircuit, Search, Filter, X } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
-
-// Import ContentUpload component
 import ContentUpload from './ContentUpload';
 
 const ContentManage = () => {
@@ -13,9 +11,12 @@ const ContentManage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'lesson' | 'note' | 'trick' | 'exam'>('all');
 
+  const handleCloseModal = () => {
+    setShowUploadModal(false);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Content Management</h1>
@@ -30,11 +31,9 @@ const ContentManage = () => {
         </button>
       </div>
 
-      {/* Search and Filter Section */}
       <Card>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Search Bar */}
             <div className="relative">
               <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -46,7 +45,6 @@ const ContentManage = () => {
               />
             </div>
 
-            {/* Filter Dropdown */}
             <div className="relative">
               <Filter size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <select
@@ -65,7 +63,6 @@ const ContentManage = () => {
         </div>
       </Card>
 
-      {/* Content Type Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <div className="flex items-center gap-4">
@@ -116,7 +113,6 @@ const ContentManage = () => {
         </Card>
       </div>
 
-      {/* Content List */}
       <Card title="Your Content">
         <div className="text-center py-12">
           <div className="mb-4">
@@ -134,18 +130,16 @@ const ContentManage = () => {
         </div>
       </Card>
 
-      {/* Floating ContentUpload Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-background-900 rounded-xl w-full max-w-7xl max-h-[95vh] overflow-y-auto shadow-2xl border border-background-700 my-8">
-            {/* Modal Header */}
             <div className="sticky top-0 z-10 bg-background-900 border-b border-background-700 px-6 py-4 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-white">Create New Content</h2>
                 <p className="text-gray-400 text-sm mt-1">Upload educational materials for your students</p>
               </div>
               <button
-                onClick={() => setShowUploadModal(false)}
+                onClick={handleCloseModal}
                 className="p-2 hover:bg-background-800 rounded-lg transition-colors text-gray-400 hover:text-white"
                 title="Close"
               >
@@ -153,9 +147,8 @@ const ContentManage = () => {
               </button>
             </div>
 
-            {/* ContentUpload Component */}
             <div className="p-6">
-              <ContentUpload />
+              <ContentUpload onClose={handleCloseModal} isModal={true} />
             </div>
           </div>
         </div>
