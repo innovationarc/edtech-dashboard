@@ -1,4 +1,4 @@
-// src/pages/ContentUpload.tsx - PART 1/4
+// src/pages/ContentManage.tsx - PART 1/4
 
 import { useState } from 'react';
 import { Upload, FileText, BookOpen, PenTool, BrainCircuit, Plus, X, Loader, Clock, Video, FileUp, Image as ImageIcon, Trash2, Eye, Lock, Unlock, ArrowLeft } from 'lucide-react';
@@ -461,7 +461,7 @@ const ContentUpload = ({ onClose, isModal = false }: ContentUploadProps) => {
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   };
-// src/pages/ContentUpload.tsx - PART 3/4
+// src/pages/ContentManage.tsx - PART 3/4
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -931,7 +931,8 @@ const ContentUpload = ({ onClose, isModal = false }: ContentUploadProps) => {
                   Total: {formatDuration()} {getTotalDurationInMinutes() > 0 && `(${getTotalDurationInMinutes().toFixed(1)} minutes)`}
                 </p>
               </div>
-// src/pages/ContentUpload.tsx - PART 4/4
+              
+          // src/pages/ContentManage.tsx - PART 4/4
 
               {(uploadType === 'lesson' || uploadType === 'trick') && (
                 <>
