@@ -4,7 +4,7 @@ import Dashboard from './pages/Dashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import ManageUsers from './pages/ManageUsers';
-import ContentUpload from './pages/ContentUpload';
+import ContentUpload from './pages/ContentManage';
 import ContentLibrary from './pages/ContentLibrary';
 import CourseEnrollment from './pages/CourseEnrollment';
 import StudyPlan from './pages/StudyPlan';
@@ -166,7 +166,7 @@ const AppRoutes = () => {
         {/* Teacher and Admin routes */}
         <Route path="content" element={
           <TeacherAdminRoute>
-            <ContentUpload />
+            <ContentManage />
           </TeacherAdminRoute>
         } />
         <Route path="course-creation" element={
