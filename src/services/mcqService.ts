@@ -26,7 +26,7 @@ export interface MCQQuestion {
   description: string;
   question: string;
   choices: MCQChoice[];
-  correctAnswer: number;
+  correctAnswer: number | number[]; // Support both single and multiple correct answers
   subject: string;
   difficulty: 'easy' | 'medium' | 'hard';
   explanation: string;
@@ -44,7 +44,7 @@ interface MCQAttempt {
   studentId: string;
   studentName: string;
   questionId: string;
-  selectedAnswer: number;
+  selectedAnswer: number | number[]; // Support multiple selections
   isCorrect: boolean;
   timeSpent: number; // in seconds
   attemptedAt: Date;
@@ -56,7 +56,7 @@ export interface QuizSession {
   studentName: string;
   subject: string;
   questions: string[]; // question IDs
-  answers: (number | null)[];
+  answers: (number | number[] | null)[]; // Support multiple answers
   score: number;
   totalQuestions: number;
   accuracy: number;
@@ -68,7 +68,7 @@ export const mcqService = {
   // MCQ Question CRUD operations
   async createMCQQuestion(question: Omit<MCQQuestion, 'id' | 'createdAt'>): Promise<string> {
     try {
-      // Validate required fields
+      // Validation
       if (!question.question?.trim()) {
         throw new Error('Question text is required');
       }
@@ -81,8 +81,8 @@ export const mcqService = {
         throw new Error('Subject/Category is required');
       }
 
-      if (!question.choices || question.choices.length !== 4) {
-        throw new Error('Exactly 4 choices are required');
+      if (!question.choices || question.choices.length < 2) {
+        throw new Error('At least 2 choices are required');
       }
 
       // Validate all choices have text
@@ -91,8 +91,16 @@ export const mcqService = {
         throw new Error('All answer choices must be filled');
       }
 
-      if (!question.correctAnswer || question.correctAnswer < 1 || question.correctAnswer > 4) {
-        throw new Error('Valid correct answer must be selected (1-4)');
+      // Validate correct answer(s)
+      const correctAnswers = Array.isArray(question.correctAnswer) 
+        ? question.correctAnswer 
+        : [question.correctAnswer];
+      
+      if (correctAnswers.length > 0) {
+        const invalidAnswers = correctAnswers.some(ans => ans < 1 || ans > question.choices.length);
+        if (invalidAnswers) {
+          throw new Error(`Valid correct answer must be selected (1-${question.choices.length})`);
+        }
       }
 
       console.log('Creating MCQ question:', question.title);
