@@ -50,8 +50,8 @@ const Sidebar = () => {
     { name: 'Payment Management', icon: <CreditCard size={20} />, path: '/payments', roles: ['admin'] },
     { name: 'Analytics Dashboard', icon: <BarChart3 size={20} />, path: '/analytics', roles: ['admin'] },
     
-    // Teacher and Admin routes
-    { name: 'Content Upload', icon: <Upload size={20} />, path: '/content', roles: ['admin', 'teacher'] },
+    // Teacher and Admin Upload'
+    { name: 'Content Management', icon: <Upload size={20} />, path: '/content', roles: ['admin', 'teacher'] },
     { name: 'Create Course', icon: <PlusCircle size={20} />, path: '/course-creation', roles: ['admin', 'teacher'] },
     { name: 'Study Plan Builder', icon: <Calendar size={20} />, path: '/study-plan', roles: ['admin', 'teacher'] },
     { name: 'Progress & Leaderboard', icon: <Medal size={20} />, path: '/progress', roles: ['admin', 'teacher'] },
