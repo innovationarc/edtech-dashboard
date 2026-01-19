@@ -1,4 +1,4 @@
-// src/pages/ContentManage.tsx - PART 1/4
+// src/pages/ContentManage.tsx 
 
 import { useState } from 'react';
 import { Upload, FileText, BookOpen, PenTool, BrainCircuit, Plus, X, Loader, Clock, Video, FileUp, Image as ImageIcon, Trash2, Eye, Lock, Unlock, ArrowLeft, Edit } from 'lucide-react';
@@ -348,7 +348,6 @@ const ContentUpload = ({ onClose, isModal = false }: ContentUploadProps) => {
     if (duration.seconds > 0) parts.push(`${duration.seconds}s`);
     return parts.length > 0 ? parts.join(' ') : '0m';
   };
-// src/pages/ContentManage.tsx - PART 2/4
 
   // NEW: Edit MCQ question
   const editMcqQuestion = (id: string) => {
@@ -891,7 +890,6 @@ const ContentUpload = ({ onClose, isModal = false }: ContentUploadProps) => {
       setLoading(false);
     }
   };
-// src/pages/ContentManage.tsx - PART 3/4
 
   return (
     <div className="space-y-6">
@@ -1495,7 +1493,6 @@ const ContentUpload = ({ onClose, isModal = false }: ContentUploadProps) => {
                       </div>
                     </div>
                   )}
-// src/pages/ContentManage.tsx - PART 4/4
 
                   {mcqQuestions.length > 0 && (
                     <div>
