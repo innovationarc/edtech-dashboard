@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Plus, BookOpen, FileText, PenTool, BrainCircuit, Search, Filter, X } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
-import ContentUpload from './ContentUpload';
+import ContentUpload from './ContentManage';
 
 const ContentManage = () => {
   const { user } = useDashboard();
