@@ -1,4 +1,4 @@
-// src/pages/ContentManage.tsx
+// src/pages/ContentUpload.tsx
 import { useState } from 'react';
 import { Plus, BookOpen, FileText, PenTool, BrainCircuit, Search, Filter, X } from 'lucide-react';
 import Card from '../components/ui/Card';
