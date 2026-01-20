@@ -1,36 +1,113 @@
 // src/services/uploadService.ts
+
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percentage: number;
+  speed?: number; // bytes per second
+}
+
 export const uploadService = {
   async uploadToSupabase(
     file: File,
-    folder: string
+    folder: string,
+    onProgress?: (progress: UploadProgress) => void
   ): Promise<{ url: string }> {
     try {
-      // Read file as Base64
+      const startTime = Date.now();
+      let lastLoaded = 0;
+      let lastTime = startTime;
+
+      // Read file as Base64 with progress
       const base64String = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.readAsDataURL(file);
+        
+        reader.onprogress = (event) => {
+          if (event.lengthComputable && onProgress) {
+            const now = Date.now();
+            const timeDiff = (now - lastTime) / 1000; // seconds
+            const bytesDiff = event.loaded - lastLoaded;
+            const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+
+            onProgress({
+              loaded: event.loaded,
+              total: event.total,
+              percentage: Math.round((event.loaded / event.total) * 50), // 0-50% for reading
+              speed
+            });
+
+            lastLoaded = event.loaded;
+            lastTime = now;
+          }
+        };
+
         reader.onloadend = () => {
           const result = reader.result as string;
           const base64 = result.split(',')[1]; // Remove data:image/png;base64, prefix
           resolve(base64);
         };
+        
         reader.onerror = () => reject(new Error('Failed to read file'));
+        
+        reader.readAsDataURL(file);
       });
 
       // Generate unique filename with timestamp
       const timestamp = Date.now();
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileExtension = file.name.split('.').pop();
       const uniqueFileName = `${timestamp}_${Math.random().toString(36).substring(7)}.${fileExtension}`;
 
-      // Send to API endpoint
+      // Prepare upload data
+      const uploadData = JSON.stringify({
+        fileName: `${folder}/${uniqueFileName}`,
+        file: base64String,
+      });
+
+      const uploadSize = new Blob([uploadData]).size;
+      let uploadedBytes = 0;
+
+      // Send to API endpoint with progress simulation
+      const uploadStartTime = Date.now();
+      
       const response = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: `${folder}/${uniqueFileName}`,
-          file: base64String,
-        }),
+        body: uploadData,
       });
+
+      // Simulate upload progress (50-100%)
+      if (onProgress) {
+        const uploadInterval = setInterval(() => {
+          uploadedBytes += uploadSize * 0.1; // Simulate 10% increments
+          if (uploadedBytes >= uploadSize) {
+            uploadedBytes = uploadSize;
+            clearInterval(uploadInterval);
+          }
+
+          const now = Date.now();
+          const timeDiff = (now - uploadStartTime) / 1000;
+          const speed = timeDiff > 0 ? uploadedBytes / timeDiff : 0;
+
+          onProgress({
+            loaded: uploadedBytes,
+            total: uploadSize,
+            percentage: 50 + Math.round((uploadedBytes / uploadSize) * 50), // 50-100%
+            speed
+          });
+        }, 100);
+
+        // Clear interval when response is received
+        if (response.ok) {
+          clearInterval(uploadInterval);
+          onProgress({
+            loaded: uploadSize,
+            total: uploadSize,
+            percentage: 100,
+            speed: uploadSize / ((Date.now() - uploadStartTime) / 1000)
+          });
+        }
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -49,4 +126,24 @@ export const uploadService = {
       throw new Error(`Failed to upload to Supabase: ${error.message}`);
     }
   },
+
+  async deleteFromSupabase(fileName: string): Promise<void> {
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Delete failed');
+      }
+
+      console.log('File deleted from Supabase:', fileName);
+    } catch (error: any) {
+      console.error('Supabase delete error:', error);
+      throw new Error(`Failed to delete from Supabase: ${error.message}`);
+    }
+  }
 };
