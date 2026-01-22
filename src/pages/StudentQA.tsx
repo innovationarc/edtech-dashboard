@@ -967,9 +967,9 @@ ${isFollowUp ? 'Follow-up Question' : 'Question'}: ${questionToSolve}${knowledge
                   {enrolledCoursesWithQnA.map(course => (
                     <option key={course.id} value={course.id}>
                       {course.title}
-                      {course.hasAiQnA && course.hasHumanQnA && ' (AI + Teacher)'}
-                      {course.hasAiQnA && !course.hasHumanQnA && ' (AI only)'}
-                      {!course.hasAiQnA && course.hasHumanQnA && ' (Teacher only)'}
+                      {course.hasAiQnA && course.hasHumanQnA && ''}
+                      {course.hasAiQnA && !course.hasHumanQnA && ''}
+                      {!course.hasAiQnA && course.hasHumanQnA && ''}
                     </option>
                   ))}
                 </select>
