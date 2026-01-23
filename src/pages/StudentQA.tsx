@@ -637,13 +637,12 @@ const AskQuestionModal = ({ onClose, onSuccess, studentId, studentName, enrolled
       return;
     }
 
-    const similar = await qaService.findSimilarQuestions(
-      questionText, 
-      subject, 
-      undefined, 
-      attachedFile && getFileType(attachedFile) === 'image' ? URL.createObjectURL(attachedFile) : undefined,
-      selectedCourse
-    );
+ const similar = await qaService.findSimilarQuestionsWithFile(
+  questionText, 
+  subject, 
+  attachedFile && getFileType(attachedFile) === 'image' ? attachedFile : null,
+  selectedCourse
+ );
     
     if (similar.length > 0) {
       setSimilarQuestions(similar);
