@@ -1,4 +1,4 @@
-// src/services/qaService.ts - Part 1 of 2 (COMPLETELY FIXED - Aggressive Cleaning)
+// src/services/qaService.ts - Part 1 of 2 (FIXED - Proper Upload Timing & Similarity)
 import {
   collection,
   doc,
@@ -120,39 +120,20 @@ export const qaService = {
     await Promise.all(deletionPromises);
   },
 
-  // ULTRA-AGGRESSIVE TEXT CLEANING
   aggressiveClean(text: string): string {
     if (!text || typeof text !== 'string') return '';
     
     try {
-      // Step 1: Normalize unicode completely
       let cleaned = text.normalize('NFKD').normalize('NFC');
-      
-      // Step 2: Remove ALL non-printable characters
       cleaned = cleaned.replace(/[^\x20-\x7E\u00A0-\uFFFF]/g, '');
-      
-      // Step 3: Replace ALL types of whitespace with single space
       cleaned = cleaned.replace(/[\s\n\r\t\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000\uFEFF]+/g, ' ');
-      
-      // Step 4: Remove special symbols that OCR adds incorrectly
       cleaned = cleaned.replace(/[`~|]/g, ' ');
-      
-      // Step 5: Normalize quotes and apostrophes
       cleaned = cleaned.replace(/['']/g, "'");
       cleaned = cleaned.replace(/[""]/g, '"');
-      
-      // Step 6: Remove multiple punctuation
       cleaned = cleaned.replace(/([.,!?;:]){2,}/g, '$1');
-      
-      // Step 7: Convert to lowercase
       cleaned = cleaned.toLowerCase();
-      
-      // Step 8: Trim
       cleaned = cleaned.trim();
-      
-      // Step 9: Collapse multiple spaces again
       cleaned = cleaned.replace(/\s{2,}/g, ' ');
-      
       return cleaned;
     } catch (e) {
       console.error('Error cleaning text:', e);
@@ -160,10 +141,9 @@ export const qaService = {
     }
   },
 
-  // Extract text from image - SAVE CLEANED VERSION
   async extractTextFromImage(imageUrl: string): Promise<string> {
     try {
-      console.log('🔍 OCR START:', imageUrl.substring(imageUrl.lastIndexOf('/') + 1, imageUrl.lastIndexOf('/')+20));
+      console.log('🔍 OCR START');
       
       const worker = await Tesseract.createWorker('eng', 1, {
         logger: (m) => {
@@ -177,14 +157,12 @@ export const qaService = {
         const { data } = await worker.recognize(imageUrl);
         const rawText = data.text || '';
         
-        console.log('📝 RAW OCR LENGTH:', rawText.length);
-        console.log('📝 RAW PREVIEW:', rawText.substring(0, 80).replace(/\n/g, '↵'));
+        console.log('📝 RAW LENGTH:', rawText.length);
         
-        // CRITICAL: Clean immediately
         const cleanedText = this.aggressiveClean(rawText);
         
         console.log('🧹 CLEAN LENGTH:', cleanedText.length);
-        console.log('🧹 CLEAN PREVIEW:', cleanedText.substring(0, 80));
+        console.log('🧹 PREVIEW:', cleanedText.substring(0, 60));
         console.log('✅ OCR DONE\n');
         
         return cleanedText;
@@ -197,13 +175,11 @@ export const qaService = {
     }
   },
 
-  // Remove instruction words AFTER cleaning
   removeInstructions(text: string): string {
     if (!text) return '';
     
     let cleaned = this.aggressiveClean(text);
     
-    // Remove common instruction patterns
     const patterns = [
       /^(solve|answer|help|explain|find|calculate|show|prove|verify|determine|check)\s+/gi,
       /\s+(it|this|that|the problem|the question|please|pls|plz)$/gi,
@@ -224,7 +200,7 @@ export const qaService = {
       let extractedText = '';
       
       if (question.imageUrl) {
-        console.log('🖼️ IMAGE DETECTED - STARTING OCR');
+        console.log('🖼️ IMAGE DETECTED - EXTRACTING OCR');
         extractedText = await this.extractTextFromImage(question.imageUrl);
       }
 
@@ -282,7 +258,6 @@ export const qaService = {
     }
   },
 
-  // SIMPLE WORD OVERLAP SIMILARITY (Most reliable for OCR)
   wordOverlapSimilarity(text1: string, text2: string): number {
     const clean1 = this.aggressiveClean(text1);
     const clean2 = this.aggressiveClean(text2);
@@ -303,7 +278,6 @@ export const qaService = {
     return union > 0 ? intersection / union : 0;
   },
 
-  // CHARACTER-LEVEL SIMILARITY (Catches typos)
   characterSimilarity(text1: string, text2: string): number {
     const clean1 = this.aggressiveClean(text1).replace(/\s/g, '');
     const clean2 = this.aggressiveClean(text2).replace(/\s/g, '');
@@ -327,12 +301,9 @@ export const qaService = {
     return matches / maxLen;
   },
 
-  // COMBINED SIMILARITY SCORE
   calculateSimilarity(text1: string, text2: string): number {
     const wordScore = this.wordOverlapSimilarity(text1, text2);
     const charScore = this.characterSimilarity(text1, text2);
-    
-    // Weight word overlap more heavily
     const finalScore = (wordScore * 0.7) + (charScore * 0.3);
     
     console.log(`   Word: ${wordScore.toFixed(3)} | Char: ${charScore.toFixed(3)} | Final: ${finalScore.toFixed(3)}`);
@@ -351,7 +322,6 @@ export const qaService = {
 
     console.log('🖼️ IMAGE SIMILARITY CHECK');
     
-    // If both have OCR text, use that (most reliable)
     if (extractedText1 && extractedText2) {
       const clean1 = this.aggressiveClean(extractedText1);
       const clean2 = this.aggressiveClean(extractedText2);
@@ -366,7 +336,6 @@ export const qaService = {
       }
     }
     
-    // Fallback: filename check
     const getName = (url: string) => {
       const parts = url.split('/');
       return parts[parts.length - 1].split('?')[0].toLowerCase();
@@ -384,11 +353,11 @@ export const qaService = {
     return 0;
   },
 
-  async findSimilarQuestions(
+  // CRITICAL FIX: Upload image FIRST, then extract OCR from uploaded URL
+  async findSimilarQuestionsWithFile(
     questionText: string,
     subject: string,
-    currentQuestionId?: string,
-    imageUrl?: string,
+    file: File | null,
     courseId?: string
   ): Promise<Question[]> {
     try {
@@ -396,7 +365,22 @@ export const qaService = {
       console.log('║   FINDING SIMILAR QUESTIONS            ║');
       console.log('╚════════════════════════════════════════╝');
       console.log('📚 Subject:', subject);
-      console.log('🖼️ Has Image:', !!imageUrl);
+      console.log('🖼️ Has File:', !!file);
+      
+      // CRITICAL: Upload file FIRST if present
+      let uploadedImageUrl: string | undefined;
+      let currentOCR = '';
+      
+      if (file) {
+        console.log('⬆️ UPLOADING IMAGE FIRST...');
+        const uploadResult = await this.uploadToSupabase(file, 'question_images');
+        uploadedImageUrl = uploadResult.url;
+        console.log('✅ UPLOADED:', uploadedImageUrl.substring(uploadedImageUrl.lastIndexOf('/') + 1, uploadedImageUrl.lastIndexOf('/') + 20));
+        
+        console.log('🔍 EXTRACTING OCR FROM UPLOADED IMAGE...');
+        currentOCR = await this.extractTextFromImage(uploadedImageUrl);
+        console.log('📝 CURRENT OCR:', currentOCR.substring(0, 60));
+      }
       
       let q = query(
         collection(db, 'questions'),
@@ -420,45 +404,33 @@ export const qaService = {
 
       console.log('📊 Total answered questions:', allQuestions.length);
 
-      const questionsToSearch = currentQuestionId 
-        ? allQuestions.filter(q => q.id !== currentQuestionId)
-        : allQuestions;
-
-      // Get OCR for current question if image exists
-      let currentOCR = '';
-      if (imageUrl) {
-        console.log('\n🔍 Extracting OCR from current question...');
-        currentOCR = await this.extractTextFromImage(imageUrl);
-      }
-
       const cleanCurrentText = this.removeInstructions(questionText);
       console.log('📝 Current Q (cleaned):', cleanCurrentText.substring(0, 60));
 
       const scored = await Promise.all(
-        questionsToSearch.map(async (q, idx) => {
-          console.log(`\n[${idx+1}/${questionsToSearch.length}] Comparing: ${q.id.substring(0, 8)}`);
+        allQuestions.map(async (q, idx) => {
+          console.log(`\n[${idx+1}/${allQuestions.length}] Comparing: ${q.id.substring(0, 8)}`);
           
           const cleanStoredText = this.removeInstructions(q.questionText);
           const textScore = this.calculateSimilarity(cleanCurrentText, cleanStoredText);
           
           let imageScore = 0;
-          if (imageUrl && q.imageUrl) {
-            imageScore = await this.calculateImageSimilarity(imageUrl, q.imageUrl, currentOCR, q.extractedText);
+          if (uploadedImageUrl && q.imageUrl) {
+            imageScore = await this.calculateImageSimilarity(uploadedImageUrl, q.imageUrl, currentOCR, q.extractedText);
           }
           
-          // Simple weighted average: 50% image, 50% text
-          const finalScore = imageUrl && q.imageUrl 
+          const finalScore = uploadedImageUrl && q.imageUrl 
             ? (imageScore * 0.6 + textScore * 0.4)
             : textScore;
           
           console.log(`   FINAL: ${finalScore.toFixed(3)} (Img:${imageScore.toFixed(2)} Text:${textScore.toFixed(2)})`);
           
-          return { question: q, score: finalScore };
+          return { question: q, score: finalScore, uploadedImageUrl };
         })
       );
 
       const similar = scored
-        .filter(item => item.score >= 0.35) // Lower threshold to catch more
+        .filter(item => item.score >= 0.35)
         .sort((a, b) => b.score - a.score)
         .slice(0, 5);
 
@@ -469,6 +441,79 @@ export const qaService = {
       return similar.map(s => s.question);
     } catch (error: any) {
       console.error('❌ Error finding similar:', error);
+      return [];
+    }
+  },
+
+  // Legacy method for compatibility - use findSimilarQuestionsWithFile instead
+  async findSimilarQuestions(
+    questionText: string,
+    subject: string,
+    currentQuestionId?: string,
+    imageUrl?: string,
+    courseId?: string
+  ): Promise<Question[]> {
+    try {
+      console.log('\n╔════════════════════════════════════════╗');
+      console.log('║   FINDING SIMILAR (LEGACY)             ║');
+      console.log('╚════════════════════════════════════════╝');
+      
+      let q = query(
+        collection(db, 'questions'),
+        where('subject', '==', subject),
+        where('status', '==', 'answered'),
+        orderBy('createdAt', 'desc')
+      );
+
+      if (courseId) {
+        q = query(q, where('courseId', '==', courseId));
+      }
+      
+      const querySnapshot = await getDocs(q);
+      let allQuestions = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate(),
+        closedAt: doc.data().closedAt?.toDate(),
+      })) as Question[];
+
+      const questionsToSearch = currentQuestionId 
+        ? allQuestions.filter(q => q.id !== currentQuestionId)
+        : allQuestions;
+
+      let currentOCR = '';
+      if (imageUrl) {
+        currentOCR = await this.extractTextFromImage(imageUrl);
+      }
+
+      const cleanCurrentText = this.removeInstructions(questionText);
+
+      const scored = await Promise.all(
+        questionsToSearch.map(async (q) => {
+          const cleanStoredText = this.removeInstructions(q.questionText);
+          const textScore = this.calculateSimilarity(cleanCurrentText, cleanStoredText);
+          
+          let imageScore = 0;
+          if (imageUrl && q.imageUrl) {
+            imageScore = await this.calculateImageSimilarity(imageUrl, q.imageUrl, currentOCR, q.extractedText);
+          }
+          
+          const finalScore = imageUrl && q.imageUrl 
+            ? (imageScore * 0.6 + textScore * 0.4)
+            : textScore;
+          
+          return { question: q, score: finalScore };
+        })
+      );
+
+      return scored
+        .filter(item => item.score >= 0.35)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(s => s.question);
+    } catch (error: any) {
+      console.error('❌ Error:', error);
       return [];
     }
   },
