@@ -27,7 +27,8 @@
     "uuid": "^13.0.0",
     "tesseract.js": "^5.1.0",
     "katex": "^0.16.9",
-    "react-katex": "^3.0.0"
+    "react-katex": "^3.0.0",
+    "axios": "^1.x.x"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
