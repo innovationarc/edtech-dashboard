@@ -1,3 +1,5 @@
+// api/upload.ts
+
 import { createClient } from '@supabase/supabase-js';
 
 export const config = {
@@ -24,39 +26,111 @@ const getContentType = (fileName: string) => {
   return 'application/octet-stream';
 };
 
+/**
+ * Get bucket name based on bucket type
+ */
+const getBucketName = (bucketType: 'public' | 'private'): string => {
+  return bucketType === 'private' ? 'assets' : 'uploads';
+};
+
+/**
+ * Extract bucket type and file path from URL
+ */
+const parseFileUrl = (fileUrl: string): { bucket: string; filePath: string } | null => {
+  try {
+    const url = new URL(fileUrl);
+    const pathParts = url.pathname.split('/');
+    
+    // Expected format: /storage/v1/object/public/uploads/... or /storage/v1/object/public/assets/...
+    const bucketIndex = pathParts.findIndex(part => part === 'uploads' || part === 'assets');
+    
+    if (bucketIndex === -1) {
+      return null;
+    }
+    
+    const bucket = pathParts[bucketIndex];
+    const filePath = pathParts.slice(bucketIndex + 1).join('/');
+    
+    return { bucket, filePath };
+  } catch (error) {
+    console.error('Error parsing file URL:', error);
+    return null;
+  }
+};
+
 export default async function handler(req, res) {
   try {
-    if (req.method !== 'POST') {
+    // POST: Upload file
+    if (req.method === 'POST') {
+      const { fileName, file, bucketType = 'public' } = req.body;
+
+      if (!fileName || !file) {
+        return res.status(400).json({ error: 'Missing fileName or file' });
+      }
+
+      const bucket = getBucketName(bucketType);
+      const buffer = Buffer.from(file, 'base64');
+
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, buffer, {
+          upsert: false,
+          contentType: getContentType(fileName),
+          metadata: {
+            contentDisposition: 'inline',
+          },
+        });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      // Get public URL (even for private bucket, we'll use signed URLs on the client)
+      const { data } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(fileName);
+
+      return res.status(200).json({ 
+        url: data.publicUrl,
+        bucket,
+        bucketType 
+      });
+    }
+
+    // DELETE: Delete file
+    else if (req.method === 'DELETE') {
+      const { fileUrl } = req.body;
+
+      if (!fileUrl) {
+        return res.status(400).json({ error: 'Missing fileUrl' });
+      }
+
+      const parsed = parseFileUrl(fileUrl);
+      
+      if (!parsed) {
+        return res.status(400).json({ error: 'Invalid file URL' });
+      }
+
+      const { bucket, filePath } = parsed;
+
+      const { error } = await supabase.storage
+        .from(bucket)
+        .remove([filePath]);
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.status(200).json({ 
+        message: 'File deleted successfully',
+        bucket,
+        filePath 
+      });
+    }
+
+    else {
       return res.status(405).json({ error: 'Method not allowed' });
     }
-
-    const { fileName, file } = req.body;
-
-    if (!fileName || !file) {
-      return res.status(400).json({ error: 'Missing fileName or file' });
-    }
-
-    const buffer = Buffer.from(file, 'base64');
-
-    const { error } = await supabase.storage
-      .from('uploads')
-      .upload(fileName, buffer, {
-        upsert: false,
-        contentType: getContentType(fileName),
-        metadata: {
-          contentDisposition: 'inline', // 🔥 THIS IS THE KEY
-        },
-      });
-
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
-
-    const { data } = supabase.storage
-      .from('uploads')
-      .getPublicUrl(fileName);
-
-    return res.status(200).json({ url: data.publicUrl });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
