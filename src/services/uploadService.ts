@@ -7,11 +7,14 @@ export interface UploadProgress {
   speed?: number; // bytes per second
 }
 
+export type BucketType = 'public' | 'private';
+
 export const uploadService = {
   async uploadToSupabase(
     file: File,
     folder: string,
-    onProgress?: (progress: UploadProgress) => void
+    onProgress?: (progress: UploadProgress) => void,
+    bucketType: BucketType = 'public'
   ): Promise<{ url: string }> {
     try {
       const startTime = Date.now();
@@ -62,6 +65,7 @@ export const uploadService = {
       const uploadData = JSON.stringify({
         fileName: `${folder}/${uniqueFileName}`,
         file: base64String,
+        bucketType, // Include bucket type
       });
 
       const uploadSize = new Blob([uploadData]).size;
@@ -127,12 +131,12 @@ export const uploadService = {
     }
   },
 
-  async deleteFromSupabase(fileName: string): Promise<void> {
+  async deleteFromSupabase(fileUrl: string): Promise<void> {
     try {
       const response = await fetch('/api/upload', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName }),
+        body: JSON.stringify({ fileUrl }),
       });
 
       if (!response.ok) {
@@ -140,10 +144,36 @@ export const uploadService = {
         throw new Error(errorData.error || 'Delete failed');
       }
 
-      console.log('File deleted from Supabase:', fileName);
+      console.log('File deleted from Supabase:', fileUrl);
     } catch (error: any) {
       console.error('Supabase delete error:', error);
       throw new Error(`Failed to delete from Supabase: ${error.message}`);
+    }
+  },
+
+  /**
+   * Generate a signed URL for private bucket files
+   * @param fileUrl - The URL of the file in the private bucket
+   * @param expiresIn - Expiration time in seconds (default: 1 hour)
+   */
+  async getSignedUrl(fileUrl: string, expiresIn: number = 3600): Promise<string> {
+    try {
+      const response = await fetch('/api/upload/signed-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileUrl, expiresIn }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate signed URL');
+      }
+
+      const data = await response.json();
+      return data.signedUrl;
+    } catch (error: any) {
+      console.error('Signed URL generation error:', error);
+      throw new Error(`Failed to generate signed URL: ${error.message}`);
     }
   }
 };
