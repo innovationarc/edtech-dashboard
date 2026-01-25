@@ -1,12 +1,13 @@
-// src/pages/CourseEnrollment.tsx - PART 1 OF 2
-// Course Enrollment - UPDATED with proper payment flow
+// src/pages/CourseEnrollment.tsx - PART 1 OF 3
+// Course Enrollment - Complete Implementation
 
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Filter, Star, Clock, Users, Play, BookOpen, Award, Eye,
   CheckCircle, Lock, Calendar, User, Video, FileText, Heart, X,
   Grid3X3, List, Loader, Tag, TrendingUp, Download, ShoppingCart,
-  AlertCircle, Percent, DollarSign, Check, AlertTriangle
+  AlertCircle, Percent, DollarSign, Check, AlertTriangle, ChevronDown,
+  ExternalLink
 } from 'lucide-react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
@@ -70,6 +71,7 @@ const CourseEnrollment = () => {
   const [enrolling, setEnrolling] = useState(false);
   const [calculatingPrice, setCalculatingPrice] = useState(false);
   const [couponCode, setCouponCode] = useState('');
+  const [couponError, setCouponError] = useState('');
 
   // Filter Options
   const [categories, setCategories] = useState<string[]>([]);
@@ -92,12 +94,14 @@ const CourseEnrollment = () => {
       setSearchParams(searchParams, { replace: true });
     } else if (status === 'failed') {
       setError('Payment failed. Please try again or contact support if this persists.');
+      setActiveTab('available');
       // Clean URL
       searchParams.delete('status');
       searchParams.delete('tran_id');
       setSearchParams(searchParams, { replace: true });
     } else if (status === 'cancelled') {
       setWarning('Payment was cancelled. You can try enrolling again whenever you\'re ready.');
+      setActiveTab('available');
       // Clean URL
       searchParams.delete('status');
       searchParams.delete('tran_id');
@@ -266,13 +270,14 @@ const CourseEnrollment = () => {
       setCalculatingPrice(true);
       setError('');
       setWarning('');
+      setCouponError('');
 
       console.log('Calculating enrollment price...');
 
       const calculation = await courseService.calculateEnrollmentPrice(
         course.id,
         user.uid,
-        couponCode || undefined
+        undefined // No coupon initially
       );
 
       console.log('Price calculation:', calculation);
@@ -297,7 +302,7 @@ const CourseEnrollment = () => {
 
     try {
       setCalculatingPrice(true);
-      setError('');
+      setCouponError('');
 
       console.log('Applying coupon code:', code);
 
@@ -307,16 +312,26 @@ const CourseEnrollment = () => {
         code
       );
 
-      setEnrollmentData({
-        ...enrollmentData,
-        calculation,
-        couponCode: code
-      });
-
-      console.log('Coupon applied:', calculation);
+      // Check if coupon was actually applied
+      if (calculation.couponDiscount > 0) {
+        setEnrollmentData({
+          ...enrollmentData,
+          calculation,
+          couponCode: code
+        });
+        console.log('Coupon applied successfully:', calculation);
+      } else {
+        setCouponError('Invalid or expired coupon code');
+        // Still update to remove any previous coupon
+        setEnrollmentData({
+          ...enrollmentData,
+          calculation,
+          couponCode: ''
+        });
+      }
     } catch (error: any) {
       console.error('Error applying coupon:', error);
-      setError('Failed to apply coupon code');
+      setCouponError('Failed to apply coupon code');
     } finally {
       setCalculatingPrice(false);
     }
@@ -411,6 +426,11 @@ const CourseEnrollment = () => {
     );
   };
 
+  const handleContinueLearning = (courseId: string) => {
+    // Navigate to content library - placeholder for now
+    navigate(`/content-library?courseId=${courseId}`);
+  };
+
   // ==================== HELPER FUNCTIONS ====================
 
   const getLevelColor = (level: string) => {
@@ -434,11 +454,12 @@ const CourseEnrollment = () => {
     setError('');
     setSuccess('');
     setWarning('');
+    setCouponError('');
   };
 
   // CONTINUE IN PART 2...
-// src/pages/CourseEnrollment.tsx - PART 2 OF 2
-// Course Enrollment UI - PASTE IMMEDIATELY AFTER PART 1
+// src/pages/CourseEnrollment.tsx - PART 2 OF 3
+// Course Card and Overview Modal - PASTE IMMEDIATELY AFTER PART 1
 
   // ==================== RENDER: LOADING STATE ====================
 
@@ -457,6 +478,12 @@ const CourseEnrollment = () => {
 
   const CourseCard = ({ course }: { course: EnrichedCourse }) => {
     const isEnrolled = course.isEnrolled;
+
+    // Get special features that are enabled
+    const specialFeatures = [];
+    if (course.hasAiQnA) specialFeatures.push('AI Q&A');
+    if (course.hasHumanQnA) specialFeatures.push('Human Q&A');
+    if (course.hasStudyPlanner) specialFeatures.push('Study Planner');
 
     return (
       <Card className="p-0 hover:shadow-lg transition-all duration-300 group overflow-hidden">
@@ -536,9 +563,23 @@ const CourseEnrollment = () => {
             )}
           </div>
 
+          {/* Special Features */}
+          {specialFeatures.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-3">
+              {specialFeatures.map((feature, idx) => (
+                <span 
+                  key={idx}
+                  className="px-2 py-0.5 bg-primary-900/30 text-primary-300 rounded text-xs border border-primary-800"
+                >
+                  {feature}
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4">
             <span className="text-lg font-bold text-white">
-              {course.price === 0 ? 'Free' : `৳${course.price}`}
+              {course.price === 0 ? 'Free' : `৳${course.price.toLocaleString()}`}
             </span>
           </div>
 
@@ -567,6 +608,7 @@ const CourseEnrollment = () => {
                 <span>Overview</span>
               </button>
               <button
+                onClick={() => handleContinueLearning(course.id)}
                 className="flex-1 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Play size={16} />
@@ -580,7 +622,7 @@ const CourseEnrollment = () => {
                 className="flex-1 py-2 bg-background-700 hover:bg-background-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Eye size={16} />
-                <span>Details</span>
+                <span>Overview</span>
               </button>
               <button
                 onClick={() => handleEnrollClick(course)}
@@ -603,12 +645,267 @@ const CourseEnrollment = () => {
     );
   };
 
+  // ==================== COURSE OVERVIEW MODAL ====================
+
+  const CourseOverviewModal = () => {
+    if (!selectedCourse) return null;
+
+    const isEnrolled = selectedCourse.isEnrolled;
+
+    // Group routine files by category
+    const routineFilesByCategory = selectedCourse.routineFiles?.reduce((acc, file) => {
+      if (!acc[file.category]) {
+        acc[file.category] = [];
+      }
+      acc[file.category].push(file);
+      return acc;
+    }, {} as Record<string, typeof selectedCourse.routineFiles>);
+
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div className="bg-background-900 rounded-xl w-full max-w-4xl shadow-2xl border border-background-700 my-8">
+          <div className="flex items-center justify-between p-6 border-b border-background-700 sticky top-0 bg-background-900 z-10">
+            <h2 className="text-2xl font-bold text-white">Course Overview</h2>
+            <button
+              onClick={() => {
+                setShowCourseModal(false);
+                setSelectedCourse(null);
+              }}
+              className="p-2 hover:bg-background-800 rounded-lg transition-colors text-gray-400 hover:text-white"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+            {/* Thumbnail */}
+            {selectedCourse.thumbnail && (
+              <div className="rounded-lg overflow-hidden">
+                <img
+                  src={selectedCourse.thumbnail}
+                  alt={selectedCourse.title}
+                  className="w-full h-64 object-cover"
+                />
+              </div>
+            )}
+
+            {/* Title & Basic Info */}
+            <div>
+              <h3 className="text-2xl font-bold text-white mb-2">{selectedCourse.title}</h3>
+              {selectedCourse.description && (
+                <p className="text-gray-300 leading-relaxed">{selectedCourse.description}</p>
+              )}
+            </div>
+
+            {/* Class & Category */}
+            <div className="grid grid-cols-2 gap-4">
+              {selectedCourse.class && (
+                <div className="bg-background-800 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm mb-1">Class</p>
+                  <p className="text-white font-medium">{selectedCourse.class}</p>
+                </div>
+              )}
+              {selectedCourse.category && (
+                <div className="bg-background-800 p-4 rounded-lg">
+                  <p className="text-gray-400 text-sm mb-1">Category</p>
+                  <p className="text-white font-medium">{selectedCourse.category}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Level */}
+            {selectedCourse.level && selectedCourse.level !== 'unspecified' && (
+              <div className="bg-background-800 p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-2">Level</p>
+                <span className={`px-3 py-1 rounded-full text-sm ${getLevelColor(selectedCourse.level)}`}>
+                  {selectedCourse.level}
+                </span>
+              </div>
+            )}
+
+            {/* Duration (only for enrolled courses) */}
+            {isEnrolled && selectedCourse.duration && selectedCourse.duration !== '00:00' && (
+              <div className="bg-background-800 p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-1">Duration</p>
+                <p className="text-white font-medium flex items-center gap-2">
+                  <Clock size={16} className="text-primary-400" />
+                  {selectedCourse.duration}
+                </p>
+              </div>
+            )}
+
+            {/* Special Features */}
+            {(selectedCourse.hasAiQnA || selectedCourse.hasHumanQnA || selectedCourse.hasStudyPlanner) && (
+              <div className="bg-background-800 p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-3">Special Features</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedCourse.hasAiQnA && (
+                    <span className="px-3 py-1 bg-primary-900/30 text-primary-300 rounded-full text-sm border border-primary-800">
+                      AI Q&A Support
+                    </span>
+                  )}
+                  {selectedCourse.hasHumanQnA && (
+                    <span className="px-3 py-1 bg-primary-900/30 text-primary-300 rounded-full text-sm border border-primary-800">
+                      Human Q&A Support
+                    </span>
+                  )}
+                  {selectedCourse.hasStudyPlanner && (
+                    <span className="px-3 py-1 bg-primary-900/30 text-primary-300 rounded-full text-sm border border-primary-800">
+                      Study Planner
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Price & Discounts */}
+            <div className="bg-background-800 p-4 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Price</span>
+                <span className="text-2xl font-bold text-white">
+                  {selectedCourse.price === 0 ? 'Free' : `৳${selectedCourse.price.toLocaleString()}`}
+                </span>
+              </div>
+
+              {selectedCourse.previousStudentDiscount && selectedCourse.previousStudentDiscount > 0 && (
+                <div className="pt-2 border-t border-background-700">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Previous Student Discount</span>
+                    <span className="text-green-400 font-medium">৳{selectedCourse.previousStudentDiscount}</span>
+                  </div>
+                </div>
+              )}
+
+              {selectedCourse.extraDiscount && selectedCourse.extraDiscount > 0 && selectedCourse.extraDiscountValidUntil && (
+                <div className="pt-2 border-t border-background-700">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Limited Time Discount</span>
+                    <span className="text-green-400 font-medium">৳{selectedCourse.extraDiscount}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Valid until: {formatDate(selectedCourse.extraDiscountValidUntil)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Course Visibility Date */}
+            {selectedCourse.validity && (
+              <div className="bg-background-800 p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-1">Course Available Until</p>
+                <p className="text-white font-medium">{formatDate(selectedCourse.validity)}</p>
+              </div>
+            )}
+
+            {/* Requirements */}
+            {selectedCourse.requirements && selectedCourse.requirements.length > 0 && (
+              <div className="bg-background-800 p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-3">Requirements</p>
+                <ul className="space-y-2">
+                  {selectedCourse.requirements.map((req, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-gray-300">
+                      <CheckCircle size={16} className="text-primary-400 mt-0.5 flex-shrink-0" />
+                      <span>{req}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* What You Will Learn */}
+            {selectedCourse.whatYouWillLearn && selectedCourse.whatYouWillLearn.length > 0 && (
+              <div className="bg-background-800 p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-3">What You Will Learn</p>
+                <ul className="space-y-2">
+                  {selectedCourse.whatYouWillLearn.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-gray-300">
+                      <Award size={16} className="text-primary-400 mt-0.5 flex-shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Routine Files */}
+            {routineFilesByCategory && Object.keys(routineFilesByCategory).length > 0 && (
+              <div className="bg-background-800 p-4 rounded-lg">
+                <p className="text-gray-400 text-sm mb-3">Downloadable Files</p>
+                {Object.entries(routineFilesByCategory).map(([category, files]) => (
+                  <div key={category} className="mb-4 last:mb-0">
+                    <p className="text-white font-medium text-sm mb-2">{category}</p>
+                    <div className="space-y-2">
+                      {files?.map((file) => (
+                        <a
+                          key={file.id}
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-2 bg-background-700 hover:bg-background-600 rounded transition-colors group"
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText size={16} className="text-primary-400" />
+                            <span className="text-gray-300 group-hover:text-white text-sm">{file.fileName}</span>
+                          </div>
+                          <Download size={16} className="text-gray-400 group-hover:text-primary-400" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer with action button */}
+          <div className="p-6 border-t border-background-700 sticky bottom-0 bg-background-900">
+            {isEnrolled ? (
+              <button
+                onClick={() => handleContinueLearning(selectedCourse.id)}
+                className="w-full py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Play size={20} />
+                <span>Continue Learning</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowCourseModal(false);
+                  handleEnrollClick(selectedCourse);
+                }}
+                disabled={calculatingPrice}
+                className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-800 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                {calculatingPrice ? (
+                  <>
+                    <Loader size={20} className="animate-spin" />
+                    <span>Calculating...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShoppingCart size={20} />
+                    <span>Enroll Now</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // CONTINUE IN PART 3...
+// src/pages/CourseEnrollment.tsx - PART 3 OF 3
+// Enrollment Modal and Main Render - PASTE IMMEDIATELY AFTER PART 2
+
   // ==================== ENROLLMENT MODAL ====================
 
   const EnrollmentModal = () => {
     if (!enrollmentData) return null;
 
     const { course, calculation } = enrollmentData;
+    const [localCouponCode, setLocalCouponCode] = useState('');
 
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -637,7 +934,7 @@ const CourseEnrollment = () => {
             <div className="bg-background-800 p-4 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Base Price</span>
-                <span className="text-white font-medium">৳{calculation.basePrice}</span>
+                <span className="text-white font-medium">৳{calculation.basePrice.toLocaleString()}</span>
               </div>
 
               {calculation.previousStudentDiscount > 0 && (
@@ -646,7 +943,7 @@ const CourseEnrollment = () => {
                     <Percent size={14} />
                     Previous Student
                   </span>
-                  <span className="text-green-400">-৳{calculation.previousStudentDiscount}</span>
+                  <span className="text-green-400">-৳{calculation.previousStudentDiscount.toLocaleString()}</span>
                 </div>
               )}
 
@@ -656,7 +953,17 @@ const CourseEnrollment = () => {
                     <Tag size={14} />
                     Limited Time
                   </span>
-                  <span className="text-green-400">-৳{calculation.extraDiscount}</span>
+                  <span className="text-green-400">-৳{calculation.extraDiscount.toLocaleString()}</span>
+                </div>
+              )}
+
+              {calculation.couponDiscount > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400 flex items-center gap-1">
+                    <Tag size={14} />
+                    Coupon
+                  </span>
+                  <span className="text-green-400">-৳{calculation.couponDiscount.toLocaleString()}</span>
                 </div>
               )}
 
@@ -664,7 +971,7 @@ const CourseEnrollment = () => {
                 <div className="pt-2 border-t border-background-700">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-400">Total Savings</span>
-                    <span className="text-green-400 font-medium">৳{calculation.totalDiscount}</span>
+                    <span className="text-green-400 font-medium">৳{calculation.totalDiscount.toLocaleString()}</span>
                   </div>
                 </div>
               )}
@@ -673,11 +980,43 @@ const CourseEnrollment = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-white font-medium">Final Price</span>
                   <span className="text-2xl font-bold text-primary-400">
-                    {calculation.finalPrice === 0 ? 'Free' : `৳${calculation.finalPrice}`}
+                    {calculation.finalPrice === 0 ? 'Free' : `৳${calculation.finalPrice.toLocaleString()}`}
                   </span>
                 </div>
               </div>
             </div>
+
+            {/* Coupon Code Input */}
+            {calculation.finalPrice > 0 && (
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400">Have a coupon code?</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={localCouponCode}
+                    onChange={(e) => setLocalCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Enter coupon code"
+                    className="flex-1 bg-background-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    disabled={calculatingPrice}
+                  />
+                  <button
+                    onClick={() => handleApplyCoupon(localCouponCode)}
+                    disabled={!localCouponCode.trim() || calculatingPrice}
+                    className="px-4 py-2 bg-background-700 hover:bg-background-600 disabled:bg-background-800 disabled:opacity-50 text-white rounded-lg transition-colors"
+                  >
+                    {calculatingPrice ? (
+                      <Loader size={16} className="animate-spin" />
+                    ) : (
+                      'Apply'
+                    )}
+                  </button>
+                </div>
+                {couponError && (
+                  <p className="text-xs text-error-light">{couponError}</p>
+                )}
+                <p className="text-xs text-gray-500">Try: WELCOME10, SAVE50, SAVE100</p>
+              </div>
+            )}
 
             {calculation.hasPreviousEnrollments && calculation.previousStudentDiscount > 0 && (
               <div className="bg-green-900/20 border border-green-500/30 p-3 rounded-lg">
@@ -686,7 +1025,7 @@ const CourseEnrollment = () => {
                   <div>
                     <p className="text-sm text-green-400 font-medium">Previous Student Discount!</p>
                     <p className="text-xs text-gray-400 mt-1">
-                      Saving ৳{calculation.previousStudentDiscount}
+                      Saving ৳{calculation.previousStudentDiscount.toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -737,7 +1076,7 @@ const CourseEnrollment = () => {
                 ) : (
                   <>
                     <ShoppingCart size={20} />
-                    <span>Pay ৳{calculation.finalPrice}</span>
+                    <span>Pay ৳{calculation.finalPrice.toLocaleString()}</span>
                   </>
                 )}
               </button>
@@ -908,7 +1247,11 @@ const CourseEnrollment = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className={`grid gap-6 ${
+            viewMode === 'grid' 
+              ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
+              : 'grid-cols-1'
+          }`}>
             {(activeTab === 'available' ? availableCourses : enrolledCourses).map(course => (
               <CourseCard key={course.id} course={course} />
             ))}
@@ -931,6 +1274,7 @@ const CourseEnrollment = () => {
         </>
       )}
 
+      {showCourseModal && <CourseOverviewModal />}
       {showEnrollmentModal && <EnrollmentModal />}
     </div>
   );
