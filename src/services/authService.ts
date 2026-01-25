@@ -22,6 +22,9 @@ export interface UserProfile {
   dob?: string;
   phoneNumber?: string;
   guardianPhone?: string;
+  bloodGroup?: string;
+  gender?: string;
+  religion?: string;
   grade?: 'six' | 'seven' | 'eight' | 'nine' | 'ten' | 'eleven' | 'twelve' | 'admission' | 'graduated';
   role: 'admin' | 'teacher' | 'student';
   status: 'active' | 'inactive' | 'pending';
@@ -69,7 +72,7 @@ const generateRegistrationNumber = (): string => {
   return `${prefix}${year}${randomNum}`;
 };
 
-// Helper function to find user by Student ID or Phone Number
+// Helper function to find user by Student ID, Phone Number, or Email
 const findUserByLoginId = async (loginId: string): Promise<any> => {
   const usersRef = collection(db, 'users');
   
@@ -89,25 +92,59 @@ const findUserByLoginId = async (loginId: string): Promise<any> => {
     return { uid: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
   }
   
+  // If not found, try to find by email
+  q = query(usersRef, where('email', '==', loginId));
+  querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    return { uid: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+  }
+  
   return null;
 };
 
 export const authService = {
-  // Sign in with Student ID/Phone Number and password
+  // Sign in with Student ID/Phone Number/Email and password
   async signIn(loginId: string, password: string): Promise<UserProfile> {
     try {
-      // Find user by Student ID or Phone Number
-      const userData = await findUserByLoginId(loginId);
+      // First, try direct email login (for admin users)
+      let userData = null;
+      let userCredential = null;
       
-      if (!userData) {
-        throw new Error('Account not found. Please check your Student ID or phone number.');
+      // Check if loginId looks like an email
+      if (loginId.includes('@') && !loginId.includes('@student.local')) {
+        try {
+          userCredential = await signInWithEmailAndPassword(auth, loginId, password);
+          const user = userCredential.user;
+          
+          // Get user profile from Firestore
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            userData = { uid: user.uid, ...userDoc.data() };
+          }
+        } catch (error) {
+          // If direct email login fails, fall through to search
+          console.log('Direct email login failed, trying search...');
+        }
       }
       
-      // Sign in using the email associated with this account
-      // We'll use a generated email format: userId@student.local or phone@student.local
-      const emailForAuth = userData.email || `${userData.userId || userData.phoneNumber}@student.local`;
+      // If direct login didn't work, search by Student ID/Phone/Email
+      if (!userData) {
+        userData = await findUserByLoginId(loginId);
+        
+        if (!userData) {
+          throw new Error('Account not found. Please check your Student ID, phone number, or email.');
+        }
+        
+        // Sign in using the email associated with this account
+        const emailForAuth = userData.email || `${userData.userId || userData.phoneNumber}@student.local`;
+        userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
+      }
       
-      const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
+      if (!userData || !userCredential) {
+        throw new Error('Login failed. Please try again.');
+      }
+      
       const user = userCredential.user;
       
       // Check if account is pending approval
@@ -124,7 +161,6 @@ export const authService = {
       
       // Update last login
       await setDoc(doc(db, 'users', user.uid), {
-        ...userData,
         lastLogin: Timestamp.now()
       }, { merge: true });
       
@@ -138,18 +174,21 @@ export const authService = {
         dob: userData.dob,
         phoneNumber: userData.phoneNumber,
         guardianPhone: userData.guardianPhone,
+        bloodGroup: userData.bloodGroup,
+        gender: userData.gender,
+        religion: userData.religion,
         grade: userData.grade,
         role: userData.role,
         status: userData.status || 'active',
-        createdAt: userData.createdAt.toDate(),
+        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(),
         lastLogin: new Date(),
         approvedBy: userData.approvedBy,
-        approvedAt: userData.approvedAt?.toDate(),
+        approvedAt: userData.approvedAt?.toDate?.(),
         registrationNumber: userData.registrationNumber
       };
     } catch (error: any) {
       if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        throw new Error('Invalid credentials. Please check your Student ID/phone number and password.');
+        throw new Error('Invalid credentials. Please check your login information and password.');
       }
       throw new Error(error.message);
     }
@@ -165,9 +204,12 @@ export const authService = {
     dob: string,
     primaryPhone: string,
     guardianPhone: string,
+    bloodGroup: string,
+    gender: string,
+    religion: string,
     grade: 'six' | 'seven' | 'eight' | 'nine' | 'ten' | 'eleven' | 'twelve' | 'admission' | 'graduated',
     role: 'admin' | 'teacher' | 'student' = 'student',
-    requireApproval: boolean = true
+    requireApproval: boolean = false // Changed default to false for auto-approval
   ): Promise<UserProfile> {
     try {
       // Generate unique Student ID
@@ -176,9 +218,9 @@ export const authService = {
       // Generate unique registration number for backward compatibility
       const registrationNumber = generateRegistrationNumber();
       
-      // Determine initial status
+      // Students are auto-approved by default, others may require approval
       let initialStatus: 'active' | 'pending' = 'active';
-      if (requireApproval && role !== 'admin') {
+      if (requireApproval && role !== 'admin' && role !== 'student') {
         initialStatus = 'pending';
       }
       
@@ -198,6 +240,9 @@ export const authService = {
         dob,
         phoneNumber: primaryPhone,
         guardianPhone: guardianPhone || undefined,
+        bloodGroup,
+        gender,
+        religion: religion || undefined,
         grade,
         role,
         status: initialStatus,
@@ -210,7 +255,7 @@ export const authService = {
       
       console.log('User created with Student ID:', studentId, 'Status:', initialStatus);
       
-      // If account requires approval, sign out the user immediately
+      // If account requires approval (teachers, not students), sign out the user immediately
       if (initialStatus === 'pending') {
         await firebaseSignOut(auth);
       }
