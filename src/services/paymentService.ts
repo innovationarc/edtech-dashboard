@@ -1,5 +1,5 @@
 // src/services/paymentService.ts
-// Payment Service with Complete Error Handling and Network Fix
+// Payment Service - FULLY FIXED with Detailed Error Logging
 
 import { 
   collection, 
@@ -14,14 +14,15 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 
-// Fix: Use proper backend URL for Vercel
+// FIXED: Get backend URL from current window location
 const BACKEND_URL = typeof window !== 'undefined' 
   ? window.location.origin 
-  : process.env.NEXT_PUBLIC_BACKEND_URL || process.env.REACT_APP_BACKEND_URL || 'http://localhost:3000';
+  : 'http://localhost:3000';
 
-console.log('PaymentService: Backend URL:', BACKEND_URL);
+console.log('💳 PaymentService initialized');
+console.log('🌐 Backend URL:', BACKEND_URL);
 
 // ==================== INTERFACES ====================
 
@@ -94,39 +95,40 @@ export const paymentService = {
   
   // ==================== PAYMENT INITIATION ====================
   
-  /**
-   * Initiate payment through SSLCOMMERZ gateway
-   */
   async initiatePayment(request: PaymentInitiationRequest): Promise<PaymentInitiationResponse> {
-    try {
-      console.log('PaymentService: Initiating payment', {
-        userId: request.userId,
-        productId: request.productId,
-        amount: request.amount
-      });
+    console.log('');
+    console.log('='.repeat(80));
+    console.log('💳 PAYMENT SERVICE: Initiating Payment');
+    console.log('='.repeat(80));
+    console.log('User ID:', request.userId);
+    console.log('Product ID:', request.productId);
+    console.log('Amount:', request.amount);
+    console.log('Product Type:', request.productType);
+    console.log('='.repeat(80));
 
-      // Validate request
+    try {
+      // Step 1: Validate request
+      console.log('📋 Step 1: Validating request...');
       const validation = this.validatePaymentRequest(request);
       if (!validation.valid) {
-        console.error('PaymentService: Validation failed:', validation.error);
+        console.error('❌ Validation failed:', validation.error);
         return {
           success: false,
           error: 'Invalid payment request',
           details: validation.error
         };
       }
+      console.log('✅ Request validated');
 
-      // Generate unique transaction ID
-      const transactionId = this.generateTransactionId(
-        request.productId, 
-        request.userId
-      );
+      // Step 2: Generate transaction ID
+      console.log('📋 Step 2: Generating transaction ID...');
+      const transactionId = this.generateTransactionId(request.productId, request.userId);
+      console.log('✅ Transaction ID:', transactionId);
 
-      console.log('PaymentService: Generated transaction ID:', transactionId);
-
-      // Create transaction record in Firestore
+      // Step 3: Create Firestore record
+      console.log('📋 Step 3: Creating Firestore transaction...');
       try {
-        const firestoreTransactionId = await this.createTransaction({
+        const firestoreId = await this.createTransaction({
           transactionId,
           userId: request.userId,
           userName: request.userName,
@@ -141,57 +143,59 @@ export const paymentService = {
           appliedDiscounts: request.appliedDiscounts,
           metadata: request.metadata
         });
-
-        console.log('PaymentService: Transaction created in Firestore:', firestoreTransactionId);
+        console.log('✅ Firestore record created:', firestoreId);
       } catch (firestoreError: any) {
-        console.error('PaymentService: Firestore error:', firestoreError);
+        console.error('❌ Firestore error:', firestoreError.message);
         return {
           success: false,
-          error: 'Failed to create transaction record',
-          details: firestoreError.message
+          error: 'Database error',
+          details: `Failed to create transaction record: ${firestoreError.message}`
         };
       }
 
-      // Call backend API
-      console.log('PaymentService: Calling backend API...');
-      console.log('PaymentService: URL:', `${BACKEND_URL}/api/payment?action=initiate`);
+      // Step 4: Call backend API
+      console.log('📋 Step 4: Calling backend API...');
+      const apiUrl = `${BACKEND_URL}/api/payment?action=initiate`;
+      console.log('API URL:', apiUrl);
       
-      try {
-        const response = await axios.post(
-          `${BACKEND_URL}/api/payment?action=initiate`,
-          {
-            transactionId,
-            userId: request.userId,
-            userName: request.userName,
-            userEmail: request.userEmail,
-            amount: request.amount,
-            productId: request.productId,
-            productName: request.productName,
-            productType: request.productType,
-            appliedDiscounts: request.appliedDiscounts,
-            metadata: request.metadata
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            timeout: 30000,
-            validateStatus: (status) => status < 500 // Don't throw on 4xx
-          }
-        );
+      const payload = {
+        transactionId,
+        userId: request.userId,
+        userName: request.userName,
+        userEmail: request.userEmail,
+        amount: request.amount,
+        productId: request.productId,
+        productName: request.productName,
+        productType: request.productType,
+        appliedDiscounts: request.appliedDiscounts,
+        metadata: request.metadata
+      };
+      
+      console.log('Payload:', JSON.stringify(payload, null, 2));
 
-        console.log('PaymentService: Backend response:', response.data);
+      try {
+        const response = await axios.post(apiUrl, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 30000
+        });
+
+        console.log('📥 Backend response:', JSON.stringify(response.data, null, 2));
 
         if (response.data.success) {
+          console.log('✅ Payment initiation successful');
+          
           // Update transaction with gateway session
           try {
             await this.updateTransactionByTranId(transactionId, {
               gatewayTransactionId: response.data.gatewayTransactionId,
               status: 'pending'
             });
+            console.log('✅ Transaction updated with gateway session');
           } catch (updateError) {
-            console.warn('PaymentService: Failed to update transaction:', updateError);
+            console.warn('⚠️ Failed to update transaction:', updateError);
           }
 
           return {
@@ -201,7 +205,7 @@ export const paymentService = {
             sessionId: response.data.gatewayTransactionId
           };
         } else {
-          console.error('PaymentService: Backend returned error:', response.data.error);
+          console.error('❌ Backend returned error:', response.data.error);
           
           // Update transaction as failed
           try {
@@ -209,23 +213,35 @@ export const paymentService = {
               status: 'failed',
               metadata: { 
                 error: response.data.error,
+                details: response.data.details,
                 timestamp: new Date().toISOString()
               }
             });
           } catch (updateError) {
-            console.warn('PaymentService: Failed to update failed transaction:', updateError);
+            console.warn('⚠️ Failed to update failed transaction');
           }
 
           return {
             success: false,
             error: response.data.error || 'Payment initiation failed',
-            details: 'Backend rejected the payment request'
+            details: response.data.details || 'Backend rejected the payment request'
           };
         }
       } catch (axiosError: any) {
-        console.error('PaymentService: Network/API error:', axiosError);
+        console.error('');
+        console.error('💥 AXIOS ERROR');
+        console.error('='.repeat(80));
+        console.error('Message:', axiosError.message);
+        console.error('Code:', axiosError.code);
+        console.error('URL:', apiUrl);
         
-        // Handle different types of errors
+        if (axiosError.response) {
+          console.error('Response Status:', axiosError.response.status);
+          console.error('Response Data:', JSON.stringify(axiosError.response.data, null, 2));
+        }
+        console.error('='.repeat(80));
+        
+        // Handle specific error types
         if (axiosError.code === 'ECONNABORTED') {
           return {
             success: false,
@@ -243,11 +259,10 @@ export const paymentService = {
         }
 
         if (axiosError.response) {
-          // Server responded with error
           return {
             success: false,
-            error: 'Server error',
-            details: axiosError.response.data?.error || 'Payment gateway returned an error'
+            error: axiosError.response.data?.error || 'Server error',
+            details: axiosError.response.data?.details || axiosError.message
           };
         }
         
@@ -258,7 +273,13 @@ export const paymentService = {
         };
       }
     } catch (error: any) {
-      console.error('PaymentService: Unexpected error:', error);
+      console.error('');
+      console.error('💥 UNEXPECTED ERROR');
+      console.error('='.repeat(80));
+      console.error('Message:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('='.repeat(80));
+      
       return {
         success: false,
         error: 'Unexpected error',
@@ -267,13 +288,11 @@ export const paymentService = {
     }
   },
 
-  /**
-   * Validate payment after gateway redirect
-   */
   async validatePayment(transactionId: string): Promise<PaymentValidationResponse> {
-    try {
-      console.log('PaymentService: Validating payment:', transactionId);
+    console.log('');
+    console.log('🔍 Validating payment:', transactionId);
 
+    try {
       if (!transactionId || !transactionId.trim()) {
         return {
           success: false,
@@ -282,11 +301,11 @@ export const paymentService = {
         };
       }
 
-      // Get transaction from Firestore
+      // Get from Firestore
       const transaction = await this.getTransactionByTranId(transactionId);
       
       if (!transaction) {
-        console.error('PaymentService: Transaction not found:', transactionId);
+        console.error('❌ Transaction not found');
         return {
           success: false,
           error: 'Transaction not found',
@@ -294,10 +313,11 @@ export const paymentService = {
         };
       }
 
-      console.log('PaymentService: Current transaction status:', transaction.status);
+      console.log('Current status:', transaction.status);
 
-      // If already completed, return cached result
+      // Return cached result if completed
       if (transaction.status === 'success') {
+        console.log('✅ Already validated');
         return {
           success: true,
           status: 'success',
@@ -306,7 +326,7 @@ export const paymentService = {
         };
       }
 
-      // If failed or cancelled
+      // Return if failed/cancelled
       if (transaction.status === 'failed' || transaction.status === 'cancelled') {
         return {
           success: false,
@@ -319,7 +339,7 @@ export const paymentService = {
       }
 
       // Call backend to validate
-      console.log('PaymentService: Calling backend validate API...');
+      console.log('📞 Calling backend validate API...');
       
       try {
         const response = await axios.post(
@@ -330,12 +350,11 @@ export const paymentService = {
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
-            timeout: 30000,
-            validateStatus: (status) => status < 500
+            timeout: 30000
           }
         );
 
-        console.log('PaymentService: Validation response:', response.data);
+        console.log('📥 Validation response:', response.data);
 
         if (response.data.success) {
           return {
@@ -354,7 +373,7 @@ export const paymentService = {
           };
         }
       } catch (axiosError: any) {
-        console.error('PaymentService: Validation API error:', axiosError);
+        console.error('❌ Validation API error:', axiosError.message);
         
         if (axiosError.code === 'ECONNABORTED') {
           return {
@@ -373,7 +392,7 @@ export const paymentService = {
         };
       }
     } catch (error: any) {
-      console.error('PaymentService: Validation error:', error);
+      console.error('❌ Validation error:', error.message);
       return {
         success: false,
         error: 'Validation failed',
@@ -440,10 +459,9 @@ export const paymentService = {
       };
 
       const docRef = await addDoc(collection(db, 'transactions'), transactionData);
-      console.log('PaymentService: Transaction record created:', docRef.id);
       return docRef.id;
     } catch (error: any) {
-      console.error('PaymentService: Error creating transaction:', error);
+      console.error('❌ Error creating transaction:', error.message);
       throw new Error(`Failed to create transaction: ${error.message}`);
     }
   },
@@ -472,7 +490,7 @@ export const paymentService = {
       
       return null;
     } catch (error: any) {
-      console.error('PaymentService: Error getting transaction:', error);
+      console.error('❌ Error getting transaction:', error.message);
       throw new Error(`Failed to get transaction: ${error.message}`);
     }
   },
@@ -500,10 +518,8 @@ export const paymentService = {
         ...cleanUpdates,
         updatedAt: Timestamp.now()
       });
-
-      console.log('PaymentService: Transaction updated:', transactionId);
     } catch (error: any) {
-      console.error('PaymentService: Error updating transaction:', error);
+      console.error('❌ Error updating transaction:', error.message);
       throw new Error(`Failed to update transaction: ${error.message}`);
     }
   },
@@ -526,7 +542,7 @@ export const paymentService = {
         } as Transaction;
       });
     } catch (error: any) {
-      console.error('PaymentService: Error getting all transactions:', error);
+      console.error('❌ Error getting all transactions:', error.message);
       throw new Error(`Failed to get transactions: ${error.message}`);
     }
   },
@@ -556,7 +572,7 @@ export const paymentService = {
         } as Transaction;
       });
     } catch (error: any) {
-      console.error('PaymentService: Error getting user transactions:', error);
+      console.error('❌ Error getting user transactions:', error.message);
       throw new Error(`Failed to get user transactions: ${error.message}`);
     }
   }
