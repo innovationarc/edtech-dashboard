@@ -7,6 +7,7 @@ import ManageUsers from './pages/ManageUsers';
 import ContentUpload from './pages/ContentUpload';
 import ContentLibrary from './pages/ContentLibrary';
 import CourseEnrollment from './pages/CourseEnrollment';
+import PaymentSuccess from './pages/PaymentSuccess';
 import StudyPlan from './pages/StudyPlan';
 import Progress from './pages/Progress';
 import Analytics from './pages/Analytics';
@@ -17,12 +18,12 @@ import PaymentManagement from './pages/PaymentManagement';
 import MCQPractice from './pages/MCQPractice';
 import Achievements from './pages/Achievements';
 import AllAnnouncements from './pages/AllAnnouncements';
-import StudentQA from './pages/StudentQA'; // Import StudentQA
-import StudentTaskDashboard from './pages/StudentTaskDashboard'; // Import StudentTaskDashboard
-import StudentStudyPlan from './pages/StudentStudyPlan'; // Import StudentStudyPlan
-import TeacherQA from './pages/TeacherQA'; // Import TeacherQA
-import TeacherTaskManagement from './pages/TeacherTaskManagement'; // Import TeacherTaskManagement
-import QuestionDetail from './pages/QuestionDetail'; // Import QuestionDetail
+import StudentQA from './pages/StudentQA';
+import StudentTaskDashboard from './pages/StudentTaskDashboard';
+import StudentStudyPlan from './pages/StudentStudyPlan';
+import TeacherQA from './pages/TeacherQA';
+import TeacherTaskManagement from './pages/TeacherTaskManagement';
+import QuestionDetail from './pages/QuestionDetail';
 import { useDashboard } from './contexts/DashboardContext';
 
 // Protected Route Component for Admin-only pages
@@ -82,6 +83,9 @@ const AppRoutes = () => {
 
   return (
     <Routes>
+      {/* Payment success route - OUTSIDE DashboardLayout for clean display */}
+      <Route path="/payment-success" element={<PaymentSuccess />} />
+      
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<Navigate to={getDefaultRoute()} replace />} />
         
@@ -197,7 +201,7 @@ const AppRoutes = () => {
         <Route path="achievements" element={<Achievements />} />
         <Route path="coming-soon" element={<ComingSoon />} />
         <Route path="settings" element={<Settings />} />
-        <Route path="question/:questionId" element={<QuestionDetail />} /> {/* New Question Detail Route */}
+        <Route path="question/:questionId" element={<QuestionDetail />} />
       </Route>
     </Routes>
   );
