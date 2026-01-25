@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "functions": {
+    "api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "FIREBASE_PROJECT_ID": "@firebase_project_id",
+    "FIREBASE_CLIENT_EMAIL": "@firebase_client_email",
+    "FIREBASE_PRIVATE_KEY": "@firebase_private_key",
+    "SSLCOMMERZ_STORE_ID": "@sslcommerz_store_id",
+    "SSLCOMMERZ_STORE_PASSWORD": "@sslcommerz_store_password",
+    "SSLCOMMERZ_IS_LIVE": "@sslcommerz_is_live"
+  },
+  "build": {
+    "env": {
+      "FIREBASE_PROJECT_ID": "@firebase_project_id",
+      "FIREBASE_CLIENT_EMAIL": "@firebase_client_email",
+      "FIREBASE_PRIVATE_KEY": "@firebase_private_key"
+    }
+  }
+}
