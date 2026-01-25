@@ -1,20 +1,28 @@
+// src/services/authService.ts
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
-  signOut,
+  signOut as firebaseSignOut,
   onAuthStateChanged,
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
   User
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, Timestamp, query, collection, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
 export interface UserProfile {
   uid: string;
-  email: string;
+  userId?: string; // ST-1xxxxxxx format
+  email?: string;
   name: string;
+  surname?: string;
+  fullName?: string;
+  dob?: string;
+  phoneNumber?: string;
+  guardianPhone?: string;
+  grade?: 'six' | 'seven' | 'eight' | 'nine' | 'ten' | 'eleven' | 'twelve' | 'admission' | 'graduated';
   role: 'admin' | 'teacher' | 'student';
   status: 'active' | 'inactive' | 'pending';
   createdAt: Date;
@@ -30,7 +38,30 @@ export interface UserProfile {
   profilePictureUrl?: string;
 }
 
-// Helper function to generate random registration number
+// Helper function to generate unique Student ID (ST-1xxxxxxx)
+const generateStudentId = async (): Promise<string> => {
+  const prefix = 'ST-1';
+  let isUnique = false;
+  let studentId = '';
+  
+  while (!isUnique) {
+    const randomNum = Math.floor(Math.random() * 9000000) + 1000000; // 7-digit random number
+    studentId = `${prefix}${randomNum}`;
+    
+    // Check if this ID already exists
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('userId', '==', studentId));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      isUnique = true;
+    }
+  }
+  
+  return studentId;
+};
+
+// Helper function to generate random registration number (kept for backward compatibility)
 const generateRegistrationNumber = (): string => {
   const prefix = 'REG';
   const year = new Date().getFullYear();
@@ -38,31 +69,56 @@ const generateRegistrationNumber = (): string => {
   return `${prefix}${year}${randomNum}`;
 };
 
+// Helper function to find user by Student ID or Phone Number
+const findUserByLoginId = async (loginId: string): Promise<any> => {
+  const usersRef = collection(db, 'users');
+  
+  // Try to find by userId first (ST-1xxxxxxx)
+  let q = query(usersRef, where('userId', '==', loginId));
+  let querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    return { uid: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+  }
+  
+  // If not found, try to find by phone number
+  q = query(usersRef, where('phoneNumber', '==', loginId));
+  querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    return { uid: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+  }
+  
+  return null;
+};
+
 export const authService = {
-  // Sign in with email and password
-  async signIn(email: string, password: string): Promise<UserProfile> {
+  // Sign in with Student ID/Phone Number and password
+  async signIn(loginId: string, password: string): Promise<UserProfile> {
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      // Find user by Student ID or Phone Number
+      const userData = await findUserByLoginId(loginId);
       
-      // Get user profile from Firestore
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      
-      if (!userDoc.exists()) {
-        throw new Error('User profile not found');
+      if (!userData) {
+        throw new Error('Account not found. Please check your Student ID or phone number.');
       }
       
-      const userData = userDoc.data();
+      // Sign in using the email associated with this account
+      // We'll use a generated email format: userId@student.local or phone@student.local
+      const emailForAuth = userData.email || `${userData.userId || userData.phoneNumber}@student.local`;
+      
+      const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
+      const user = userCredential.user;
       
       // Check if account is pending approval
       if (userData.status === 'pending') {
-        await signOut(auth); // Sign out the user
+        await firebaseSignOut(auth);
         throw new Error('Your account is pending admin approval. Please wait for approval before signing in.');
       }
       
       // Check if account is inactive
       if (userData.status === 'inactive') {
-        await signOut(auth); // Sign out the user
+        await firebaseSignOut(auth);
         throw new Error('Your account has been deactivated. Please contact an administrator.');
       }
       
@@ -74,74 +130,102 @@ export const authService = {
       
       return {
         uid: user.uid,
-        email: user.email!,
-        name: userData.name,
+        userId: userData.userId,
+        email: userData.email,
+        name: userData.name || userData.fullName,
+        surname: userData.surname,
+        fullName: userData.fullName,
+        dob: userData.dob,
+        phoneNumber: userData.phoneNumber,
+        guardianPhone: userData.guardianPhone,
+        grade: userData.grade,
         role: userData.role,
         status: userData.status || 'active',
         createdAt: userData.createdAt.toDate(),
         lastLogin: new Date(),
         approvedBy: userData.approvedBy,
-        approvedAt: userData.approvedAt?.toDate()
+        approvedAt: userData.approvedAt?.toDate(),
+        registrationNumber: userData.registrationNumber
       };
     } catch (error: any) {
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        throw new Error('Invalid credentials. Please check your Student ID/phone number and password.');
+      }
       throw new Error(error.message);
     }
   },
 
-  // Create new user account
+  // Create new user account with new registration fields
   async createUser(
-    email: string, 
-    password: string, 
-    name: string, 
+    phoneNumber: string,
+    email: string,
+    password: string,
+    surname: string,
+    fullName: string,
+    dob: string,
+    primaryPhone: string,
+    guardianPhone: string,
+    grade: 'six' | 'seven' | 'eight' | 'nine' | 'ten' | 'eleven' | 'twelve' | 'admission' | 'graduated',
     role: 'admin' | 'teacher' | 'student' = 'student',
     requireApproval: boolean = true
   ): Promise<UserProfile> {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      // Generate unique Student ID
+      const studentId = await generateStudentId();
       
-      // Determine initial status based on role and approval requirement
+      // Generate unique registration number for backward compatibility
+      const registrationNumber = generateRegistrationNumber();
+      
+      // Determine initial status
       let initialStatus: 'active' | 'pending' = 'active';
-      
       if (requireApproval && role !== 'admin') {
         initialStatus = 'pending';
       }
       
-      // Generate unique registration number
-      const registrationNumber = generateRegistrationNumber();
+      // Create email for Firebase Auth (use provided email or generate one)
+      const authEmail = email || `${studentId}@student.local`;
       
-      const userProfile: Omit<UserProfile, 'uid'> = {
-        email: user.email!,
-        name,
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
+      const user = userCredential.user;
+      
+      const userProfile: Omit<UserProfile, 'uid'> & { createdAt: any } = {
+        userId: studentId,
+        email: email || undefined,
+        name: fullName,
+        surname,
+        fullName,
+        dob,
+        phoneNumber: primaryPhone,
+        guardianPhone: guardianPhone || undefined,
+        grade,
         role,
         status: initialStatus,
-        createdAt: new Date(),
+        createdAt: Timestamp.now(),
         registrationNumber
       };
       
       // Save user profile to Firestore
-      await setDoc(doc(db, 'users', user.uid), {
-        ...userProfile,
-        createdAt: Timestamp.now()
-      });
+      await setDoc(doc(db, 'users', user.uid), userProfile);
       
-      console.log('User created with status:', initialStatus);
+      console.log('User created with Student ID:', studentId, 'Status:', initialStatus);
       
       // If account requires approval, sign out the user immediately
       if (initialStatus === 'pending') {
-        await signOut(auth);
+        await firebaseSignOut(auth);
       }
       
       return {
         uid: user.uid,
-        ...userProfile
+        ...userProfile,
+        createdAt: new Date()
       };
     } catch (error: any) {
       // Handle specific Firebase auth errors
       let errorMessage = error.message;
       
       if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'An account with this email already exists';
+        errorMessage = 'This email is already registered. Please use a different email or sign in.';
       } else if (error.code === 'auth/weak-password') {
         errorMessage = 'Password is too weak. Please choose a stronger password';
       } else if (error.code === 'auth/invalid-email') {
@@ -191,7 +275,7 @@ export const authService = {
   // Sign out
   async signOut(): Promise<void> {
     try {
-      await signOut(auth);
+      await firebaseSignOut(auth);
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -211,16 +295,30 @@ export const authService = {
   isAuthenticated(): boolean {
     return !!auth.currentUser;
   },
+
   // Update user password
   async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
     try {
       const user = auth.currentUser;
-      if (!user || !user.email) {
+      if (!user) {
         throw new Error('No authenticated user found');
       }
 
+      // Get user's email from Firestore
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (!userDoc.exists()) {
+        throw new Error('User profile not found');
+      }
+      
+      const userData = userDoc.data();
+      const userEmail = userData.email || user.email;
+      
+      if (!userEmail) {
+        throw new Error('Email not found for authentication');
+      }
+
       // Re-authenticate user before password change for security
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      const credential = EmailAuthProvider.credential(userEmail, currentPassword);
       await reauthenticateWithCredential(user, credential);
 
       // Update password
