@@ -89,7 +89,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
           <div className="space-y-5">
             <div className="group">
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Student ID or Phone Number
+                Student ID, Phone Number, or Email
               </label>
               <div className="relative">
                 <input
@@ -98,12 +98,12 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   onChange={(e) => setLoginId(e.target.value)}
                   onKeyPress={handleKeyPress}
                   className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
-                  placeholder="ST-1xxxxxxx or phone number"
+                  placeholder="ST-1xxxxxxx, phone, or email"
                   disabled={loading}
                 />
                 <Smartphone size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
-              <p className="text-xs text-gray-500 mt-1.5">Enter your Student ID or registered phone number</p>
+              <p className="text-xs text-gray-500 mt-1.5">Enter your Student ID, phone number, or email address</p>
             </div>
 
             <div className="group">
