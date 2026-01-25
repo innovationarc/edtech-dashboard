@@ -1,5 +1,5 @@
 // api/payment.ts
-// Vercel Serverless Function - FIXED with correct URL handling
+// Vercel Serverless Function - FIXED with API route callbacks
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
@@ -365,10 +365,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log('✅ All required fields present');
 
-      // CRITICAL FIX: Construct URLs correctly
-      const successUrl = `${baseUrl}/payment-success?status=success&tran_id=${transactionId}`;
-      const failUrl = `${baseUrl}/payment-success?status=failed&tran_id=${transactionId}`;
-      const cancelUrl = `${baseUrl}/payment-success?status=cancel&tran_id=${transactionId}`;
+      // CRITICAL FIX: Use API routes for SSLCOMMERZ callbacks (they POST data)
+      const successUrl = `${baseUrl}/api/payment/success`;
+      const failUrl = `${baseUrl}/api/payment/success`;
+      const cancelUrl = `${baseUrl}/api/payment/success`;
       const ipnUrl = `${baseUrl}/api/payment?action=ipn`;
 
       console.log('');
@@ -377,6 +377,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('  Fail URL:', failUrl);
       console.log('  Cancel URL:', cancelUrl);
       console.log('  IPN URL:', ipnUrl);
+      console.log('  ⚠️ All URLs point to API routes (accept POST)');
       console.log('');
 
       const paymentData = {
