@@ -15,6 +15,9 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
     dob: '',
     phoneNumber: '',
     guardianPhone: '',
+    bloodGroup: '' as '' | 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-',
+    gender: '' as '' | 'male' | 'female' | 'other',
+    religion: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -32,7 +35,7 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
     setLoading(true);
 
     // Validation
-    if (!formData.surname || !formData.fullName || !formData.dob || !formData.phoneNumber || !formData.password || !formData.confirmPassword || !formData.grade) {
+    if (!formData.surname || !formData.fullName || !formData.dob || !formData.phoneNumber || !formData.password || !formData.confirmPassword || !formData.grade || !formData.bloodGroup || !formData.gender) {
       setError('Please fill in all required fields');
       setLoading(false);
       return;
@@ -68,9 +71,12 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
         formData.dob,
         formData.phoneNumber,
         formData.guardianPhone,
+        formData.bloodGroup,
+        formData.gender,
+        formData.religion,
         formData.grade,
         formData.role,
-        true // Require approval for new accounts
+        false // Auto-approve students
       );
       
       setRegistrationSuccess(true);
@@ -158,7 +164,8 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               </div>
             ) : (
               <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 text-green-200 px-6 py-4 rounded-xl border border-green-700/50">
-                <p className="text-sm">Your account is ready! Sign in with your Student ID and password.</p>
+                <p className="text-sm font-semibold mb-2">✓ Account Ready!</p>
+                <p className="text-sm">Your account is active and ready to use. Sign in with your Student ID and password to start learning!</p>
               </div>
             )}
             
@@ -307,6 +314,62 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="group">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Blood Group *</label>
+                <div className="relative">
+                  <select
+                    value={formData.bloodGroup}
+                    onChange={(e) => handleInputChange('bloodGroup', e.target.value)}
+                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-4 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 appearance-none cursor-pointer"
+                    disabled={loading}
+                  >
+                    <option value="">Select blood group</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="group">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Gender *</label>
+                <div className="relative">
+                  <select
+                    value={formData.gender}
+                    onChange={(e) => handleInputChange('gender', e.target.value)}
+                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-4 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 appearance-none cursor-pointer"
+                    disabled={loading}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="group">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Religion <span className="text-gray-500">(Optional)</span></label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.religion}
+                    onChange={(e) => handleInputChange('religion', e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-4 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                    placeholder="Your religion"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="group">
               <label className="block text-sm font-medium text-gray-300 mb-2">Email <span className="text-gray-500">(Optional)</span></label>
               <div className="relative">
@@ -357,15 +420,15 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               </div>
             </div>
 
-            <div className="bg-gradient-to-r from-yellow-900/20 to-orange-900/20 border border-yellow-700/30 rounded-xl p-4 backdrop-blur-sm">
+            <div className="bg-gradient-to-r from-green-900/20 to-emerald-900/20 border border-green-700/30 rounded-xl p-4 backdrop-blur-sm">
               <div className="flex items-start gap-3">
-                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg">
-                  <span className="text-xs text-white font-bold">!</span>
+                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg">
+                  <span className="text-xs text-white font-bold">✓</span>
                 </div>
                 <div>
-                  <p className="text-sm text-yellow-100 font-semibold">Account Approval Required</p>
-                  <p className="text-xs text-yellow-200/80 mt-1">
-                    New accounts require admin approval. You'll receive notification once approved.
+                  <p className="text-sm text-green-100 font-semibold">Instant Account Activation</p>
+                  <p className="text-xs text-green-200/80 mt-1">
+                    Student accounts are automatically approved. You can sign in immediately after registration!
                   </p>
                 </div>
               </div>
