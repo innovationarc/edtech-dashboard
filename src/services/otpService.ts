@@ -41,11 +41,16 @@ export const otpService = {
     return Math.floor(100000 + Math.random() * 900000).toString();
   },
 
-  formatPhoneNumber(phoneNumber: string): string {
+  /**
+   * Normalize phone number to 880XXXXXXXXXX format (13 digits, no + sign)
+   * Input: Can be 880XXXXXXXXXX, 01XXXXXXXXX, or 1XXXXXXXXX
+   * Output: Always 880XXXXXXXXXX
+   */
+  normalizePhoneNumber(phoneNumber: string): string {
     // Remove all non-digit characters
     let cleaned = phoneNumber.replace(/\D/g, '');
     
-    // Handle different input formats
+    // Remove country code if present
     if (cleaned.startsWith('880')) {
       cleaned = cleaned.substring(3);
     } else if (cleaned.startsWith('88')) {
@@ -57,29 +62,45 @@ export const otpService = {
       cleaned = cleaned.substring(1);
     }
     
-    // Validate length (should be 10 digits)
+    // Validate length (should be 10 digits now)
     if (cleaned.length !== 10) {
       throw new Error('Invalid phone number format');
     }
     
-    // Return in international format: +8801XXXXXXXXXX
-    return `+8801${cleaned}`;
+    // Return in format: 880XXXXXXXXXX (no + sign)
+    return `880${cleaned}`;
   },
 
+  /**
+   * Validate phone number format
+   * Accepts: 10 or 11 digits
+   * Examples: 1623737505, 01623737505
+   */
   validatePhoneNumber(phoneNumber: string): boolean {
     try {
-      const formatted = this.formatPhoneNumber(phoneNumber);
-      // Check if it starts with +8801 and has exactly 14 characters
-      if (!formatted.startsWith('+8801') || formatted.length !== 14) {
+      const normalized = this.normalizePhoneNumber(phoneNumber);
+      
+      // Check if it's exactly 13 digits and starts with 880
+      if (!normalized.startsWith('880') || normalized.length !== 13) {
         return false;
       }
       
-      // Check if the first digit after +8801 is valid (1,3,4,5,6,7,8,9)
-      const firstDigit = formatted[5]; // Position after +8801
+      // Check if the first digit after 880 is valid (1,3,4,5,6,7,8,9)
+      const firstDigit = normalized[3]; // Position after 880
       return ['1', '3', '4', '5', '6', '7', '8', '9'].includes(firstDigit);
     } catch {
       return false;
     }
+  },
+
+  /**
+   * Format phone number for display with + sign
+   * Input: 880XXXXXXXXXX
+   * Output: +880XXXXXXXXXX (for display only)
+   */
+  formatForDisplay(phoneNumber: string): string {
+    const normalized = this.normalizePhoneNumber(phoneNumber);
+    return `+${normalized}`;
   },
 
   async sendOTP(
@@ -88,7 +109,8 @@ export const otpService = {
     surname?: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const formattedPhone = this.formatPhoneNumber(phoneNumber);
+      // Normalize phone number to 880XXXXXXXXXX format
+      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
       if (!this.validatePhoneNumber(phoneNumber)) {
         return { success: false, message: 'Invalid phone number format' };
@@ -98,7 +120,7 @@ export const otpService = {
       const otpCollection = collection(db, 'otp_verifications');
       const recentOTPQuery = query(
         otpCollection,
-        where('phoneNumber', '==', formattedPhone),
+        where('phoneNumber', '==', normalizedPhone),
         where('purpose', '==', purpose)
       );
       
@@ -138,7 +160,7 @@ export const otpService = {
       // Save OTP to Firestore
       const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
       const otpDoc = await addDoc(otpCollection, {
-        phoneNumber: formattedPhone,
+        phoneNumber: normalizedPhone,
         otp,
         createdAt: Timestamp.fromDate(now),
         expiresAt: Timestamp.fromDate(expiresAt),
@@ -158,7 +180,7 @@ export const otpService = {
       // Convert to GSM 7-bit encoding
       message = toGSM7Bit(message);
 
-      // Send SMS
+      // Send SMS (without + sign)
       try {
         const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                            import.meta.env.VITE_API_URL ||
@@ -166,7 +188,7 @@ export const otpService = {
         const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
         const requestBody: any = {
-          phoneNumber: formattedPhone,
+          phoneNumber: normalizedPhone, // Send 880XXXXXXXXXX (no + sign)
           message
         };
 
@@ -240,7 +262,8 @@ export const otpService = {
 
   async sendRegistrationSuccessSMS(phoneNumber: string, surname: string, studentId: string): Promise<void> {
     try {
-      const formattedPhone = this.formatPhoneNumber(phoneNumber);
+      // Normalize phone number
+      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
       let message = `Dear ${surname}, Your registration on Ed-tech has been successfully completed. Student ID: ${studentId} We look forward to supporting your learning journey.`;
       
@@ -253,7 +276,7 @@ export const otpService = {
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
       const requestBody: any = {
-        phoneNumber: formattedPhone,
+        phoneNumber: normalizedPhone, // Send 880XXXXXXXXXX (no + sign)
         message
       };
 
@@ -275,12 +298,13 @@ export const otpService = {
 
   async verifyOTP(phoneNumber: string, otp: string, purpose: 'registration' | 'password-reset' = 'registration'): Promise<{ success: boolean; message: string }> {
     try {
-      const formattedPhone = this.formatPhoneNumber(phoneNumber);
+      // Normalize phone number
+      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
       const otpCollection = collection(db, 'otp_verifications');
       const otpQuery = query(
         otpCollection,
-        where('phoneNumber', '==', formattedPhone),
+        where('phoneNumber', '==', normalizedPhone),
         where('purpose', '==', purpose)
       );
       
