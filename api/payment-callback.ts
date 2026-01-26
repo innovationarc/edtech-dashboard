@@ -1,6 +1,5 @@
 // api/payment-callback.ts
-// Complete SSLCOMMERZ callback handler with validation
-// This WILL work because it's a Vercel serverless function
+// FIXED: Redirects to /payment-success instead of /course-enrollment
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
@@ -74,7 +73,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!tran_id) {
       console.error('❌ Missing transaction ID');
-      return res.redirect(302, '/course-enrollment?error=invalid_transaction');
+      // FIXED: Redirect to payment-success with error
+      return res.redirect(302, '/payment-success?error=invalid_transaction');
     }
 
     // Handle cancelled/failed
@@ -89,7 +89,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      return res.redirect(302, `/course-enrollment?status=${status.toLowerCase()}&tran_id=${tran_id}`);
+      // FIXED: Redirect to payment-success page
+      return res.redirect(302, `/payment-success?status=${status.toLowerCase()}&tran_id=${tran_id}`);
     }
 
     // Handle success - validate with SSLCOMMERZ
@@ -98,7 +99,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!val_id) {
         console.error('❌ Missing validation ID');
-        return res.redirect(302, `/course-enrollment?status=failed&tran_id=${tran_id}`);
+        // FIXED: Redirect to payment-success with failed status
+        return res.redirect(302, `/payment-success?status=failed&tran_id=${tran_id}`);
       }
 
       try {
@@ -131,7 +133,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               });
             }
 
-            return res.redirect(302, `/course-enrollment?status=validating&tran_id=${tran_id}`);
+            // FIXED: Redirect to payment-success with validating status
+            return res.redirect(302, `/payment-success?status=validating&tran_id=${tran_id}`);
           }
 
           // Success!
@@ -147,8 +150,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await createEnrollment(tran_id);
           }
 
-          console.log('✅ Payment successful, redirecting...');
-          return res.redirect(302, `/course-enrollment?enrolled=true&tran_id=${tran_id}`);
+          console.log('✅ Payment successful, redirecting to payment-success page...');
+          // FIXED: Redirect to payment-success page with enrolled=true
+          return res.redirect(302, `/payment-success?enrolled=true&tran_id=${tran_id}`);
         } else {
           console.error('❌ Validation failed:', validationData.status);
           
@@ -156,17 +160,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             await updateTransactionStatus(tran_id, 'failed', { validationData });
           }
 
-          return res.redirect(302, `/course-enrollment?status=failed&tran_id=${tran_id}`);
+          // FIXED: Redirect to payment-success with failed status
+          return res.redirect(302, `/payment-success?status=failed&tran_id=${tran_id}`);
         }
       } catch (validationError: any) {
         console.error('❌ Validation error:', validationError.message);
-        return res.redirect(302, `/course-enrollment?status=validation_error&tran_id=${tran_id}`);
+        // FIXED: Redirect to payment-success with validation error
+        return res.redirect(302, `/payment-success?status=validation_error&tran_id=${tran_id}`);
       }
     }
 
     // Unknown status
     console.error('❌ Unknown status:', status);
-    return res.redirect(302, `/course-enrollment?status=unknown&tran_id=${tran_id}`);
+    // FIXED: Redirect to payment-success with unknown status
+    return res.redirect(302, `/payment-success?status=unknown&tran_id=${tran_id}`);
 
   } catch (error: any) {
     console.error('');
@@ -176,7 +183,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Stack:', error.stack);
     console.error('='.repeat(80));
 
-    return res.redirect(302, '/course-enrollment?error=callback_failed');
+    // FIXED: Redirect to payment-success with callback error
+    return res.redirect(302, '/payment-success?error=callback_failed');
   }
 }
 
