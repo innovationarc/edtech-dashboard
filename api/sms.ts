@@ -1,17 +1,6 @@
-import express, { Request, Response } from 'express';
-import cors from 'cors';
+// api/sms.ts
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// IMPORTANT: Node 18+ has fetch built-in
-// If using Node <18, uncomment below:
-// import fetch from 'node-fetch';
-
-const router = express.Router();
-
-/* ------------------ MIDDLEWARE ------------------ */
-router.use(cors());
-router.use(express.json());
-
-/* ------------------ TYPES ------------------ */
 interface SMSRequestBody {
   phoneNumber: string;
   message: string;
@@ -23,12 +12,37 @@ interface SMSResponse {
   error?: string;
 }
 
-/* ------------------ ROUTE ------------------ */
-router.post('/sms', async (req: Request, res: Response<SMSResponse>) => {
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse<SMSResponse>
+) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed'
+    });
+  }
+
   try {
     const { phoneNumber, message } = req.body as SMSRequestBody;
 
-    /* ---------- Validation ---------- */
+    // Validation
     if (!phoneNumber || !message) {
       return res.status(400).json({
         success: false,
@@ -36,11 +50,9 @@ router.post('/sms', async (req: Request, res: Response<SMSResponse>) => {
       });
     }
 
-    /* ---------- ENV ---------- */
-    const API_KEY =
-      process.env.SMS_API_KEY || process.env.VITE_SMS_API_KEY;
-    const SENDER_ID =
-      process.env.SMS_SENDER_ID || process.env.VITE_SMS_SENDER_ID;
+    // Get API credentials from environment
+    const API_KEY = process.env.SMS_API_KEY || process.env.VITE_SMS_API_KEY;
+    const SENDER_ID = process.env.SMS_SENDER_ID || process.env.VITE_SMS_SENDER_ID;
 
     if (!API_KEY || !SENDER_ID) {
       console.error('❌ SMS credentials missing');
@@ -50,7 +62,7 @@ router.post('/sms', async (req: Request, res: Response<SMSResponse>) => {
       });
     }
 
-    /* ---------- SMS API ---------- */
+    // Send SMS using BulkSMSBD API
     const url = 'http://bulksmsbd.net/api/smsapi';
 
     const params = new URLSearchParams({
@@ -67,31 +79,29 @@ router.post('/sms', async (req: Request, res: Response<SMSResponse>) => {
 
     const rawText = await smsResponse.text();
 
-    /* ---------- Handle SMS API ---------- */
+    // Check if SMS API returned success
     if (!smsResponse.ok) {
       console.error('❌ SMS API failed:', rawText);
       return res.status(500).json({
         success: false,
-        error: 'Failed to send OTP',
+        error: 'Failed to send OTP via SMS',
       });
     }
 
-    // Optional: log success for debugging
-    console.log('✅ SMS sent:', rawText);
+    // Log success
+    console.log('✅ SMS sent successfully:', rawText);
 
     return res.status(200).json({
       success: true,
       message: 'OTP sent successfully',
     });
 
-  } catch (err: any) {
-    console.error('🔥 SMS SERVER ERROR:', err);
+  } catch (error: any) {
+    console.error('🔥 SMS SERVER ERROR:', error);
 
     return res.status(500).json({
       success: false,
-      error: 'Internal server error while sending OTP',
+      error: error.message || 'Internal server error while sending OTP',
     });
   }
-});
-
-export default router;
+}
