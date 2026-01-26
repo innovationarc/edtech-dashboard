@@ -1,5 +1,5 @@
 // src/services/otpService.ts
-import { collection, query, where, getDocs, addDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, deleteDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 interface OTPRecord {
@@ -112,9 +112,9 @@ export const otpService = {
       // Generate OTP
       const otp = this.generateOTP();
       
-      // Save OTP to Firestore
+      // Save OTP to Firestore first
       const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
-      await addDoc(otpCollection, {
+      const otpDoc = await addDoc(otpCollection, {
         phoneNumber: formattedPhone,
         otp,
         createdAt: Timestamp.fromDate(now),
@@ -125,44 +125,55 @@ export const otpService = {
       // Send SMS using backend API
       const message = `Your verification code is: ${otp}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
       
-      // Get backend URL from environment
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://edtech-dashboard-alpha.vercel.app';
-      
-      const response = await fetch(`${BACKEND_URL}/api/sms`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phoneNumber: formattedPhone,
-          message
-        })
-      });
+      try {
+        // Get backend URL from environment
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://edtech-dashboard-alpha.vercel.app';
+        
+        const response = await fetch(`${BACKEND_URL}/api/sms`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            phoneNumber: formattedPhone,
+            message
+          })
+        });
 
-      const result = await response.json();
+        // Check if response is ok
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-      if (!result.success) {
-        // If SMS fails, delete the OTP record
-        const failedOTPQuery = query(
-          otpCollection,
-          where('phoneNumber', '==', formattedPhone),
-          where('otp', '==', otp)
-        );
-        const failedOTPs = await getDocs(failedOTPQuery);
-        failedOTPs.forEach(doc => deleteDoc(doc.ref));
+        const result = await response.json();
+
+        if (!result.success) {
+          // If SMS fails, delete the OTP record
+          await deleteDoc(otpDoc);
+          
+          return { 
+            success: false, 
+            message: result.error || 'Failed to send OTP' 
+          };
+        }
+
+        return { 
+          success: true, 
+          message: 'OTP sent successfully to your phone number' 
+        };
+      } catch (smsError: any) {
+        console.error('SMS sending error:', smsError);
+        
+        // Delete the OTP record since SMS failed
+        await deleteDoc(otpDoc);
         
         return { 
           success: false, 
-          message: result.error || 'Failed to send OTP' 
+          message: 'Failed to send SMS. Please check your connection and try again.' 
         };
       }
-
-      return { 
-        success: true, 
-        message: 'OTP sent successfully to your phone number' 
-      };
     } catch (error: any) {
-      console.error('Error sending OTP:', error);
+      console.error('Error in sendOTP:', error);
       return { 
         success: false, 
         message: error.message || 'Failed to send OTP. Please try again.' 
@@ -236,10 +247,9 @@ export const otpService = {
       } else {
         // Increment attempts
         const newAttempts = otpData.attempts + 1;
-        const otpRef = otpDoc.ref;
         
         if (newAttempts >= MAX_OTP_ATTEMPTS) {
-          await deleteDoc(otpRef);
+          await deleteDoc(otpDoc.ref);
           return { 
             success: false, 
             message: 'Too many failed attempts. Please request a new OTP.' 
@@ -247,7 +257,7 @@ export const otpService = {
         }
         
         // Update attempts count
-        await otpRef.set({ attempts: newAttempts }, { merge: true });
+        await updateDoc(otpDoc.ref, { attempts: newAttempts });
         
         return { 
           success: false, 
