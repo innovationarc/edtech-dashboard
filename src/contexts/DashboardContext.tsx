@@ -1,3 +1,4 @@
+// src/contexts/DashboardContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { authService, UserProfile } from '../services/authService';
@@ -10,7 +11,7 @@ interface DashboardContextType {
   handleMouseEnterSidebarArea: () => void;
   handleMouseLeaveSidebarArea: () => void;
   handleSearch: (query: string) => void;
-  handleSignIn: (email: string, password: string) => Promise<void>;
+  handleSignIn: (loginId: string, password: string, rememberMe?: boolean) => Promise<void>;
   handleSignOut: () => Promise<void>;
   isAuthenticated: boolean;
   user: UserProfile | null;
@@ -95,26 +96,31 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             (window as any).refreshUserProfile = refreshUserProfile;
 
             // Streak logic: Check and update study streak
-            const userStats = await gamificationService.getUserStats(userProfile.uid);
-            if (userStats) {
-              const today = new Date();
-              const lastActivityDate = userStats.lastActivityDate;
+            try {
+              const userStats = await gamificationService.getUserStats(userProfile.uid);
+              if (userStats) {
+                const today = new Date();
+                const lastActivityDate = userStats.lastActivityDate;
 
-              // Normalize dates to compare only day, month, year
-              const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-              const lastActivityDay = new Date(lastActivityDate.getFullYear(), lastActivityDate.getMonth(), lastActivityDate.getDate());
+                // Normalize dates to compare only day, month, year
+                const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const lastActivityDay = new Date(lastActivityDate.getFullYear(), lastActivityDate.getMonth(), lastActivityDate.getDate());
 
-              const diffTime = Math.abs(todayDate.getTime() - lastActivityDay.getTime());
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const diffTime = Math.abs(todayDate.getTime() - lastActivityDay.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-              if (diffDays === 1) { // Consecutive day
-                const newStreak = userStats.currentStreak + 1;
-                await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak });
-              } else if (diffDays > 1) { // Gap in days, reset streak
-                await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak: 1 });
+                if (diffDays === 1) { // Consecutive day
+                  const newStreak = userStats.currentStreak + 1;
+                  await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak });
+                } else if (diffDays > 1) { // Gap in days, reset streak
+                  await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak: 1 });
+                }
+                // If diffDays is 0, it's the same day, no change to streak needed yet.
+                // The study_session activity will update lastActivityDate.
               }
-              // If diffDays is 0, it's the same day, no change to streak needed yet.
-              // The study_session activity will update lastActivityDate.
+            } catch (streakError) {
+              console.error('Error updating streak:', streakError);
+              // Don't block login if streak update fails
             }
           } else {
             // User exists in Firebase Auth but not in Firestore, sign them out
@@ -124,7 +130,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             setSidebarOpen(false); // Close sidebar when user is signed out
           }
         } catch (error) {
-          console.error('Error getting user profile or updating streak:', error);
+          console.error('Error getting user profile:', error);
           setUser(null);
           setIsAuthenticated(false);
           setSidebarOpen(false); // Close sidebar on error
@@ -197,8 +203,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     
     // Update body background
     document.body.style.backgroundColor = colors.bg;
-  }
-  )
+  }, [theme, primaryColor, accentColor, fontFamily, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -236,13 +241,16 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     // Implement search functionality here
   };
 
-  const handleSignIn = async (email: string, password: string) => {
+  const handleSignIn = async (loginId: string, password: string, rememberMe: boolean = false) => {
     try {
       setLoading(true);
-      const userProfile = await authService.signIn(email, password);
+      // Call authService.signIn with rememberMe parameter
+      const userProfile = await authService.signIn(loginId, password, rememberMe);
       setUser(userProfile);
       setIsAuthenticated(true);
+      setSidebarOpen(true);
     } catch (error: any) {
+      setLoading(false);
       throw new Error(error.message);
     } finally {
       setLoading(false);
@@ -254,6 +262,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       await authService.signOut();
       setUser(null);
       setIsAuthenticated(false);
+      setSidebarOpen(false);
     } catch (error: any) {
       console.error('Error signing out:', error);
     }
