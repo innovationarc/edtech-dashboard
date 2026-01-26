@@ -31,14 +31,5 @@
         }
       ]
     }
-  ],
-  "functions": {
-    "api/sms/**": {
-      "maxDuration": 10,
-      "memory": 1024
-    },
-    "api/**": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }
