@@ -1,12 +1,18 @@
-// api/sms.ts (or backend/api/sms.ts if you have a separate backend)
-// apineeds to be on your backend server, not frontend
-
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
+
+// IMPORTANT: Node 18+ has fetch built-in
+// If using Node <18, uncomment below:
+// import fetch from 'node-fetch';
 
 const router = express.Router();
 
-interface SMSRequest {
+/* ------------------ MIDDLEWARE ------------------ */
+router.use(cors());
+router.use(express.json());
+
+/* ------------------ TYPES ------------------ */
+interface SMSRequestBody {
   phoneNumber: string;
   message: string;
 }
@@ -17,62 +23,73 @@ interface SMSResponse {
   error?: string;
 }
 
-router.post('/sms', async (req, res) => {
-  const { phoneNumber, message }: SMSRequest = req.body;
-
-  if (!phoneNumber || !message) {
-    return res.status(400).json({ 
-      success: false, 
-      error: 'Phone number and message are required' 
-    });
-  }
-
-  // Get API key and sender ID from environment variables
-  const API_KEY = process.env.VITE_SMS_API_KEY || process.env.SMS_API_KEY;
-  const SENDER_ID = process.env.VITE_SMS_SENDER_ID || process.env.SMS_SENDER_ID;
-
-  if (!API_KEY || !SENDER_ID) {
-    console.error('SMS credentials not configured');
-    return res.status(500).json({ 
-      success: false, 
-      error: 'SMS service not configured' 
-    });
-  }
-
+/* ------------------ ROUTE ------------------ */
+router.post('/sms', async (req: Request, res: Response<SMSResponse>) => {
   try {
+    const { phoneNumber, message } = req.body as SMSRequestBody;
+
+    /* ---------- Validation ---------- */
+    if (!phoneNumber || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number and message are required',
+      });
+    }
+
+    /* ---------- ENV ---------- */
+    const API_KEY =
+      process.env.SMS_API_KEY || process.env.VITE_SMS_API_KEY;
+    const SENDER_ID =
+      process.env.SMS_SENDER_ID || process.env.VITE_SMS_SENDER_ID;
+
+    if (!API_KEY || !SENDER_ID) {
+      console.error('❌ SMS credentials missing');
+      return res.status(500).json({
+        success: false,
+        error: 'SMS service not configured',
+      });
+    }
+
+    /* ---------- SMS API ---------- */
     const url = 'http://bulksmsbd.net/api/smsapi';
-    
+
     const params = new URLSearchParams({
       api_key: API_KEY,
       senderid: SENDER_ID,
       number: phoneNumber,
       message: message,
-      type: 'text'
+      type: 'text',
     });
 
-    const response = await fetch(`${url}?${params.toString()}`, {
+    const smsResponse = await fetch(`${url}?${params.toString()}`, {
       method: 'GET',
     });
 
-    const data = await response.text();
-    
-    if (response.ok) {
-      return res.status(200).json({ 
-        success: true, 
-        message: 'OTP sent successfully' 
-      });
-    } else {
-      console.error('SMS API Error:', data);
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Failed to send OTP. Please try again.' 
+    const rawText = await smsResponse.text();
+
+    /* ---------- Handle SMS API ---------- */
+    if (!smsResponse.ok) {
+      console.error('❌ SMS API failed:', rawText);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send OTP',
       });
     }
-  } catch (error: any) {
-    console.error('SMS sending error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: 'Failed to send OTP. Please check your connection.' 
+
+    // Optional: log success for debugging
+    console.log('✅ SMS sent:', rawText);
+
+    return res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully',
+    });
+
+  } catch (err: any) {
+    console.error('🔥 SMS SERVER ERROR:', err);
+
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error while sending OTP',
     });
   }
 });
