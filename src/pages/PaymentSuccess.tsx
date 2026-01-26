@@ -1,5 +1,5 @@
 // src/pages/PaymentSuccess.tsx
-// Payment Success Page with Receipt and Print Functionality
+// FIXED: Payment Success Page with Receipt - Shows success message HERE, not on CourseEnrollment
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -34,11 +34,11 @@ const PaymentSuccess = () => {
 
     setTransactionId(tranId || '');
 
-    // Handle enrolled=true (from successful callback)
+    // FIXED: Handle enrolled=true (from successful callback)
     if (enrolled === 'true' && tranId) {
       loadTransactionDetails(tranId);
       setStatus('success');
-      setMessage('Payment completed successfully!');
+      setMessage('🎉 Payment completed successfully! Your enrollment is confirmed. Welcome to the course!');
       setShowReceipt(true);
       return;
     }
@@ -63,7 +63,7 @@ const PaymentSuccess = () => {
           loadTransactionDetails(tranId);
         }
         setStatus('success');
-        setMessage('Payment completed successfully!');
+        setMessage('🎉 Payment completed successfully!');
         setShowReceipt(true);
         break;
 
@@ -74,7 +74,7 @@ const PaymentSuccess = () => {
 
       case 'cancelled':
         setStatus('cancelled');
-        setMessage('Payment was cancelled.');
+        setMessage('Payment was cancelled. You can try again whenever you\'re ready.');
         break;
 
       case 'validating':
@@ -136,8 +136,10 @@ const PaymentSuccess = () => {
 
   const handleReturnToCourses = () => {
     if (status === 'success') {
-      navigate('/course-enrollment?enrolled=true', { replace: true });
+      // FIXED: Redirect to Enrolled tab after successful payment
+      navigate('/course-enrollment?tab=enrolled', { replace: true });
     } else {
+      // Failed/Cancelled: Go to Available tab
       navigate('/course-enrollment', { replace: true });
     }
   };
@@ -310,18 +312,16 @@ const PaymentSuccess = () => {
             body * {
               visibility: hidden;
             }
-            ${receiptRef.current ? `
-              #receipt-container,
-              #receipt-container * {
-                visibility: visible;
-              }
-              #receipt-container {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-              }
-            ` : ''}
+            #receipt-container,
+            #receipt-container * {
+              visibility: visible;
+            }
+            #receipt-container {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: 100%;
+            }
           }
         `}</style>
       </div>
