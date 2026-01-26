@@ -30,11 +30,12 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse<SMSResponse>
 ) {
-  // Set CORS headers - restrict to your domain in production
+  // Set CORS headers
   const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:5173',
     'https://edtech-dashboard-alpha.vercel.app',
-    // Add your production domain here
+    'http://localhost:3000',
+    'http://localhost:5174'
   ];
 
   const origin = req.headers.origin || '';
@@ -66,57 +67,49 @@ export default async function handler(
 
     // Validate required fields
     if (!phoneNumber || !message) {
+      console.error('❌ Missing required fields');
       return res.status(400).json({
         success: false,
         error: 'Phone number and message are required',
       });
     }
 
-    // SECURITY: Validate API Key (Master Key from environment)
-    const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
-    const requestSignature = req.headers['x-request-signature'] as string;
-
-    if (!MASTER_API_KEY) {
-      console.error('❌ SMS_MASTER_KEY not configured');
-      return res.status(500).json({
-        success: false,
-        error: 'SMS service not configured',
-      });
-    }
-
-    // Method 1: Check API Key in body (simpler but less secure)
-    // Method 2: Check HMAC signature in header (more secure)
-    let isAuthorized = false;
-
-    if (apiKey && apiKey === MASTER_API_KEY) {
-      isAuthorized = true;
-    } else if (requestSignature && validateRequest(phoneNumber, message, requestSignature, MASTER_API_KEY)) {
-      isAuthorized = true;
-    }
-
-    if (!isAuthorized) {
-      console.error('❌ Unauthorized SMS request');
-      return res.status(401).json({
-        success: false,
-        error: 'Unauthorized request',
-      });
-    }
-
-    // SECURITY: Rate limiting check (basic)
-    // In production, use Redis or similar for distributed rate limiting
-    const requestKey = `${phoneNumber}:${Date.now()}`;
-    // TODO: Implement proper rate limiting
-
     // Get SMS provider credentials
-    const SMS_API_KEY = process.env.SMS_API_KEY || process.env.VITE_SMS_API_KEY;
-    const SENDER_ID = process.env.SMS_SENDER_ID || process.env.VITE_SMS_SENDER_ID;
+    const SMS_API_KEY = process.env.SMS_API_KEY;
+    const SENDER_ID = process.env.SMS_SENDER_ID;
+    const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
 
+    // Check if SMS service is configured
     if (!SMS_API_KEY || !SENDER_ID) {
       console.error('❌ SMS provider credentials not configured');
+      console.error('Missing:', {
+        SMS_API_KEY: !!SMS_API_KEY,
+        SENDER_ID: !!SENDER_ID
+      });
       return res.status(500).json({
         success: false,
-        error: 'SMS provider not configured',
+        error: 'SMS provider not configured. Please contact administrator.',
       });
+    }
+
+    // SECURITY: Validate API Key if MASTER_KEY is set
+    if (MASTER_API_KEY) {
+      const requestSignature = req.headers['x-request-signature'] as string;
+      let isAuthorized = false;
+
+      if (apiKey && apiKey === MASTER_API_KEY) {
+        isAuthorized = true;
+      } else if (requestSignature && validateRequest(phoneNumber, message, requestSignature, MASTER_API_KEY)) {
+        isAuthorized = true;
+      }
+
+      if (!isAuthorized) {
+        console.error('❌ Unauthorized SMS request');
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized request',
+        });
+      }
     }
 
     // Format phone number for BulkSMSBD (requires 880 prefix without +)
@@ -135,14 +128,20 @@ export default async function handler(
       formattedNumber = '880' + formattedNumber;
     }
 
-    // Extract OTP from message (assumes format: "Your verification code is: 123456...")
+    // Extract OTP from message
     const otpMatch = message.match(/\d{6}/);
-    const otp = otpMatch ? otpMatch[0] : message;
+    const otp = otpMatch ? otpMatch[0] : '';
 
     // Format message for BulkSMSBD
-    const formattedMessage = `Your verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`;
+    let formattedMessage = message;
+    if (otp) {
+      formattedMessage = `Your verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`;
+    }
 
-    console.log('📱 Sending SMS:', { number: formattedNumber, otp });
+    console.log('📱 Sending SMS:', { 
+      number: formattedNumber.substring(0, 5) + '****' + formattedNumber.substring(formattedNumber.length - 2),
+      hasOTP: !!otp 
+    });
 
     // Call BulkSMSBD API
     const url = 'http://bulksmsbd.net/api/smsapi';
@@ -168,11 +167,10 @@ export default async function handler(
 
     // BulkSMSBD returns different responses
     // Success: Usually contains "success" or specific success code
-    // Check for common success indicators
     const isSuccess = 
       rawText.toLowerCase().includes('success') ||
       rawText.toLowerCase().includes('ok') ||
-      /^[0-9]+$/.test(rawText.trim()); // Some providers return just a message ID
+      /^[0-9]+$/.test(rawText.trim());
 
     if (!isSuccess) {
       console.error('❌ SMS Provider Error:', rawText);
