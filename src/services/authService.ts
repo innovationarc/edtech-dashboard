@@ -225,30 +225,41 @@ export const authService = {
       }
       
       // Create email for Firebase Auth (use provided email or generate one)
-      const authEmail = email || `${studentId}@student.local`;
+      const authEmail = email && email.trim() ? email.trim() : `${studentId}@student.local`;
       
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
       const user = userCredential.user;
       
-      const userProfile: Omit<UserProfile, 'uid'> & { createdAt: any } = {
+      // Build user profile with only defined values (no undefined)
+      const userProfile: any = {
         userId: studentId,
-        email: email || undefined,
         name: fullName,
         surname,
         fullName,
         dob,
         phoneNumber: primaryPhone,
-        guardianPhone: guardianPhone || undefined,
         bloodGroup,
         gender,
-        religion: religion || undefined,
         grade,
         role,
         status: initialStatus,
         createdAt: Timestamp.now(),
         registrationNumber
       };
+
+      // Only add optional fields if they have values
+      if (email && email.trim()) {
+        userProfile.email = email.trim();
+      }
+      
+      if (guardianPhone && guardianPhone.trim()) {
+        userProfile.guardianPhone = guardianPhone.trim();
+      }
+      
+      if (religion && religion.trim()) {
+        userProfile.religion = religion.trim();
+      }
       
       // Save user profile to Firestore
       await setDoc(doc(db, 'users', user.uid), userProfile);
