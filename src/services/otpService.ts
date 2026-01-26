@@ -127,11 +127,23 @@ export const otpService = {
       
       try {
         // Get backend URL and master key from environment
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://edtech-dashboard-alpha.vercel.app';
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                           import.meta.env.VITE_API_URL ||
+                           'https://edtech-dashboard-alpha.vercel.app';
         const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-        if (!MASTER_API_KEY) {
-          throw new Error('SMS service not configured');
+        console.log('🔧 Backend URL:', BACKEND_URL);
+        console.log('🔑 Master Key configured:', !!MASTER_API_KEY);
+
+        // Prepare request body
+        const requestBody: any = {
+          phoneNumber: formattedPhone,
+          message
+        };
+
+        // Add master key only if it's configured
+        if (MASTER_API_KEY) {
+          requestBody.apiKey = MASTER_API_KEY;
         }
 
         const response = await fetch(`${BACKEND_URL}/api/sms`, {
@@ -139,20 +151,28 @@ export const otpService = {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            phoneNumber: formattedPhone,
-            message,
-            apiKey: MASTER_API_KEY // Send master key for authentication
-          })
+          body: JSON.stringify(requestBody)
         });
+
+        console.log('📡 Response status:', response.status);
 
         // Check if response is ok
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          const errorText = await response.text();
+          console.error('❌ Server error:', errorText);
+          
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { error: errorText || `Server error: ${response.status}` };
+          }
+          
           throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
 
         const result = await response.json();
+        console.log('✅ SMS API response:', result);
 
         if (!result.success) {
           // If SMS fails, delete the OTP record
@@ -169,18 +189,31 @@ export const otpService = {
           message: 'OTP sent successfully to your phone number' 
         };
       } catch (smsError: any) {
-        console.error('SMS sending error:', smsError);
+        console.error('❌ SMS sending error:', smsError);
         
         // Delete the OTP record since SMS failed
         await deleteDoc(otpDoc);
         
+        // Provide more specific error messages
+        let errorMessage = 'Failed to send SMS. ';
+        
+        if (smsError.message.includes('SMS service not configured')) {
+          errorMessage += 'SMS service is not properly configured. Please contact support.';
+        } else if (smsError.message.includes('Unauthorized')) {
+          errorMessage += 'Authentication failed. Please contact support.';
+        } else if (smsError.message.includes('Network') || smsError.message.includes('fetch')) {
+          errorMessage += 'Network error. Please check your internet connection.';
+        } else {
+          errorMessage += 'Please try again later.';
+        }
+        
         return { 
           success: false, 
-          message: 'Failed to send SMS. Please check your connection and try again.' 
+          message: errorMessage
         };
       }
     } catch (error: any) {
-      console.error('Error in sendOTP:', error);
+      console.error('❌ Error in sendOTP:', error);
       return { 
         success: false, 
         message: error.message || 'Failed to send OTP. Please try again.' 
@@ -272,7 +305,7 @@ export const otpService = {
         };
       }
     } catch (error: any) {
-      console.error('Error verifying OTP:', error);
+      console.error('❌ Error verifying OTP:', error);
       return { 
         success: false, 
         message: 'Failed to verify OTP. Please try again.' 
@@ -299,8 +332,9 @@ export const otpService = {
       }
       
       await Promise.all(deletePromises);
+      console.log(`🧹 Cleaned up ${deletePromises.length} expired OTPs`);
     } catch (error) {
-      console.error('Error cleaning up expired OTPs:', error);
+      console.error('❌ Error cleaning up expired OTPs:', error);
     }
   }
 };
