@@ -1,7 +1,8 @@
 // src/components/auth/RegisterModal.tsx
 import { useState } from 'react';
-import { X, Mail, Lock, User, Loader, CheckCircle, Phone, Calendar, Users } from 'lucide-react';
+import { X, Mail, Lock, User, Loader, CheckCircle, Phone, Calendar, Users, Shield } from 'lucide-react';
 import { authService } from '../../services/authService';
+import { otpService } from '../../services/otpService';
 
 interface RegisterModalProps {
   onClose: () => void;
@@ -29,6 +30,121 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [generatedUserId, setGeneratedUserId] = useState('');
+  
+  // OTP verification states
+  const [showOTPVerification, setShowOTPVerification] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [otpSuccess, setOtpSuccess] = useState('');
+  const [canResendOTP, setCanResendOTP] = useState(false);
+  const [resendTimer, setResendTimer] = useState(60);
+
+  const startResendTimer = () => {
+    setCanResendOTP(false);
+    setResendTimer(60);
+    
+    const interval = setInterval(() => {
+      setResendTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setCanResendOTP(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendOTP = async () => {
+    setOtpError('');
+    setOtpSuccess('');
+    setOtpLoading(true);
+
+    // Validate phone number first
+    if (!formData.phoneNumber) {
+      setOtpError('Please enter your phone number');
+      setOtpLoading(false);
+      return;
+    }
+
+    if (!otpService.validatePhoneNumber(formData.phoneNumber)) {
+      setOtpError('Invalid phone number format. Use: +880 1xxxxxxxxx or 01xxxxxxxxx');
+      setOtpLoading(false);
+      return;
+    }
+
+    try {
+      const result = await otpService.sendOTP(formData.phoneNumber);
+      
+      if (result.success) {
+        setOtpSuccess(result.message);
+        setShowOTPVerification(true);
+        startResendTimer();
+      } else {
+        setOtpError(result.message);
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Failed to send OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    setOtpError('');
+    setOtpLoading(true);
+
+    if (!otp || otp.length !== 6) {
+      setOtpError('Please enter a valid 6-digit OTP');
+      setOtpLoading(false);
+      return;
+    }
+
+    try {
+      const result = await otpService.verifyOTP(formData.phoneNumber, otp);
+      
+      if (result.success) {
+        setOtpVerified(true);
+        setOtpSuccess(result.message);
+        setShowOTPVerification(false);
+      } else {
+        setOtpError(result.message);
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Failed to verify OTP');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handlePhoneNumberChange = (value: string) => {
+    // Auto-format phone number
+    let formatted = value.replace(/\D/g, ''); // Remove non-digits
+    
+    // Handle different input formats
+    if (formatted.startsWith('880')) {
+      formatted = '+' + formatted;
+    } else if (formatted.startsWith('88')) {
+      formatted = '+' + formatted;
+    } else if (formatted.startsWith('0') && formatted.length > 1) {
+      formatted = '+88' + formatted;
+    } else if (formatted.startsWith('1') && formatted.length === 10) {
+      formatted = '+880' + formatted;
+    } else if (!formatted.startsWith('+') && formatted.length > 0) {
+      formatted = '+880' + formatted;
+    }
+    
+    setFormData(prev => ({ ...prev, phoneNumber: formatted }));
+    
+    // Reset OTP verification if phone number changes
+    if (otpVerified) {
+      setOtpVerified(false);
+      setOtp('');
+      setShowOTPVerification(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setError('');
@@ -37,6 +153,13 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
     // Validation
     if (!formData.surname || !formData.fullName || !formData.dob || !formData.phoneNumber || !formData.password || !formData.confirmPassword || !formData.grade || !formData.bloodGroup || !formData.gender) {
       setError('Please fill in all required fields');
+      setLoading(false);
+      return;
+    }
+
+    // Check OTP verification
+    if (!otpVerified) {
+      setError('Please verify your phone number with OTP first');
       setLoading(false);
       return;
     }
@@ -53,27 +176,22 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
       return;
     }
 
-    // Validate phone number
-    const phoneRegex = /^\d{10,15}$/;
-    if (!phoneRegex.test(formData.phoneNumber.replace(/\D/g, ''))) {
-      setError('Please enter a valid phone number (10-15 digits)');
-      setLoading(false);
-      return;
-    }
-
     try {
+      // Format phone number before creating user
+      const formattedPhone = otpService.formatPhoneNumber(formData.phoneNumber);
+      
       const userProfile = await authService.createUser(
-        formData.phoneNumber,
-        formData.email || '',
+        formattedPhone,
+        formData.email.trim() || '',
         formData.password,
         formData.surname,
         formData.fullName,
         formData.dob,
-        formData.phoneNumber,
-        formData.guardianPhone,
+        formattedPhone,
+        formData.guardianPhone.trim() || '',
         formData.bloodGroup,
         formData.gender,
-        formData.religion,
+        formData.religion.trim() || '',
         formData.grade,
         formData.role,
         false // Auto-approve students
@@ -104,7 +222,11 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !loading) {
       e.preventDefault();
-      handleSubmit();
+      if (showOTPVerification) {
+        handleVerifyOTP();
+      } else {
+        handleSubmit();
+      }
     }
   };
 
@@ -280,37 +402,122 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-3">
               <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Phone Number * 
+                  {otpVerified && <span className="text-green-400 ml-2 text-xs">✓ Verified</span>}
+                </label>
                 <div className="relative">
                   <input
                     type="tel"
                     value={formData.phoneNumber}
-                    onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+                    onChange={(e) => handlePhoneNumberChange(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
-                    placeholder="10-15 digits"
-                    disabled={loading}
+                    className={`w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-11 pr-32 border ${
+                      otpVerified ? 'border-green-500/50' : 'border-gray-700/50'
+                    } focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600`}
+                    placeholder="+880 1XXXXXXXXX"
+                    disabled={loading || otpVerified}
                   />
                   <Phone size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                  {!otpVerified && (
+                    <button
+                      type="button"
+                      onClick={handleSendOTP}
+                      disabled={otpLoading || !formData.phoneNumber}
+                      className="absolute right-2 top-2 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-1.5 rounded-lg text-sm transition-all duration-200"
+                    >
+                      {otpLoading ? <Loader size={16} className="animate-spin" /> : 'Send OTP'}
+                    </button>
+                  )}
+                  {otpVerified && (
+                    <div className="absolute right-2 top-2 bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm flex items-center gap-1">
+                      <Shield size={16} />
+                      <span>Verified</span>
+                    </div>
+                  )}
                 </div>
+                <p className="text-xs text-gray-500 mt-1.5">Format: +880 1XXXXXXXXX or 01XXXXXXXXX</p>
               </div>
 
-              <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Guardian Phone <span className="text-gray-500">(Optional)</span></label>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    value={formData.guardianPhone}
-                    onChange={(e) => handleInputChange('guardianPhone', e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
-                    placeholder="Guardian/Additional"
-                    disabled={loading}
-                  />
-                  <Users size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+              {showOTPVerification && !otpVerified && (
+                <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-700/30 rounded-xl p-4 backdrop-blur-sm space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield size={18} className="text-blue-400" />
+                    <p className="text-sm font-medium text-blue-200">Enter OTP sent to your phone</p>
+                  </div>
+                  
+                  {otpError && (
+                    <div className="bg-red-900/30 border border-red-700/50 text-red-200 px-3 py-2 rounded-lg text-xs">
+                      {otpError}
+                    </div>
+                  )}
+                  
+                  {otpSuccess && (
+                    <div className="bg-green-900/30 border border-green-700/50 text-green-200 px-3 py-2 rounded-lg text-xs">
+                      {otpSuccess}
+                    </div>
+                  )}
+       <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleVerifyOTP();
+                        }
+                      }}
+                      className="flex-1 bg-gray-800/50 text-white rounded-lg py-2 px-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 text-center text-lg font-mono tracking-widest"
+                      placeholder="000000"
+                      maxLength={6}
+                      disabled={otpLoading}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyOTP}
+                      disabled={otpLoading || otp.length !== 6}
+                      className="bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-6 py-2 rounded-lg transition-all duration-200 flex items-center gap-2"
+                    >
+                      {otpLoading ? <Loader size={18} className="animate-spin" /> : 'Verify'}
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-400">
+                      {canResendOTP ? (
+                        <button
+                          type="button"
+                          onClick={handleSendOTP}
+                          className="text-primary-400 hover:text-primary-300"
+                        >
+                          Resend OTP
+                        </button>
+                      ) : (
+                        <span>Resend OTP in {resendTimer}s</span>
+                      )}
+                    </span>
+                    <span className="text-gray-500">OTP expires in 10 minutes</span>
+                  </div>
                 </div>
+              )}
+            </div>
+
+            <div className="group">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Guardian Phone <span className="text-gray-500">(Optional)</span></label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  value={formData.guardianPhone}
+                  onChange={(e) => handleInputChange('guardianPhone', e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                  placeholder="Guardian/Additional"
+                  disabled={loading}
+                />
+                <Users size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
             </div>
 
@@ -436,11 +643,11 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
 
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !otpVerified}
               className="w-full bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3.5 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-medium shadow-lg hover:shadow-primary-500/50"
             >
               {loading && <Loader size={20} className="animate-spin" />}
-              <span>{loading ? 'Creating Account...' : 'Create Account'}</span>
+              <span>{loading ? 'Creating Account...' : otpVerified ? 'Create Account' : 'Verify Phone First'}</span>
             </button>
           </div>
 
@@ -461,4 +668,4 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
   );
 };
 
-export default RegisterModal;
+export default RegisterModal;           
