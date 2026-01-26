@@ -26,15 +26,13 @@ const toGSM7Bit = (text: string): string => {
     }
     // Replace non-GSM characters with closest equivalent
     const replacements: { [key: string]: string } = {
-      '"': '"',
-      '"': '"',
-      ''': "'",
-      ''': "'",
-      '–': '-',
-      '—': '-',
-      '…': '...',
-      '\u00A0': ' ' // non-breaking space
-    };
+  '"': '"',
+  "'": "'",
+  '–': '-',
+  '—': '-',
+  '…': '...',
+  '\u00A0': ' ' // non-breaking space
+};
     return replacements[char] || char;
   }).join('');
 };
