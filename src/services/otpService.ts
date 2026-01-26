@@ -24,26 +24,23 @@ const toGSM7Bit = (text: string): string => {
     if (GSM_7BIT_CHARS.includes(char)) {
       return char;
     }
-    // Replace non-GSM characters with closest equivalent
     const replacements: { [key: string]: string } = {
-  '"': '"',
-  "'": "'",
-  '–': '-',
-  '—': '-',
-  '…': '...',
-  '\u00A0': ' ' // non-breaking space
-};
+      '"': '"',
+      "'": "'",
+      '–': '-',
+      '—': '-',
+      '…': '...',
+      '\u00A0': ' '
+    };
     return replacements[char] || char;
   }).join('');
 };
 
 export const otpService = {
-  // Generate a random OTP
   generateOTP(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   },
 
-  // Format phone number to Bangladesh format
   formatPhoneNumber(phoneNumber: string): string {
     // Remove all non-digit characters
     let cleaned = phoneNumber.replace(/\D/g, '');
@@ -60,26 +57,31 @@ export const otpService = {
       cleaned = cleaned.substring(1);
     }
     
-    // Validate length (should be 10 digits after removing country code and leading zero)
+    // Validate length (should be 10 digits)
     if (cleaned.length !== 10) {
       throw new Error('Invalid phone number format');
     }
     
-    // Return in international format: +8801XXXXXXXXX
+    // Return in international format: +8801XXXXXXXXXX
     return `+8801${cleaned}`;
   },
 
-  // Validate phone number format
   validatePhoneNumber(phoneNumber: string): boolean {
     try {
       const formatted = this.formatPhoneNumber(phoneNumber);
-      return formatted.startsWith('+8801') && formatted.length === 14;
+      // Check if it starts with +8801 and has exactly 14 characters
+      if (!formatted.startsWith('+8801') || formatted.length !== 14) {
+        return false;
+      }
+      
+      // Check if the first digit after +8801 is valid (1,3,4,5,6,7,8,9)
+      const firstDigit = formatted[5]; // Position after +8801
+      return ['1', '3', '4', '5', '6', '7', '8', '9'].includes(firstDigit);
     } catch {
       return false;
     }
   },
 
-  // Send OTP via SMS
   async sendOTP(
     phoneNumber: string, 
     purpose: 'registration' | 'password-reset' = 'registration',
@@ -236,7 +238,6 @@ export const otpService = {
     }
   },
 
-  // Send registration success SMS
   async sendRegistrationSuccessSMS(phoneNumber: string, surname: string, studentId: string): Promise<void> {
     try {
       const formattedPhone = this.formatPhoneNumber(phoneNumber);
@@ -272,7 +273,6 @@ export const otpService = {
     }
   },
 
-  // Verify OTP
   async verifyOTP(phoneNumber: string, otp: string, purpose: 'registration' | 'password-reset' = 'registration'): Promise<{ success: boolean; message: string }> {
     try {
       const formattedPhone = this.formatPhoneNumber(phoneNumber);
@@ -358,7 +358,6 @@ export const otpService = {
     }
   },
 
-  // Clean up expired OTPs
   async cleanupExpiredOTPs(): Promise<void> {
     try {
       const otpCollection = collection(db, 'otp_verifications');
