@@ -1,11 +1,9 @@
-// src/components/auth/SignInModal.tsx - PART 1
-// Paste this part first, then immediately paste Part 2
-import { useState, useRef } from 'react';
+// src/components/auth/SignInModal.tsx
+import { useState, useEffect } from 'react';
 import { X, Lock, Loader, Smartphone, CreditCard, AlertCircle, Mail, Phone, Eye, EyeOff } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import RegisterModal from './RegisterModal';
 import ForgotPasswordModal from './ForgotPasswordModal';
-import ReCAPTCHA from 'react-google-recaptcha';
 
 interface SignInModalProps {
   onClose: () => void;
@@ -21,12 +19,42 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const [captchaLoaded, setCaptchaLoaded] = useState(false);
 
-  // Handle CAPTCHA change
-  const handleCaptchaChange = (token: string | null) => {
-    setCaptchaToken(token);
+  // Load reCAPTCHA v3
+  useEffect(() => {
+    const loadRecaptcha = () => {
+      if (window.grecaptcha) {
+        setCaptchaLoaded(true);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = `https://www.google.com/recaptcha/api.js?render=${import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => setCaptchaLoaded(true);
+      document.head.appendChild(script);
+    };
+
+    loadRecaptcha();
+  }, []);
+
+  // Get reCAPTCHA v3 token
+  const getCaptchaToken = async (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!window.grecaptcha || !captchaLoaded) {
+        reject(new Error('reCAPTCHA not loaded'));
+        return;
+      }
+
+      window.grecaptcha.ready(() => {
+        window.grecaptcha
+          .execute(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'login' })
+          .then(resolve)
+          .catch(reject);
+      });
+    });
   };
 
   const handleSubmit = async () => {
@@ -39,9 +67,11 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       return;
     }
 
-    // CAPTCHA validation
-    if (!captchaToken) {
-      setError('Please complete the CAPTCHA verification');
+    // Get reCAPTCHA token
+    try {
+      await getCaptchaToken();
+    } catch (err) {
+      setError('Please wait for security verification to load');
       setLoading(false);
       return;
     }
@@ -51,18 +81,13 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       onClose();
     } catch (err: any) {
       setError(err.message || 'Invalid credentials');
-      // Reset CAPTCHA on error
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-        setCaptchaToken(null);
-      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !loading && captchaToken) {
+    if (e.key === 'Enter' && !loading && captchaLoaded) {
       e.preventDefault();
       handleSubmit();
     }
@@ -95,8 +120,8 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in p-4">
-      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-6 sm:p-8 relative shadow-2xl border border-gray-700/50 animate-slide-up">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-6 sm:p-8 relative shadow-2xl border border-gray-700/50">
         <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
         
         <button
@@ -109,17 +134,17 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
 
         <div className="relative">
           <div className="text-center mb-6 sm:mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-600 to-primary-500 mb-4 shadow-2xl shadow-primary-500/50 animate-gradient hover:scale-110 transition-transform duration-300">
+            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-600 to-primary-500 mb-4 shadow-2xl shadow-primary-500/50 hover:scale-110 transition-transform duration-300">
               <CreditCard size={32} className="sm:w-10 sm:h-10 text-white" />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2 animate-text-shine">
+            <h2 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2">
               Welcome Back
             </h2>
             <p className="text-gray-400 text-sm">Sign in to continue learning</p>
           </div>
 
           {error && (
-            <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm animate-shake">
+            <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
               <p className="text-sm flex items-center gap-2">
                 <AlertCircle size={16} />
                 {error}
@@ -183,7 +208,6 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </div>
             </div>
 
-            {/* Remember Me Checkbox */}
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer group">
                 <input
@@ -207,23 +231,13 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </button>
             </div>
 
-            {/* reCAPTCHA */}
-            <div className="flex justify-center">
-              <ReCAPTCHA
-                ref={recaptchaRef}
-                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"}
-                onChange={handleCaptchaChange}
-                theme="dark"
-              />
-            </div>
-
             <button
               onClick={handleSubmit}
-              disabled={loading || !captchaToken}
-              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50 animate-gradient"
+              disabled={loading || !captchaLoaded}
+              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
             >
               {loading && <Loader size={20} className="animate-spin" />}
-              <span>{loading ? 'Signing In...' : 'Sign In'}</span>
+              <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
             </button>
           </div>
 
@@ -254,47 +268,6 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes text-shine {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .animate-text-shine {
-          background-size: 200% 200%;
-          animation: text-shine 3s ease infinite;
-        }
-        @keyframes gradient {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        .animate-gradient {
-          background-size: 200% 200%;
-          animation: gradient 3s ease infinite;
-        }
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
-        }
-        @keyframes slide-up {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-slide-up {
-          animation: slide-up 0.4s ease-out;
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-          20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-        .animate-shake {
-          animation: shake 0.5s ease-in-out;
-        }
-      `}</style>
     </div>
   );
 };
