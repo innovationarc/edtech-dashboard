@@ -122,13 +122,18 @@ export const otpService = {
         attempts: 0
       });
 
-      // Send SMS using backend API
+      // Send SMS using backend API with security
       const message = `Your verification code is: ${otp}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
       
       try {
-        // Get backend URL from environment
+        // Get backend URL and master key from environment
         const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://edtech-dashboard-alpha.vercel.app';
-        
+        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+        if (!MASTER_API_KEY) {
+          throw new Error('SMS service not configured');
+        }
+
         const response = await fetch(`${BACKEND_URL}/api/sms`, {
           method: 'POST',
           headers: {
@@ -136,13 +141,15 @@ export const otpService = {
           },
           body: JSON.stringify({
             phoneNumber: formattedPhone,
-            message
+            message,
+            apiKey: MASTER_API_KEY // Send master key for authentication
           })
         });
 
         // Check if response is ok
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
 
         const result = await response.json();
