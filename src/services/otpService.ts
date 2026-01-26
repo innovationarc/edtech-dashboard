@@ -11,7 +11,7 @@ interface OTPRecord {
 }
 
 const OTP_EXPIRY_MINUTES = 5;
-const MAX_OTP_ATTEMPTS = 5;
+const MAX_OTP_ATTEMPTS = 3;
 const OTP_LENGTH = 6;
 
 export const otpService = {
@@ -126,7 +126,7 @@ export const otpService = {
       const message = `Your verification code is: ${otp}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
       
       // Get backend URL from environment
-      const BACKEND_URL = import.meta.env.BACKEND_URL || 'http://localhost:3000';
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
       
       const response = await fetch(`${BACKEND_URL}/api/sms`, {
         method: 'POST',
