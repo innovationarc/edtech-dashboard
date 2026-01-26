@@ -10,6 +10,7 @@ interface SMSResponse {
   success: boolean;
   message?: string;
   error?: string;
+  providerResponse?: string;
 }
 
 export default async function handler(
@@ -25,13 +26,11 @@ export default async function handler(
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // Handle preflight request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({
       success: false,
@@ -42,7 +41,6 @@ export default async function handler(
   try {
     const { phoneNumber, message } = req.body as SMSRequestBody;
 
-    // Validation
     if (!phoneNumber || !message) {
       return res.status(400).json({
         success: false,
@@ -50,26 +48,31 @@ export default async function handler(
       });
     }
 
-    // Get API credentials from environment
     const API_KEY = process.env.SMS_API_KEY || process.env.VITE_SMS_API_KEY;
     const SENDER_ID = process.env.SMS_SENDER_ID || process.env.VITE_SMS_SENDER_ID;
 
     if (!API_KEY || !SENDER_ID) {
-      console.error('❌ SMS credentials missing');
       return res.status(500).json({
         success: false,
         error: 'SMS service not configured',
       });
     }
 
-    // Send SMS using BulkSMSBD API
+    // Fix phone format (BulkSMSBD requires 880 prefix)
+    const formattedNumber = phoneNumber.startsWith("880")
+      ? phoneNumber
+      : `880${phoneNumber.replace(/^0+/, "")}`;
+
+    // Fix message format (BulkSMSBD OTP format)
+    const otpMessage = `Your EdTech OTP is ${message}`;
+
     const url = 'http://bulksmsbd.net/api/smsapi';
 
     const params = new URLSearchParams({
       api_key: API_KEY,
       senderid: SENDER_ID,
-      number: phoneNumber,
-      message: message,
+      number: formattedNumber,
+      message: otpMessage,
       type: 'text',
     });
 
@@ -79,26 +82,25 @@ export default async function handler(
 
     const rawText = await smsResponse.text();
 
-    // Check if SMS API returned success
-    if (!smsResponse.ok) {
-      console.error('❌ SMS API failed:', rawText);
+    // LOG provider response
+    console.log("SMS Provider Response:", rawText);
+
+    // BulkSMSBD returns 200 even on failure, so check the response text
+    if (!rawText.toLowerCase().includes("ok")) {
       return res.status(500).json({
         success: false,
-        error: 'Failed to send OTP via SMS',
+        error: "SMS provider rejected the request",
+        providerResponse: rawText
       });
     }
-
-    // Log success
-    console.log('✅ SMS sent successfully:', rawText);
 
     return res.status(200).json({
       success: true,
       message: 'OTP sent successfully',
+      providerResponse: rawText
     });
 
   } catch (error: any) {
-    console.error('🔥 SMS SERVER ERROR:', error);
-
     return res.status(500).json({
       success: false,
       error: error.message || 'Internal server error while sending OTP',
