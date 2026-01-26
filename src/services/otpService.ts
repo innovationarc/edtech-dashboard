@@ -126,7 +126,7 @@ export const otpService = {
       const message = `Your verification code is: ${otp}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
       
       // Get backend URL from environment
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://edtech-dashboard-alpha.vercel.app';
       
       const response = await fetch(`${BACKEND_URL}/api/sms`, {
         method: 'POST',
