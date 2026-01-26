@@ -33,12 +33,12 @@
     }
   ],
   "functions": {
-    "api/**/*.ts": {
-      "maxDuration": 60
-    },
-    "api/sms.ts": {
+    "api/sms/**": {
       "maxDuration": 10,
       "memory": 1024
+    },
+    "api/**": {
+      "maxDuration": 60
     }
   }
 }
