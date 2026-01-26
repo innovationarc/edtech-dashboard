@@ -8,11 +8,36 @@ interface OTPRecord {
   createdAt: Date;
   expiresAt: Date;
   attempts: number;
+  purpose: 'registration' | 'password-reset';
 }
 
-const OTP_EXPIRY_MINUTES = 5;
+const OTP_EXPIRY_MINUTES = 2;
 const MAX_OTP_ATTEMPTS = 3;
 const OTP_LENGTH = 6;
+
+// GSM 7-bit character set for SMS
+const GSM_7BIT_CHARS = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+
+// Convert text to GSM 7-bit compatible format
+const toGSM7Bit = (text: string): string => {
+  return text.split('').map(char => {
+    if (GSM_7BIT_CHARS.includes(char)) {
+      return char;
+    }
+    // Replace non-GSM characters with closest equivalent
+    const replacements: { [key: string]: string } = {
+      '"': '"',
+      '"': '"',
+      ''': "'",
+      ''': "'",
+      '–': '-',
+      '—': '-',
+      '…': '...',
+      '\u00A0': ' ' // non-breaking space
+    };
+    return replacements[char] || char;
+  }).join('');
+};
 
 export const otpService = {
   // Generate a random OTP
@@ -27,31 +52,29 @@ export const otpService = {
     
     // Handle different input formats
     if (cleaned.startsWith('880')) {
-      // Already has country code
       cleaned = cleaned.substring(3);
     } else if (cleaned.startsWith('88')) {
       cleaned = cleaned.substring(2);
     }
     
-    // Now cleaned should be 10 or 11 digits
-    if (cleaned.length === 11 && cleaned.startsWith('0')) {
-      // Format: 01xxxxxxxxx -> +8801xxxxxxxxx
-      return `+88${cleaned}`;
-    } else if (cleaned.length === 10 && cleaned.startsWith('1')) {
-      // Format: 1xxxxxxxxx -> +8801xxxxxxxxx
-      return `+880${cleaned}`;
+    // Remove leading zero if present
+    if (cleaned.startsWith('0')) {
+      cleaned = cleaned.substring(1);
     }
     
-    // Invalid format
-    throw new Error('Invalid phone number format');
+    // Validate length (should be 10 digits after removing country code and leading zero)
+    if (cleaned.length !== 10) {
+      throw new Error('Invalid phone number format');
+    }
+    
+    // Return in international format: +8801XXXXXXXXX
+    return `+8801${cleaned}`;
   },
 
   // Validate phone number format
   validatePhoneNumber(phoneNumber: string): boolean {
     try {
       const formatted = this.formatPhoneNumber(phoneNumber);
-      // Check if formatted number is valid Bangladesh mobile number
-      // Bangladesh mobile: +8801xxxxxxxxx (14 characters total)
       return formatted.startsWith('+8801') && formatted.length === 14;
     } catch {
       return false;
@@ -59,9 +82,12 @@ export const otpService = {
   },
 
   // Send OTP via SMS
-  async sendOTP(phoneNumber: string): Promise<{ success: boolean; message: string }> {
+  async sendOTP(
+    phoneNumber: string, 
+    purpose: 'registration' | 'password-reset' = 'registration',
+    surname?: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
-      // Format and validate phone number
       const formattedPhone = this.formatPhoneNumber(phoneNumber);
       
       if (!this.validatePhoneNumber(phoneNumber)) {
@@ -72,12 +98,12 @@ export const otpService = {
       const otpCollection = collection(db, 'otp_verifications');
       const recentOTPQuery = query(
         otpCollection,
-        where('phoneNumber', '==', formattedPhone)
+        where('phoneNumber', '==', formattedPhone),
+        where('purpose', '==', purpose)
       );
       
       const recentOTPs = await getDocs(recentOTPQuery);
       
-      // Delete expired OTPs and check for recent ones
       const now = new Date();
       let hasRecentOTP = false;
       
@@ -86,17 +112,14 @@ export const otpService = {
         const expiresAt = data.expiresAt.toDate();
         
         if (expiresAt < now) {
-          // Delete expired OTP
           await deleteDoc(doc.ref);
         } else {
-          // Check if OTP was sent in the last minute
           const createdAt = data.createdAt.toDate();
           const timeSinceCreation = (now.getTime() - createdAt.getTime()) / 1000;
           
           if (timeSinceCreation < 60) {
             hasRecentOTP = true;
           } else {
-            // Delete old OTP to create new one
             await deleteDoc(doc.ref);
           }
         }
@@ -112,36 +135,41 @@ export const otpService = {
       // Generate OTP
       const otp = this.generateOTP();
       
-      // Save OTP to Firestore first
+      // Save OTP to Firestore
       const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
       const otpDoc = await addDoc(otpCollection, {
         phoneNumber: formattedPhone,
         otp,
         createdAt: Timestamp.fromDate(now),
         expiresAt: Timestamp.fromDate(expiresAt),
-        attempts: 0
+        attempts: 0,
+        purpose
       });
 
-      // Send SMS using backend API with security
-      const message = `Your verification code is: ${otp}. Valid for ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
+      // Create SMS message based on purpose
+      let message = '';
       
+      if (purpose === 'registration') {
+        message = `Your Ed-tech verification code is ${otp}. This code expires in 02 minutes. If you did not request this, please ignore.`;
+      } else if (purpose === 'password-reset') {
+        message = `Your Ed-tech password reset code is ${otp}. This code is valid for 02 minutes. Do not share this code with anyone.`;
+      }
+      
+      // Convert to GSM 7-bit encoding
+      message = toGSM7Bit(message);
+
+      // Send SMS
       try {
-        // Get backend URL and master key from environment
         const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                            import.meta.env.VITE_API_URL ||
                            'https://edtech-dashboard-alpha.vercel.app';
         const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-        console.log('🔧 Backend URL:', BACKEND_URL);
-        console.log('🔑 Master Key configured:', !!MASTER_API_KEY);
-
-        // Prepare request body
         const requestBody: any = {
           phoneNumber: formattedPhone,
           message
         };
 
-        // Add master key only if it's configured
         if (MASTER_API_KEY) {
           requestBody.apiKey = MASTER_API_KEY;
         }
@@ -154,13 +182,8 @@ export const otpService = {
           body: JSON.stringify(requestBody)
         });
 
-        console.log('📡 Response status:', response.status);
-
-        // Check if response is ok
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('❌ Server error:', errorText);
-          
           let errorData;
           try {
             errorData = JSON.parse(errorText);
@@ -172,12 +195,9 @@ export const otpService = {
         }
 
         const result = await response.json();
-        console.log('✅ SMS API response:', result);
 
         if (!result.success) {
-          // If SMS fails, delete the OTP record
           await deleteDoc(otpDoc);
-          
           return { 
             success: false, 
             message: result.error || 'Failed to send OTP' 
@@ -189,20 +209,17 @@ export const otpService = {
           message: 'OTP sent successfully to your phone number' 
         };
       } catch (smsError: any) {
-        console.error('❌ SMS sending error:', smsError);
-        
-        // Delete the OTP record since SMS failed
+        console.error('SMS sending error:', smsError);
         await deleteDoc(otpDoc);
         
-        // Provide more specific error messages
         let errorMessage = 'Failed to send SMS. ';
         
         if (smsError.message.includes('SMS service not configured')) {
-          errorMessage += 'SMS service is not properly configured. Please contact support.';
+          errorMessage += 'SMS service is not properly configured.';
         } else if (smsError.message.includes('Unauthorized')) {
-          errorMessage += 'Authentication failed. Please contact support.';
+          errorMessage += 'Authentication failed.';
         } else if (smsError.message.includes('Network') || smsError.message.includes('fetch')) {
-          errorMessage += 'Network error. Please check your internet connection.';
+          errorMessage += 'Network error. Please check your connection.';
         } else {
           errorMessage += 'Please try again later.';
         }
@@ -213,7 +230,7 @@ export const otpService = {
         };
       }
     } catch (error: any) {
-      console.error('❌ Error in sendOTP:', error);
+      console.error('Error in sendOTP:', error);
       return { 
         success: false, 
         message: error.message || 'Failed to send OTP. Please try again.' 
@@ -221,15 +238,52 @@ export const otpService = {
     }
   },
 
+  // Send registration success SMS
+  async sendRegistrationSuccessSMS(phoneNumber: string, surname: string, studentId: string): Promise<void> {
+    try {
+      const formattedPhone = this.formatPhoneNumber(phoneNumber);
+      
+      let message = `Dear ${surname}, Your registration on Ed-tech has been successfully completed. Student ID: ${studentId} We look forward to supporting your learning journey.`;
+      
+      // Convert to GSM 7-bit encoding
+      message = toGSM7Bit(message);
+
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const requestBody: any = {
+        phoneNumber: formattedPhone,
+        message
+      };
+
+      if (MASTER_API_KEY) {
+        requestBody.apiKey = MASTER_API_KEY;
+      }
+
+      await fetch(`${BACKEND_URL}/api/sms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+    } catch (error) {
+      console.error('Failed to send registration success SMS:', error);
+    }
+  },
+
   // Verify OTP
-  async verifyOTP(phoneNumber: string, otp: string): Promise<{ success: boolean; message: string }> {
+  async verifyOTP(phoneNumber: string, otp: string, purpose: 'registration' | 'password-reset' = 'registration'): Promise<{ success: boolean; message: string }> {
     try {
       const formattedPhone = this.formatPhoneNumber(phoneNumber);
       
       const otpCollection = collection(db, 'otp_verifications');
       const otpQuery = query(
         otpCollection,
-        where('phoneNumber', '==', formattedPhone)
+        where('phoneNumber', '==', formattedPhone),
+        where('purpose', '==', purpose)
       );
       
       const otpDocs = await getDocs(otpQuery);
@@ -245,13 +299,11 @@ export const otpService = {
       let otpDoc = null;
       let otpData = null;
 
-      // Find the most recent valid OTP
       for (const doc of otpDocs.docs) {
         const data = doc.data();
         const expiresAt = data.expiresAt.toDate();
         
         if (expiresAt < now) {
-          // Delete expired OTP
           await deleteDoc(doc.ref);
         } else {
           otpDoc = doc;
@@ -267,7 +319,6 @@ export const otpService = {
         };
       }
 
-      // Check attempts
       if (otpData.attempts >= MAX_OTP_ATTEMPTS) {
         await deleteDoc(otpDoc.ref);
         return { 
@@ -276,16 +327,13 @@ export const otpService = {
         };
       }
 
-      // Verify OTP
       if (otpData.otp === otp) {
-        // OTP is correct, delete the record
         await deleteDoc(otpDoc.ref);
         return { 
           success: true, 
           message: 'Phone number verified successfully' 
         };
       } else {
-        // Increment attempts
         const newAttempts = otpData.attempts + 1;
         
         if (newAttempts >= MAX_OTP_ATTEMPTS) {
@@ -296,7 +344,6 @@ export const otpService = {
           };
         }
         
-        // Update attempts count
         await updateDoc(otpDoc.ref, { attempts: newAttempts });
         
         return { 
@@ -305,7 +352,7 @@ export const otpService = {
         };
       }
     } catch (error: any) {
-      console.error('❌ Error verifying OTP:', error);
+      console.error('Error verifying OTP:', error);
       return { 
         success: false, 
         message: 'Failed to verify OTP. Please try again.' 
@@ -313,7 +360,7 @@ export const otpService = {
     }
   },
 
-  // Clean up expired OTPs (can be called periodically)
+  // Clean up expired OTPs
   async cleanupExpiredOTPs(): Promise<void> {
     try {
       const otpCollection = collection(db, 'otp_verifications');
@@ -332,9 +379,10 @@ export const otpService = {
       }
       
       await Promise.all(deletePromises);
-      console.log(`🧹 Cleaned up ${deletePromises.length} expired OTPs`);
+      console.log(`Cleaned up ${deletePromises.length} expired OTPs`);
     } catch (error) {
-      console.error('❌ Error cleaning up expired OTPs:', error);
+      console.error('Error cleaning up expired OTPs:', error);
     }
   }
 };
+l
