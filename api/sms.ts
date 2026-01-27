@@ -15,6 +15,40 @@ interface SMSResponse {
   providerResponse?: string;
 }
 
+// GSM 7-bit character set - extended
+const GSM_7BIT_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+const GSM_7BIT_EXTENDED = "^{}\\[~]|€";
+
+// Convert text to GSM 7-bit compatible format
+function toGSM7Bit(text: string): string {
+  return text.split('').map(char => {
+    // Check if character is in basic or extended GSM 7-bit set
+    if (GSM_7BIT_BASIC.includes(char) || GSM_7BIT_EXTENDED.includes(char)) {
+      return char;
+    }
+    
+    // Replace common non-GSM characters
+    const replacements: { [key: string]: string } = {
+      '"': '"',
+      '"': '"',
+      "'": "'",
+      "'": "'",
+      '–': '-',
+      '—': '-',
+      '…': '...',
+      '\u00A0': ' ',
+      '•': '*',
+      '→': '->',
+      '←': '<-',
+      '™': '(TM)',
+      '©': '(C)',
+      '®': '(R)',
+    };
+    
+    return replacements[char] || char;
+  }).join('');
+}
+
 // Generate HMAC signature for request validation
 function generateSignature(data: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(data).digest('hex');
@@ -128,19 +162,13 @@ export default async function handler(
       formattedNumber = '880' + formattedNumber;
     }
 
-    // Extract OTP from message
-    const otpMatch = message.match(/\d{6}/);
-    const otp = otpMatch ? otpMatch[0] : '';
-
-    // Format message for BulkSMSBD
-    let formattedMessage = message;
-    if (otp) {
-      formattedMessage = `Your verification code is: ${otp}. Valid for 5 minutes. Do not share this code.`;
-    }
+    // Convert message to GSM 7-bit encoding
+    const formattedMessage = toGSM7Bit(message);
 
     console.log('📱 Sending SMS:', { 
       number: formattedNumber.substring(0, 5) + '****' + formattedNumber.substring(formattedNumber.length - 2),
-      hasOTP: !!otp 
+      messageLength: formattedMessage.length,
+      encoding: 'GSM_7BIT'
     });
 
     // Call BulkSMSBD API
@@ -157,7 +185,9 @@ export default async function handler(
     const smsResponse = await fetch(`${url}?${params.toString()}`, {
       method: 'GET',
       headers: {
-        'User-Agent': 'EdTech-Platform/1.0'
+        'User-Agent': 'EdTech-Platform/1.0',
+        'Accept': 'text/plain',
+        'Accept-Charset': 'utf-8'
       }
     });
 
@@ -185,7 +215,7 @@ export default async function handler(
 
     return res.status(200).json({
       success: true,
-      message: 'OTP sent successfully',
+      message: 'SMS sent successfully',
       providerResponse: rawText
     });
 
