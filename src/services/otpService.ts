@@ -15,23 +15,36 @@ const OTP_EXPIRY_MINUTES = 2;
 const MAX_OTP_ATTEMPTS = 3;
 const OTP_LENGTH = 6;
 
-// GSM 7-bit character set for SMS
-const GSM_7BIT_CHARS = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+// GSM 7-bit character set for SMS - extended set
+const GSM_7BIT_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+const GSM_7BIT_EXTENDED = "^{}\\[~]|€";
 
 // Convert text to GSM 7-bit compatible format
 const toGSM7Bit = (text: string): string => {
   return text.split('').map(char => {
-    if (GSM_7BIT_CHARS.includes(char)) {
+    // Check if character is in basic or extended GSM 7-bit set
+    if (GSM_7BIT_BASIC.includes(char) || GSM_7BIT_EXTENDED.includes(char)) {
       return char;
     }
+    
+    // Replace common non-GSM characters
     const replacements: { [key: string]: string } = {
       '"': '"',
+      '"': '"',
+      "'": "'",
       "'": "'",
       '–': '-',
       '—': '-',
       '…': '...',
-      '\u00A0': ' '
+      '\u00A0': ' ',
+      '•': '*',
+      '→': '->',
+      '←': '<-',
+      '™': '(TM)',
+      '©': '(C)',
+      '®': '(R)',
     };
+    
     return replacements[char] || char;
   }).join('');
 };
@@ -124,25 +137,46 @@ export const otpService = {
         where('purpose', '==', purpose)
       );
       
-      const recentOTPs = await getDocs(recentOTPQuery);
+      let recentOTPs;
+      try {
+        recentOTPs = await getDocs(recentOTPQuery);
+      } catch (firestoreError: any) {
+        console.error('Firestore query error:', firestoreError);
+        // If Firestore fails, continue without rate limiting check
+        recentOTPs = { docs: [], empty: true };
+      }
       
       const now = new Date();
       let hasRecentOTP = false;
       
-      for (const doc of recentOTPs.docs) {
-        const data = doc.data();
-        const expiresAt = data.expiresAt.toDate();
-        
-        if (expiresAt < now) {
-          await deleteDoc(doc.ref);
-        } else {
-          const createdAt = data.createdAt.toDate();
-          const timeSinceCreation = (now.getTime() - createdAt.getTime()) / 1000;
-          
-          if (timeSinceCreation < 60) {
-            hasRecentOTP = true;
-          } else {
-            await deleteDoc(doc.ref);
+      if (!recentOTPs.empty) {
+        for (const doc of recentOTPs.docs) {
+          try {
+            const data = doc.data();
+            const expiresAt = data.expiresAt.toDate();
+            
+            if (expiresAt < now) {
+              try {
+                await deleteDoc(doc.ref);
+              } catch (deleteError) {
+                console.error('Failed to delete expired OTP:', deleteError);
+              }
+            } else {
+              const createdAt = data.createdAt.toDate();
+              const timeSinceCreation = (now.getTime() - createdAt.getTime()) / 1000;
+              
+              if (timeSinceCreation < 60) {
+                hasRecentOTP = true;
+              } else {
+                try {
+                  await deleteDoc(doc.ref);
+                } catch (deleteError) {
+                  console.error('Failed to delete old OTP:', deleteError);
+                }
+              }
+            }
+          } catch (docError) {
+            console.error('Error processing OTP document:', docError);
           }
         }
       }
@@ -159,16 +193,23 @@ export const otpService = {
       
       // Save OTP to Firestore
       const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
-      const otpDoc = await addDoc(otpCollection, {
-        phoneNumber: normalizedPhone,
-        otp,
-        createdAt: Timestamp.fromDate(now),
-        expiresAt: Timestamp.fromDate(expiresAt),
-        attempts: 0,
-        purpose
-      });
+      let otpDocRef = null;
+      
+      try {
+        otpDocRef = await addDoc(otpCollection, {
+          phoneNumber: normalizedPhone,
+          otp,
+          createdAt: Timestamp.fromDate(now),
+          expiresAt: Timestamp.fromDate(expiresAt),
+          attempts: 0,
+          purpose
+        });
+      } catch (firestoreError: any) {
+        console.error('Failed to save OTP to Firestore:', firestoreError);
+        // Continue with SMS sending even if Firestore save fails
+      }
 
-      // Create SMS message based on purpose
+      // Create SMS message based on purpose with GSM 7-bit encoding
       let message = '';
       
       if (purpose === 'registration') {
@@ -213,13 +254,29 @@ export const otpService = {
             errorData = { error: errorText || `Server error: ${response.status}` };
           }
           
+          // Clean up Firestore doc if SMS fails
+          if (otpDocRef) {
+            try {
+              await deleteDoc(otpDocRef);
+            } catch (deleteError) {
+              console.error('Failed to cleanup OTP after SMS error:', deleteError);
+            }
+          }
+          
           throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
 
         const result = await response.json();
 
         if (!result.success) {
-          await deleteDoc(otpDoc);
+          // Clean up Firestore doc if SMS fails
+          if (otpDocRef) {
+            try {
+              await deleteDoc(otpDocRef);
+            } catch (deleteError) {
+              console.error('Failed to cleanup OTP after SMS error:', deleteError);
+            }
+          }
           return { 
             success: false, 
             message: result.error || 'Failed to send OTP' 
@@ -232,7 +289,15 @@ export const otpService = {
         };
       } catch (smsError: any) {
         console.error('SMS sending error:', smsError);
-        await deleteDoc(otpDoc);
+        
+        // Clean up Firestore doc if SMS fails
+        if (otpDocRef) {
+          try {
+            await deleteDoc(otpDocRef);
+          } catch (deleteError) {
+            console.error('Failed to cleanup OTP after SMS error:', deleteError);
+          }
+        }
         
         let errorMessage = 'Failed to send SMS. ';
         
@@ -265,6 +330,7 @@ export const otpService = {
       // Normalize phone number
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
+      // Format message with proper GSM 7-bit encoding
       let message = `Dear ${surname}, Your registration on Ed-tech has been successfully completed. Student ID: ${studentId} We look forward to supporting your learning journey.`;
       
       // Convert to GSM 7-bit encoding
@@ -284,13 +350,17 @@ export const otpService = {
         requestBody.apiKey = MASTER_API_KEY;
       }
 
-      await fetch(`${BACKEND_URL}/api/sms`, {
+      const response = await fetch(`${BACKEND_URL}/api/sms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody)
       });
+
+      if (!response.ok) {
+        console.error('Failed to send registration success SMS');
+      }
     } catch (error) {
       console.error('Failed to send registration success SMS:', error);
     }
@@ -308,7 +378,16 @@ export const otpService = {
         where('purpose', '==', purpose)
       );
       
-      const otpDocs = await getDocs(otpQuery);
+      let otpDocs;
+      try {
+        otpDocs = await getDocs(otpQuery);
+      } catch (firestoreError: any) {
+        console.error('Firestore query error during OTP verification:', firestoreError);
+        return { 
+          success: false, 
+          message: 'Unable to verify OTP at this time. Please try again.' 
+        };
+      }
       
       if (otpDocs.empty) {
         return { 
@@ -322,15 +401,23 @@ export const otpService = {
       let otpData = null;
 
       for (const doc of otpDocs.docs) {
-        const data = doc.data();
-        const expiresAt = data.expiresAt.toDate();
-        
-        if (expiresAt < now) {
-          await deleteDoc(doc.ref);
-        } else {
-          otpDoc = doc;
-          otpData = data;
-          break;
+        try {
+          const data = doc.data();
+          const expiresAt = data.expiresAt.toDate();
+          
+          if (expiresAt < now) {
+            try {
+              await deleteDoc(doc.ref);
+            } catch (deleteError) {
+              console.error('Failed to delete expired OTP:', deleteError);
+            }
+          } else {
+            otpDoc = doc;
+            otpData = data;
+            break;
+          }
+        } catch (docError) {
+          console.error('Error processing OTP document:', docError);
         }
       }
 
@@ -342,7 +429,11 @@ export const otpService = {
       }
 
       if (otpData.attempts >= MAX_OTP_ATTEMPTS) {
-        await deleteDoc(otpDoc.ref);
+        try {
+          await deleteDoc(otpDoc.ref);
+        } catch (deleteError) {
+          console.error('Failed to delete OTP after max attempts:', deleteError);
+        }
         return { 
           success: false, 
           message: 'Too many failed attempts. Please request a new OTP.' 
@@ -350,7 +441,12 @@ export const otpService = {
       }
 
       if (otpData.otp === otp) {
-        await deleteDoc(otpDoc.ref);
+        try {
+          await deleteDoc(otpDoc.ref);
+        } catch (deleteError) {
+          console.error('Failed to delete OTP after successful verification:', deleteError);
+          // Still return success since OTP was correct
+        }
         return { 
           success: true, 
           message: 'Phone number verified successfully' 
@@ -359,14 +455,22 @@ export const otpService = {
         const newAttempts = otpData.attempts + 1;
         
         if (newAttempts >= MAX_OTP_ATTEMPTS) {
-          await deleteDoc(otpDoc.ref);
+          try {
+            await deleteDoc(otpDoc.ref);
+          } catch (deleteError) {
+            console.error('Failed to delete OTP after max attempts:', deleteError);
+          }
           return { 
             success: false, 
             message: 'Too many failed attempts. Please request a new OTP.' 
           };
         }
         
-        await updateDoc(otpDoc.ref, { attempts: newAttempts });
+        try {
+          await updateDoc(otpDoc.ref, { attempts: newAttempts });
+        } catch (updateError) {
+          console.error('Failed to update OTP attempts:', updateError);
+        }
         
         return { 
           success: false, 
@@ -391,15 +495,19 @@ export const otpService = {
       const deletePromises = [];
       
       for (const doc of allOTPs.docs) {
-        const data = doc.data();
-        const expiresAt = data.expiresAt.toDate();
-        
-        if (expiresAt < now) {
-          deletePromises.push(deleteDoc(doc.ref));
+        try {
+          const data = doc.data();
+          const expiresAt = data.expiresAt.toDate();
+          
+          if (expiresAt < now) {
+            deletePromises.push(deleteDoc(doc.ref));
+          }
+        } catch (docError) {
+          console.error('Error processing OTP document during cleanup:', docError);
         }
       }
       
-      await Promise.all(deletePromises);
+      await Promise.allSettled(deletePromises);
       console.log(`Cleaned up ${deletePromises.length} expired OTPs`);
     } catch (error) {
       console.error('Error cleaning up expired OTPs:', error);
