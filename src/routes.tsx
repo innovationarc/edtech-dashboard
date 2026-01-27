@@ -24,6 +24,8 @@ import StudentStudyPlan from './pages/StudentStudyPlan';
 import TeacherQA from './pages/TeacherQA';
 import TeacherTaskManagement from './pages/TeacherTaskManagement';
 import QuestionDetail from './pages/QuestionDetail';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import { useDashboard } from './contexts/DashboardContext';
 
 // Protected Route Component for Admin-only pages
@@ -83,8 +85,10 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      {/* Payment success route - OUTSIDE DashboardLayout for clean display */}
+      {/* Public routes - OUTSIDE DashboardLayout for clean display */}
       <Route path="/payment-success" element={<PaymentSuccess />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/terms-of-service" element={<TermsOfService />} />
       
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<Navigate to={getDefaultRoute()} replace />} />
