@@ -1,11 +1,15 @@
-// src/types/recaptcha.d.ts
-// TypeScript declarations for Google reCAPTCHA v3
+// TypeScript declarations for Google reCAPTCHA v3 ONLY
 
-interface Window {
-  grecaptcha: {
-    ready: (callback: () => void) => void;
-    execute: (siteKey: string, options: { action: string }) => Promise<string>;
-    render: (container: string | HTMLElement, parameters: any) => number;
-    reset: (widgetId?: number) => void;
-  };
+declare global {
+  interface Window {
+    grecaptcha?: {
+      ready: (callback: () => void) => void;
+      execute: (
+        siteKey: string,
+        options: { action: string }
+      ) => Promise<string>;
+    };
+  }
 }
+
+export {};
