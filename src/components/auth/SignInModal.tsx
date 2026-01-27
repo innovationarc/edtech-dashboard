@@ -266,6 +266,30 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </div>
             </div>
           </div>
+
+          {/* Terms and Privacy Notice */}
+          <div className="mt-4 text-center">
+            <p className="text-xs text-gray-500">
+              By continuing, you agree to our{' '}
+              <a 
+                href="/terms-of-service" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary-400 hover:text-primary-300 underline"
+              >
+                Terms of Service
+              </a>
+              {' '}and{' '}
+              <a 
+                href="/privacy-policy" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary-400 hover:text-primary-300 underline"
+              >
+                Privacy Policy
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </div>
