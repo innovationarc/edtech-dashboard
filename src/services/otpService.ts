@@ -374,7 +374,7 @@ export const otpService = {
       
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
-      let message = `Dear ${surname}, Your registration on Ed-tech has been successfully completed. Student ID: ${studentId} We look forward to supporting your learning journey.`;
+      let message = `Dear ${surname}, Your registration on Ed-tech has been successfully completed. Student ID: ${studentId}. We look forward to supporting your learning journey.`;
       message = toGSM7Bit(message);
 
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
