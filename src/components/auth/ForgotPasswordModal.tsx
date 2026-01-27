@@ -44,6 +44,10 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
       script.async = true;
       script.defer = true;
       script.onload = () => setCaptchaLoaded(true);
+      script.onerror = () => {
+        console.error('Failed to load reCAPTCHA');
+        setCaptchaLoaded(true); // Allow form to work even if reCAPTCHA fails
+      };
       document.head.appendChild(script);
     };
 
@@ -64,19 +68,23 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
   }, [newPassword]);
 
   // Get reCAPTCHA v3 token
-  const getCaptchaToken = async (): Promise<string> => {
-    return new Promise((resolve, reject) => {
+  const getCaptchaToken = async (): Promise<string | null> => {
+    return new Promise((resolve) => {
       if (!window.grecaptcha || !captchaLoaded) {
-        reject(new Error('reCAPTCHA not loaded'));
+        resolve(null);
         return;
       }
 
-      window.grecaptcha.ready(() => {
-        window.grecaptcha
-          .execute(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'forgot_password' })
-          .then(resolve)
-          .catch(reject);
-      });
+      try {
+        window.grecaptcha.ready(() => {
+          window.grecaptcha
+            .execute(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'forgot_password' })
+            .then(resolve)
+            .catch(() => resolve(null));
+        });
+      } catch {
+        resolve(null);
+      }
     });
   };
 
@@ -108,13 +116,11 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
       return;
     }
 
-    // Get reCAPTCHA token
+    // Get reCAPTCHA token (optional - don't block if it fails)
     try {
       await getCaptchaToken();
     } catch (err) {
-      setError('Please wait for security verification to load');
-      setLoading(false);
-      return;
+      console.warn('reCAPTCHA verification skipped');
     }
 
     try {
@@ -598,11 +604,11 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
 
             <button
               onClick={handleIdentifyUser}
-              disabled={loading || !captchaLoaded}
+              disabled={loading}
               className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
             >
               {loading && <Loader size={20} className="animate-spin" />}
-              <span>{loading ? 'Processing...' : !captchaLoaded ? 'Loading Security...' : 'Continue'}</span>
+              <span>{loading ? 'Processing...' : 'Continue'}</span>
             </button>
           </div>
 
