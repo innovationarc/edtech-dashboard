@@ -1,7 +1,4 @@
 // api/user-search.ts
-// ALTERNATIVE VERSION - Uses FIREBASE_SERVICE_ACCOUNT (entire JSON)
-// This completely bypasses private key encoding issues
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
 
@@ -14,11 +11,12 @@ interface UserSearchRequest {
 interface UserSearchResponse {
   success: boolean;
   phoneNumber?: string;
+  userData?: any;
   message?: string;
   error?: string;
 }
 
-// Initialize Firebase Admin SDK using direct JSON method
+// Initialize Firebase Admin SDK
 function initializeFirebaseAdmin() {
   if (admin.apps.length > 0) {
     console.log('✅ Firebase Admin already initialized');
@@ -182,7 +180,7 @@ export default async function handler(
         
         if (!phoneQuery.empty) {
           userDoc = phoneQuery.docs[0];
-          userData = userDoc.data();
+          userData = phoneQuery.docs[0].data();
           console.log('✅ User found by phone number');
         }
       } catch (queryError: any) {
@@ -201,7 +199,7 @@ export default async function handler(
         
         if (!emailQuery.empty) {
           userDoc = emailQuery.docs[0];
-          userData = userDoc.data();
+          userData = emailQuery.docs[0].data();
           console.log('✅ User found by email');
         }
       } catch (queryError: any) {
@@ -228,10 +226,35 @@ export default async function handler(
 
     console.log('✅ User search successful - Phone:', userData.phoneNumber.substring(0, 5) + '****');
 
-    return res.status(200).json({
-      success: true,
-      phoneNumber: userData.phoneNumber,
-      message: 'Account found. Please verify your phone number.'
+    // For password-reset purpose, only return phone number
+    if (purpose === 'password-reset') {
+      return res.status(200).json({
+        success: true,
+        phoneNumber: userData.phoneNumber,
+        message: 'Account found. Please verify your phone number.'
+      });
+    }
+
+    // For user-lookup purpose (sign-in), return full user data
+    if (purpose === 'user-lookup') {
+      // Include the Firestore document ID as uid
+      const userDataWithUid = {
+        uid: userDoc?.id,
+        ...userData
+      };
+
+      return res.status(200).json({
+        success: true,
+        phoneNumber: userData.phoneNumber,
+        userData: userDataWithUid,
+        message: 'User found successfully.'
+      });
+    }
+
+    // Unknown purpose
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid purpose specified'
     });
 
   } catch (error: any) {
@@ -247,4 +270,3 @@ export default async function handler(
     });
   }
 }
-
