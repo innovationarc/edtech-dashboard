@@ -1,22 +1,9 @@
 // api/user-search.ts
+// ALTERNATIVE VERSION - Uses FIREBASE_SERVICE_ACCOUNT (entire JSON)
+// This completely bypasses private key encoding issues
+
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
-
-// Initialize Firebase Admin SDK
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    });
-    console.log('✅ Firebase Admin initialized');
-  } catch (error: any) {
-    console.error('❌ Firebase Admin initialization error:', error.message);
-  }
-}
 
 interface UserSearchRequest {
   loginId: string;
@@ -29,6 +16,61 @@ interface UserSearchResponse {
   phoneNumber?: string;
   message?: string;
   error?: string;
+}
+
+// Initialize Firebase Admin SDK using direct JSON method
+function initializeFirebaseAdmin() {
+  if (admin.apps.length > 0) {
+    console.log('✅ Firebase Admin already initialized');
+    return;
+  }
+
+  try {
+    console.log('🔧 Initializing Firebase Admin...');
+
+    // METHOD 1: Try using full service account JSON (RECOMMENDED)
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+    
+    if (serviceAccountJson) {
+      console.log('📋 Using FIREBASE_SERVICE_ACCOUNT (full JSON)');
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      
+      console.log('✅ Firebase Admin initialized with full JSON');
+      return;
+    }
+
+    // METHOD 2: Fallback to individual credentials
+    console.log('📋 Using individual credentials (fallback)');
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (!projectId || !clientEmail || !privateKey) {
+      throw new Error('Missing Firebase credentials. Please set FIREBASE_SERVICE_ACCOUNT or individual credentials.');
+    }
+
+    // Fix private key formatting
+    privateKey = privateKey.replace(/\\n/g, '\n');
+    privateKey = privateKey.replace(/^["']|["']$/g, '');
+
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+
+    console.log('✅ Firebase Admin initialized with individual credentials');
+  } catch (error: any) {
+    console.error('❌ Firebase Admin initialization error:', error.message);
+    console.error('Stack:', error.stack);
+    throw error;
+  }
 }
 
 export default async function handler(
@@ -68,9 +110,24 @@ export default async function handler(
   }
 
   try {
+    // Initialize Firebase Admin
+    try {
+      initializeFirebaseAdmin();
+    } catch (initError: any) {
+      console.error('🔥 Firebase initialization failed:', initError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Firebase Admin configuration error. Please check environment variables.',
+      });
+    }
+
     const { loginId, purpose, apiKey } = req.body as UserSearchRequest;
 
-    console.log('🔍 User search request - Purpose:', purpose);
+    console.log('🔍 User search request:', {
+      purpose,
+      loginIdPrefix: loginId?.substring(0, 5) + '...',
+      hasApiKey: !!apiKey
+    });
 
     // Validate required fields
     if (!loginId || !purpose) {
@@ -84,7 +141,7 @@ export default async function handler(
     // Optional: Validate API Key if MASTER_KEY is set
     const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
     if (MASTER_API_KEY && apiKey !== MASTER_API_KEY) {
-      console.error('❌ Unauthorized request');
+      console.error('❌ Unauthorized request - invalid API key');
       return res.status(401).json({
         success: false,
         error: 'Unauthorized request',
@@ -99,49 +156,61 @@ export default async function handler(
 
     console.log('🔍 Searching by userId...');
     // Try to find by userId
-    const userIdQuery = await db.collection('users')
-      .where('userId', '==', loginId)
-      .limit(1)
-      .get();
-    
-    if (!userIdQuery.empty) {
-      userDoc = userIdQuery.docs[0];
-      userData = userDoc.data();
-      console.log('✅ User found by Student ID');
+    try {
+      const userIdQuery = await db.collection('users')
+        .where('userId', '==', loginId)
+        .limit(1)
+        .get();
+      
+      if (!userIdQuery.empty) {
+        userDoc = userIdQuery.docs[0];
+        userData = userDoc.data();
+        console.log('✅ User found by Student ID');
+      }
+    } catch (queryError: any) {
+      console.error('⚠️ Error querying by userId:', queryError.message);
     }
 
     // Try to find by phone number
     if (!userData) {
       console.log('🔍 Searching by phoneNumber...');
-      const phoneQuery = await db.collection('users')
-        .where('phoneNumber', '==', loginId)
-        .limit(1)
-        .get();
-      
-      if (!phoneQuery.empty) {
-        userDoc = phoneQuery.docs[0];
-        userData = userDoc.data();
-        console.log('✅ User found by phone number');
+      try {
+        const phoneQuery = await db.collection('users')
+          .where('phoneNumber', '==', loginId)
+          .limit(1)
+          .get();
+        
+        if (!phoneQuery.empty) {
+          userDoc = phoneQuery.docs[0];
+          userData = userDoc.data();
+          console.log('✅ User found by phone number');
+        }
+      } catch (queryError: any) {
+        console.error('⚠️ Error querying by phoneNumber:', queryError.message);
       }
     }
 
     // Try to find by email
     if (!userData) {
       console.log('🔍 Searching by email...');
-      const emailQuery = await db.collection('users')
-        .where('email', '==', loginId)
-        .limit(1)
-        .get();
-      
-      if (!emailQuery.empty) {
-        userDoc = emailQuery.docs[0];
-        userData = userDoc.data();
-        console.log('✅ User found by email');
+      try {
+        const emailQuery = await db.collection('users')
+          .where('email', '==', loginId)
+          .limit(1)
+          .get();
+        
+        if (!emailQuery.empty) {
+          userDoc = emailQuery.docs[0];
+          userData = userDoc.data();
+          console.log('✅ User found by email');
+        }
+      } catch (queryError: any) {
+        console.error('⚠️ Error querying by email:', queryError.message);
       }
     }
 
     if (!userData) {
-      console.log('❌ User not found');
+      console.log('❌ User not found with login ID:', loginId.substring(0, 5) + '...');
       return res.status(404).json({
         success: false,
         error: 'Account not found. Please check your Student ID, phone number, or email.',
@@ -157,7 +226,7 @@ export default async function handler(
       });
     }
 
-    console.log('✅ User search successful');
+    console.log('✅ User search successful - Phone:', userData.phoneNumber.substring(0, 5) + '****');
 
     return res.status(200).json({
       success: true,
@@ -166,7 +235,11 @@ export default async function handler(
     });
 
   } catch (error: any) {
-    console.error('🔥 User search error:', error);
+    console.error('🔥 User search error:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
 
     return res.status(500).json({
       success: false,
@@ -174,3 +247,4 @@ export default async function handler(
     });
   }
 }
+
