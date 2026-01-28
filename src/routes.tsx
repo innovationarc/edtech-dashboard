@@ -26,6 +26,15 @@ import TeacherTaskManagement from './pages/TeacherTaskManagement';
 import QuestionDetail from './pages/QuestionDetail';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+
+// Import role-specific management pages (placeholders)
+import ManageStudent from './pages/ManageStudent';
+import ManageParent from './pages/ManageParent';
+import ManageTeacher from './pages/ManageTeacher';
+import ManageCoordinator from './pages/ManageCoordinator';
+import ManageManager from './pages/ManageManager';
+import ManageAdmin from './pages/ManageAdmin';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Protected Route Component for Admin-only pages
@@ -72,6 +81,52 @@ const TeacherRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Protected Route Component for Admin, Manager, Coordinator pages
+const ManagementRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated } = useDashboard();
+  
+  if (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'manager' && user?.role !== 'coordinator')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="text-error-DEFAULT">
+          <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-white">Access Denied</h2>
+        <p className="text-gray-400 text-center max-w-md">
+          Only administrators, managers, and coordinators can access this page.
+        </p>
+      </div>
+    );
+  }
+  
+  return <>{children}</>;
+};
+
+// Protected Route Component for Admin and Manager pages
+const AdminManagerRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated } = useDashboard();
+  
+  if (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'manager')) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="text-error-DEFAULT">
+          <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-white">Access Denied</h2>
+        <p className="text-gray-400 text-center max-w-md">
+          Only administrators and managers can access this page.
+        </p>
+      </div>
+    );
+  }
+  
+  return <>{children}</>;
+};
+
 const AppRoutes = () => {
   const { user, isAuthenticated } = useDashboard();
 
@@ -80,7 +135,7 @@ const AppRoutes = () => {
     if (!isAuthenticated) return '/dashboard';
     if (user?.role === 'student') return '/student-dashboard';
     if (user?.role === 'teacher') return '/teacher-dashboard';
-    return '/dashboard'; // Admin goes to main dashboard
+    return '/dashboard'; // Admin, Manager, Coordinator goes to main dashboard
   };
 
   return (
@@ -150,11 +205,6 @@ const AppRoutes = () => {
         } />
         
         {/* Admin-only routes */}
-        <Route path="users" element={
-          <AdminRoute>
-            <ManageUsers />
-          </AdminRoute>
-        } />
         <Route path="payments" element={
           <AdminRoute>
             <PaymentManagement />
@@ -168,6 +218,56 @@ const AppRoutes = () => {
         <Route path="announcements" element={
           <AdminRoute>
             <AllAnnouncements />
+          </AdminRoute>
+        } />
+        
+        {/* User Management - Admin, Manager, Coordinator */}
+        <Route path="users" element={
+          <ManagementRoute>
+            <ManageUsers />
+          </ManagementRoute>
+        } />
+        
+        {/* Role-specific User Management Routes */}
+        {/* Student Management - Admin, Manager, Coordinator */}
+        <Route path="manage/students" element={
+          <ManagementRoute>
+            <ManageStudent />
+          </ManagementRoute>
+        } />
+        
+        {/* Parent Management - Admin, Manager, Coordinator */}
+        <Route path="manage/parents" element={
+          <ManagementRoute>
+            <ManageParent />
+          </ManagementRoute>
+        } />
+        
+        {/* Teacher Management - Admin, Manager */}
+        <Route path="manage/teachers" element={
+          <AdminManagerRoute>
+            <ManageTeacher />
+          </AdminManagerRoute>
+        } />
+        
+        {/* Coordinator Management - Admin, Manager */}
+        <Route path="manage/coordinators" element={
+          <AdminManagerRoute>
+            <ManageCoordinator />
+          </AdminManagerRoute>
+        } />
+        
+        {/* Manager Management - Admin only */}
+        <Route path="manage/managers" element={
+          <AdminRoute>
+            <ManageManager />
+          </AdminRoute>
+        } />
+        
+        {/* Admin Management - Admin only */}
+        <Route path="manage/admins" element={
+          <AdminRoute>
+            <ManageAdmin />
           </AdminRoute>
         } />
         
