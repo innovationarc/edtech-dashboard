@@ -1,3 +1,4 @@
+// src/services/userService.ts
 import { 
   collection, 
   doc, 
@@ -12,7 +13,8 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import { db, storage, auth } from '../config/firebase';
+import { deleteUser as deleteAuthUser } from 'firebase/auth';
 import { UserProfile } from './authService';
 
 export interface User extends UserProfile {
@@ -202,12 +204,55 @@ export const userService = {
     }
   },
 
-  // Delete user
-  async deleteUser(uid: string): Promise<void> {
+  // Delete user from both Firestore and Firebase Authentication
+  async deleteUser(uid: string, userEmail?: string): Promise<void> {
     try {
+      console.log('🗑️ Starting user deletion process for UID:', uid);
+      
+      // Step 1: Delete from Firestore
       await deleteDoc(doc(db, 'users', uid));
+      console.log('✅ User deleted from Firestore');
+      
+      // Step 2: Delete from Firebase Authentication
+      // Note: This requires admin privileges or the user to be currently authenticated
+      // For production, you should use Firebase Admin SDK on the backend
+      try {
+        // Try to delete from Firebase Auth using backend API if available
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                           import.meta.env.VITE_API_URL ||
+                           'https://edtech-dashboard-alpha.vercel.app';
+        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+        const requestBody: any = {
+          uid,
+          email: userEmail
+        };
+
+        if (MASTER_API_KEY) {
+          requestBody.apiKey = MASTER_API_KEY;
+        }
+
+        const response = await fetch(`${BACKEND_URL}/api/delete-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (response.ok) {
+          console.log('✅ User deleted from Firebase Authentication via backend');
+        } else {
+          console.warn('⚠️ Could not delete from Firebase Auth via backend, user may still exist in Auth');
+        }
+      } catch (authError: any) {
+        console.warn('⚠️ Firebase Auth deletion failed:', authError.message);
+        console.log('Note: User deleted from Firestore but may still exist in Firebase Authentication');
+      }
+      
+      console.log('✅ User deletion process completed');
     } catch (error: any) {
-      console.error('Error deleting user:', error);
+      console.error('❌ Error deleting user:', error);
       throw new Error(error.message);
     }
   },
@@ -230,8 +275,11 @@ export const userService = {
       }) as User[];
       
       return users.filter(user => 
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
+        user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.userId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.phoneNumber?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     } catch (error: any) {
       console.error('Error searching users:', error);
@@ -245,7 +293,14 @@ export const userService = {
     active: number;
     pending: number;
     inactive: number;
-    byRole: { admin: number; teacher: number; student: number };
+    byRole: { 
+      admin: number; 
+      manager: number;
+      coordinator: number;
+      teacher: number; 
+      parent: number;
+      student: number;
+    };
   }> {
     try {
       const users = await this.getAllUsers();
@@ -257,7 +312,10 @@ export const userService = {
         inactive: users.filter(u => u.status === 'inactive').length,
         byRole: {
           admin: users.filter(u => u.role === 'admin').length,
+          manager: users.filter(u => u.role === 'manager').length,
+          coordinator: users.filter(u => u.role === 'coordinator').length,
           teacher: users.filter(u => u.role === 'teacher').length,
+          parent: users.filter(u => u.role === 'parent').length,
           student: users.filter(u => u.role === 'student').length,
         }
       };
