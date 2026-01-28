@@ -12,7 +12,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage, auth } from '../config/firebase';
+import { db, storage } from '../config/firebase';
 import { UserProfile } from './authService';
 
 export interface User extends UserProfile {
@@ -269,14 +269,20 @@ export const userService = {
       
       // Step 3: Delete profile picture from Storage if exists
       try {
-        const user = await this.getUserById(uid);
-        if (user?.profilePictureUrl) {
-          const pictureRef = ref(storage, `profile_pictures/${uid}_profile_picture`);
+        // Note: We can't call getUserById after deleting from Firestore
+        // So we'll attempt to delete the profile picture based on the naming convention
+        const pictureRef = ref(storage, `profile_pictures/${uid}_profile_picture.jpg`);
+        await deleteObject(pictureRef);
+        console.log('✅ Profile picture deleted from Storage');
+      } catch (storageError) {
+        // Try other common extensions
+        try {
+          const pictureRef = ref(storage, `profile_pictures/${uid}_profile_picture.png`);
           await deleteObject(pictureRef);
           console.log('✅ Profile picture deleted from Storage');
+        } catch {
+          console.warn('⚠️ Profile picture deletion skipped (may not exist)');
         }
-      } catch (storageError) {
-        console.warn('⚠️ Profile picture deletion skipped (may not exist)');
       }
       
       console.log('✅ User deletion process completed successfully');
