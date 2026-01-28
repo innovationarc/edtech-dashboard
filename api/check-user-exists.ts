@@ -138,7 +138,7 @@ export default async function handler(
 
     const db = admin.firestore();
 
-    // Check phone number in Firestore
+    // Check phone number in Firestore ONLY
     if (phoneNumber) {
       console.log('🔍 Checking phone number in Firestore:', phoneNumber.substring(0, 5) + '****');
       const phoneQuery = await db.collection('users')
@@ -159,30 +159,45 @@ export default async function handler(
       console.log('✅ Phone number available in Firestore');
     }
 
-    // Check email in both Firebase Auth and Firestore
+    // Check email in Firestore ONLY (not Firebase Auth)
+    // This ensures we only flag emails that are actually tied to active user profiles
     if (email && email.trim() && !email.endsWith('@student.local')) {
-      console.log('🔍 Checking email:', email);
+      console.log('🔍 Checking email in Firestore only:', email);
       
-      // Check Firebase Authentication first
+      // Check Firestore for active user profiles with this email
+      const emailQuery = await db.collection('users')
+        .where('email', '==', email)
+        .limit(1)
+        .get();
+
+      if (!emailQuery.empty) {
+        console.log('⚠️ Email already exists in Firestore');
+        return res.status(200).json({
+          success: true,
+          exists: true,
+          field: 'email',
+          message: 'This email is already registered'
+        });
+      }
+      
+      // Check if email exists in Firebase Auth but NOT in Firestore (orphaned account)
+      // If found, delete the orphaned auth account to allow re-registration
       try {
         const userRecord = await admin.auth().getUserByEmail(email);
         if (userRecord) {
-          console.log('⚠️ Email exists in Firebase Authentication');
+          console.log('⚠️ Orphaned auth account detected for email:', email);
           
           // Check if user document exists in Firestore
           const userDoc = await db.collection('users').doc(userRecord.uid).get();
           
-          if (userDoc.exists()) {
-            console.log('⚠️ Email already registered with active account');
-            return res.status(200).json({
-              success: true,
-              exists: true,
-              field: 'email',
-              message: 'This email is already registered'
-            });
+          if (!userDoc.exists()) {
+            // This is an orphaned account - delete it from Auth to allow re-registration
+            console.log('🗑️ Deleting orphaned auth account:', userRecord.uid);
+            await admin.auth().deleteUser(userRecord.uid);
+            console.log('✅ Orphaned account deleted - email is now available');
           } else {
-            // User exists in Auth but not in Firestore (orphaned account)
-            console.log('⚠️ Orphaned auth account detected - will need cleanup');
+            // User exists in both Auth and Firestore
+            console.log('⚠️ Email already registered with active account');
             return res.status(200).json({
               success: true,
               exists: true,
@@ -199,23 +214,7 @@ export default async function handler(
         }
       }
       
-      // Check Firestore as secondary verification
-      const emailQuery = await db.collection('users')
-        .where('email', '==', email)
-        .limit(1)
-        .get();
-
-      if (!emailQuery.empty) {
-        console.log('⚠️ Email already exists in Firestore');
-        return res.status(200).json({
-          success: true,
-          exists: true,
-          field: 'email',
-          message: 'This email is already registered'
-        });
-      }
-      
-      console.log('✅ Email available in Firestore');
+      console.log('✅ Email available for registration');
     }
 
     console.log('✅ Phone/Email available for registration');
