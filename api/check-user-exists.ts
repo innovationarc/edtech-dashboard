@@ -138,16 +138,16 @@ export default async function handler(
 
     const db = admin.firestore();
 
-    // Check phone number
+    // Check phone number in Firestore
     if (phoneNumber) {
-      console.log('🔍 Checking phone number:', phoneNumber.substring(0, 5) + '****');
+      console.log('🔍 Checking phone number in Firestore:', phoneNumber.substring(0, 5) + '****');
       const phoneQuery = await db.collection('users')
         .where('phoneNumber', '==', phoneNumber)
         .limit(1)
         .get();
 
       if (!phoneQuery.empty) {
-        console.log('⚠️ Phone number already exists');
+        console.log('⚠️ Phone number already exists in Firestore');
         return res.status(200).json({
           success: true,
           exists: true,
@@ -155,18 +155,58 @@ export default async function handler(
           message: 'This phone number is already registered'
         });
       }
+      
+      console.log('✅ Phone number available in Firestore');
     }
 
-    // Check email
+    // Check email in both Firebase Auth and Firestore
     if (email && email.trim() && !email.endsWith('@student.local')) {
       console.log('🔍 Checking email:', email);
+      
+      // Check Firebase Authentication first
+      try {
+        const userRecord = await admin.auth().getUserByEmail(email);
+        if (userRecord) {
+          console.log('⚠️ Email exists in Firebase Authentication');
+          
+          // Check if user document exists in Firestore
+          const userDoc = await db.collection('users').doc(userRecord.uid).get();
+          
+          if (userDoc.exists()) {
+            console.log('⚠️ Email already registered with active account');
+            return res.status(200).json({
+              success: true,
+              exists: true,
+              field: 'email',
+              message: 'This email is already registered'
+            });
+          } else {
+            // User exists in Auth but not in Firestore (orphaned account)
+            console.log('⚠️ Orphaned auth account detected - will need cleanup');
+            return res.status(200).json({
+              success: true,
+              exists: true,
+              field: 'email',
+              message: 'This email is already registered'
+            });
+          }
+        }
+      } catch (authError: any) {
+        if (authError.code === 'auth/user-not-found') {
+          console.log('✅ Email not found in Firebase Authentication');
+        } else {
+          console.error('⚠️ Error checking Firebase Auth:', authError.message);
+        }
+      }
+      
+      // Check Firestore as secondary verification
       const emailQuery = await db.collection('users')
         .where('email', '==', email)
         .limit(1)
         .get();
 
       if (!emailQuery.empty) {
-        console.log('⚠️ Email already exists');
+        console.log('⚠️ Email already exists in Firestore');
         return res.status(200).json({
           success: true,
           exists: true,
@@ -174,9 +214,11 @@ export default async function handler(
           message: 'This email is already registered'
         });
       }
+      
+      console.log('✅ Email available in Firestore');
     }
 
-    console.log('✅ Phone/Email available');
+    console.log('✅ Phone/Email available for registration');
     return res.status(200).json({
       success: true,
       exists: false,
