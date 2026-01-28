@@ -1,5 +1,3 @@
-// src/services/userService.ts
-
 import { 
   collection, 
   doc, 
