@@ -6,7 +6,7 @@ import { useDashboard } from '../../contexts/DashboardContext';
 import SignInModal from '../auth/SignInModal';
 import RegisterModal from '../auth/RegisterModal';
 import PaymentModal from '../payment/PaymentModal';
-import ProfileEditModal from '../profile/ProfileEditModal';
+import Profile from '../profile/Profile';
 
 const Header = () => {
   const { 
@@ -26,7 +26,7 @@ const Header = () => {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
-  const [showProfileEditModal, setShowProfileEditModal] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     message: string;
@@ -107,8 +107,8 @@ const Header = () => {
     }
   };
 
-  const handleProfileEditSuccess = () => {
-    setShowProfileEditModal(false);
+  const handleProfileSuccess = () => {
+    setShowProfile(false);
     // Reload user data to reflect changes
     window.location.reload();
   };
@@ -140,40 +140,56 @@ const Header = () => {
 
   const breadcrumb = getBreadcrumb();
 
+  // Close dropdowns when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.notifications-dropdown') && !target.closest('.notifications-button')) {
+        setShowNotifications(false);
+      }
+      if (!target.closest('.search-results') && !target.closest('.search-input')) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <>
-      <header className="h-16 bg-background-900 border-b border-background-800 flex items-center justify-between px-3 sm:px-4 lg:px-6 safe-area-top">
-        <div className="flex items-center flex-1 min-w-0 gap-2 sm:gap-3">
+      <header className="h-14 sm:h-16 bg-background-900 border-b border-background-800 flex items-center justify-between px-2 sm:px-3 md:px-4 lg:px-6 safe-area-top sticky top-0 z-40">
+        <div className="flex items-center flex-1 min-w-0 gap-1 sm:gap-2 md:gap-3">
           {/* Menu button - visible on all screens */}
           <button 
             onClick={toggleSidebarClick}
             onMouseEnter={handleMouseEnterSidebarArea}
             onMouseLeave={handleMouseLeaveSidebarArea}
-            className="p-2 rounded-lg hover:bg-background-800 transition-colors flex-shrink-0"
+            className="p-1.5 sm:p-2 rounded-lg hover:bg-background-800 transition-colors flex-shrink-0 touch-manipulation active:scale-95"
             aria-label="Toggle menu"
           >
-            <Menu size={20} className="text-gray-300" />
+            <Menu size={18} className="sm:w-5 sm:h-5 text-gray-300" />
           </button>
           
           {/* Mobile search button */}
           <button
             onClick={() => setShowMobileSearch(true)}
-            className="lg:hidden p-2 rounded-lg hover:bg-background-800 transition-colors flex-shrink-0"
+            className="lg:hidden p-1.5 sm:p-2 rounded-lg hover:bg-background-800 transition-colors flex-shrink-0 touch-manipulation active:scale-95"
             aria-label="Search"
           >
-            <Search size={20} className="text-gray-300" />
+            <Search size={18} className="sm:w-5 sm:h-5 text-gray-300" />
           </button>
           
-          {/* Breadcrumb - hidden on small mobile */}
+          {/* Breadcrumb - hidden on extra small mobile, visible from sm */}
           <div className="hidden sm:block min-w-0 flex-1">
             <div className="text-xs text-gray-400 truncate">{breadcrumb.section}</div>
-            <h1 className="text-sm sm:text-base text-white font-medium truncate">{breadcrumb.page}</h1>
+            <h1 className="text-sm md:text-base text-white font-medium truncate">{breadcrumb.page}</h1>
           </div>
         </div>
         
-        <div className="flex items-center gap-1 sm:gap-2 lg:gap-4">
+        <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 xl:gap-4">
           {/* Desktop search */}
-          <div className="hidden lg:block relative">
+          <div className="hidden lg:block relative search-input">
             <form onSubmit={handleSearchSubmit}>
               <input 
                 type="text" 
@@ -184,54 +200,54 @@ const Header = () => {
                   isTeacher ? "Search materials..." : 
                   "Search..."
                 } 
-                className="bg-background-800 text-white rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-48 xl:w-64"
+                className="bg-background-800 text-white rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-40 xl:w-48 2xl:w-64 transition-all"
               />
               <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
             </form>
 
             {showSearchResults && searchQuery && (
-              <div className="absolute top-full mt-2 w-full bg-background-800 rounded-lg shadow-lg overflow-hidden z-50">
+              <div className="search-results absolute top-full mt-2 w-64 xl:w-80 bg-background-800 rounded-lg shadow-xl overflow-hidden z-50 border border-background-700 right-0">
                 <div className="p-2">
                   <div className="text-sm text-gray-400 px-3 py-2">
                     Search results for "{searchQuery}"
                   </div>
-                  <div className="border-t border-background-700">
+                  <div className="border-t border-background-700 max-h-64 overflow-y-auto">
                     {isStudent ? (
                       <>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Student Dashboard
                         </button>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Content Library
                         </button>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           My Progress
                         </button>
                       </>
                     ) : isTeacher ? (
                       <>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Teacher Dashboard
                         </button>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Content Upload
                         </button>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Study Plans
                         </button>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Student Progress
                         </button>
                       </>
                     ) : (
                       <>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Content Library
                         </button>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           My Courses
                         </button>
-                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm">
+                        <button className="w-full text-left px-3 py-2 hover:bg-background-700 text-white text-sm transition-colors rounded">
                           Course Enrollment
                         </button>
                       </>
@@ -242,15 +258,15 @@ const Header = () => {
             )}
           </div>
           
-          {/* Admin payment button - hidden on small screens */}
+          {/* Admin payment button - hidden on small screens, visible from md */}
           {isAuthenticated && isAdmin && (
             <button 
               onClick={() => setShowPaymentModal(true)}
-              className="hidden md:flex p-2 rounded-lg hover:bg-background-800 relative text-gray-300 hover:text-white transition-colors flex-shrink-0"
+              className="hidden md:flex p-1.5 sm:p-2 rounded-lg hover:bg-background-800 relative text-gray-300 hover:text-white transition-colors flex-shrink-0 touch-manipulation active:scale-95"
               title="Payment Management"
               aria-label="Payment Management"
             >
-              <CreditCard size={20} />
+              <CreditCard size={18} className="sm:w-5 sm:h-5" />
             </button>
           )}
           
@@ -258,47 +274,54 @@ const Header = () => {
           <div className="relative">
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 rounded-lg hover:bg-background-800 relative transition-colors flex-shrink-0"
+              className="notifications-button p-1.5 sm:p-2 rounded-lg hover:bg-background-800 relative transition-colors flex-shrink-0 touch-manipulation active:scale-95"
               aria-label="Notifications"
             >
-              <Bell size={20} className="text-gray-300" />
+              <Bell size={18} className="sm:w-5 sm:h-5 text-gray-300" />
               {notifications.length > 0 && (
-                <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full"></span>
+                <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>
               )}
             </button>
 
             {/* Notifications Dropdown */}
             {showNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-sm bg-background-800 rounded-lg shadow-lg overflow-hidden z-50 border border-background-700">
-                <div className="p-3 border-b border-background-700">
+              <div className="notifications-dropdown absolute right-0 top-full mt-2 w-[calc(100vw-1rem)] xs:w-80 sm:w-96 max-w-sm bg-background-800 rounded-lg shadow-xl overflow-hidden z-50 border border-background-700">
+                <div className="p-3 border-b border-background-700 flex items-center justify-between">
                   <h3 className="text-white font-medium text-sm sm:text-base">Notifications</h3>
+                  <button
+                    onClick={() => setShowNotifications(false)}
+                    className="lg:hidden p-1 hover:bg-background-700 rounded transition-colors"
+                    aria-label="Close notifications"
+                  >
+                    <X size={16} className="text-gray-400" />
+                  </button>
                 </div>
                 
                 {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-gray-400">
+                  <div className="p-6 text-center text-gray-400">
                     <Bell size={32} className="mx-auto mb-2 opacity-50" />
                     <p className="text-sm">No new notifications</p>
                   </div>
                 ) : (
-                  <div className="max-h-64 overflow-y-auto">
+                  <div className="max-h-64 sm:max-h-80 overflow-y-auto">
                     {notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        className={`p-3 border-l-4 border-b border-background-700 last:border-b-0 ${getNotificationColor(notification.type)}`}
+                        className={`p-3 border-l-4 border-b border-background-700 last:border-b-0 ${getNotificationColor(notification.type)} transition-all hover:bg-opacity-80`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <span className="text-sm flex-shrink-0">{getNotificationIcon(notification.type)}</span>
+                            <span className="text-sm flex-shrink-0 mt-0.5">{getNotificationIcon(notification.type)}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-xs sm:text-sm font-medium break-words">{notification.message}</p>
                               <p className="text-xs opacity-75 mt-1">
-                                {notification.timestamp.toLocaleTimeString()}
+                                {notification.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                           </div>
                           <button
                             onClick={() => removeNotification(notification.id)}
-                            className="text-xs opacity-50 hover:opacity-100 flex-shrink-0"
+                            className="text-xs opacity-50 hover:opacity-100 flex-shrink-0 p-1 hover:bg-background-900 rounded transition-all touch-manipulation"
                             aria-label="Remove notification"
                           >
                             <X size={14} />
@@ -317,11 +340,18 @@ const Header = () => {
             {isAuthenticated ? (
               <div className="flex items-center gap-1 sm:gap-2">
                 <div 
-                  className="flex items-center gap-2 bg-background-800 rounded-full py-1 pl-1 pr-2 sm:pr-3 cursor-pointer hover:bg-background-700 transition-colors"
-                  onClick={() => setShowProfileEditModal(true)}
-                  title="Click to edit profile"
+                  className="flex items-center gap-1.5 sm:gap-2 bg-background-800 rounded-full py-0.5 sm:py-1 pl-0.5 sm:pl-1 pr-1.5 sm:pr-2 md:pr-3 cursor-pointer hover:bg-background-700 transition-all touch-manipulation active:scale-95"
+                  onClick={() => setShowProfile(true)}
+                  title="View profile"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setShowProfile(true);
+                    }
+                  }}
                 >
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white font-medium flex-shrink-0 ${
+                  <div className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center text-white font-medium text-xs sm:text-sm flex-shrink-0 ${
                     isStudent ? 'bg-accent-700' : 
                     isTeacher ? 'bg-secondary-700' : 
                     'bg-primary-700'
@@ -333,12 +363,14 @@ const Header = () => {
                         className="w-full h-full rounded-full object-cover"
                       />
                     ) : (
-                      user?.name.charAt(0)
+                      user?.name.charAt(0).toUpperCase()
                     )}
                   </div>
                   <div className="hidden sm:flex flex-col min-w-0">
-                    <span className="text-white text-sm truncate max-w-[80px] md:max-w-[120px]">{user?.name}</span>
-                    <span className={`text-xs capitalize ${
+                    <span className="text-white text-xs md:text-sm truncate max-w-[60px] md:max-w-[100px] lg:max-w-[120px]">
+                      {user?.name}
+                    </span>
+                    <span className={`text-[10px] md:text-xs capitalize truncate ${
                       isStudent ? 'text-accent-400' : 
                       isTeacher ? 'text-secondary-400' : 
                       'text-gray-400'
@@ -349,33 +381,33 @@ const Header = () => {
                 </div>
                 <button 
                   onClick={handleSignOutClick}
-                  className="p-2 rounded-lg hover:bg-background-800 text-gray-300 hover:text-white transition-colors flex-shrink-0"
+                  className="p-1.5 sm:p-2 rounded-lg hover:bg-background-800 text-gray-300 hover:text-white transition-colors flex-shrink-0 touch-manipulation active:scale-95"
                   title="Sign Out"
                   aria-label="Sign Out"
                 >
-                  <LogOut size={18} />
+                  <LogOut size={16} className="sm:w-[18px] sm:h-[18px]" />
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-1 sm:gap-2">
                 <button 
                   onClick={() => setShowRegisterModal(true)}
-                  className="hidden sm:flex items-center gap-2 bg-primary-600 hover:bg-primary-700 rounded-full py-1 pl-1 pr-3 transition-colors"
+                  className="hidden sm:flex items-center gap-1.5 sm:gap-2 bg-primary-600 hover:bg-primary-700 rounded-full py-0.5 sm:py-1 pl-0.5 sm:pl-1 pr-2 sm:pr-3 transition-all touch-manipulation active:scale-95"
                 >
-                  <div className="h-8 w-8 rounded-full bg-primary-800 flex items-center justify-center text-white font-medium flex-shrink-0">
-                    <UserPlus size={16} />
+                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-primary-800 flex items-center justify-center text-white font-medium flex-shrink-0">
+                    <UserPlus size={14} className="sm:w-4 sm:h-4" />
                   </div>
-                  <span className="text-white text-sm">Register</span>
+                  <span className="text-white text-xs sm:text-sm whitespace-nowrap">Register</span>
                 </button>
                 
                 <button 
                   onClick={() => setShowSignInModal(true)}
-                  className="flex items-center gap-2 bg-background-800 rounded-full py-1 pl-1 pr-2 sm:pr-3 hover:bg-background-700 transition-colors"
+                  className="flex items-center gap-1.5 sm:gap-2 bg-background-800 rounded-full py-0.5 sm:py-1 pl-0.5 sm:pl-1 pr-1.5 sm:pr-2 md:pr-3 hover:bg-background-700 transition-all touch-manipulation active:scale-95"
                 >
-                  <div className="h-8 w-8 rounded-full bg-primary-700 flex items-center justify-center text-white font-medium flex-shrink-0">
+                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-primary-700 flex items-center justify-center text-white font-medium text-xs sm:text-sm flex-shrink-0">
                     S
                   </div>
-                  <span className="hidden sm:inline text-white text-sm">Sign In</span>
+                  <span className="hidden sm:inline text-white text-xs sm:text-sm whitespace-nowrap">Sign In</span>
                 </button>
               </div>
             )}
@@ -385,25 +417,29 @@ const Header = () => {
 
       {/* Mobile Search Modal */}
       {showMobileSearch && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden">
-          <div className="bg-background-900 p-4 safe-area-top">
-            <div className="flex items-center gap-3">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden" onClick={() => setShowMobileSearch(false)}>
+          <div className="bg-background-900 p-3 sm:p-4 safe-area-top" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 sm:gap-3">
               <form onSubmit={handleSearchSubmit} className="flex-1">
                 <div className="relative">
                   <input 
                     type="text" 
                     value={searchQuery}
                     onChange={handleSearchChange}
-                    placeholder="Search..."
-                    className="w-full bg-background-800 text-white rounded-lg py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder={
+                      isStudent ? "Search content..." : 
+                      isTeacher ? "Search materials..." : 
+                      "Search..."
+                    }
+                    className="w-full bg-background-800 text-white rounded-lg py-2.5 sm:py-3 pl-10 pr-4 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary-500"
                     autoFocus
                   />
-                  <Search size={18} className="absolute left-3 top-3.5 text-gray-400" />
+                  <Search size={18} className="absolute left-3 top-3 sm:top-3.5 text-gray-400" />
                 </div>
               </form>
               <button
                 onClick={() => setShowMobileSearch(false)}
-                className="p-2 text-gray-400 hover:text-white"
+                className="p-2 text-gray-400 hover:text-white transition-colors touch-manipulation active:scale-95 flex-shrink-0"
                 aria-label="Close search"
               >
                 <X size={20} />
@@ -411,44 +447,47 @@ const Header = () => {
             </div>
             
             {searchQuery && (
-              <div className="mt-4 space-y-2">
+              <div className="mt-3 sm:mt-4 space-y-2">
                 <div className="text-sm text-gray-400 px-3 py-2">
-                  Search results for "{searchQuery}"
+                  Search results for "<span className="text-white font-medium">{searchQuery}</span>"
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
                   {isStudent ? (
                     <>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         Student Dashboard
                       </button>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         Content Library
                       </button>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         My Progress
                       </button>
                     </>
                   ) : isTeacher ? (
                     <>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         Teacher Dashboard
                       </button>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         Content Upload
                       </button>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         Study Plans
+                      </button>
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
+                        Student Progress
                       </button>
                     </>
                   ) : (
                     <>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         Content Library
                       </button>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         My Courses
                       </button>
-                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 text-white rounded-lg text-sm">
+                      <button className="w-full text-left px-3 py-3 hover:bg-background-800 active:bg-background-700 text-white rounded-lg text-sm transition-colors touch-manipulation">
                         Course Enrollment
                       </button>
                     </>
@@ -476,10 +515,10 @@ const Header = () => {
         <PaymentModal onClose={() => setShowPaymentModal(false)} />
       )}
 
-      {showProfileEditModal && isAuthenticated && (user?.role === 'student' || user?.role === 'teacher') && (
-        <ProfileEditModal
-          onClose={() => setShowProfileEditModal(false)}
-          onSuccess={handleProfileEditSuccess}
+      {showProfile && isAuthenticated && (
+        <Profile
+          onClose={() => setShowProfile(false)}
+          onSuccess={handleProfileSuccess}
         />
       )}
     </>
