@@ -1,3 +1,4 @@
+// src/components/profile/ChangePasswordForm.tsx
 import { useState } from 'react';
 import { Lock, Eye, EyeOff, Loader, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { authService } from '../../services/authService';
