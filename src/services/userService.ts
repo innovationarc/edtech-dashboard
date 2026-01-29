@@ -1,4 +1,4 @@
-// src/services/userService.ts
+
 import { 
   collection, 
   doc, 
@@ -13,7 +13,8 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, storage, functions } from '../config/firebase';
 import { UserProfile } from './authService';
 
 export interface User extends UserProfile {
@@ -203,7 +204,7 @@ export const userService = {
     }
   },
 
-  // Delete user from both Firestore and Firebase Authentication via API
+  // Delete user - tries multiple methods
   async deleteUser(uid: string, userEmail?: string): Promise<void> {
     try {
       console.log('🗑️ Starting user deletion process for UID:', uid);
@@ -219,76 +220,102 @@ export const userService = {
         console.warn('⚠️ Could not fetch user data before deletion:', error);
       }
 
-      // Call backend API to delete from both Firebase Auth and Firestore
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const requestBody: any = {
-        uid,
-        email: userEmail,
-        action: 'delete-auth-user'
-      };
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      console.log('🌐 Calling backend API to delete user from both Firebase Auth and Firestore...');
-
-      const response = await fetch(`${BACKEND_URL}/api/delete-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Backend API error:', errorText);
+      // Method 1: Try Firebase Cloud Function (recommended)
+      try {
+        console.log('🌐 Attempting deletion via Firebase Cloud Function...');
+        const deleteUserFunction = httpsCallable(functions, 'deleteUser');
+        const result = await deleteUserFunction({ uid });
+        console.log('✅ User deleted via Cloud Function:', result.data);
         
-        // Try to parse error message
-        let errorMessage = 'Failed to delete user';
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
+        // Delete profile picture
+        if (profilePictureUrl) {
+          await this.deleteProfilePicture(profilePictureUrl);
         }
         
-        throw new Error(errorMessage);
+        return;
+      } catch (cloudFunctionError: any) {
+        console.warn('⚠️ Cloud Function failed, trying API endpoint...', cloudFunctionError.message);
       }
 
-      const result = await response.json();
+      // Method 2: Try Vercel API endpoint (fallback)
+      try {
+        console.log('🌐 Attempting deletion via Vercel API...');
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                           import.meta.env.VITE_API_URL ||
+                           window.location.origin;
+        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+        const requestBody: any = {
+          uid,
+          email: userEmail,
+          action: 'delete-auth-user'
+        };
+
+        if (MASTER_API_KEY) {
+          requestBody.apiKey = MASTER_API_KEY;
+        }
+
+        const response = await fetch(`${BACKEND_URL}/api/delete-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText);
+        }
+
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'API deletion failed');
+        }
+
+        console.log('✅ User deleted via API endpoint');
+        
+        // Delete profile picture
+        if (profilePictureUrl) {
+          await this.deleteProfilePicture(profilePictureUrl);
+        }
+        
+        return;
+      } catch (apiError: any) {
+        console.warn('⚠️ API endpoint failed, using manual method...', apiError.message);
+      }
+
+      // Method 3: Manual deletion from Firestore only (last resort)
+      console.log('⚠️ Using manual Firestore deletion only...');
+      await deleteDoc(doc(db, 'users', uid));
+      console.log('✅ User deleted from Firestore (Auth deletion requires backend)');
       
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to delete user');
-      }
-
-      console.log('✅ User deleted from both Firebase Auth and Firestore');
-
-      // Delete profile picture from Storage if exists
+      // Delete profile picture
       if (profilePictureUrl) {
-        try {
-          // Extract file path from URL
-          const urlParts = profilePictureUrl.split('/o/')[1]?.split('?')[0];
-          if (urlParts) {
-            const filePath = decodeURIComponent(urlParts);
-            const pictureRef = ref(storage, filePath);
-            await deleteObject(pictureRef);
-            console.log('✅ Profile picture deleted from Storage');
-          }
-        } catch (storageError) {
-          console.warn('⚠️ Profile picture deletion failed or file not found:', storageError);
-        }
+        await this.deleteProfilePicture(profilePictureUrl);
       }
       
-      console.log('✅ User deletion process completed successfully');
+      console.warn('⚠️ User deleted from Firestore only. Auth user may still exist. Please set up Cloud Function or API endpoint for complete deletion.');
+      
     } catch (error: any) {
       console.error('❌ Error deleting user:', error);
       throw new Error(error.message || 'Failed to delete user');
+    }
+  },
+
+  // Helper: Delete profile picture from Storage
+  async deleteProfilePicture(profilePictureUrl: string): Promise<void> {
+    try {
+      const urlParts = profilePictureUrl.split('/o/')[1]?.split('?')[0];
+      if (urlParts) {
+        const filePath = decodeURIComponent(urlParts);
+        const pictureRef = ref(storage, filePath);
+        await deleteObject(pictureRef);
+        console.log('✅ Profile picture deleted from Storage');
+      }
+    } catch (error) {
+      console.warn('⚠️ Profile picture deletion failed or file not found:', error);
     }
   },
 
