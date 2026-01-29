@@ -3,7 +3,7 @@ import { Save, Upload, Globe, Mail, BellRing, Lock, Users, Palette, Shield, Mess
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
 import MyQAActivity from '../components/settings/MyQAActivity'; // Import MyQAActivity
-import ChangePasswordForm from '../components/profile/ChangePasswordForm'; // Import ChangePasswordForm
+import ChangePasswordForm from '../components/profile/ChangePasswordModal'; // Import ChangePasswordModal
 
 const Settings = () => {
   const { user } = useDashboard();
