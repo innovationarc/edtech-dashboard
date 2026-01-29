@@ -26,6 +26,7 @@ import TeacherTaskManagement from './pages/TeacherTaskManagement';
 import QuestionDetail from './pages/QuestionDetail';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import VerifyProfile from './pages/VerifyProfile';
 
 // Import role-specific management pages (placeholders)
 import ManageStudent from './pages/ManageStudent';
@@ -144,6 +145,7 @@ const AppRoutes = () => {
       <Route path="/payment-success" element={<PaymentSuccess />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
+      <Route path="/verify-profile" element={<VerifyProfile />} />
       
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<Navigate to={getDefaultRoute()} replace />} />
