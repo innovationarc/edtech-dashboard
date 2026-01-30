@@ -1,179 +1,209 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Firebase Admin will be initialized dynamically
-let adminSDK: any = null;
-let initialized = false;
+// Global cache for Firebase Admin instance
+let firebaseAdmin: any = null;
 
+/**
+ * Initialize and return Firebase Admin SDK
+ * Uses caching to prevent re-initialization
+ */
 async function initializeFirebaseAdmin() {
-  if (initialized && adminSDK) {
-    return adminSDK;
+  // Return cached instance if available
+  if (firebaseAdmin !== null) {
+    console.log('✅ Using cached Firebase Admin instance');
+    return firebaseAdmin;
   }
 
   try {
-    console.log('🔧 Starting Firebase Admin initialization...');
+    console.log('🔧 Initializing Firebase Admin SDK...');
     
-    // Dynamically import firebase-admin
-    const admin = await import('firebase-admin');
+    // Use require for better compatibility in Vercel serverless functions
+    const admin = require('firebase-admin');
     
     // Check if already initialized
     if (admin.apps && admin.apps.length > 0) {
       console.log('✅ Firebase Admin already initialized');
-      adminSDK = admin;
-      initialized = true;
+      firebaseAdmin = admin;
       return admin;
     }
 
     // Get credentials from environment variables
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-    
-    console.log('🔍 Checking environment variables:');
-    console.log('Project ID:', projectId ? '✓ Present' : '✗ Missing');
-    console.log('Client Email:', clientEmail ? '✓ Present' : '✗ Missing');
-    console.log('Private Key:', privateKey ? '✓ Present' : '✗ Missing');
-    
-    if (!projectId || !clientEmail || !privateKey) {
-      const missing = [];
-      if (!projectId) missing.push('FIREBASE_PROJECT_ID');
-      if (!clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
-      if (!privateKey) missing.push('FIREBASE_PRIVATE_KEY');
-      
-      throw new Error(`Missing Firebase credentials: ${missing.join(', ')}`);
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    // Validate all required environment variables
+    const missingVars = [];
+    if (!projectId) missingVars.push('FIREBASE_PROJECT_ID');
+    if (!clientEmail) missingVars.push('FIREBASE_CLIENT_EMAIL');
+    if (!privateKey) missingVars.push('FIREBASE_PRIVATE_KEY');
+
+    if (missingVars.length > 0) {
+      const error = `Missing required environment variables: ${missingVars.join(', ')}`;
+      console.error('❌', error);
+      throw new Error(error);
     }
 
-    // Initialize Firebase Admin
-    console.log('🚀 Initializing Firebase Admin SDK...');
+    // Process private key: replace literal \n with actual newlines
+    privateKey = privateKey!.replace(/\\n/g, '\n');
+
+    console.log('📋 Initializing with:');
+    console.log('  - Project ID:', projectId);
+    console.log('  - Client Email:', clientEmail);
+    console.log('  - Private Key: [length:', privateKey.length, ']');
+
+    // Initialize Firebase Admin with credentials
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId,
         clientEmail,
         privateKey,
       }),
+      projectId,
     });
+
+    console.log('✅ Firebase Admin SDK initialized successfully');
     
-    console.log('✅ Firebase Admin initialized successfully');
-    adminSDK = admin;
-    initialized = true;
+    // Cache the instance
+    firebaseAdmin = admin;
     
     return admin;
+
   } catch (error: any) {
-    console.error('❌ Firebase Admin initialization failed:', error.message);
+    console.error('❌ Firebase Admin initialization failed');
+    console.error('Error:', error.message);
     console.error('Stack:', error.stack);
-    throw new Error(`Firebase initialization failed: ${error.message}`);
+    
+    // Reset cache on failure
+    firebaseAdmin = null;
+    
+    throw new Error(`Firebase Admin initialization failed: ${error.message}`);
   }
 }
 
+/**
+ * Main API handler for deleting users
+ * Deletes from BOTH Firebase Auth AND Firestore
+ * Only returns success if BOTH deletions succeed
+ */
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  console.log('📥 DELETE USER API - Request received:', req.method);
+  console.log('\n==========================================');
+  console.log('DELETE USER API - Request received');
+  console.log('Time:', new Date().toISOString());
+  console.log('Method:', req.method);
+  console.log('==========================================\n');
 
-  // Enable CORS
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // Handle preflight request
+  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
+    console.log('✅ Preflight request handled');
     return res.status(200).end();
   }
 
-  // Only allow POST requests
+  // Only allow POST method
   if (req.method !== 'POST') {
-    return res.status(405).json({ 
-      success: false, 
-      error: 'Method not allowed. Use POST.' 
+    console.log('❌ Invalid method:', req.method);
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed. Use POST.'
     });
   }
 
   try {
+    // Parse and validate request body
     const { uid, email, action, apiKey } = req.body;
 
-    console.log('📋 Request details:', { 
-      uid: uid ? '✓' : '✗', 
-      email: email ? '✓' : '✗', 
-      action,
-      hasApiKey: !!apiKey 
-    });
+    console.log('📥 Request details:');
+    console.log('  - UID:', uid || '[MISSING]');
+    console.log('  - Email:', email || '[NONE]');
+    console.log('  - Action:', action || '[MISSING]');
+    console.log('  - API Key:', apiKey ? '[PROVIDED]' : '[NONE]');
 
-    // Verify action
+    // Validate action parameter
     if (action !== 'delete-auth-user') {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid action. Expected "delete-auth-user"' 
+      console.log('❌ Invalid action:', action);
+      return res.status(400).json({
+        success: false,
+        error: `Invalid action. Expected 'delete-auth-user', got '${action}'`
       });
     }
 
-    // Verify API key if provided in environment
-    const MASTER_API_KEY = process.env.VITE_SMS_MASTER_KEY || process.env.SMS_MASTER_KEY;
-    if (MASTER_API_KEY && apiKey !== MASTER_API_KEY) {
-      console.warn('⚠️ Invalid API key provided');
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Invalid API key' 
+    // Validate UID
+    if (!uid || typeof uid !== 'string' || uid.trim() === '') {
+      console.log('❌ Invalid or missing UID');
+      return res.status(400).json({
+        success: false,
+        error: 'Valid UID is required'
       });
     }
 
-    // Validate required fields
-    if (!uid) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'User UID is required' 
-      });
+    // Verify API key if configured
+    const masterKey = process.env.VITE_SMS_MASTER_KEY || process.env.SMS_MASTER_KEY;
+    if (masterKey) {
+      if (apiKey !== masterKey) {
+        console.log('❌ API key mismatch');
+        return res.status(403).json({
+          success: false,
+          error: 'Unauthorized: Invalid API key'
+        });
+      }
+      console.log('✅ API key validated');
+    } else {
+      console.log('⚠️ No master API key configured - skipping validation');
     }
 
-    console.log('🔥 Processing deletion for UID:', uid);
+    console.log('\n--- Starting deletion process ---\n');
 
     // Initialize Firebase Admin
     let admin: any;
     try {
       admin = await initializeFirebaseAdmin();
     } catch (initError: any) {
-      console.error('❌ Initialization error:', initError.message);
+      console.error('❌ Failed to initialize Firebase Admin:', initError.message);
       return res.status(500).json({
         success: false,
-        error: `Firebase initialization failed: ${initError.message}`,
-        details: initError.stack?.split('\n').slice(0, 3).join('\n')
+        error: 'Failed to initialize Firebase Admin SDK',
+        details: initError.message
       });
     }
 
     const auth = admin.auth();
-    const db = admin.firestore();
+    const firestore = admin.firestore();
 
+    // Track deletion status
     let authDeleted = false;
     let firestoreDeleted = false;
+    const errors: string[] = [];
 
-    // Step 1: Delete from Firebase Authentication
+    // STEP 1: Delete from Firebase Authentication
+    console.log('🔐 STEP 1: Deleting from Firebase Authentication...');
     try {
-      console.log('🔐 Attempting to delete from Firebase Auth...');
       await auth.deleteUser(uid);
       authDeleted = true;
       console.log('✅ Successfully deleted from Firebase Auth');
-    } catch (error: any) {
-      console.error('❌ Auth deletion error:', {
-        code: error.code,
-        message: error.message
-      });
-      
-      // If user not found in Auth, consider it already deleted
-      if (error.code === 'auth/user-not-found') {
-        console.log('⚠️ User not found in Auth (may have been deleted already)');
-        authDeleted = true;
+    } catch (authError: any) {
+      // Check if user was already deleted
+      if (authError.code === 'auth/user-not-found') {
+        console.log('ℹ️ User not found in Auth (already deleted or never existed)');
+        authDeleted = true; // Consider this a success
       } else {
-        return res.status(500).json({
-          success: false,
-          error: `Auth deletion failed: ${error.message}`,
-          code: error.code
-        });
+        const errorMsg = `Firebase Auth deletion failed: ${authError.message} (code: ${authError.code})`;
+        console.error('❌', errorMsg);
+        errors.push(errorMsg);
       }
     }
 
-    // Step 2: Delete from Firestore
+    // STEP 2: Delete from Firestore
+    console.log('\n📄 STEP 2: Deleting from Firestore...');
     try {
-      console.log('📄 Attempting to delete from Firestore...');
-      const userRef = db.collection('users').doc(uid);
+      const userRef = firestore.collection('users').doc(uid);
       const userDoc = await userRef.get();
       
       if (userDoc.exists) {
@@ -181,39 +211,65 @@ export default async function handler(
         firestoreDeleted = true;
         console.log('✅ Successfully deleted from Firestore');
       } else {
-        console.log('⚠️ User not found in Firestore (may have been deleted already)');
-        firestoreDeleted = true;
+        console.log('ℹ️ User not found in Firestore (already deleted or never existed)');
+        firestoreDeleted = true; // Consider this a success
       }
-    } catch (error: any) {
-      console.error('❌ Firestore deletion error:', error.message);
+    } catch (firestoreError: any) {
+      const errorMsg = `Firestore deletion failed: ${firestoreError.message}`;
+      console.error('❌', errorMsg);
+      errors.push(errorMsg);
+    }
+
+    // Determine final success status
+    const overallSuccess = authDeleted && firestoreDeleted;
+
+    console.log('\n--- Deletion Summary ---');
+    console.log('Firebase Auth:', authDeleted ? '✅ DELETED' : '❌ FAILED');
+    console.log('Firestore:', firestoreDeleted ? '✅ DELETED' : '❌ FAILED');
+    console.log('Overall Status:', overallSuccess ? '✅ SUCCESS' : '❌ FAILURE');
+    
+    if (errors.length > 0) {
+      console.log('Errors:', errors);
+    }
+    console.log('==========================================\n');
+
+    // Return appropriate response
+    if (overallSuccess) {
+      return res.status(200).json({
+        success: true,
+        message: 'User successfully deleted from both Firebase Auth and Firestore',
+        uid,
+        email: email || null,
+        details: {
+          authDeleted: true,
+          firestoreDeleted: true,
+          timestamp: new Date().toISOString()
+        }
+      });
+    } else {
       return res.status(500).json({
         success: false,
-        error: `Firestore deletion failed: ${error.message}`,
-        code: error.code
+        error: 'Failed to delete user from both systems',
+        uid,
+        details: {
+          authDeleted,
+          firestoreDeleted,
+          errors: errors.length > 0 ? errors : ['Unknown error occurred']
+        }
       });
     }
 
-    // Success response
-    console.log('✅ User deletion completed successfully');
-    return res.status(200).json({ 
-      success: true, 
-      message: 'User deleted successfully from both Firebase Auth and Firestore',
-      uid,
-      email: email || 'N/A',
-      details: {
-        authDeleted,
-        firestoreDeleted
-      }
-    });
-
   } catch (error: any) {
-    console.error('❌ Unexpected error in delete-user API:', error.message);
-    console.error('Stack trace:', error.stack);
+    console.error('\n❌ UNEXPECTED ERROR:');
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    console.log('==========================================\n');
     
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Internal server error',
-      details: error.stack?.split('\n').slice(0, 3).join('\n')
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      details: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n')
     });
   }
 }
