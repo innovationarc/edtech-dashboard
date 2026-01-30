@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { authService } from './authService';
+import { otpService } from './otpService';
 
 export interface Admin {
   uid: string;
@@ -36,6 +37,127 @@ export interface Admin {
   createdBy: string;
   lastLogin?: Date;
 }
+
+// GSM 7-bit character set - extended
+const GSM_7BIT_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+const GSM_7BIT_EXTENDED = "^{}\\[~]|€";
+
+// Convert text to GSM 7-bit compatible format
+const toGSM7Bit = (text: string): string => {
+  return text.split('').map(char => {
+    if (GSM_7BIT_BASIC.includes(char) || GSM_7BIT_EXTENDED.includes(char)) {
+      return char;
+    }
+    
+    const replacements: { [key: string]: string } = {
+      '"': '"',
+      '"': '"',
+      "'": "'",
+      "'": "'",
+      '–': '-',
+      '—': '-',
+      '…': '...',
+      '\u00A0': ' ',
+      '•': '*',
+      '→': '->',
+      '←': '<-',
+      '™': '(TM)',
+      '©': '(C)',
+      '®': '(R)',
+    };
+    
+    return replacements[char] || char;
+  }).join('');
+};
+
+/**
+ * Normalize phone number to 880XXXXXXXXXX format (13 digits, no + sign)
+ */
+const normalizePhoneNumber = (phoneNumber: string): string => {
+  let cleaned = phoneNumber.replace(/\D/g, '');
+  
+  // If starts with 880, remove it to get the 10 digit number
+  if (cleaned.startsWith('880')) {
+    cleaned = cleaned.substring(3);
+  } 
+  // If starts with 88, remove it
+  else if (cleaned.startsWith('88')) {
+    cleaned = cleaned.substring(2);
+  }
+  
+  // If starts with 0, remove it (11 digit number starting with 0)
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  // Now we should have a 10 digit number
+  if (cleaned.length !== 10) {
+    throw new Error('Invalid phone number format');
+  }
+  
+  // Add 880 prefix
+  return `880${cleaned}`;
+};
+
+/**
+ * Send SMS notification to new admin
+ */
+const sendAdminCreationSMS = async (phoneNumber: string, adminId: string): Promise<void> => {
+  try {
+    console.log('📤 Sending admin creation SMS');
+    
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    
+    // Create SMS message with proper formatting and GSM 7-bit encoding
+    let message = `Sir,
+This message serves as official confirmation that you have been granted Administrator access on Ed-tech with full system control. This role carries comprehensive administrative authority and is reserved for a select group responsible for overseeing core platform operations.
+
+You can now log in to the platform:
+Admin ID: ${adminId}
+
+Note: Your password is not included in this message for security reasons. Contact other administrators if you do not have it.
+
+Please begin executing your administrative responsibilities.
+
+Regards,
+Ed-tech Team`;
+    
+    message = toGSM7Bit(message);
+    console.log('📝 SMS message prepared, length:', message.length);
+
+    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                       import.meta.env.VITE_API_URL ||
+                       'https://edtech-dashboard-alpha.vercel.app';
+    const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+    const requestBody: any = {
+      phoneNumber: normalizedPhone,
+      message
+    };
+
+    if (MASTER_API_KEY) {
+      requestBody.apiKey = MASTER_API_KEY;
+    }
+
+    const response = await fetch(`${BACKEND_URL}/api/sms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (response.ok) {
+      console.log('✅ Admin creation SMS sent successfully');
+    } else {
+      const errorText = await response.text();
+      console.error('❌ Failed to send admin creation SMS:', errorText);
+    }
+  } catch (error) {
+    console.error('❌ Error sending admin creation SMS:', error);
+    // Don't throw error - SMS failure shouldn't prevent admin creation
+  }
+};
 
 export const adminService = {
   // Generate Admin ID in format: AD-YYMM-XXXXX
@@ -90,7 +212,8 @@ export const adminService = {
     address: string,
     birthCertificateNumber: string,
     nid: string,
-    createdByAdminId: string
+    createdByAdminId: string,
+    profilePictureUrl?: string
   ): Promise<Admin> {
     try {
       // Generate Admin ID
@@ -112,7 +235,8 @@ export const adminService = {
         '', // classGrade not needed for admin
         'admin',
         false, // skipApproval - admins don't need approval
-        adminId // custom userId
+        adminId, // custom userId
+        profilePictureUrl
       );
 
       // Update admin document with additional fields
@@ -122,8 +246,12 @@ export const adminService = {
         nid: nid || '',
         createdBy: createdByAdminId,
         createdAt: Timestamp.now(),
-        status: 'active'
+        status: 'active',
+        ...(profilePictureUrl && { profilePictureUrl })
       });
+
+      // Send SMS notification to new admin
+      await sendAdminCreationSMS(phoneNumber, adminId);
 
       // Return admin object
       return {
@@ -143,7 +271,8 @@ export const adminService = {
         role: 'admin',
         status: 'active',
         createdAt: new Date(),
-        createdBy: createdByAdminId
+        createdBy: createdByAdminId,
+        profilePictureUrl: profilePictureUrl || undefined
       };
     } catch (error: any) {
       console.error('Error creating admin:', error);
@@ -341,3 +470,4 @@ export const adminService = {
     }
   }
 };
+
