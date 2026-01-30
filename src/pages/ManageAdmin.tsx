@@ -3,11 +3,12 @@ import { useState, useEffect } from 'react';
 import { 
   Shield, Search, Loader, CheckCircle, XCircle, Clock, RefreshCw, 
   Info, Edit, AlertTriangle, X, User as UserIcon, Plus, Phone, Mail,
-  Calendar, MapPin, FileText, CreditCard, Users
+  Calendar, MapPin, FileText, CreditCard, Users, ArrowLeft, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { adminService, Admin } from '../services/adminService';
 import { useDashboard } from '../contexts/DashboardContext';
+import { uploadService, UploadProgress } from '../services/uploadService';
 
 const ManageAdmin = () => {
   const { user: currentUser } = useDashboard();
@@ -198,21 +199,30 @@ const ManageAdmin = () => {
       {/* Header Section */}
       <div className="bg-background-800/50 backdrop-blur-sm rounded-2xl p-6 border border-background-700/50">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div>
-            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2 flex items-center gap-3">
-              <Shield className="text-gray-400" size={36} />
-              Admin Management
-            </h1>
-            <p className="text-gray-400">
-              Manage administrator accounts • <span className="text-primary-400 font-semibold">{allAdmins.length}</span> total admins
-            </p>
+          <div className="flex items-center gap-4 w-full lg:w-auto">
+            <button
+              onClick={() => navigate('/manage/users')}
+              className="flex items-center justify-center p-2.5 bg-background-700/60 hover:bg-background-600/60 text-white rounded-xl transition-all duration-200"
+              title="Back to User Management"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div className="flex-1">
+              <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2 flex items-center gap-3">
+                <Shield className="text-gray-400" size={36} />
+                Admin Management
+              </h1>
+              <p className="text-gray-400">
+                Manage administrator accounts • <span className="text-primary-400 font-semibold">{allAdmins.length}</span> total admins
+              </p>
+            </div>
           </div>
           
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap w-full lg:w-auto">
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="flex items-center gap-2 bg-gray-700/60 hover:bg-gray-600/60 text-white px-5 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-50 font-medium"
+              className="flex items-center gap-2 bg-gray-700/60 hover:bg-gray-600/60 text-white px-5 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-50 font-medium flex-1 lg:flex-initial justify-center"
             >
               <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
               <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
@@ -220,7 +230,7 @@ const ManageAdmin = () => {
 
             <button
               onClick={() => setShowAddAdminModal(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white px-5 py-2.5 rounded-xl transition-all duration-200 font-medium shadow-lg"
+              className="flex items-center gap-2 bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white px-5 py-2.5 rounded-xl transition-all duration-200 font-medium shadow-lg flex-1 lg:flex-initial justify-center"
             >
               <Plus size={16} />
               <span>Add Admin</span>
@@ -307,10 +317,10 @@ const ManageAdmin = () => {
                 <th className="p-4 text-left">
                   <div className="flex items-center gap-2 text-xs uppercase text-gray-400 font-bold tracking-wider">
                     <Shield size={12} />
-                    <span>Admin ID</span>
+                    <span>Admin Details</span>
                   </div>
                 </th>
-                <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider">Surname</th>
+                <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden sm:table-cell">Surname</th>
                 <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden lg:table-cell">Status</th>
                 <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden xl:table-cell">Joining Date</th>
                 <th className="p-4 text-right text-xs uppercase text-gray-400 font-bold tracking-wider">Actions</th>
@@ -353,10 +363,18 @@ const ManageAdmin = () => {
                           )}
                         </div>
                         <p className="text-sm text-gray-400 truncate">{admin.fullName || 'N/A'}</p>
+                        <div className="flex items-center gap-2 mt-1 lg:hidden">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                            admin.status === 'active' ? 'bg-green-800/60 text-green-300' : 'bg-red-800/60 text-red-300'
+                          }`}>
+                            {admin.status === 'active' ? <CheckCircle size={10} className="inline mr-1" /> : <XCircle size={10} className="inline mr-1" />}
+                            {admin.status}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="p-4 text-gray-300 font-medium text-sm">{admin.surname || 'N/A'}</td>
+                  <td className="p-4 text-gray-300 font-medium text-sm hidden sm:table-cell">{admin.surname || 'N/A'}</td>
                   <td className="p-4 hidden lg:table-cell">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
                       admin.status === 'active' ? 'bg-green-800/60 text-green-300' : 'bg-red-800/60 text-red-300'
@@ -696,8 +714,51 @@ const EditAdminModal = ({ admin, onClose, onSave }: EditAdminModalProps) => {
     address: admin.address || '',
     birthCertificateNumber: admin.birthCertificateNumber || '',
     nid: admin.nid || '',
-    status: admin.status || 'active' as 'active' | 'inactive'
+    status: admin.status || 'active' as 'active' | 'inactive',
+    profilePictureUrl: admin.profilePictureUrl || ''
   });
+
+  const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const handleProfilePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size should be less than 5MB');
+      return;
+    }
+
+    try {
+      setUploadingProfilePic(true);
+      setUploadProgress(0);
+
+      const { url } = await uploadService.uploadToSupabase(
+        file,
+        'profile-pictures',
+        (progress: UploadProgress) => {
+          setUploadProgress(progress.percentage);
+        },
+        'public'
+      );
+
+      setFormData({ ...formData, profilePictureUrl: url });
+    } catch (error: any) {
+      console.error('Profile picture upload error:', error);
+      alert(`Failed to upload profile picture: ${error.message}`);
+    } finally {
+      setUploadingProfilePic(false);
+      setUploadProgress(0);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -723,6 +784,59 @@ const EditAdminModal = ({ admin, onClose, onSave }: EditAdminModalProps) => {
         </div>
         
         <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Profile Picture */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-2">Profile Picture</label>
+            <div className="flex items-center gap-4">
+              {formData.profilePictureUrl ? (
+                <div className="h-20 w-20 rounded-xl overflow-hidden border-2 border-background-700/50">
+                  <img src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+                  <ImageIcon size={32} className="text-gray-400" />
+                </div>
+              )}
+              <div className="flex-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePictureChange}
+                  disabled={uploadingProfilePic}
+                  className="hidden"
+                  id="profile-picture-edit"
+                />
+                <label
+                  htmlFor="profile-picture-edit"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-background-700/60 hover:bg-background-600/60 text-white rounded-lg transition-all duration-200 cursor-pointer ${
+                    uploadingProfilePic ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploadingProfilePic ? (
+                    <>
+                      <Loader size={16} className="animate-spin" />
+                      <span>Uploading... {uploadProgress}%</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      <span>Upload Photo</span>
+                    </>
+                  )}
+                </label>
+                {formData.profilePictureUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, profilePictureUrl: '' })}
+                    className="ml-2 px-4 py-2 bg-red-700/60 hover:bg-red-600/60 text-white rounded-lg transition-all duration-200"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* User ID - Read Only */}
           <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-3.5">
             <p className="text-xs text-blue-300 font-semibold mb-1.5 uppercase">User ID (Non-editable)</p>
@@ -886,7 +1000,8 @@ const EditAdminModal = ({ admin, onClose, onSave }: EditAdminModalProps) => {
             </button>
             <button
               type="submit"
-              className="flex-1 px-5 py-2.5 bg-green-700/80 hover:bg-green-600/80 text-white rounded-lg transition-all duration-200 font-semibold"
+              disabled={uploadingProfilePic}
+              className="flex-1 px-5 py-2.5 bg-green-700/80 hover:bg-green-600/80 text-white rounded-lg transition-all duration-200 font-semibold disabled:opacity-50"
             >
               Save Changes
             </button>
@@ -919,6 +1034,7 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdminId }: AddAdminModalProp
     address: '',
     birthCertificateNumber: '',
     nid: '',
+    profilePictureUrl: ''
   });
 
   const [loading, setLoading] = useState(false);
@@ -927,6 +1043,48 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdminId }: AddAdminModalProp
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [generatedUserId, setGeneratedUserId] = useState('');
+  const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const handleProfilePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size should be less than 5MB');
+      return;
+    }
+
+    try {
+      setUploadingProfilePic(true);
+      setUploadProgress(0);
+      setError('');
+
+      const { url } = await uploadService.uploadToSupabase(
+        file,
+        'profile-pictures',
+        (progress: UploadProgress) => {
+          setUploadProgress(progress.percentage);
+        },
+        'public'
+      );
+
+      setFormData({ ...formData, profilePictureUrl: url });
+    } catch (error: any) {
+      console.error('Profile picture upload error:', error);
+      setError(`Failed to upload profile picture: ${error.message}`);
+    } finally {
+      setUploadingProfilePic(false);
+      setUploadProgress(0);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -962,7 +1120,8 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdminId }: AddAdminModalProp
         formData.address,
         formData.birthCertificateNumber,
         formData.nid,
-        currentAdminId
+        currentAdminId,
+        formData.profilePictureUrl
       );
 
       setGeneratedUserId(newAdmin.userId || '');
@@ -1016,9 +1175,9 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdminId }: AddAdminModalProp
             <div className="bg-gradient-to-r from-green-900/40 to-emerald-900/40 text-green-200 px-6 py-4 rounded-xl border border-green-700/50 backdrop-blur-sm mb-6">
               <p className="text-sm font-semibold mb-2 flex items-center justify-center gap-2">
                 <CheckCircle size={18} />
-                Account Created Successfully!
+                Account Created & SMS Sent!
               </p>
-              <p className="text-sm">The admin can now sign in with their User ID and password.</p>
+              <p className="text-sm">The admin has been notified via SMS with login instructions.</p>
             </div>
           </div>
         </div>
@@ -1055,6 +1214,60 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdminId }: AddAdminModalProp
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            {/* Profile Picture Upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Profile Picture</label>
+              <div className="flex items-center gap-4">
+                {formData.profilePictureUrl ? (
+                  <div className="h-20 w-20 rounded-xl overflow-hidden border-2 border-background-700/50">
+                    <img src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+                    <ImageIcon size={32} className="text-gray-400" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleProfilePictureChange}
+                    disabled={uploadingProfilePic || loading}
+                    className="hidden"
+                    id="profile-picture-upload"
+                  />
+                  <label
+                    htmlFor="profile-picture-upload"
+                    className={`inline-flex items-center gap-2 px-4 py-2 bg-background-700/60 hover:bg-background-600/60 text-white rounded-lg transition-all duration-200 cursor-pointer ${
+                      uploadingProfilePic || loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {uploadingProfilePic ? (
+                      <>
+                        <Loader size={16} className="animate-spin" />
+                        <span>Uploading... {uploadProgress}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={16} />
+                        <span>Upload Photo</span>
+                      </>
+                    )}
+                  </label>
+                  {formData.profilePictureUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, profilePictureUrl: '' })}
+                      disabled={loading}
+                      className="ml-2 px-4 py-2 bg-red-700/60 hover:bg-red-600/60 text-white rounded-lg transition-all duration-200"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="group">
                 <label className="block text-sm font-medium text-gray-300 mb-2">Surname *</label>
@@ -1271,14 +1484,14 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdminId }: AddAdminModalProp
               <button
                 type="button"
                 onClick={onClose}
-                disabled={loading}
+                disabled={loading || uploadingProfilePic}
                 className="flex-1 px-5 py-3 bg-background-700/60 hover:bg-background-600/60 text-white rounded-xl transition-all duration-200 font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || uploadingProfilePic}
                 className="flex-1 px-5 py-3 bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white rounded-xl transition-all duration-200 font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? (
