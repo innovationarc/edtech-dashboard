@@ -10,11 +10,11 @@ import {
   where, 
   orderBy,
   Timestamp,
-  setDoc
+  setDoc,
+  addDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { authService } from './authService';
-import { otpService } from './otpService';
 
 export interface Admin {
   uid: string;
@@ -36,6 +36,17 @@ export interface Admin {
   createdAt: Date;
   createdBy: string;
   lastLogin?: Date;
+}
+
+export interface PasswordResetLog {
+  targetAdminUid: string;
+  targetAdminUserId: string;
+  targetAdminSurname: string;
+  resetByUid: string;
+  resetByUserId: string;
+  resetBySurname: string;
+  timestamp: Date;
+  reason?: string;
 }
 
 // GSM 7-bit character set - extended
@@ -185,6 +196,7 @@ export const adminService = {
         throw new Error('Failed to generate Admin ID');
       }
 
+      console.log('✅ Generated Admin ID:', data.adminId);
       return data.adminId;
     } catch (error: any) {
       console.error('Error generating Admin ID:', error);
@@ -193,6 +205,7 @@ export const adminService = {
       const year = now.getFullYear().toString().slice(-2);
       const month = (now.getMonth() + 1).toString().padStart(2, '0');
       const fallbackId = `AD-${year}${month}-${Date.now().toString().slice(-5)}`;
+      console.log('⚠️ Using fallback Admin ID:', fallbackId);
       return fallbackId;
     }
   },
@@ -277,6 +290,108 @@ export const adminService = {
     } catch (error: any) {
       console.error('Error creating admin:', error);
       throw new Error(error.message || 'Failed to create admin account');
+    }
+  },
+
+  // Reset admin password
+  async resetAdminPassword(
+    targetAdminUid: string,
+    newPassword: string,
+    resetByAdmin: Admin,
+    reason?: string
+  ): Promise<void> {
+    try {
+      // Get target admin details
+      const targetAdmin = await this.getAdminById(targetAdminUid);
+      if (!targetAdmin) {
+        throw new Error('Target admin not found');
+      }
+
+      // Call backend API to reset password
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const response = await fetch(`${BACKEND_URL}/api/reset-admin-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uid: targetAdminUid,
+          newPassword,
+          apiKey: MASTER_API_KEY
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reset password');
+      }
+
+      // Log the password reset
+      await addDoc(collection(db, 'password_reset_logs'), {
+        targetAdminUid: targetAdmin.uid,
+        targetAdminUserId: targetAdmin.userId,
+        targetAdminSurname: targetAdmin.surname,
+        resetByUid: resetByAdmin.uid,
+        resetByUserId: resetByAdmin.userId,
+        resetBySurname: resetByAdmin.surname,
+        timestamp: Timestamp.now(),
+        reason: reason || 'No reason provided'
+      });
+
+      console.log('✅ Password reset successful and logged');
+    } catch (error: any) {
+      console.error('Error resetting admin password:', error);
+      throw new Error(error.message || 'Failed to reset admin password');
+    }
+  },
+
+  // Get password reset logs for an admin
+  async getPasswordResetLogs(adminUid: string): Promise<PasswordResetLog[]> {
+    try {
+      const logsCollection = collection(db, 'password_reset_logs');
+      const logsQuery = query(
+        logsCollection,
+        where('targetAdminUid', '==', adminUid),
+        orderBy('timestamp', 'desc')
+      );
+      
+      const logsSnapshot = await getDocs(logsQuery);
+      
+      return logsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          timestamp: data.timestamp?.toDate() || new Date()
+        };
+      }) as PasswordResetLog[];
+    } catch (error: any) {
+      console.error('Error getting password reset logs:', error);
+      return [];
+    }
+  },
+
+  // Get all password reset logs
+  async getAllPasswordResetLogs(): Promise<PasswordResetLog[]> {
+    try {
+      const logsCollection = collection(db, 'password_reset_logs');
+      const logsQuery = query(logsCollection, orderBy('timestamp', 'desc'));
+      
+      const logsSnapshot = await getDocs(logsQuery);
+      
+      return logsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          timestamp: data.timestamp?.toDate() || new Date()
+        };
+      }) as PasswordResetLog[];
+    } catch (error: any) {
+      console.error('Error getting all password reset logs:', error);
+      return [];
     }
   },
 
@@ -470,4 +585,3 @@ export const adminService = {
     }
   }
 };
-
