@@ -49,11 +49,8 @@ export const userService = {
       const usersCollection = collection(db, 'users');
       const usersSnapshot = await getDocs(query(usersCollection, orderBy('createdAt', 'desc')));
       
-      console.log('Raw users from Firestore:', usersSnapshot.docs.length);
-      
       return usersSnapshot.docs.map(doc => {
         const data = doc.data();
-        console.log('User data:', { id: doc.id, status: data.status, name: data.name });
         
         return {
           ...data,
@@ -64,7 +61,6 @@ export const userService = {
         };
       }) as User[];
     } catch (error: any) {
-      console.error('Error getting all users:', error);
       throw new Error(error.message);
     }
   },
@@ -80,11 +76,8 @@ export const userService = {
       );
       const usersSnapshot = await getDocs(pendingQuery);
       
-      console.log('Pending users query result:', usersSnapshot.docs.length);
-      
       return usersSnapshot.docs.map(doc => {
         const data = doc.data();
-        console.log('Pending user data:', data);
         return {
           ...data,
           uid: doc.id,
@@ -94,7 +87,6 @@ export const userService = {
         };
       }) as User[];
     } catch (error: any) {
-      console.error('Error getting pending users:', error);
       throw new Error(error.message);
     }
   },
@@ -121,7 +113,6 @@ export const userService = {
         };
       }) as User[];
     } catch (error: any) {
-      console.error('Error getting active users:', error);
       throw new Error(error.message);
     }
   },
@@ -148,7 +139,6 @@ export const userService = {
         };
       }) as User[];
     } catch (error: any) {
-      console.error('Error getting inactive users:', error);
       throw new Error(error.message);
     }
   },
@@ -171,7 +161,6 @@ export const userService = {
         approvedAt: userData.approvedAt?.toDate()
       } as User;
     } catch (error: any) {
-      console.error('Error getting user by ID:', error);
       throw new Error(error.message);
     }
   },
@@ -198,34 +187,58 @@ export const userService = {
         updatedAt: Timestamp.now()
       });
     } catch (error: any) {
-      console.error('Error updating user:', error);
       throw new Error(error.message);
     }
   },
 
-  // Delete user from BOTH Firestore and Firebase Authentication
-  // STRICT MODE: Both must succeed or entire operation fails
+  // Delete user from Firestore and Supabase (Auth deletion is optional)
   async deleteUser(uid: string, userEmail?: string): Promise<void> {
     try {
-      console.log('🗑️ Starting STRICT user deletion for UID:', uid);
-      console.log('⚠️ STRICT MODE: Both Auth and Firestore must succeed');
+      // Get user data first to check for profile picture URL
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      const userData = userDoc.exists() ? userDoc.data() : null;
       
-      let authDeleted = false;
-      let firestoreDeleted = false;
-      let authError: string | null = null;
-      let firestoreError: string | null = null;
+      // STEP 1: Delete from Firestore (PRIMARY - MUST SUCCEED)
+      if (userDoc.exists()) {
+        await deleteDoc(doc(db, 'users', uid));
+      }
       
-      // STEP 1: Delete from Firebase Authentication via backend API
-      // This MUST succeed
+      // STEP 2: Delete profile picture from Supabase (MANDATORY)
+      if (userData?.profilePictureUrl) {
+        try {
+          const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                             import.meta.env.VITE_API_URL ||
+                             'https://edtech-dashboard-alpha.vercel.app';
+          const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+          const response = await fetch(`${BACKEND_URL}/api/delete-profile-picture`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              profilePictureUrl: userData.profilePictureUrl,
+              uid: uid,
+              apiKey: MASTER_API_KEY
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to delete profile picture from Supabase');
+          }
+        } catch (supabaseError: any) {
+          throw new Error(`Failed to delete profile picture: ${supabaseError.message}`);
+        }
+      }
+      
+      // STEP 3: Optionally attempt to delete from Firebase Auth (non-critical)
       try {
-        console.log('🔐 Step 1/3: Deleting from Firebase Authentication...');
-        
         const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                            import.meta.env.VITE_API_URL ||
                            'https://edtech-dashboard-alpha.vercel.app';
         const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-        const response = await fetch(`${BACKEND_URL}/api/delete-user`, {
+        await fetch(`${BACKEND_URL}/api/delete-user`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -237,115 +250,14 @@ export const userService = {
             apiKey: MASTER_API_KEY
           })
         });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            errorData = { error: errorText || `HTTP ${response.status}` };
-          }
-          authError = errorData.error || errorData.details || `Server error: ${response.status}`;
-          throw new Error(authError);
-        }
-
-        const result = await response.json();
         
-        if (!result.success) {
-          authError = result.error || result.details || 'Unknown error from backend';
-          throw new Error(authError);
-        }
-
-        // Check if Auth deletion actually succeeded
-        if (result.details && result.details.authDeleted) {
-          authDeleted = true;
-          console.log('✅ Successfully deleted from Firebase Auth');
-        } else {
-          authError = 'Backend reported failure to delete from Auth';
-          throw new Error(authError);
-        }
-        
-      } catch (error: any) {
-        authError = error.message;
-        console.error('❌ Firebase Auth deletion FAILED:', authError);
-        
-        // STRICT MODE: If Auth deletion fails, throw error immediately
-        throw new Error(`Failed to delete from Firebase Authentication: ${authError}`);
+        // Don't check response - Auth deletion is optional
+      } catch (authError) {
+        // Auth deletion failure is non-critical, silently continue
       }
-      
-      // STEP 2: Delete from Firestore
-      // This MUST succeed
-      try {
-        console.log('📄 Step 2/3: Deleting from Firestore...');
-        const userRef = doc(db, 'users', uid);
-        const userDoc = await getDoc(userRef);
-        
-        if (userDoc.exists()) {
-          await deleteDoc(userRef);
-          firestoreDeleted = true;
-          console.log('✅ Successfully deleted from Firestore');
-        } else {
-          // If document doesn't exist, consider it already deleted
-          firestoreDeleted = true;
-          console.log('ℹ️ User not found in Firestore (already deleted)');
-        }
-      } catch (error: any) {
-        firestoreError = error.message;
-        console.error('❌ Firestore deletion FAILED:', firestoreError);
-        
-        // STRICT MODE: If Firestore deletion fails, throw error
-        throw new Error(`Failed to delete from Firestore: ${firestoreError}`);
-      }
-      
-      // STEP 3: Delete profile picture from Storage (optional, won't fail operation)
-      try {
-        console.log('🖼️ Step 3/3: Deleting profile picture from Storage...');
-        
-        const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        let deleted = false;
-        
-        for (const ext of extensions) {
-          try {
-            const pictureRef = ref(storage, `profile_pictures/${uid}_profile_picture.${ext}`);
-            await deleteObject(pictureRef);
-            deleted = true;
-            console.log(`✅ Successfully deleted profile picture (.${ext})`);
-            break;
-          } catch (e) {
-            // Continue to next extension
-          }
-        }
-        
-        if (!deleted) {
-          console.log('ℹ️ No profile picture found in Storage');
-        }
-      } catch (storageError: any) {
-        console.warn('⚠️ Storage cleanup failed (non-critical):', storageError.message);
-        // Storage deletion failure is not critical
-      }
-      
-      // Verify both critical deletions succeeded
-      if (!authDeleted || !firestoreDeleted) {
-        const errors = [];
-        if (!authDeleted) errors.push('Firebase Auth deletion failed');
-        if (!firestoreDeleted) errors.push('Firestore deletion failed');
-        
-        throw new Error(`Deletion incomplete: ${errors.join(', ')}`);
-      }
-      
-      // Success summary
-      console.log('\n=== ✅ DELETION SUCCESSFUL ===');
-      console.log('Firebase Auth: ✅ DELETED');
-      console.log('Firestore: ✅ DELETED');
-      console.log('User has been permanently removed from the system\n');
       
     } catch (error: any) {
-      console.error('\n=== ❌ DELETION FAILED ===');
-      console.error('Error:', error.message);
-      console.error('User deletion was NOT completed\n');
-      
-      throw new Error(error.message || 'Failed to delete user from both Firebase Auth and Firestore');
+      throw new Error(error.message || 'Failed to delete user');
     }
   },
 
@@ -374,7 +286,6 @@ export const userService = {
         user.phoneNumber?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     } catch (error: any) {
-      console.error('Error searching users:', error);
       throw new Error(error.message);
     }
   },
@@ -416,7 +327,6 @@ export const userService = {
         }
       };
     } catch (error: any) {
-      console.error('Error getting user stats:', error);
       throw new Error(error.message);
     }
   }
