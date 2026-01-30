@@ -122,23 +122,30 @@ export default async function handler(
 
     console.log('🔢 Generating Admin ID with prefix:', prefix);
 
-    // Query for the highest number in current year-month
-    const usersQuery = await db.collection('users')
-      .where('userId', '>=', prefix)
-      .where('userId', '<', `AD-${year}${month}-99999`)
+    // Query for all admin IDs in current year-month to find the highest number
+    const usersRef = db.collection('users');
+    const adminQuery = await usersRef
       .where('role', '==', 'admin')
+      .where('userId', '>=', prefix)
+      .where('userId', '<=', prefix + '\uf8ff')
       .orderBy('userId', 'desc')
       .limit(1)
       .get();
 
     let nextNumber = 1;
 
-    if (!usersQuery.empty) {
-      const lastUserId = usersQuery.docs[0].data().userId;
-      console.log('📋 Last Admin ID:', lastUserId);
+    if (!adminQuery.empty) {
+      const lastUserId = adminQuery.docs[0].data().userId;
+      console.log('📋 Last Admin ID found:', lastUserId);
       
-      const lastNumber = parseInt(lastUserId.split('-')[2]);
-      nextNumber = lastNumber + 1;
+      // Extract the number part from AD-YYMM-XXXXX
+      const parts = lastUserId.split('-');
+      if (parts.length === 3) {
+        const lastNumber = parseInt(parts[2]);
+        if (!isNaN(lastNumber)) {
+          nextNumber = lastNumber + 1;
+        }
+      }
     }
 
     const adminId = `${prefix}${nextNumber.toString().padStart(5, '0')}`;
