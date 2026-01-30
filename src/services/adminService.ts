@@ -307,13 +307,13 @@ export const adminService = {
         throw new Error('Target admin not found');
       }
 
-      // Call backend API to reset password
+      // Call unified password reset API (password-reset.ts)
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-      const response = await fetch(`${BACKEND_URL}/api/reset-admin-password`, {
+      const response = await fetch(`${BACKEND_URL}/api/password-reset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -321,6 +321,8 @@ export const adminService = {
         body: JSON.stringify({
           uid: targetAdminUid,
           newPassword,
+          resetByUid: resetByAdmin.uid,
+          resetByRole: resetByAdmin.role,
           apiKey: MASTER_API_KEY
         })
       });
