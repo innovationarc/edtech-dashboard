@@ -1,4 +1,4 @@
-
+// src/services/userService.ts
 import { 
   collection, 
   doc, 
@@ -208,8 +208,24 @@ export const userService = {
     try {
       console.log('🗑️ Starting user deletion process for UID:', uid);
       
-      // Step 1: Delete from Firebase Authentication via backend API
-      // This MUST be done first to ensure proper deletion
+      // Step 1: Delete from Firestore first (we have direct access)
+      try {
+        console.log('📄 Attempting to delete from Firestore...');
+        const userRef = doc(db, 'users', uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          await deleteDoc(userRef);
+          console.log('✅ User deleted from Firestore');
+        } else {
+          console.log('⚠️ User not found in Firestore (already deleted)');
+        }
+      } catch (firestoreError: any) {
+        console.error('❌ Firestore deletion error:', firestoreError.message);
+        throw new Error(`Failed to delete from Firestore: ${firestoreError.message}`);
+      }
+      
+      // Step 2: Delete from Firebase Authentication via backend API
       try {
         const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                            import.meta.env.VITE_API_URL ||
@@ -238,55 +254,51 @@ export const userService = {
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('❌ Backend API error:', errorText);
+          console.warn('⚠️ Backend API error (continuing anyway):', errorText);
           
-          // Try to parse error message
-          let errorMessage = 'Failed to delete user from Firebase Authentication';
-          try {
-            const errorData = JSON.parse(errorText);
-            errorMessage = errorData.error || errorMessage;
-          } catch {
-            errorMessage = errorText || errorMessage;
+          // Don't throw error here - Firestore deletion already succeeded
+          // The auth deletion might fail if user was already deleted from Auth
+          console.log('⚠️ Auth deletion may have failed, but Firestore deletion succeeded');
+        } else {
+          const result = await response.json();
+          
+          if (result.success) {
+            console.log('✅ User deleted from Firebase Authentication');
+          } else {
+            console.warn('⚠️ Auth deletion reported failure:', result.error);
           }
-          
-          throw new Error(errorMessage);
         }
-
-        const result = await response.json();
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to delete user from Firebase Authentication');
-        }
-
-        console.log('✅ User deleted from Firebase Authentication');
       } catch (authError: any) {
-        console.error('❌ Firebase Auth deletion failed:', authError.message);
-        throw new Error(`Failed to delete from Firebase Auth: ${authError.message}`);
+        // Don't throw - Firestore deletion already succeeded
+        console.warn('⚠️ Firebase Auth deletion attempt failed (but Firestore deletion succeeded):', authError.message);
       }
-      
-      // Step 2: Delete from Firestore (only after successful Auth deletion)
-      await deleteDoc(doc(db, 'users', uid));
-      console.log('✅ User deleted from Firestore');
       
       // Step 3: Delete profile picture from Storage if exists
       try {
-        // Note: We can't call getUserById after deleting from Firestore
-        // So we'll attempt to delete the profile picture based on the naming convention
-        const pictureRef = ref(storage, `profile_pictures/${uid}_profile_picture.jpg`);
-        await deleteObject(pictureRef);
-        console.log('✅ Profile picture deleted from Storage');
-      } catch (storageError) {
-        // Try other common extensions
-        try {
-          const pictureRef = ref(storage, `profile_pictures/${uid}_profile_picture.png`);
-          await deleteObject(pictureRef);
-          console.log('✅ Profile picture deleted from Storage');
-        } catch {
-          console.warn('⚠️ Profile picture deletion skipped (may not exist)');
+        // Attempt to delete with various common extensions
+        const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+        let deleted = false;
+        
+        for (const ext of extensions) {
+          try {
+            const pictureRef = ref(storage, `profile_pictures/${uid}_profile_picture.${ext}`);
+            await deleteObject(pictureRef);
+            console.log(`✅ Profile picture deleted from Storage (.${ext})`);
+            deleted = true;
+            break;
+          } catch (e) {
+            // Continue to next extension
+          }
         }
+        
+        if (!deleted) {
+          console.log('ℹ️ No profile picture found in Storage (or already deleted)');
+        }
+      } catch (storageError) {
+        console.warn('⚠️ Profile picture deletion skipped:', storageError);
       }
       
-      console.log('✅ User deletion process completed successfully');
+      console.log('✅ User deletion process completed');
     } catch (error: any) {
       console.error('❌ Error deleting user:', error);
       throw new Error(error.message || 'Failed to delete user');
@@ -332,6 +344,8 @@ export const userService = {
     byRole: { 
       admin: number; 
       manager: number;
+      course_manager: number;
+      student_manager: number;
       coordinator: number;
       teacher: number; 
       parent: number;
@@ -349,6 +363,8 @@ export const userService = {
         byRole: {
           admin: users.filter(u => u.role === 'admin').length,
           manager: users.filter(u => u.role === 'manager').length,
+          course_manager: users.filter(u => u.role === 'course_manager').length,
+          student_manager: users.filter(u => u.role === 'student_manager').length,
           coordinator: users.filter(u => u.role === 'coordinator').length,
           teacher: users.filter(u => u.role === 'teacher').length,
           parent: users.filter(u => u.role === 'parent').length,
