@@ -3,8 +3,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
 
 interface PasswordResetRequest {
-  phoneNumber: string;
+  // Option 1: Reset by phone number (original functionality)
+  phoneNumber?: string;
+  // Option 2: Reset by UID (admin password reset functionality)
+  uid?: string;
+  // Required for both
   newPassword: string;
+  // Optional metadata
+  resetByUid?: string;
+  resetByRole?: string;
   apiKey?: string;
 }
 
@@ -105,69 +112,124 @@ export default async function handler(
       });
     }
 
-    const { phoneNumber, newPassword, apiKey } = req.body as PasswordResetRequest;
+    const { 
+      phoneNumber, 
+      uid, 
+      newPassword, 
+      resetByUid, 
+      resetByRole, 
+      apiKey 
+    } = req.body as PasswordResetRequest;
 
-    console.log('🔐 Password reset request for phone:', phoneNumber?.substring(0, 5) + '****');
+    // Determine reset type
+    const isPhoneNumberReset = !!phoneNumber;
+    const isUidReset = !!uid;
+
+    if (!isPhoneNumberReset && !isUidReset) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either phoneNumber or uid must be provided'
+      });
+    }
+
+    if (isPhoneNumberReset) {
+      console.log('🔐 Password reset request by phone:', phoneNumber?.substring(0, 5) + '****');
+    } else {
+      console.log('🔐 Password reset request by UID:', uid);
+    }
 
     // Validate required fields
-    if (!phoneNumber || !newPassword) {
-      console.error('❌ Missing required fields');
+    if (!newPassword) {
+      console.error('❌ Missing new password');
       return res.status(400).json({
         success: false,
-        error: 'Phone number and new password are required',
+        error: 'New password is required',
       });
     }
 
-    // Validate password strength
-    if (newPassword.length < 8) {
-      return res.status(400).json({
-        success: false,
-        error: 'Password must be at least 8 characters long',
-      });
+    // Validate password strength (relaxed for admin resets, strict for phone resets)
+    if (isPhoneNumberReset) {
+      // Strict validation for self-service password reset
+      if (newPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          error: 'Password must be at least 8 characters long',
+        });
+      }
+
+      if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || 
+          !/[0-9]/.test(newPassword) || !/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Password must include uppercase, lowercase, number, and special character',
+        });
+      }
+    } else {
+      // Relaxed validation for admin-initiated password reset
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          error: 'Password must be at least 6 characters long'
+        });
+      }
     }
 
-    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || 
-        !/[0-9]/.test(newPassword) || !/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Password must include uppercase, lowercase, number, and special character',
-      });
-    }
-
-    // Optional: Validate API Key
+    // Optional: Validate API Key for sensitive operations
     const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
     if (MASTER_API_KEY && apiKey !== MASTER_API_KEY) {
-      console.error('❌ Unauthorized request');
+      console.error('❌ Unauthorized request - invalid API key');
       return res.status(401).json({
         success: false,
         error: 'Unauthorized request',
       });
     }
 
-    // Find user by phone number
-    const db = admin.firestore();
-    const usersQuery = await db.collection('users')
-      .where('phoneNumber', '==', phoneNumber)
-      .limit(1)
-      .get();
+    let targetUserId: string;
+    let targetUserData: any;
 
-    if (usersQuery.empty) {
-      console.error('❌ User not found');
-      return res.status(404).json({
-        success: false,
-        error: 'Account not found',
-      });
+    // Find user by phone number or UID
+    if (isPhoneNumberReset) {
+      const db = admin.firestore();
+      const usersQuery = await db.collection('users')
+        .where('phoneNumber', '==', phoneNumber)
+        .limit(1)
+        .get();
+
+      if (usersQuery.empty) {
+        console.error('❌ User not found by phone number');
+        return res.status(404).json({
+          success: false,
+          error: 'Account not found',
+        });
+      }
+
+      const userDoc = usersQuery.docs[0];
+      targetUserData = userDoc.data();
+      targetUserId = userDoc.id;
+
+      console.log('✅ User found by phone:', targetUserData.userId);
+    } else {
+      // UID-based reset (for admin operations)
+      const db = admin.firestore();
+      const userDoc = await db.collection('users').doc(uid!).get();
+
+      if (!userDoc.exists) {
+        console.error('❌ User not found by UID');
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+        });
+      }
+
+      targetUserData = userDoc.data();
+      targetUserId = uid!;
+
+      console.log('✅ User found by UID:', targetUserData.userId);
     }
-
-    const userDoc = usersQuery.docs[0];
-    const userData = userDoc.data();
-    const userId = userDoc.id;
-
-    console.log('✅ User found:', userData.userId);
 
     // Update password using Firebase Auth Admin SDK
     try {
-      await admin.auth().updateUser(userId, {
+      await admin.auth().updateUser(targetUserId, {
         password: newPassword
       });
       console.log('✅ Password updated in Firebase Auth');
@@ -181,10 +243,19 @@ export default async function handler(
 
     // Update Firestore to mark password as reset
     try {
-      await userDoc.ref.update({
+      const db = admin.firestore();
+      const updateData: any = {
         passwordResetAt: admin.firestore.FieldValue.serverTimestamp(),
         passwordResetPending: false
-      });
+      };
+
+      // Add metadata if this is an admin-initiated reset
+      if (resetByUid && resetByRole) {
+        updateData.lastPasswordResetBy = resetByUid;
+        updateData.lastPasswordResetByRole = resetByRole;
+      }
+
+      await db.collection('users').doc(targetUserId).update(updateData);
       console.log('✅ Password reset logged in Firestore');
     } catch (firestoreError: any) {
       console.warn('⚠️ Failed to update Firestore metadata:', firestoreError.message);
