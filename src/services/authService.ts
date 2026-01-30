@@ -364,13 +364,17 @@ export const authService = {
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-      const requestBody: any = {};
+      const requestBody: any = {
+        role: 'student'
+      };
 
       if (MASTER_API_KEY) {
         requestBody.apiKey = MASTER_API_KEY;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/generate-student-id`, {
+      console.log('🔢 Generating Student ID via api/generate-id...');
+
+      const response = await fetch(`${BACKEND_URL}/api/generate-id`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -379,23 +383,35 @@ export const authService = {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate Student ID');
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `Server error: ${response.status}` };
+        }
+        console.error('❌ Failed to generate Student ID:', errorData.error);
+        throw new Error(errorData.error || 'Failed to generate Student ID');
       }
 
       const result = await response.json();
       
-      if (!result.success || !result.studentId) {
+      if (!result.success || !result.userId) {
+        console.error('❌ Invalid response from ID generation service:', result);
         throw new Error('Invalid response from ID generation service');
       }
 
-      return result.studentId;
+      console.log('✅ Student ID generated:', result.userId);
+      return result.userId;
     } catch (error: any) {
+      console.error('❌ Error generating Student ID, using fallback:', error);
       // Fallback: generate timestamp-based ID
       const now = new Date();
       const year = now.getFullYear().toString().slice(-2);
       const month = (now.getMonth() + 1).toString().padStart(2, '0');
       const fallbackId = `ST-${year}${month}-${Date.now().toString().slice(-5)}`;
       
+      console.log('⚠️ Using fallback Student ID:', fallbackId);
       return fallbackId;
     }
   },
@@ -422,7 +438,7 @@ export const authService = {
         throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
       }
       
-      // Generate unique Student ID via backend
+      // Generate unique Student ID via api/generate-id endpoint
       const studentId = await this.generateStudentId();
       const registrationNumber = `REG${new Date().getFullYear()}${Math.floor(Math.random() * 900000) + 100000}`;
       
