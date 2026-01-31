@@ -116,31 +116,37 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             (window as any).refreshUserProfile = refreshUserProfile;
 
             // Streak logic: Check and update study streak
-            try {
-              const userStats = await gamificationService.getUserStats(userProfile.uid);
-              if (userStats) {
-                const today = new Date();
-                const lastActivityDate = userStats.lastActivityDate;
+            // ONLY for student role - skip for admin, teacher, coordinator, etc.
+            if (userProfile.role === 'student') {
+              try {
+                const userStats = await gamificationService.getUserStats(userProfile.uid);
+                if (userStats) {
+                  const today = new Date();
+                  const lastActivityDate = userStats.lastActivityDate;
 
-                // Normalize dates to compare only day, month, year
-                const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                const lastActivityDay = new Date(lastActivityDate.getFullYear(), lastActivityDate.getMonth(), lastActivityDate.getDate());
+                  // Normalize dates to compare only day, month, year
+                  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                  const lastActivityDay = new Date(lastActivityDate.getFullYear(), lastActivityDate.getMonth(), lastActivityDate.getDate());
 
-                const diffTime = Math.abs(todayDate.getTime() - lastActivityDay.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  const diffTime = Math.abs(todayDate.getTime() - lastActivityDay.getTime());
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                if (diffDays === 1) { // Consecutive day
-                  const newStreak = userStats.currentStreak + 1;
-                  await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak });
-                } else if (diffDays > 1) { // Gap in days, reset streak
-                  await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak: 1 });
+                  if (diffDays === 1) { // Consecutive day
+                    const newStreak = userStats.currentStreak + 1;
+                    await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak });
+                  } else if (diffDays > 1) { // Gap in days, reset streak
+                    await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak: 1 });
+                  }
+                  // If diffDays is 0, it's the same day, no change to streak needed yet.
+                  // The study_session activity will update lastActivityDate.
                 }
-                // If diffDays is 0, it's the same day, no change to streak needed yet.
-                // The study_session activity will update lastActivityDate.
+              } catch (streakError: any) {
+                // Silent fail for permission errors or missing gamification data
+                // This is normal for non-student users (admin, teacher, etc.)
+                if (!streakError.message?.includes('permission')) {
+                  console.warn('Streak update skipped:', streakError.message);
+                }
               }
-            } catch (streakError) {
-              console.error('Error updating streak:', streakError);
-              // Don't block login if streak update fails
             }
           } else {
             // User exists in Firebase Auth but not in Firestore, sign them out
