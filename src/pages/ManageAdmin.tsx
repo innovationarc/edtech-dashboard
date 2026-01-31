@@ -1,5 +1,4 @@
-// src/pages/ManageAdmin.tsx - PART 1 of 3
-// PASTE THIS PART FIRST, THEN IMMEDIATELY PASTE PART 2, THEN PART 3
+// src/pages/ManageAdmin.tsx 
 import { useState, useEffect } from 'react';
 import { 
   Shield, Search, Loader, CheckCircle, XCircle, Clock, RefreshCw, 
@@ -755,12 +754,6 @@ const AdminInfoModal = ({ admin, onClose, formatDate }: AdminInfoModalProps) => 
         <div className="p-5 border-b border-background-700/50 bg-background-900/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-
-// END OF PART 1
-// CONTINUE WITH PART 2
-// src/pages/ManageAdmin.tsx - PART 2 of 3
-// PASTE THIS IMMEDIATELY AFTER PART 1
-
               {admin.profilePictureUrl ? (
                 <div className="h-16 w-16 rounded-2xl overflow-hidden border-2 border-background-700/50 shadow-lg">
                   <img 
@@ -1127,12 +1120,7 @@ const EditAdminModal = ({ admin, onClose, onSave }: EditAdminModalProps) => {
   );
 };
 
-// END OF PART 2
-// CONTINUE WITH PART 3
-// src/pages/ManageAdmin.tsx - PART 3 of 3
-// PASTE THIS IMMEDIATELY AFTER PART 2
 
-// Add Admin Modal Component
 interface AddAdminModalProps {
   onClose: () => void;
   onSuccess: (admin: Admin) => void;
@@ -2274,5 +2262,4 @@ const AllAdminLogsModal = ({ onClose, formatDate }: AllAdminLogsModalProps) => {
 
 export default ManageAdmin;
 
-// END OF PART 3
 // THIS IS THE COMPLETE FILE
