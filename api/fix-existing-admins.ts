@@ -1,88 +1,61 @@
-// /api/fix-existing-admins.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import admin from 'firebase-admin';
 
-import { initializeApp, getApps } from 'firebase/app';
-import {
-  getFirestore,
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  query,
-  where
-} from 'firebase/firestore';
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    }),
+  });
+}
 
-// ⚠️ Use ENV variables in Vercel (recommended)
-const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY!,
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN!,
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID!,
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET!,
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID!,
-  appId: process.env.VITE_FIREBASE_APP_ID!
-};
-
-// Prevent re-initialization on hot reload
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = admin.firestore();
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // 🔒 Simple protection (VERY IMPORTANT)
   if (req.query.secret !== process.env.ADMIN_MIGRATION_SECRET) {
     return res.status(403).json({ error: 'Unauthorized' });
   }
 
   try {
-    const usersCollection = collection(db, 'users');
-    const adminQuery = query(usersCollection, where('role', '==', 'admin'));
-    const adminsSnapshot = await getDocs(adminQuery);
+    const snapshot = await db
+      .collection('users')
+      .where('role', '==', 'admin')
+      .get();
 
     let fixed = 0;
     let skipped = 0;
 
-    for (const adminDoc of adminsSnapshot.docs) {
-      const data = adminDoc.data();
-      const adminId = adminDoc.id;
+    for (const docSnap of snapshot.docs) {
+      const data = docSnap.data();
 
-      const needsFix = !data.name || !data.surname || !data.fullName;
+      const updates: any = {};
 
-      if (!needsFix) {
+      if (!data.name) updates.name = data.fullName || 'Admin';
+      if (!data.surname) updates.surname = data.fullName || 'Admin';
+      if (!data.fullName)
+        updates.fullName = `${updates.name || 'Admin'} ${updates.surname || ''}`.trim();
+
+      if (Object.keys(updates).length === 0) {
         skipped++;
         continue;
       }
 
-      const updates: any = {};
-
-      if (!data.name) {
-        updates.name = data.fullName || data.surname || 'Admin';
-      }
-
-      if (!data.surname) {
-        updates.surname = data.fullName || data.name || 'Admin';
-      }
-
-      if (!data.fullName) {
-        updates.fullName = `${updates.name || data.name || 'Admin'} ${updates.surname || data.surname || ''}`.trim();
-      }
-
-      await updateDoc(doc(db, 'users', adminId), updates);
+      await docSnap.ref.update(updates);
       fixed++;
     }
 
     return res.json({
       success: true,
-      total: adminsSnapshot.size,
+      total: snapshot.size,
       fixed,
-      skipped
+      skipped,
     });
-
-  } catch (error: any) {
-    return res.status(500).json({
-      success: false,
-      error: error.message
-    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 }
