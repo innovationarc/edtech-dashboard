@@ -269,17 +269,22 @@ export const adminService = {
       });
 
       // Log admin creation in security logs
-      await addDoc(collection(db, 'security_logs'), {
-        action: 'admin_created',
-        targetAdminUid: userProfile.uid,
-        targetAdminUserId: adminId,
-        targetAdminSurname: surname,
-        performedByUid: createdByAdminUid,
-        performedByUserId: createdByAdminId,
-        performedBySurname: createdByAdminSurname,
-        timestamp: Timestamp.now(),
-        details: `Admin ${surname} (${adminId}) was created`
-      });
+      try {
+        await addDoc(collection(db, 'security_logs'), {
+          action: 'admin_created',
+          targetAdminUid: userProfile.uid,
+          targetAdminUserId: adminId,
+          targetAdminSurname: surname,
+          performedByUid: createdByAdminUid,
+          performedByUserId: createdByAdminId,
+          performedBySurname: createdByAdminSurname,
+          timestamp: Timestamp.now(),
+          details: `Admin ${surname} (${adminId}) was created`
+        });
+      } catch (logError) {
+        console.warn('⚠️ Failed to log admin creation:', logError);
+        // Don't fail the operation if logging fails
+      }
 
       // Send SMS notification to new admin
       await sendAdminCreationSMS(phoneNumber, adminId);
@@ -351,18 +356,23 @@ export const adminService = {
       }
 
       // Log the password reset in security logs
-      await addDoc(collection(db, 'security_logs'), {
-        action: 'password_reset',
-        targetAdminUid: targetAdmin.uid,
-        targetAdminUserId: targetAdmin.userId || 'N/A',
-        targetAdminSurname: targetAdmin.surname || 'N/A',
-        performedByUid: resetByAdmin.uid,
-        performedByUserId: resetByAdmin.userId || 'N/A',
-        performedBySurname: resetByAdmin.surname || 'N/A',
-        timestamp: Timestamp.now(),
-        reason: reason || 'No reason provided',
-        details: `Password reset for ${targetAdmin.surname} (${targetAdmin.userId})`
-      });
+      try {
+        await addDoc(collection(db, 'security_logs'), {
+          action: 'password_reset',
+          targetAdminUid: targetAdmin.uid,
+          targetAdminUserId: targetAdmin.userId || 'N/A',
+          targetAdminSurname: targetAdmin.surname || 'N/A',
+          performedByUid: resetByAdmin.uid,
+          performedByUserId: resetByAdmin.userId || 'N/A',
+          performedBySurname: resetByAdmin.surname || 'N/A',
+          timestamp: Timestamp.now(),
+          reason: reason || 'No reason provided',
+          details: `Password reset for ${targetAdmin.surname} (${targetAdmin.userId})`
+        });
+      } catch (logError) {
+        console.warn('⚠️ Failed to log password reset:', logError);
+        // Don't fail the operation if logging fails
+      }
 
       console.log('✅ Password reset successful and logged');
     } catch (error: any) {
@@ -393,6 +403,7 @@ export const adminService = {
       }) as SecurityLog[];
     } catch (error: any) {
       console.error('Error getting security logs:', error);
+      // Return empty array instead of throwing error
       return [];
     }
   },
@@ -415,6 +426,7 @@ export const adminService = {
       }) as SecurityLog[];
     } catch (error: any) {
       console.error('Error getting all security logs:', error);
+      // Return empty array instead of throwing error
       return [];
     }
   },
@@ -440,7 +452,8 @@ export const adminService = {
         };
       }) as Admin[];
     } catch (error: any) {
-      throw new Error(error.message);
+      console.error('Error getting all admins:', error);
+      throw new Error(error.message || 'Failed to get admins');
     }
   },
 
@@ -466,7 +479,8 @@ export const adminService = {
         lastLogin: adminData.lastLogin?.toDate(),
       } as Admin;
     } catch (error: any) {
-      throw new Error(error.message);
+      console.error('Error getting admin by ID:', error);
+      throw new Error(error.message || 'Failed to get admin');
     }
   },
 
@@ -495,23 +509,29 @@ export const adminService = {
 
       // Log admin edit in security logs
       if (updatedByAdmin) {
-        const targetAdmin = await this.getAdminById(uid);
-        if (targetAdmin) {
-          await addDoc(collection(db, 'security_logs'), {
-            action: 'admin_edited',
-            targetAdminUid: uid,
-            targetAdminUserId: targetAdmin.userId || 'N/A',
-            targetAdminSurname: targetAdmin.surname || 'N/A',
-            performedByUid: updatedByAdmin.uid,
-            performedByUserId: updatedByAdmin.userId || 'N/A',
-            performedBySurname: updatedByAdmin.surname || 'N/A',
-            timestamp: Timestamp.now(),
-            details: `Admin details updated for ${targetAdmin.surname} (${targetAdmin.userId})`
-          });
+        try {
+          const targetAdmin = await this.getAdminById(uid);
+          if (targetAdmin) {
+            await addDoc(collection(db, 'security_logs'), {
+              action: 'admin_edited',
+              targetAdminUid: uid,
+              targetAdminUserId: targetAdmin.userId || 'N/A',
+              targetAdminSurname: targetAdmin.surname || 'N/A',
+              performedByUid: updatedByAdmin.uid,
+              performedByUserId: updatedByAdmin.userId || 'N/A',
+              performedBySurname: updatedByAdmin.surname || 'N/A',
+              timestamp: Timestamp.now(),
+              details: `Admin details updated for ${targetAdmin.surname} (${targetAdmin.userId})`
+            });
+          }
+        } catch (logError) {
+          console.warn('⚠️ Failed to log admin edit:', logError);
+          // Don't fail the operation if logging fails
         }
       }
     } catch (error: any) {
-      throw new Error(error.message);
+      console.error('Error updating admin:', error);
+      throw new Error(error.message || 'Failed to update admin');
     }
   },
 
@@ -529,6 +549,7 @@ export const adminService = {
       // STEP 1: Delete from Firestore (PRIMARY - MUST SUCCEED)
       if (adminDoc.exists()) {
         await deleteDoc(doc(db, 'users', uid));
+        console.log('✅ Deleted from Firestore');
       }
       
       // STEP 2: Delete profile picture from Supabase (if exists)
@@ -539,7 +560,7 @@ export const adminService = {
                              'https://edtech-dashboard-alpha.vercel.app';
           const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-          await fetch(`${BACKEND_URL}/api/delete-profile-picture`, {
+          const deleteProfilePicResponse = await fetch(`${BACKEND_URL}/api/delete-profile-picture`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -550,9 +571,14 @@ export const adminService = {
               apiKey: MASTER_API_KEY
             })
           });
+
+          if (deleteProfilePicResponse.ok) {
+            console.log('✅ Profile picture deleted from Supabase');
+          } else {
+            console.warn('⚠️ Failed to delete profile picture');
+          }
         } catch (supabaseError) {
-          // Non-critical, continue
-          console.warn('Failed to delete profile picture:', supabaseError);
+          console.warn('⚠️ Failed to delete profile picture:', supabaseError);
         }
       }
       
@@ -563,7 +589,7 @@ export const adminService = {
                            'https://edtech-dashboard-alpha.vercel.app';
         const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-        await fetch(`${BACKEND_URL}/api/delete-user`, {
+        const deleteAuthResponse = await fetch(`${BACKEND_URL}/api/delete-user`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -575,27 +601,38 @@ export const adminService = {
             apiKey: MASTER_API_KEY
           })
         });
+
+        if (deleteAuthResponse.ok) {
+          console.log('✅ Deleted from Firebase Auth');
+        } else {
+          const errorText = await deleteAuthResponse.text();
+          console.warn('⚠️ Failed to delete from Firebase Auth:', errorText);
+        }
       } catch (authError) {
-        // Auth deletion failure is non-critical
-        console.warn('Failed to delete from Auth:', authError);
+        console.warn('⚠️ Failed to delete from Auth:', authError);
       }
 
       // STEP 4: Log admin deletion in security logs
       if (deletedByAdmin && adminData) {
-        await addDoc(collection(db, 'security_logs'), {
-          action: 'admin_deleted',
-          targetAdminUid: uid,
-          targetAdminUserId: adminData.userId || 'N/A',
-          targetAdminSurname: adminData.surname || 'N/A',
-          performedByUid: deletedByAdmin.uid,
-          performedByUserId: deletedByAdmin.userId || 'N/A',
-          performedBySurname: deletedByAdmin.surname || 'N/A',
-          timestamp: Timestamp.now(),
-          details: `Admin ${adminData.surname} (${adminData.userId}) was deleted`
-        });
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'admin_deleted',
+            targetAdminUid: uid,
+            targetAdminUserId: adminData.userId || 'N/A',
+            targetAdminSurname: adminData.surname || 'N/A',
+            performedByUid: deletedByAdmin.uid,
+            performedByUserId: deletedByAdmin.userId || 'N/A',
+            performedBySurname: deletedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            details: `Admin ${adminData.surname} (${adminData.userId}) was deleted`
+          });
+        } catch (logError) {
+          console.warn('⚠️ Failed to log admin deletion:', logError);
+        }
       }
       
     } catch (error: any) {
+      console.error('Error deleting admin:', error);
       throw new Error(error.message || 'Failed to delete admin');
     }
   },
@@ -627,7 +664,8 @@ export const adminService = {
         admin.phoneNumber?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     } catch (error: any) {
-      throw new Error(error.message);
+      console.error('Error searching admins:', error);
+      throw new Error(error.message || 'Failed to search admins');
     }
   },
 
@@ -646,7 +684,8 @@ export const adminService = {
         inactive: admins.filter(a => a.status === 'inactive').length,
       };
     } catch (error: any) {
-      throw new Error(error.message);
+      console.error('Error getting admin stats:', error);
+      throw new Error(error.message || 'Failed to get admin statistics');
     }
   }
 };
