@@ -14,6 +14,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Secret check
   if (req.query.secret !== process.env.ADMIN_MIGRATION_SECRET) {
     return res.status(403).json({ error: 'Unauthorized' });
   }
@@ -21,6 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     console.log('🔍 Searching for admin accounts...');
     const usersSnapshot = await db.collection('users').where('role', '==', 'admin').get();
+
     console.log(`✅ Found ${usersSnapshot.size} admin accounts`);
 
     let fixed = 0;
@@ -30,8 +32,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const data = docSnap.data() || {};
       const docRef = docSnap.ref;
 
-      // Safe log
-      console.log(`\n📝 Processing: ${data.surname || data.fullName || 'Unknown'} (${data.userId || 'N/A'})`);
+      // Safe log: userId may not exist
+      console.log(`\n📝 Processing: ${data.surname || data.fullName || 'Unknown'} (${data.userId ?? 'N/A'})`);
 
       const updates: any = {};
 
@@ -39,13 +41,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!data.surname && (data.fullName || data.name)) updates.surname = data.fullName || data.name;
       if (!data.fullName && (data.name || data.surname)) updates.fullName = `${data.name || ''} ${data.surname || ''}`.trim();
 
-      // Only update if there is at least one field
+      // Skip empty updates to avoid Admin SDK crash
       if (Object.keys(updates).length === 0) {
         skipped++;
         continue;
       }
 
-      // Apply updates safely
       await docRef.update(updates);
       console.log(`   ✅ Updated successfully`);
       fixed++;
