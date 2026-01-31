@@ -13,8 +13,8 @@ import {
   setDoc,
   addDoc
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { authService } from './authService';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { db, auth } from '../config/firebase';
 
 export interface Admin {
   uid: string;
@@ -114,6 +114,32 @@ const normalizePhoneNumber = (phoneNumber: string): string => {
 };
 
 /**
+ * Generate device fingerprint
+ */
+const generateDeviceId = (): string => {
+  const navigator = window.navigator;
+  const screen = window.screen;
+  
+  const fingerprint = [
+    navigator.userAgent,
+    navigator.language,
+    screen.colorDepth,
+    screen.width + 'x' + screen.height,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency || 'unknown',
+  ].join('|');
+  
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  
+  return 'device_' + Math.abs(hash).toString(36);
+};
+
+/**
  * Send SMS notification to new admin
  */
 const sendAdminCreationSMS = async (phoneNumber: string, adminId: string): Promise<void> => {
@@ -203,7 +229,7 @@ export const adminService = {
       return data.userId;
     } catch (error: any) {
       console.error('Error generating Admin ID:', error);
-      // Fallback to timestamp-based ID
+      // Fallback to timestamp-based ID with AD prefix
       const now = new Date();
       const year = now.getFullYear().toString().slice(-2);
       const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -213,7 +239,7 @@ export const adminService = {
     }
   },
 
-  // Create a new admin
+  // Create a new admin - DOES NOT USE authService.createUser to avoid ID conflicts
   async createAdmin(
     phoneNumber: string,
     email: string,
@@ -234,45 +260,57 @@ export const adminService = {
     profilePictureUrl?: string
   ): Promise<Admin> {
     try {
-      // Generate Admin ID
+      // STEP 1: Generate Admin ID FIRST
       const adminId = await this.generateAdminId();
+      console.log('🆔 Admin ID generated:', adminId);
 
-      // Create user in Firebase Auth and Firestore (no email/phone uniqueness check)
-      const userProfile = await authService.createUser(
-        phoneNumber,
-        email,
-        password,
+      // STEP 2: Create auth email (use real email if provided, otherwise use adminId)
+      const authEmail = email && email.trim() ? email.trim() : `${adminId}@admin.local`;
+
+      // STEP 3: Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
+      const user = userCredential.user;
+      console.log('✅ Firebase Auth user created:', user.uid);
+
+      // STEP 4: Create Firestore document with Admin ID
+      const adminProfile: any = {
+        userId: adminId, // THIS IS THE CRITICAL LINE - Admin ID is set here
         surname,
-        fullName,
-        dob,
-        phone,
-        '', // guardianPhone not needed for admin
-        bloodGroup,
-        gender,
-        religion,
-        '', // classGrade not needed for admin
-        'admin',
-        false, // skipApproval - admins don't need approval
-        adminId, // custom userId
-        profilePictureUrl
-      );
-
-      // Update admin document with additional fields
-      await updateDoc(doc(db, 'users', userProfile.uid), {
+        fullName: fullName || '',
+        dob: dob || '',
+        phoneNumber: phone,
+        gender: gender || '',
+        bloodGroup: bloodGroup || '',
+        religion: religion || '',
         address: address || '',
         birthCertificateNumber: birthCertificateNumber || '',
         nid: nid || '',
-        createdBy: createdByAdminId,
-        createdAt: Timestamp.now(),
+        role: 'admin',
         status: 'active',
-        ...(profilePictureUrl && { profilePictureUrl })
-      });
+        createdAt: Timestamp.now(),
+        createdBy: createdByAdminId,
+        deviceId: generateDeviceId()
+      };
 
-      // Log admin creation in security logs
+      // Add email if provided
+      if (email && email.trim()) {
+        adminProfile.email = email.trim();
+      }
+
+      // Add profile picture if provided
+      if (profilePictureUrl) {
+        adminProfile.profilePictureUrl = profilePictureUrl;
+      }
+
+      // STEP 5: Save to Firestore with the Admin ID
+      await setDoc(doc(db, 'users', user.uid), adminProfile);
+      console.log('✅ Firestore document created with Admin ID:', adminId);
+
+      // STEP 6: Log admin creation in security logs
       try {
         await addDoc(collection(db, 'security_logs'), {
           action: 'admin_created',
-          targetAdminUid: userProfile.uid,
+          targetAdminUid: user.uid,
           targetAdminUserId: adminId,
           targetAdminSurname: surname,
           performedByUid: createdByAdminUid,
@@ -283,23 +321,22 @@ export const adminService = {
         });
       } catch (logError) {
         console.warn('⚠️ Failed to log admin creation:', logError);
-        // Don't fail the operation if logging fails
       }
 
-      // Send SMS notification to new admin
+      // STEP 7: Send SMS notification to new admin
       await sendAdminCreationSMS(phoneNumber, adminId);
 
-      // Return admin object
+      // STEP 8: Return admin object
       return {
-        uid: userProfile.uid,
+        uid: user.uid,
         userId: adminId,
         surname,
         fullName: fullName || '',
         email: email || '',
         phoneNumber: phone,
         dob: dob || '',
-        gender: gender || undefined,
-        bloodGroup: bloodGroup || undefined,
+        gender: gender as any,
+        bloodGroup: bloodGroup as any,
         religion: religion || '',
         address: address || '',
         birthCertificateNumber: birthCertificateNumber || '',
@@ -311,7 +348,7 @@ export const adminService = {
         profilePictureUrl: profilePictureUrl || undefined
       };
     } catch (error: any) {
-      console.error('Error creating admin:', error);
+      console.error('❌ Error creating admin:', error);
       throw new Error(error.message || 'Failed to create admin account');
     }
   },
@@ -371,7 +408,6 @@ export const adminService = {
         });
       } catch (logError) {
         console.warn('⚠️ Failed to log password reset:', logError);
-        // Don't fail the operation if logging fails
       }
 
       console.log('✅ Password reset successful and logged');
@@ -403,7 +439,6 @@ export const adminService = {
       }) as SecurityLog[];
     } catch (error: any) {
       console.error('Error getting security logs:', error);
-      // Return empty array instead of throwing error
       return [];
     }
   },
@@ -426,7 +461,6 @@ export const adminService = {
       }) as SecurityLog[];
     } catch (error: any) {
       console.error('Error getting all security logs:', error);
-      // Return empty array instead of throwing error
       return [];
     }
   },
@@ -526,7 +560,6 @@ export const adminService = {
           }
         } catch (logError) {
           console.warn('⚠️ Failed to log admin edit:', logError);
-          // Don't fail the operation if logging fails
         }
       }
     } catch (error: any) {
