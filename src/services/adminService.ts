@@ -31,7 +31,7 @@ export interface Admin {
   birthCertificateNumber?: string;
   nid?: string;
   role: 'admin';
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending';
   profilePictureUrl?: string;
   createdAt: Date;
   createdBy: string;
@@ -40,7 +40,7 @@ export interface Admin {
 
 export interface SecurityLog {
   id?: string;
-  action: 'password_reset' | 'admin_created' | 'admin_edited' | 'admin_deleted';
+  action: 'login' | 'logout' | 'password_reset' | 'admin_created' | 'admin_edited' | 'admin_deleted';
   targetAdminUid: string;
   targetAdminUserId: string;
   targetAdminSurname: string;
@@ -254,224 +254,80 @@ export const adminService = {
     address: string,
     birthCertificateNumber: string,
     nid: string,
-    createdByAdminId: string,
-    createdByAdminUid: string,
-    createdByAdminSurname: string,
-    profilePictureUrl?: string
+    createdByAdmin?: Admin
   ): Promise<Admin> {
     try {
-      // Validate required fields
-      if (!surname || surname.trim() === '') {
-        throw new Error('Surname is required');
-      }
-      if (!phone || phone.trim() === '') {
-        throw new Error('Phone number is required');
-      }
-
-      // STEP 1: Generate Admin ID FIRST
+      // Generate Admin ID first
       const adminId = await this.generateAdminId();
-      console.log('🆔 Admin ID generated:', adminId);
+      console.log('📝 Creating admin with ID:', adminId);
 
-      // STEP 2: Create auth email (use real email if provided, otherwise use adminId)
-      const authEmail = email && email.trim() ? email.trim() : `${adminId}@admin.local`;
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const uid = userCredential.user.uid;
 
-      // STEP 3: Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
-      const user = userCredential.user;
-      console.log('✅ Firebase Auth user created:', user.uid);
-
-      // STEP 4: Create Firestore document with ALL required fields properly initialized
-      const adminProfile: any = {
-        userId: adminId, // Admin ID with AD prefix
-        surname: surname.trim(), // REQUIRED - must not be empty
-        fullName: fullName && fullName.trim() ? fullName.trim() : surname.trim(), // Default to surname if fullName is empty
-        name: fullName && fullName.trim() ? fullName.trim() : surname.trim(), // Add 'name' field for compatibility
-        dob: dob && dob.trim() ? dob.trim() : '',
-        phoneNumber: phone.trim(), // REQUIRED
-        gender: gender && gender.trim() ? gender.trim() : '',
-        bloodGroup: bloodGroup && bloodGroup.trim() ? bloodGroup.trim() : '',
-        religion: religion && religion.trim() ? religion.trim() : '',
-        address: address && address.trim() ? address.trim() : '',
-        birthCertificateNumber: birthCertificateNumber && birthCertificateNumber.trim() ? birthCertificateNumber.trim() : '',
-        nid: nid && nid.trim() ? nid.trim() : '',
-        role: 'admin',
-        status: 'active',
-        createdAt: Timestamp.now(),
-        createdBy: createdByAdminId,
-        deviceId: generateDeviceId()
-      };
-
-      // Add email if provided
-      if (email && email.trim()) {
-        adminProfile.email = email.trim();
-      }
-
-      // Add profile picture if provided
-      if (profilePictureUrl && profilePictureUrl.trim()) {
-        adminProfile.profilePictureUrl = profilePictureUrl.trim();
-      }
-
-      // STEP 5: Save to Firestore with the Admin ID
-      await setDoc(doc(db, 'users', user.uid), adminProfile);
-      console.log('✅ Firestore document created with Admin ID:', adminId);
-      console.log('✅ Admin profile:', adminProfile);
-
-      // STEP 6: Log admin creation in security logs
-      try {
-        await addDoc(collection(db, 'security_logs'), {
-          action: 'admin_created',
-          targetAdminUid: user.uid,
-          targetAdminUserId: adminId,
-          targetAdminSurname: surname.trim(),
-          performedByUid: createdByAdminUid,
-          performedByUserId: createdByAdminId,
-          performedBySurname: createdByAdminSurname,
-          timestamp: Timestamp.now(),
-          details: `Admin ${surname.trim()} (${adminId}) was created`
-        });
-      } catch (logError) {
-        console.warn('⚠️ Failed to log admin creation:', logError);
-      }
-
-      // STEP 7: Send SMS notification to new admin
-      await sendAdminCreationSMS(phoneNumber, adminId);
-
-      // STEP 8: Return admin object with all fields properly set
-      return {
-        uid: user.uid,
+      // Create admin profile
+      const adminData: Admin = {
+        uid,
         userId: adminId,
-        surname: surname.trim(),
-        fullName: fullName && fullName.trim() ? fullName.trim() : surname.trim(),
-        email: email && email.trim() ? email.trim() : undefined,
-        phoneNumber: phone.trim(),
-        dob: dob && dob.trim() ? dob.trim() : undefined,
-        gender: gender && gender.trim() ? (gender.trim() as any) : undefined,
-        bloodGroup: bloodGroup && bloodGroup.trim() ? (bloodGroup.trim() as any) : undefined,
-        religion: religion && religion.trim() ? religion.trim() : undefined,
-        address: address && address.trim() ? address.trim() : undefined,
-        birthCertificateNumber: birthCertificateNumber && birthCertificateNumber.trim() ? birthCertificateNumber.trim() : undefined,
-        nid: nid && nid.trim() ? nid.trim() : undefined,
+        surname,
+        fullName,
+        email,
+        phoneNumber: phone,
+        dob,
+        gender: gender || undefined,
+        bloodGroup: bloodGroup || undefined,
+        religion,
+        address,
+        birthCertificateNumber,
+        nid,
         role: 'admin',
         status: 'active',
         createdAt: new Date(),
-        createdBy: createdByAdminId,
-        profilePictureUrl: profilePictureUrl && profilePictureUrl.trim() ? profilePictureUrl.trim() : undefined
+        createdBy: createdByAdmin?.uid || 'system',
       };
-    } catch (error: any) {
-      console.error('❌ Error creating admin:', error);
-      throw new Error(error.message || 'Failed to create admin account');
-    }
-  },
 
-  // Reset admin password using password-reset.ts API
-  async resetAdminPassword(
-    targetAdminUid: string,
-    newPassword: string,
-    resetByAdmin: Admin,
-    reason?: string
-  ): Promise<void> {
-    try {
-      // Get target admin details
-      const targetAdmin = await this.getAdminById(targetAdminUid);
-      if (!targetAdmin) {
-        throw new Error('Target admin not found');
-      }
-
-      // Call unified password reset API (password-reset.ts)
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const response = await fetch(`${BACKEND_URL}/api/password-reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          uid: targetAdminUid,
-          newPassword,
-          resetByUid: resetByAdmin.uid,
-          resetByRole: resetByAdmin.role,
-          apiKey: MASTER_API_KEY
-        })
+      await setDoc(doc(db, 'users', uid), {
+        ...adminData,
+        createdAt: Timestamp.now(),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to reset password');
+      console.log('✅ Admin created successfully');
+
+      // Send SMS notification to the new admin
+      await sendAdminCreationSMS(phone, adminId);
+
+      // Log admin creation in security logs
+      if (createdByAdmin) {
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'admin_created',
+            targetAdminUid: uid,
+            targetAdminUserId: adminId,
+            targetAdminSurname: surname,
+            performedByUid: createdByAdmin.uid,
+            performedByUserId: createdByAdmin.userId || 'N/A',
+            performedBySurname: createdByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            details: `New admin ${surname} (${adminId}) was created`
+          });
+        } catch (logError) {
+          console.warn('⚠️ Failed to log admin creation:', logError);
+        }
       }
 
-      // Log the password reset in security logs
-      try {
-        await addDoc(collection(db, 'security_logs'), {
-          action: 'password_reset',
-          targetAdminUid: targetAdmin.uid,
-          targetAdminUserId: targetAdmin.userId || 'N/A',
-          targetAdminSurname: targetAdmin.surname || 'N/A',
-          performedByUid: resetByAdmin.uid,
-          performedByUserId: resetByAdmin.userId || 'N/A',
-          performedBySurname: resetByAdmin.surname || 'N/A',
-          timestamp: Timestamp.now(),
-          reason: reason || 'No reason provided',
-          details: `Password reset for ${targetAdmin.surname} (${targetAdmin.userId})`
-        });
-      } catch (logError) {
-        console.warn('⚠️ Failed to log password reset:', logError);
+      return adminData;
+    } catch (error: any) {
+      console.error('Error creating admin:', error);
+      
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error('This email is already registered');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Invalid email address');
+      } else if (error.code === 'auth/weak-password') {
+        throw new Error('Password must be at least 6 characters');
       }
-
-      console.log('✅ Password reset successful and logged');
-    } catch (error: any) {
-      console.error('Error resetting admin password:', error);
-      throw new Error(error.message || 'Failed to reset admin password');
-    }
-  },
-
-  // Get security logs for an admin
-  async getSecurityLogs(adminUid: string): Promise<SecurityLog[]> {
-    try {
-      const logsCollection = collection(db, 'security_logs');
-      const logsQuery = query(
-        logsCollection,
-        where('targetAdminUid', '==', adminUid),
-        orderBy('timestamp', 'desc')
-      );
       
-      const logsSnapshot = await getDocs(logsQuery);
-      
-      return logsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          timestamp: data.timestamp?.toDate() || new Date()
-        };
-      }) as SecurityLog[];
-    } catch (error: any) {
-      console.error('Error getting security logs:', error);
-      return [];
-    }
-  },
-
-  // Get all security logs
-  async getAllSecurityLogs(): Promise<SecurityLog[]> {
-    try {
-      const logsCollection = collection(db, 'security_logs');
-      const logsQuery = query(logsCollection, orderBy('timestamp', 'desc'));
-      
-      const logsSnapshot = await getDocs(logsQuery);
-      
-      return logsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          timestamp: data.timestamp?.toDate() || new Date()
-        };
-      }) as SecurityLog[];
-    } catch (error: any) {
-      console.error('Error getting all security logs:', error);
-      return [];
+      throw new Error(error.message || 'Failed to create admin');
     }
   },
 
@@ -491,7 +347,7 @@ export const adminService = {
         return {
           ...data,
           uid: doc.id,
-          // Ensure surname always has a value (fallback to 'Admin' if missing)
+          // Ensure surname always has a value
           surname: data.surname || data.name || data.fullName || 'Admin',
           fullName: data.fullName || data.name || data.surname || '',
           createdAt: data.createdAt?.toDate() || new Date(),
@@ -730,6 +586,7 @@ export const adminService = {
     total: number;
     active: number;
     inactive: number;
+    pending: number;
   }> {
     try {
       const admins = await this.getAllAdmins();
@@ -738,10 +595,57 @@ export const adminService = {
         total: admins.length,
         active: admins.filter(a => a.status === 'active').length,
         inactive: admins.filter(a => a.status === 'inactive').length,
+        pending: admins.filter(a => a.status === 'pending').length,
       };
     } catch (error: any) {
       console.error('Error getting admin stats:', error);
       throw new Error(error.message || 'Failed to get admin statistics');
+    }
+  },
+
+  // Get all security logs for all admins
+  async getAllSecurityLogs(): Promise<SecurityLog[]> {
+    try {
+      const logsCollection = collection(db, 'security_logs');
+      const logsQuery = query(logsCollection, orderBy('timestamp', 'desc'));
+      const logsSnapshot = await getDocs(logsQuery);
+      
+      return logsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          timestamp: data.timestamp?.toDate() || new Date(),
+        };
+      }) as SecurityLog[];
+    } catch (error: any) {
+      console.error('Error getting all security logs:', error);
+      throw new Error(error.message || 'Failed to get security logs');
+    }
+  },
+
+  // Get security logs for a specific admin
+  async getSecurityLogs(adminUid: string): Promise<SecurityLog[]> {
+    try {
+      const logsCollection = collection(db, 'security_logs');
+      const logsQuery = query(
+        logsCollection,
+        where('targetAdminUid', '==', adminUid),
+        orderBy('timestamp', 'desc')
+      );
+      const logsSnapshot = await getDocs(logsQuery);
+      
+      return logsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          timestamp: data.timestamp?.toDate() || new Date(),
+        };
+      }) as SecurityLog[];
+    } catch (error: any) {
+      console.error('Error getting security logs:', error);
+      throw new Error(error.message || 'Failed to get security logs');
     }
   }
 };
