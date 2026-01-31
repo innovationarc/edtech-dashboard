@@ -212,7 +212,7 @@ export const authService = {
       let userCredential = null;
       
       // Check if loginId looks like an email
-      if (loginId.includes('@') && !loginId.includes('@student.local')) {
+      if (loginId.includes('@') && !loginId.includes('@student.local') && !loginId.includes('@admin.local')) {
         try {
           userCredential = await signInWithEmailAndPassword(auth, loginId, password);
           const user = userCredential.user;
@@ -238,7 +238,16 @@ export const authService = {
           throw new Error('Account not found. Please check your Student ID, phone number, or email.');
         }
         
-        const emailForAuth = userData.email || `${userData.userId || userData.phoneNumber}@student.local`;
+        // Determine email for auth based on role
+        let emailForAuth = userData.email;
+        if (!emailForAuth || !emailForAuth.includes('@')) {
+          if (userData.role === 'admin') {
+            emailForAuth = `${userData.userId || userData.phoneNumber}@admin.local`;
+          } else {
+            emailForAuth = `${userData.userId || userData.phoneNumber}@student.local`;
+          }
+        }
+        
         userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
         
         // CRITICAL: Verify user exists in Firestore after Firebase Auth login
@@ -357,7 +366,8 @@ export const authService = {
     }
   },
 
-  async generateStudentId(): Promise<string> {
+  // UPDATED: Generic function to generate user ID for ANY role
+  async generateUserId(role: string): Promise<string> {
     try {
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
@@ -365,14 +375,14 @@ export const authService = {
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
       const requestBody: any = {
-        role: 'student'
+        role: role // Pass the actual role (student, admin, teacher, etc.)
       };
 
       if (MASTER_API_KEY) {
         requestBody.apiKey = MASTER_API_KEY;
       }
 
-      console.log('🔢 Generating Student ID via api/generate-id...');
+      console.log(`🔢 Generating ${role} ID via api/generate-id...`);
 
       const response = await fetch(`${BACKEND_URL}/api/generate-id`, {
         method: 'POST',
@@ -390,28 +400,40 @@ export const authService = {
         } catch {
           errorData = { error: errorText || `Server error: ${response.status}` };
         }
-        console.error('❌ Failed to generate Student ID:', errorData.error);
-        throw new Error(errorData.error || 'Failed to generate Student ID');
+        console.error(`❌ Failed to generate ${role} ID:`, errorData.error);
+        throw new Error(errorData.error || `Failed to generate ${role} ID`);
       }
 
       const result = await response.json();
       
       if (!result.success || !result.userId) {
-        console.error('❌ Invalid response from ID generation service:', result);
+        console.error(`❌ Invalid response from ID generation service:`, result);
         throw new Error('Invalid response from ID generation service');
       }
 
-      console.log('✅ Student ID generated:', result.userId);
+      console.log(`✅ ${role} ID generated:`, result.userId);
       return result.userId;
     } catch (error: any) {
-      console.error('❌ Error generating Student ID, using fallback:', error);
-      // Fallback: generate timestamp-based ID
+      console.error(`❌ Error generating ${role} ID, using fallback:`, error);
+      
+      // Fallback: generate timestamp-based ID with appropriate prefix
       const now = new Date();
       const year = now.getFullYear().toString().slice(-2);
       const month = (now.getMonth() + 1).toString().padStart(2, '0');
-      const fallbackId = `ST-${year}${month}-${Date.now().toString().slice(-5)}`;
       
-      console.log('⚠️ Using fallback Student ID:', fallbackId);
+      // Determine prefix based on role
+      let prefix = 'ST'; // Default to student
+      if (role === 'admin') prefix = 'AD';
+      else if (role === 'teacher') prefix = 'TC';
+      else if (role === 'parent') prefix = 'PR';
+      else if (role === 'coordinator') prefix = 'CR';
+      else if (role === 'manager') prefix = 'MG';
+      else if (role === 'course_manager' || role === 'course-manager') prefix = 'CM';
+      else if (role === 'student_manager' || role === 'student-manager') prefix = 'SM';
+      
+      const fallbackId = `${prefix}-${year}${month}-${Date.now().toString().slice(-5)}`;
+      
+      console.log(`⚠️ Using fallback ${role} ID:`, fallbackId);
       return fallbackId;
     }
   },
@@ -430,7 +452,9 @@ export const authService = {
     religion: string,
     classGrade: 'class6' | 'class7' | 'class8' | 'class9' | 'class10' | 'ssc' | 'class11' | 'class12' | 'hsc' | 'diploma' | 'undergraduate' | 'graduated',
     role: 'admin' | 'manager' | 'course_manager' | 'student_manager' | 'coordinator' | 'teacher' | 'parent' | 'student' = 'student',
-    requireApproval: boolean = false
+    requireApproval: boolean = false,
+    customUserId?: string, // Allow passing custom ID (for admin creation)
+    customProfilePictureUrl?: string // Allow passing custom profile picture URL
   ): Promise<UserProfile> {
     try {
       const passwordValidation = validatePasswordStrength(password);
@@ -438,8 +462,8 @@ export const authService = {
         throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
       }
       
-      // Generate unique Student ID via api/generate-id endpoint
-      const studentId = await this.generateStudentId();
+      // Use custom ID if provided, otherwise generate based on role
+      const userId = customUserId || await this.generateUserId(role);
       const registrationNumber = `REG${new Date().getFullYear()}${Math.floor(Math.random() * 900000) + 100000}`;
       
       let initialStatus: 'active' | 'pending' = 'active';
@@ -447,13 +471,21 @@ export const authService = {
         initialStatus = 'pending';
       }
       
-      const authEmail = email && email.trim() ? email.trim() : `${studentId}@student.local`;
+      // Determine auth email based on role
+      let authEmail = email && email.trim() ? email.trim() : null;
+      if (!authEmail) {
+        if (role === 'admin') {
+          authEmail = `${userId}@admin.local`;
+        } else {
+          authEmail = `${userId}@student.local`;
+        }
+      }
       
       const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
       const user = userCredential.user;
       
       const userProfile: any = {
-        userId: studentId,
+        userId: userId, // Use the generated or custom ID
         name: fullName,
         surname,
         fullName,
@@ -482,6 +514,10 @@ export const authService = {
       
       if (bloodGroup && bloodGroup.trim()) {
         userProfile.bloodGroup = bloodGroup.trim();
+      }
+      
+      if (customProfilePictureUrl) {
+        userProfile.profilePictureUrl = customProfilePictureUrl;
       }
       
       await setDoc(doc(db, 'users', user.uid), userProfile);
