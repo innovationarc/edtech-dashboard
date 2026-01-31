@@ -260,6 +260,14 @@ export const adminService = {
     profilePictureUrl?: string
   ): Promise<Admin> {
     try {
+      // Validate required fields
+      if (!surname || surname.trim() === '') {
+        throw new Error('Surname is required');
+      }
+      if (!phone || phone.trim() === '') {
+        throw new Error('Phone number is required');
+      }
+
       // STEP 1: Generate Admin ID FIRST
       const adminId = await this.generateAdminId();
       console.log('🆔 Admin ID generated:', adminId);
@@ -272,19 +280,20 @@ export const adminService = {
       const user = userCredential.user;
       console.log('✅ Firebase Auth user created:', user.uid);
 
-      // STEP 4: Create Firestore document with Admin ID
+      // STEP 4: Create Firestore document with ALL required fields properly initialized
       const adminProfile: any = {
-        userId: adminId, // THIS IS THE CRITICAL LINE - Admin ID is set here
-        surname,
-        fullName: fullName || '',
-        dob: dob || '',
-        phoneNumber: phone,
-        gender: gender || '',
-        bloodGroup: bloodGroup || '',
-        religion: religion || '',
-        address: address || '',
-        birthCertificateNumber: birthCertificateNumber || '',
-        nid: nid || '',
+        userId: adminId, // Admin ID with AD prefix
+        surname: surname.trim(), // REQUIRED - must not be empty
+        fullName: fullName && fullName.trim() ? fullName.trim() : surname.trim(), // Default to surname if fullName is empty
+        name: fullName && fullName.trim() ? fullName.trim() : surname.trim(), // Add 'name' field for compatibility
+        dob: dob && dob.trim() ? dob.trim() : '',
+        phoneNumber: phone.trim(), // REQUIRED
+        gender: gender && gender.trim() ? gender.trim() : '',
+        bloodGroup: bloodGroup && bloodGroup.trim() ? bloodGroup.trim() : '',
+        religion: religion && religion.trim() ? religion.trim() : '',
+        address: address && address.trim() ? address.trim() : '',
+        birthCertificateNumber: birthCertificateNumber && birthCertificateNumber.trim() ? birthCertificateNumber.trim() : '',
+        nid: nid && nid.trim() ? nid.trim() : '',
         role: 'admin',
         status: 'active',
         createdAt: Timestamp.now(),
@@ -298,13 +307,14 @@ export const adminService = {
       }
 
       // Add profile picture if provided
-      if (profilePictureUrl) {
-        adminProfile.profilePictureUrl = profilePictureUrl;
+      if (profilePictureUrl && profilePictureUrl.trim()) {
+        adminProfile.profilePictureUrl = profilePictureUrl.trim();
       }
 
       // STEP 5: Save to Firestore with the Admin ID
       await setDoc(doc(db, 'users', user.uid), adminProfile);
       console.log('✅ Firestore document created with Admin ID:', adminId);
+      console.log('✅ Admin profile:', adminProfile);
 
       // STEP 6: Log admin creation in security logs
       try {
@@ -312,12 +322,12 @@ export const adminService = {
           action: 'admin_created',
           targetAdminUid: user.uid,
           targetAdminUserId: adminId,
-          targetAdminSurname: surname,
+          targetAdminSurname: surname.trim(),
           performedByUid: createdByAdminUid,
           performedByUserId: createdByAdminId,
           performedBySurname: createdByAdminSurname,
           timestamp: Timestamp.now(),
-          details: `Admin ${surname} (${adminId}) was created`
+          details: `Admin ${surname.trim()} (${adminId}) was created`
         });
       } catch (logError) {
         console.warn('⚠️ Failed to log admin creation:', logError);
@@ -326,26 +336,26 @@ export const adminService = {
       // STEP 7: Send SMS notification to new admin
       await sendAdminCreationSMS(phoneNumber, adminId);
 
-      // STEP 8: Return admin object
+      // STEP 8: Return admin object with all fields properly set
       return {
         uid: user.uid,
         userId: adminId,
-        surname,
-        fullName: fullName || '',
-        email: email || '',
-        phoneNumber: phone,
-        dob: dob || '',
-        gender: gender as any,
-        bloodGroup: bloodGroup as any,
-        religion: religion || '',
-        address: address || '',
-        birthCertificateNumber: birthCertificateNumber || '',
-        nid: nid || '',
+        surname: surname.trim(),
+        fullName: fullName && fullName.trim() ? fullName.trim() : surname.trim(),
+        email: email && email.trim() ? email.trim() : undefined,
+        phoneNumber: phone.trim(),
+        dob: dob && dob.trim() ? dob.trim() : undefined,
+        gender: gender && gender.trim() ? (gender.trim() as any) : undefined,
+        bloodGroup: bloodGroup && bloodGroup.trim() ? (bloodGroup.trim() as any) : undefined,
+        religion: religion && religion.trim() ? religion.trim() : undefined,
+        address: address && address.trim() ? address.trim() : undefined,
+        birthCertificateNumber: birthCertificateNumber && birthCertificateNumber.trim() ? birthCertificateNumber.trim() : undefined,
+        nid: nid && nid.trim() ? nid.trim() : undefined,
         role: 'admin',
         status: 'active',
         createdAt: new Date(),
         createdBy: createdByAdminId,
-        profilePictureUrl: profilePictureUrl || undefined
+        profilePictureUrl: profilePictureUrl && profilePictureUrl.trim() ? profilePictureUrl.trim() : undefined
       };
     } catch (error: any) {
       console.error('❌ Error creating admin:', error);
@@ -481,6 +491,9 @@ export const adminService = {
         return {
           ...data,
           uid: doc.id,
+          // Ensure surname always has a value (fallback to 'Admin' if missing)
+          surname: data.surname || data.name || data.fullName || 'Admin',
+          fullName: data.fullName || data.name || data.surname || '',
           createdAt: data.createdAt?.toDate() || new Date(),
           lastLogin: data.lastLogin?.toDate(),
         };
@@ -509,6 +522,9 @@ export const adminService = {
       return {
         ...adminData,
         uid: adminDoc.id,
+        // Ensure surname always has a value
+        surname: adminData.surname || adminData.name || adminData.fullName || 'Admin',
+        fullName: adminData.fullName || adminData.name || adminData.surname || '',
         createdAt: adminData.createdAt?.toDate() || new Date(),
         lastLogin: adminData.lastLogin?.toDate(),
       } as Admin;
@@ -527,6 +543,11 @@ export const adminService = {
     try {
       const adminRef = doc(db, 'users', uid);
       const updateData = { ...updates };
+      
+      // Ensure surname is never empty
+      if (updateData.surname !== undefined && (!updateData.surname || updateData.surname.trim() === '')) {
+        throw new Error('Surname cannot be empty');
+      }
       
       // Convert dates to Timestamps for Firestore
       if (updateData.createdAt) {
@@ -652,12 +673,12 @@ export const adminService = {
             action: 'admin_deleted',
             targetAdminUid: uid,
             targetAdminUserId: adminData.userId || 'N/A',
-            targetAdminSurname: adminData.surname || 'N/A',
+            targetAdminSurname: adminData.surname || adminData.name || 'N/A',
             performedByUid: deletedByAdmin.uid,
             performedByUserId: deletedByAdmin.userId || 'N/A',
             performedBySurname: deletedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
-            details: `Admin ${adminData.surname} (${adminData.userId}) was deleted`
+            details: `Admin ${adminData.surname || adminData.name} (${adminData.userId}) was deleted`
           });
         } catch (logError) {
           console.warn('⚠️ Failed to log admin deletion:', logError);
@@ -685,6 +706,8 @@ export const adminService = {
         return {
           ...data,
           uid: doc.id,
+          surname: data.surname || data.name || data.fullName || 'Admin',
+          fullName: data.fullName || data.name || data.surname || '',
           createdAt: data.createdAt?.toDate() || new Date(),
           lastLogin: data.lastLogin?.toDate(),
         };
