@@ -38,15 +38,18 @@ export interface Admin {
   lastLogin?: Date;
 }
 
-export interface PasswordResetLog {
+export interface SecurityLog {
+  id?: string;
+  action: 'password_reset' | 'admin_created' | 'admin_edited' | 'admin_deleted';
   targetAdminUid: string;
   targetAdminUserId: string;
   targetAdminSurname: string;
-  resetByUid: string;
-  resetByUserId: string;
-  resetBySurname: string;
+  performedByUid: string;
+  performedByUserId: string;
+  performedBySurname: string;
   timestamp: Date;
   reason?: string;
+  details?: string;
 }
 
 // GSM 7-bit character set - extended
@@ -171,33 +174,33 @@ Ed-tech Team`;
 };
 
 export const adminService = {
-  // Generate Admin ID in format: AD-YYMM-XXXXX
+  // Generate Admin ID using generate-id.ts API
   async generateAdminId(): Promise<string> {
     try {
-      // Call backend API to generate ID
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-      const response = await fetch(`${BACKEND_URL}/api/generate-admin-id`, {
+      const response = await fetch(`${BACKEND_URL}/api/generate-id`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          role: 'admin',
           apiKey: MASTER_API_KEY
         })
       });
 
       const data = await response.json();
       
-      if (!data.success || !data.adminId) {
+      if (!data.success || !data.userId) {
         throw new Error('Failed to generate Admin ID');
       }
 
-      console.log('✅ Generated Admin ID:', data.adminId);
-      return data.adminId;
+      console.log('✅ Generated Admin ID:', data.userId);
+      return data.userId;
     } catch (error: any) {
       console.error('Error generating Admin ID:', error);
       // Fallback to timestamp-based ID
@@ -226,13 +229,15 @@ export const adminService = {
     birthCertificateNumber: string,
     nid: string,
     createdByAdminId: string,
+    createdByAdminUid: string,
+    createdByAdminSurname: string,
     profilePictureUrl?: string
   ): Promise<Admin> {
     try {
       // Generate Admin ID
       const adminId = await this.generateAdminId();
 
-      // Create user in Firebase Auth and Firestore
+      // Create user in Firebase Auth and Firestore (no email/phone uniqueness check)
       const userProfile = await authService.createUser(
         phoneNumber,
         email,
@@ -261,6 +266,19 @@ export const adminService = {
         createdAt: Timestamp.now(),
         status: 'active',
         ...(profilePictureUrl && { profilePictureUrl })
+      });
+
+      // Log admin creation in security logs
+      await addDoc(collection(db, 'security_logs'), {
+        action: 'admin_created',
+        targetAdminUid: userProfile.uid,
+        targetAdminUserId: adminId,
+        targetAdminSurname: surname,
+        performedByUid: createdByAdminUid,
+        performedByUserId: createdByAdminId,
+        performedBySurname: createdByAdminSurname,
+        timestamp: Timestamp.now(),
+        details: `Admin ${surname} (${adminId}) was created`
       });
 
       // Send SMS notification to new admin
@@ -293,7 +311,7 @@ export const adminService = {
     }
   },
 
-  // Reset admin password
+  // Reset admin password using password-reset.ts API
   async resetAdminPassword(
     targetAdminUid: string,
     newPassword: string,
@@ -332,16 +350,18 @@ export const adminService = {
         throw new Error(errorData.error || 'Failed to reset password');
       }
 
-      // Log the password reset
-      await addDoc(collection(db, 'password_reset_logs'), {
+      // Log the password reset in security logs
+      await addDoc(collection(db, 'security_logs'), {
+        action: 'password_reset',
         targetAdminUid: targetAdmin.uid,
-        targetAdminUserId: targetAdmin.userId,
-        targetAdminSurname: targetAdmin.surname,
-        resetByUid: resetByAdmin.uid,
-        resetByUserId: resetByAdmin.userId,
-        resetBySurname: resetByAdmin.surname,
+        targetAdminUserId: targetAdmin.userId || 'N/A',
+        targetAdminSurname: targetAdmin.surname || 'N/A',
+        performedByUid: resetByAdmin.uid,
+        performedByUserId: resetByAdmin.userId || 'N/A',
+        performedBySurname: resetByAdmin.surname || 'N/A',
         timestamp: Timestamp.now(),
-        reason: reason || 'No reason provided'
+        reason: reason || 'No reason provided',
+        details: `Password reset for ${targetAdmin.surname} (${targetAdmin.userId})`
       });
 
       console.log('✅ Password reset successful and logged');
@@ -351,10 +371,10 @@ export const adminService = {
     }
   },
 
-  // Get password reset logs for an admin
-  async getPasswordResetLogs(adminUid: string): Promise<PasswordResetLog[]> {
+  // Get security logs for an admin
+  async getSecurityLogs(adminUid: string): Promise<SecurityLog[]> {
     try {
-      const logsCollection = collection(db, 'password_reset_logs');
+      const logsCollection = collection(db, 'security_logs');
       const logsQuery = query(
         logsCollection,
         where('targetAdminUid', '==', adminUid),
@@ -366,20 +386,21 @@ export const adminService = {
       return logsSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
+          id: doc.id,
           ...data,
           timestamp: data.timestamp?.toDate() || new Date()
         };
-      }) as PasswordResetLog[];
+      }) as SecurityLog[];
     } catch (error: any) {
-      console.error('Error getting password reset logs:', error);
+      console.error('Error getting security logs:', error);
       return [];
     }
   },
 
-  // Get all password reset logs
-  async getAllPasswordResetLogs(): Promise<PasswordResetLog[]> {
+  // Get all security logs
+  async getAllSecurityLogs(): Promise<SecurityLog[]> {
     try {
-      const logsCollection = collection(db, 'password_reset_logs');
+      const logsCollection = collection(db, 'security_logs');
       const logsQuery = query(logsCollection, orderBy('timestamp', 'desc'));
       
       const logsSnapshot = await getDocs(logsQuery);
@@ -387,12 +408,13 @@ export const adminService = {
       return logsSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
+          id: doc.id,
           ...data,
           timestamp: data.timestamp?.toDate() || new Date()
         };
-      }) as PasswordResetLog[];
+      }) as SecurityLog[];
     } catch (error: any) {
-      console.error('Error getting all password reset logs:', error);
+      console.error('Error getting all security logs:', error);
       return [];
     }
   },
@@ -449,7 +471,11 @@ export const adminService = {
   },
 
   // Update admin
-  async updateAdmin(uid: string, updates: Partial<Admin>): Promise<void> {
+  async updateAdmin(
+    uid: string, 
+    updates: Partial<Admin>, 
+    updatedByAdmin?: Admin
+  ): Promise<void> {
     try {
       const adminRef = doc(db, 'users', uid);
       const updateData = { ...updates };
@@ -466,13 +492,35 @@ export const adminService = {
         ...updateData,
         updatedAt: Timestamp.now()
       });
+
+      // Log admin edit in security logs
+      if (updatedByAdmin) {
+        const targetAdmin = await this.getAdminById(uid);
+        if (targetAdmin) {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'admin_edited',
+            targetAdminUid: uid,
+            targetAdminUserId: targetAdmin.userId || 'N/A',
+            targetAdminSurname: targetAdmin.surname || 'N/A',
+            performedByUid: updatedByAdmin.uid,
+            performedByUserId: updatedByAdmin.userId || 'N/A',
+            performedBySurname: updatedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            details: `Admin details updated for ${targetAdmin.surname} (${targetAdmin.userId})`
+          });
+        }
+      }
     } catch (error: any) {
       throw new Error(error.message);
     }
   },
 
-  // Delete admin
-  async deleteAdmin(uid: string, userEmail?: string): Promise<void> {
+  // Delete admin using delete-user.ts and delete-profile-picture.ts
+  async deleteAdmin(
+    uid: string, 
+    userEmail?: string,
+    deletedByAdmin?: Admin
+  ): Promise<void> {
     try {
       // Get admin data first to check for profile picture URL
       const adminDoc = await getDoc(doc(db, 'users', uid));
@@ -508,7 +556,7 @@ export const adminService = {
         }
       }
       
-      // STEP 3: Optionally attempt to delete from Firebase Auth (non-critical)
+      // STEP 3: Delete from Firebase Auth using delete-user.ts
       try {
         const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                            import.meta.env.VITE_API_URL ||
@@ -530,6 +578,21 @@ export const adminService = {
       } catch (authError) {
         // Auth deletion failure is non-critical
         console.warn('Failed to delete from Auth:', authError);
+      }
+
+      // STEP 4: Log admin deletion in security logs
+      if (deletedByAdmin && adminData) {
+        await addDoc(collection(db, 'security_logs'), {
+          action: 'admin_deleted',
+          targetAdminUid: uid,
+          targetAdminUserId: adminData.userId || 'N/A',
+          targetAdminSurname: adminData.surname || 'N/A',
+          performedByUid: deletedByAdmin.uid,
+          performedByUserId: deletedByAdmin.userId || 'N/A',
+          performedBySurname: deletedByAdmin.surname || 'N/A',
+          timestamp: Timestamp.now(),
+          details: `Admin ${adminData.surname} (${adminData.userId}) was deleted`
+        });
       }
       
     } catch (error: any) {
