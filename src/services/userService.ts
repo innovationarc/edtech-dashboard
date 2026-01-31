@@ -27,6 +27,31 @@ export interface User extends UserProfile {
   profilePictureUrl?: string;
 }
 
+/**
+ * Helper function to ensure user data has all required fields
+ * This fixes old admin accounts that might be missing 'name' or 'surname' fields
+ */
+const ensureUserFields = (userData: any): any => {
+  const fixed = { ...userData };
+  
+  // Ensure 'name' field exists (fallback chain: fullName -> surname -> 'User')
+  if (!fixed.name || fixed.name.trim() === '') {
+    fixed.name = fixed.fullName || fixed.surname || 'User';
+  }
+  
+  // Ensure 'surname' field exists (fallback chain: name -> fullName -> 'User')
+  if (!fixed.surname || fixed.surname.trim() === '') {
+    fixed.surname = fixed.name || fixed.fullName || 'User';
+  }
+  
+  // Ensure 'fullName' field exists (fallback chain: name -> surname -> 'User')
+  if (!fixed.fullName || fixed.fullName.trim() === '') {
+    fixed.fullName = fixed.name || fixed.surname || 'User';
+  }
+  
+  return fixed;
+};
+
 export const userService = {
   // Upload profile picture to Firebase Storage
   async uploadProfilePicture(file: File, userId: string): Promise<string> {
@@ -52,12 +77,15 @@ export const userService = {
       return usersSnapshot.docs.map(doc => {
         const data = doc.data();
         
+        // Ensure all required fields exist (fixes old admin accounts)
+        const fixedData = ensureUserFields(data);
+        
         return {
-          ...data,
+          ...fixedData,
           uid: doc.id,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastLogin: data.lastLogin?.toDate(),
-          approvedAt: data.approvedAt?.toDate()
+          createdAt: fixedData.createdAt?.toDate() || new Date(),
+          lastLogin: fixedData.lastLogin?.toDate(),
+          approvedAt: fixedData.approvedAt?.toDate()
         };
       }) as User[];
     } catch (error: any) {
@@ -78,12 +106,14 @@ export const userService = {
       
       return usersSnapshot.docs.map(doc => {
         const data = doc.data();
+        const fixedData = ensureUserFields(data);
+        
         return {
-          ...data,
+          ...fixedData,
           uid: doc.id,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastLogin: data.lastLogin?.toDate(),
-          approvedAt: data.approvedAt?.toDate()
+          createdAt: fixedData.createdAt?.toDate() || new Date(),
+          lastLogin: fixedData.lastLogin?.toDate(),
+          approvedAt: fixedData.approvedAt?.toDate()
         };
       }) as User[];
     } catch (error: any) {
@@ -104,12 +134,14 @@ export const userService = {
       
       return usersSnapshot.docs.map(doc => {
         const data = doc.data();
+        const fixedData = ensureUserFields(data);
+        
         return {
-          ...data,
+          ...fixedData,
           uid: doc.id,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastLogin: data.lastLogin?.toDate(),
-          approvedAt: data.approvedAt?.toDate()
+          createdAt: fixedData.createdAt?.toDate() || new Date(),
+          lastLogin: fixedData.lastLogin?.toDate(),
+          approvedAt: fixedData.approvedAt?.toDate()
         };
       }) as User[];
     } catch (error: any) {
@@ -130,12 +162,14 @@ export const userService = {
       
       return usersSnapshot.docs.map(doc => {
         const data = doc.data();
+        const fixedData = ensureUserFields(data);
+        
         return {
-          ...data,
+          ...fixedData,
           uid: doc.id,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastLogin: data.lastLogin?.toDate(),
-          approvedAt: data.approvedAt?.toDate()
+          createdAt: fixedData.createdAt?.toDate() || new Date(),
+          lastLogin: fixedData.lastLogin?.toDate(),
+          approvedAt: fixedData.approvedAt?.toDate()
         };
       }) as User[];
     } catch (error: any) {
@@ -153,12 +187,16 @@ export const userService = {
       }
       
       const userData = userDoc.data();
+      
+      // Ensure all required fields exist (fixes old admin accounts)
+      const fixedData = ensureUserFields(userData);
+      
       return {
-        ...userData,
+        ...fixedData,
         uid: userDoc.id,
-        createdAt: userData.createdAt?.toDate() || new Date(),
-        lastLogin: userData.lastLogin?.toDate(),
-        approvedAt: userData.approvedAt?.toDate()
+        createdAt: fixedData.createdAt?.toDate() || new Date(),
+        lastLogin: fixedData.lastLogin?.toDate(),
+        approvedAt: fixedData.approvedAt?.toDate()
       } as User;
     } catch (error: any) {
       throw new Error(error.message);
@@ -269,12 +307,14 @@ export const userService = {
       
       const users = usersSnapshot.docs.map(doc => {
         const data = doc.data();
+        const fixedData = ensureUserFields(data);
+        
         return {
-          ...data,
+          ...fixedData,
           uid: doc.id,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          lastLogin: data.lastLogin?.toDate(),
-          approvedAt: data.approvedAt?.toDate()
+          createdAt: fixedData.createdAt?.toDate() || new Date(),
+          lastLogin: fixedData.lastLogin?.toDate(),
+          approvedAt: fixedData.approvedAt?.toDate()
         };
       }) as User[];
       
