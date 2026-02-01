@@ -6,7 +6,7 @@ interface UserSearchRequest {
   loginId?: string;
   phoneNumber?: string;
   email?: string;
-  purpose?: 'password-reset' | 'user-lookup';
+  purpose?: 'password-reset' | 'user-lookup' | 'user-id-recovery';
   checkDuplicates?: boolean;
   apiKey?: string;
 }
@@ -15,6 +15,15 @@ interface UserSearchResponse {
   success: boolean;
   phoneNumber?: string;
   userData?: any;
+  users?: Array<{
+    uid: string;
+    userId: string;
+    surname: string;
+    role: string;
+    status: string;
+    fullName?: string;
+    name?: string;
+  }>;
   message?: string;
   error?: string;
   exists?: boolean;
@@ -138,6 +147,49 @@ export default async function handler(
     }
 
     const db = admin.firestore();
+
+    // ==========================================
+    // USER ID RECOVERY MODE (NEW)
+    // ==========================================
+    if (purpose === 'user-id-recovery' && phoneNumber) {
+      console.log('🔍 User ID recovery request for phone:', phoneNumber.substring(0, 5) + '****');
+
+      // Find all users with this phone number
+      const phoneQuery = await db.collection('users')
+        .where('phoneNumber', '==', phoneNumber)
+        .get();
+
+      if (phoneQuery.empty) {
+        console.log('❌ No users found with this phone number');
+        return res.status(404).json({
+          success: false,
+          error: 'No users found with this phone number',
+        });
+      }
+
+      // Extract user data
+      const users = phoneQuery.docs.map(doc => {
+        const data = doc.data();
+        return {
+          uid: doc.id,
+          userId: data.userId || 'N/A',
+          surname: data.surname || data.fullName || data.name || 'N/A',
+          role: data.role || 'N/A',
+          status: data.status || 'N/A',
+          fullName: data.fullName,
+          name: data.name
+        };
+      });
+
+      console.log(`✅ Found ${users.length} user(s) with this phone number`);
+
+      return res.status(200).json({
+        success: true,
+        users,
+        count: users.length,
+        message: `${users.length} user${users.length > 1 ? 's' : ''} found`
+      });
+    }
 
     // ==========================================
     // DUPLICATE CHECK MODE (for registration)
