@@ -21,8 +21,7 @@ interface UserData {
 
 const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) => {
   const [currentStep, setCurrentStep] = useState<'phone' | 'otp' | 'results'>('phone');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [displayPhone, setDisplayPhone] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(''); // Raw input (10 or 11 digits)
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [users, setUsers] = useState<UserData[]>([]);
   const [userCount, setUserCount] = useState(0);
@@ -32,52 +31,68 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   const [canResendOTP, setCanResendOTP] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
 
-  // Phone number formatting
-  const formatPhoneNumber = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
+  // Handle phone number input - same as RegisterModal
+  const handlePhoneNumberChange = (value: string) => {
+    // Remove all non-digit characters
+    let cleaned = value.replace(/\D/g, '');
     
-    if (numbers.startsWith('880')) {
-      const rest = numbers.substring(3);
-      if (rest.length <= 5) {
-        return `+880 ${rest}`;
-      } else if (rest.length <= 9) {
-        return `+880 ${rest.substring(0, 5)}-${rest.substring(5)}`;
-      } else {
-        return `+880 ${rest.substring(0, 5)}-${rest.substring(5, 9)}`;
-      }
-    } else if (numbers.startsWith('88')) {
-      const rest = numbers.substring(2);
-      if (rest.length <= 5) {
-        return `+880 ${rest}`;
-      } else if (rest.length <= 9) {
-        return `+880 ${rest.substring(0, 5)}-${rest.substring(5)}`;
-      } else {
-        return `+880 ${rest.substring(0, 5)}-${rest.substring(5, 9)}`;
-      }
-    } else if (numbers.startsWith('0')) {
-      const rest = numbers.substring(1);
-      if (rest.length <= 5) {
-        return `+880 ${rest}`;
-      } else if (rest.length <= 9) {
-        return `+880 ${rest.substring(0, 5)}-${rest.substring(5)}`;
-      } else {
-        return `+880 ${rest.substring(0, 5)}-${rest.substring(5, 9)}`;
-      }
-    } else {
-      if (numbers.length <= 5) {
-        return `+880 ${numbers}`;
-      } else if (numbers.length <= 9) {
-        return `+880 ${numbers.substring(0, 5)}-${numbers.substring(5)}`;
-      } else {
-        return `+880 ${numbers.substring(0, 5)}-${numbers.substring(5, 9)}`;
-      }
+    // Remove country code if user accidentally types it
+    if (cleaned.startsWith('880')) {
+      cleaned = cleaned.substring(3);
+    } else if (cleaned.startsWith('88')) {
+      cleaned = cleaned.substring(2);
     }
+    
+    // Limit to 11 digits
+    cleaned = cleaned.substring(0, 11);
+    
+    setPhoneNumber(cleaned);
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setDisplayPhone(formatted);
-    setPhoneNumber(e.target.value.replace(/\D/g, ''));
+  // Normalize phone number to 880XXXXXXXXXX format (13 digits) - same as RegisterModal
+  const normalizePhoneNumber = (phoneNumber: string): string => {
+    let cleaned = phoneNumber.replace(/\D/g, '');
+    
+    // Remove country code if present
+    if (cleaned.startsWith('880')) {
+      cleaned = cleaned.substring(3);
+    } else if (cleaned.startsWith('88')) {
+      cleaned = cleaned.substring(2);
+    }
+    
+    // Remove leading zero if present (for 11 digit numbers starting with 0)
+    if (cleaned.startsWith('0')) {
+      cleaned = cleaned.substring(1);
+    }
+    
+    // Should now have 10 digits
+    if (cleaned.length !== 10) {
+      throw new Error('Invalid phone number format');
+    }
+    
+    // Return in format: 880XXXXXXXXXX (13 digits, no + sign)
+    return `880${cleaned}`;
+  };
+
+  // Validate phone number - same as RegisterModal
+  const validatePhoneNumber = (phoneNumber: string): boolean => {
+    const cleaned = phoneNumber.replace(/\D/g, '');
+    
+    // Must be 10 or 11 digits
+    if (cleaned.length !== 10 && cleaned.length !== 11) {
+      return false;
+    }
+    
+    // If 11 digits, must start with 0
+    if (cleaned.length === 11 && !cleaned.startsWith('0')) {
+      return false;
+    }
+    
+    // Get the first digit after optional leading 0
+    const firstDigit = cleaned.startsWith('0') ? cleaned[1] : cleaned[0];
+    
+    // Must start with valid digits (1,3,4,5,6,7,8,9)
+    return ['1', '3', '4', '5', '6', '7', '8', '9'].includes(firstDigit);
   };
 
   const startResendTimer = () => {
@@ -110,13 +125,13 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
     try {
       // Validate phone number format
-      if (!otpService.validatePhoneNumber(phoneNumber)) {
-        setError('Please enter a valid Bangladeshi phone number');
+      if (!validatePhoneNumber(phoneNumber)) {
+        setError('Please enter a valid Bangladeshi phone number (10 or 11 digits)');
         setLoading(false);
         return;
       }
 
-      const normalizedPhone = otpService.normalizePhoneNumber(phoneNumber);
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
       // Search for users with this phone number using checkDuplicates
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
@@ -168,7 +183,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     setLoading(true);
 
     try {
-      const normalizedPhone = otpService.normalizePhoneNumber(phoneNumber);
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
       
       // Send OTP with user-search purpose
       const otpResult = await otpService.sendOTP(normalizedPhone, 'user-search');
@@ -236,7 +251,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     }
 
     try {
-      const normalizedPhone = otpService.normalizePhoneNumber(phoneNumber);
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
       
       // Verify OTP
       const result = await otpService.verifyOTP(normalizedPhone, otpCode, 'user-search');
@@ -278,7 +293,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     setLoading(true);
 
     try {
-      const normalizedPhone = otpService.normalizePhoneNumber(phoneNumber);
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
       const otpResult = await otpService.sendOTP(normalizedPhone, 'user-search');
       
       if (otpResult.success) {
@@ -300,6 +315,17 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
       onSignInClick();
     } else {
       onClose();
+    }
+  };
+
+  // Format phone number for display
+  const getDisplayPhoneNumber = (): string => {
+    try {
+      const normalized = normalizePhoneNumber(phoneNumber);
+      // Format as +880 XXXXX-XXXXX
+      return `+${normalized.substring(0, 3)} ${normalized.substring(3, 8)}-${normalized.substring(8)}`;
+    } catch {
+      return phoneNumber;
     }
   };
 
@@ -332,7 +358,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             </h2>
             <p className="text-gray-400 text-sm mb-6">
               {users.length} user{users.length > 1 ? 's' : ''} found with phone number<br />
-              <span className="text-white font-semibold">{otpService.formatForDisplay(phoneNumber)}</span>
+              <span className="text-white font-semibold">{getDisplayPhoneNumber()}</span>
             </p>
 
             {error && (
@@ -440,7 +466,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             </h2>
             <p className="text-gray-400 text-sm mb-6">
               Enter the 6-digit code sent to<br />
-              <span className="text-white font-semibold">{otpService.formatForDisplay(phoneNumber)}</span>
+              <span className="text-white font-semibold">{getDisplayPhoneNumber()}</span>
             </p>
 
             {error && (
@@ -562,19 +588,21 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
           <div className="space-y-5">
             <div className="group">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number *</label>
               <div className="relative">
                 <input
                   type="tel"
-                  value={displayPhone}
-                  onChange={handlePhoneChange}
+                  value={phoneNumber}
+                  onChange={(e) => handlePhoneNumberChange(e.target.value)}
                   className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
-                  placeholder="+880 12345-6789"
+                  placeholder="01XXXXXXXXX or 1XXXXXXXXX"
                   disabled={loading}
                 />
                 <Phone size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
-              <p className="text-xs text-gray-500 mt-1.5">Enter your registered Bangladeshi phone number</p>
+              <p className="text-xs text-gray-500 mt-1.5">
+                Enter 11 digits starting with 0 (e.g., 01712345678) or 10 digits starting with 1 (e.g., 1712345678)
+              </p>
             </div>
 
             {userCount === 0 && error && error.includes('No user found') && (
