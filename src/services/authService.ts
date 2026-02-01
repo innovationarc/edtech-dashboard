@@ -26,6 +26,7 @@ export interface UserProfile {
   bloodGroup?: string;
   gender?: string;
   religion?: string;
+  address?: string;
   classGrade?: 'class6' | 'class7' | 'class8' | 'class9' | 'class10' | 'ssc' | 'class11' | 'class12' | 'hsc' | 'diploma' | 'undergraduate' | 'graduated';
   role: 'admin' | 'manager' | 'course_manager' | 'student_manager' | 'coordinator' | 'teacher' | 'parent' | 'student';
   status: 'active' | 'inactive' | 'pending';
@@ -33,7 +34,6 @@ export interface UserProfile {
   lastLogin?: Date;
   approvedBy?: string;
   approvedAt?: Date;
-  address?: string;
   class?: string;
   school?: string;
   college?: string;
@@ -269,192 +269,65 @@ export const authService = {
       const user = userCredential.user;
       
       if (userData.status === 'pending') {
-        await firebaseSignOut(auth);
-        throw new Error('Your account is pending admin approval. Please wait for approval before signing in.');
+        throw new Error('Your account is pending approval. Please wait for administrator approval.');
       }
       
       if (userData.status === 'inactive') {
-        await firebaseSignOut(auth);
-        throw new Error('Your account has been deactivated. Please contact an administrator.');
+        throw new Error('Your account has been deactivated. Please contact administrator.');
       }
       
-      await setDoc(doc(db, 'users', user.uid), {
+      // Check for device change (if user has a deviceId)
+      if (userData.deviceId && userData.deviceId !== currentDeviceId) {
+        // Device change detected - we could log this or send notification
+        console.log('Device change detected for user:', userData.userId);
+      }
+      
+      // Update last login and device info
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
         lastLogin: Timestamp.now(),
-        deviceId: currentDeviceId,
-        rememberMe: rememberMe
+        deviceId: currentDeviceId
       }, { merge: true });
       
       return {
         uid: user.uid,
-        userId: userData.userId,
-        email: userData.email,
-        name: userData.name || userData.fullName,
-        surname: userData.surname,
-        fullName: userData.fullName,
-        dob: userData.dob,
-        phoneNumber: userData.phoneNumber,
-        guardianPhone: userData.guardianPhone,
-        bloodGroup: userData.bloodGroup,
-        gender: userData.gender,
-        religion: userData.religion,
-        classGrade: userData.classGrade,
-        role: userData.role,
-        status: userData.status || 'active',
-        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(),
-        lastLogin: new Date(),
-        approvedBy: userData.approvedBy,
-        approvedAt: userData.approvedAt?.toDate?.(),
-        registrationNumber: userData.registrationNumber,
-        deviceId: currentDeviceId
+        ...userData,
+        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
+        lastLogin: new Date()
       };
     } catch (error: any) {
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        throw new Error('Invalid credentials. Please check your login information and password.');
+      let errorMessage = error.message;
+      
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid password. Please try again.';
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = 'Account not found. Please check your credentials.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed login attempts. Please try again later.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your internet connection.';
       }
-      throw new Error(error.message);
+      
+      throw new Error(errorMessage);
     }
   },
 
-  async checkUserExists(phoneNumber?: string, email?: string): Promise<{ exists: boolean; field?: 'phone' | 'email'; message?: string }> {
-    try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const requestBody: any = {};
-      
-      if (phoneNumber) {
-        requestBody.phoneNumber = phoneNumber;
-      }
-      
-      if (email) {
-        requestBody.email = email;
-      }
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/api/check-user-exists`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        // If API fails, assume doesn't exist (fail gracefully)
-        return { exists: false };
-      }
-
-      const result = await response.json();
-      
-      if (result.exists) {
-        return {
-          exists: true,
-          field: result.field,
-          message: result.message
-        };
-      }
-
-      return { exists: false };
-    } catch (error: any) {
-      // If check fails, assume doesn't exist (fail gracefully)
-      return { exists: false };
-    }
-  },
-
-  // UPDATED: Generic function to generate user ID for ANY role
-  async generateUserId(role: string): Promise<string> {
-    try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const requestBody: any = {
-        role: role // Pass the actual role (student, admin, teacher, etc.)
-      };
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      console.log(`🔢 Generating ${role} ID via api/generate-id...`);
-
-      const response = await fetch(`${BACKEND_URL}/api/generate-id`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || `Server error: ${response.status}` };
-        }
-        console.error(`❌ Failed to generate ${role} ID:`, errorData.error);
-        throw new Error(errorData.error || `Failed to generate ${role} ID`);
-      }
-
-      const result = await response.json();
-      
-      if (!result.success || !result.userId) {
-        console.error(`❌ Invalid response from ID generation service:`, result);
-        throw new Error('Invalid response from ID generation service');
-      }
-
-      console.log(`✅ ${role} ID generated:`, result.userId);
-      return result.userId;
-    } catch (error: any) {
-      console.error(`❌ Error generating ${role} ID, using fallback:`, error);
-      
-      // Fallback: generate timestamp-based ID with appropriate prefix
-      const now = new Date();
-      const year = now.getFullYear().toString().slice(-2);
-      const month = (now.getMonth() + 1).toString().padStart(2, '0');
-      
-      // Determine prefix based on role
-      let prefix = 'ST'; // Default to student
-      if (role === 'admin') prefix = 'AD';
-      else if (role === 'teacher') prefix = 'TC';
-      else if (role === 'parent') prefix = 'PR';
-      else if (role === 'coordinator') prefix = 'CR';
-      else if (role === 'manager') prefix = 'MG';
-      else if (role === 'course_manager' || role === 'course-manager') prefix = 'CM';
-      else if (role === 'student_manager' || role === 'student-manager') prefix = 'SM';
-      
-      const fallbackId = `${prefix}-${year}${month}-${Date.now().toString().slice(-5)}`;
-      
-      console.log(`⚠️ Using fallback ${role} ID:`, fallbackId);
-      return fallbackId;
-    }
-  },
-
-  async createUser(
-    phoneNumber: string,
-    email: string,
+  async register(
+    email: string | undefined,
     password: string,
-    surname: string,
     fullName: string,
+    surname: string,
     dob: string,
     primaryPhone: string,
-    guardianPhone: string,
-    bloodGroup: string,
+    guardianPhone: string | undefined,
+    bloodGroup: string | undefined,
     gender: string,
-    religion: string,
+    religion: string | undefined,
     classGrade: 'class6' | 'class7' | 'class8' | 'class9' | 'class10' | 'ssc' | 'class11' | 'class12' | 'hsc' | 'diploma' | 'undergraduate' | 'graduated',
-    role: 'admin' | 'manager' | 'course_manager' | 'student_manager' | 'coordinator' | 'teacher' | 'parent' | 'student' = 'student',
-    requireApproval: boolean = false,
-    customUserId?: string, // Allow passing custom ID (for admin creation)
-    customProfilePictureUrl?: string // Allow passing custom profile picture URL
+    role: 'admin' | 'teacher' | 'student' = 'student',
+    userId: string,
+    registrationNumber: string,
+    address?: string
   ): Promise<UserProfile> {
     try {
       const passwordValidation = validatePasswordStrength(password);
@@ -462,14 +335,7 @@ export const authService = {
         throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
       }
       
-      // Use custom ID if provided, otherwise generate based on role
-      const userId = customUserId || await this.generateUserId(role);
-      const registrationNumber = `REG${new Date().getFullYear()}${Math.floor(Math.random() * 900000) + 100000}`;
-      
       let initialStatus: 'active' | 'pending' = 'active';
-      if (requireApproval && role !== 'admin' && role !== 'student') {
-        initialStatus = 'pending';
-      }
       
       // Determine auth email based on role
       let authEmail = email && email.trim() ? email.trim() : null;
@@ -485,7 +351,7 @@ export const authService = {
       const user = userCredential.user;
       
       const userProfile: any = {
-        userId: userId, // Use the generated or custom ID
+        userId: userId,
         name: fullName,
         surname,
         fullName,
@@ -516,8 +382,8 @@ export const authService = {
         userProfile.bloodGroup = bloodGroup.trim();
       }
       
-      if (customProfilePictureUrl) {
-        userProfile.profilePictureUrl = customProfilePictureUrl;
+      if (address && address.trim()) {
+        userProfile.address = address.trim();
       }
       
       await setDoc(doc(db, 'users', user.uid), userProfile);
