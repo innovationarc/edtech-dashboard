@@ -270,37 +270,26 @@ export const authService = {
         lastLogin: new Date()
       } as UserProfile;
     } catch (error: any) {
-      let errorMessage = error.message;
-      
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-        errorMessage = 'Invalid User ID or password';
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed login attempts. Please try again later.';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      }
-      
-      throw new Error(errorMessage);
+      throw new Error(error.message || 'Sign in failed');
     }
   },
 
   async signUp(
-    userId: string,
     fullName: string,
     surname: string,
     dob: string,
     primaryPhone: string,
-    guardianPhone: string,
-    gender: string,
-    bloodGroup: string,
-    religion: string,
-    address: string,
-    classGrade: string,
+    email: string,
     password: string,
-    email?: string,
-    role: 'student' | 'teacher' | 'admin' | 'parent' | 'coordinator' | 'manager' = 'student',
-    initialStatus: 'active' | 'pending' = 'pending',
-    registrationNumber?: string
+    gender: string,
+    classGrade: string,
+    role: string,
+    userId: string,
+    registrationNumber: string,
+    guardianPhone?: string,
+    religion?: string,
+    bloodGroup?: string,
+    address?: string
   ): Promise<UserProfile> {
     try {
       const passwordValidation = validatePasswordStrength(password);
@@ -308,16 +297,18 @@ export const authService = {
         throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
       }
 
-      let authEmail = email;
-      if (!authEmail || !authEmail.includes('@')) {
+      let emailForAuth = email;
+      if (!email || !email.includes('@')) {
         if (role === 'admin') {
-          authEmail = `${userId}@admin.local`;
+          emailForAuth = `${userId || primaryPhone}@admin.local`;
         } else {
-          authEmail = `${userId}@student.local`;
+          emailForAuth = `${userId || primaryPhone}@student.local`;
         }
       }
-      
-      const userCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
+
+      const initialStatus = role === 'admin' ? 'active' : 'pending';
+
+      const userCredential = await createUserWithEmailAndPassword(auth, emailForAuth, password);
       const user = userCredential.user;
       
       const userProfile: any = {
@@ -436,6 +427,77 @@ export const authService = {
       }
       
       throw new Error(errorMessage);
+    }
+  },
+
+  async getUsersByPhone(phoneNumber: string): Promise<{ success: boolean; users?: Array<{ uid: string; userId: string; surname: string; role: string; status: string; fullName?: string; name?: string; }>; count?: number; message: string }> {
+    try {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const requestBody: any = {
+        phoneNumber,
+        purpose: 'user-id-recovery'
+      };
+
+      if (MASTER_API_KEY) {
+        requestBody.apiKey = MASTER_API_KEY;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `Server error: ${response.status}` };
+        }
+        
+        if (response.status === 404) {
+          return {
+            success: false,
+            message: 'No users found with this phone number'
+          };
+        }
+        
+        throw new Error(errorData.error || 'Failed to fetch users');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'Failed to fetch users'
+        };
+      }
+      
+      return {
+        success: true,
+        users: result.users,
+        count: result.count,
+        message: result.message || 'Users retrieved successfully'
+      };
+    } catch (error: any) {
+      let errorMessage = error.message;
+      if (errorMessage.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
     }
   },
 
