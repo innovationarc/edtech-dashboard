@@ -3,8 +3,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
 
 interface UserSearchRequest {
-  loginId: string;
-  purpose: 'password-reset' | 'user-lookup';
+  loginId?: string;
+  phoneNumber?: string;
+  email?: string;
+  purpose?: 'password-reset' | 'user-lookup';
+  checkDuplicates?: boolean;
   apiKey?: string;
 }
 
@@ -14,6 +17,9 @@ interface UserSearchResponse {
   userData?: any;
   message?: string;
   error?: string;
+  exists?: boolean;
+  field?: 'phone' | 'email';
+  count?: number;
 }
 
 // Initialize Firebase Admin SDK
@@ -119,22 +125,7 @@ export default async function handler(
       });
     }
 
-    const { loginId, purpose, apiKey } = req.body as UserSearchRequest;
-
-    console.log('🔍 User search request:', {
-      purpose,
-      loginIdPrefix: loginId?.substring(0, 5) + '...',
-      hasApiKey: !!apiKey
-    });
-
-    // Validate required fields
-    if (!loginId || !purpose) {
-      console.error('❌ Missing required fields');
-      return res.status(400).json({
-        success: false,
-        error: 'Login ID and purpose are required',
-      });
-    }
+    const { loginId, phoneNumber, email, purpose, checkDuplicates, apiKey } = req.body as UserSearchRequest;
 
     // Optional: Validate API Key if MASTER_KEY is set
     const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
@@ -146,8 +137,135 @@ export default async function handler(
       });
     }
 
-    // Search for user in Firestore
     const db = admin.firestore();
+
+    // ==========================================
+    // DUPLICATE CHECK MODE (for registration)
+    // ==========================================
+    if (checkDuplicates && phoneNumber) {
+      console.log('🔍 Checking for duplicate phone numbers:', phoneNumber.substring(0, 5) + '****');
+      
+      const phoneQuery = await db.collection('users')
+        .where('phoneNumber', '==', phoneNumber)
+        .get();
+
+      const count = phoneQuery.size;
+      
+      console.log(`✅ Found ${count} account(s) with this phone number`);
+      
+      return res.status(200).json({
+        success: true,
+        count,
+        message: count > 0 ? `${count} account(s) found with this phone number` : 'No accounts found'
+      });
+    }
+
+    // ==========================================
+    // EXISTING USER CHECK MODE (deprecated - kept for backward compatibility)
+    // ==========================================
+    if (!loginId && !purpose && (phoneNumber || email)) {
+      console.log('🔍 Checking user existence:', {
+        hasPhone: !!phoneNumber,
+        hasEmail: !!email
+      });
+
+      // Check phone number in Firestore
+      if (phoneNumber) {
+        console.log('🔍 Checking phone number in Firestore:', phoneNumber.substring(0, 5) + '****');
+        const phoneQuery = await db.collection('users')
+          .where('phoneNumber', '==', phoneNumber)
+          .limit(1)
+          .get();
+
+        if (!phoneQuery.empty) {
+          console.log('⚠️ Phone number already exists in Firestore');
+          return res.status(200).json({
+            success: true,
+            exists: true,
+            field: 'phone',
+            message: 'This phone number is already registered'
+          });
+        }
+        
+        console.log('✅ Phone number available in Firestore');
+      }
+
+      // Check email in Firestore
+      if (email && email.trim() && !email.endsWith('@student.local')) {
+        console.log('🔍 Checking email in Firestore only:', email);
+        
+        const emailQuery = await db.collection('users')
+          .where('email', '==', email)
+          .limit(1)
+          .get();
+
+        if (!emailQuery.empty) {
+          console.log('⚠️ Email already exists in Firestore');
+          return res.status(200).json({
+            success: true,
+            exists: true,
+            field: 'email',
+            message: 'This email is already registered'
+          });
+        }
+        
+        // Check for orphaned auth accounts
+        try {
+          const userRecord = await admin.auth().getUserByEmail(email);
+          if (userRecord) {
+            console.log('⚠️ Orphaned auth account detected for email:', email);
+            
+            const userDoc = await db.collection('users').doc(userRecord.uid).get();
+            
+            if (!userDoc.exists()) {
+              console.log('🗑️ Deleting orphaned auth account:', userRecord.uid);
+              await admin.auth().deleteUser(userRecord.uid);
+              console.log('✅ Orphaned account deleted - email is now available');
+            } else {
+              console.log('⚠️ Email already registered with active account');
+              return res.status(200).json({
+                success: true,
+                exists: true,
+                field: 'email',
+                message: 'This email is already registered'
+              });
+            }
+          }
+        } catch (authError: any) {
+          if (authError.code === 'auth/user-not-found') {
+            console.log('✅ Email not found in Firebase Authentication');
+          } else {
+            console.error('⚠️ Error checking Firebase Auth:', authError.message);
+          }
+        }
+        
+        console.log('✅ Email available for registration');
+      }
+
+      console.log('✅ Phone/Email available for registration');
+      return res.status(200).json({
+        success: true,
+        exists: false,
+        message: 'Available'
+      });
+    }
+
+    // ==========================================
+    // USER LOOKUP MODE (for login/password reset)
+    // ==========================================
+    if (!loginId || !purpose) {
+      console.error('❌ Missing required fields for user lookup');
+      return res.status(400).json({
+        success: false,
+        error: 'Login ID and purpose are required for user lookup',
+      });
+    }
+
+    console.log('🔍 User search request:', {
+      purpose,
+      loginIdPrefix: loginId?.substring(0, 5) + '...',
+      hasApiKey: !!apiKey
+    });
     
     let userDoc = null;
     let userData = null;
