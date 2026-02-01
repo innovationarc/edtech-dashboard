@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { X, Loader, Shield, AlertCircle, CheckCircle, Phone, UserSearch, CreditCard, LogIn } from 'lucide-react';
 import { otpService } from '../../services/otpService';
-import { authService } from '../../services/authService';
 
 interface ForgotUserIdModalProps {
   onClose: () => void;
@@ -133,18 +132,68 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-      // Use authService.getUsersByPhone which uses user-search API with purpose: 'user-id-recovery'
-      // This will return ALL types of accounts (admin, teacher, student, etc.)
-      const result = await authService.getUsersByPhone(normalizedPhone);
+      // Call user-search API directly with purpose: 'user-id-recovery'
+      // This will return ALL account types (admin, teacher, student, etc.)
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const requestBody: any = {
+        phoneNumber: normalizedPhone,
+        purpose: 'user-id-recovery' // Critical: This purpose returns ALL account types
+      };
+
+      if (MASTER_API_KEY) {
+        requestBody.apiKey = MASTER_API_KEY;
+      }
+
+      console.log('🔍 Searching for users with phone:', normalizedPhone.substring(0, 5) + '****');
+      console.log('📋 Request body:', { ...requestBody, apiKey: requestBody.apiKey ? '***' : undefined });
+
+      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('📡 Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ API Error:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `Server error: ${response.status}` };
+        }
+        
+        if (response.status === 404) {
+          setError('No user found with this phone number');
+          setUserCount(0);
+          setLoading(false);
+          return;
+        }
+        
+        throw new Error(errorData.error || 'Failed to search for users');
+      }
+
+      const result = await response.json();
+      console.log('✅ API Response:', result);
 
       if (!result.success || !result.users || result.count === 0) {
         setError('No user found with this phone number');
         setUserCount(0);
       } else {
+        console.log(`✅ Found ${result.count} user(s):`, result.users);
         setUserCount(result.count);
         setSuccess(`${result.count} user${result.count > 1 ? 's' : ''} found with this phone number`);
       }
     } catch (err: any) {
+      console.error('❌ Search error:', err);
       setError(err.message || 'Failed to search for users');
     } finally {
       setLoading(false);
@@ -160,8 +209,12 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     try {
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
       
+      console.log('📤 Sending OTP to:', normalizedPhone.substring(0, 5) + '****');
+      
       // Send OTP with user-search purpose
       const otpResult = await otpService.sendOTP(normalizedPhone, 'user-search');
+      
+      console.log('📧 OTP Result:', otpResult);
       
       if (otpResult.success) {
         setSuccess(otpResult.message);
@@ -171,6 +224,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
         setError(otpResult.message);
       }
     } catch (err: any) {
+      console.error('❌ OTP send error:', err);
       setError(err.message || 'Failed to send OTP');
     } finally {
       setLoading(false);
@@ -228,12 +282,46 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     try {
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
       
+      console.log('🔐 Verifying OTP for:', normalizedPhone.substring(0, 5) + '****');
+      
       // Verify OTP
       const result = await otpService.verifyOTP(normalizedPhone, otpCode, 'user-search');
       
+      console.log('✅ OTP Verification result:', result);
+      
       if (result.success) {
-        // Fetch users using authService which uses user-search API
-        const usersResult = await authService.getUsersByPhone(normalizedPhone);
+        // Fetch users using direct API call
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                           import.meta.env.VITE_API_URL ||
+                           'https://edtech-dashboard-alpha.vercel.app';
+        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+        const requestBody: any = {
+          phoneNumber: normalizedPhone,
+          purpose: 'user-id-recovery' // Returns ALL account types
+        };
+
+        if (MASTER_API_KEY) {
+          requestBody.apiKey = MASTER_API_KEY;
+        }
+
+        console.log('🔍 Fetching users after OTP verification...');
+
+        const response = await fetch(`${BACKEND_URL}/api/user-search`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch users');
+        }
+
+        const usersResult = await response.json();
+        
+        console.log('✅ Users fetched:', usersResult);
         
         if (usersResult.success && usersResult.users && usersResult.users.length > 0) {
           setUsers(usersResult.users);
@@ -246,6 +334,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
         setError(result.message);
       }
     } catch (err: any) {
+      console.error('❌ Verification error:', err);
       setError(err.message || 'Failed to verify OTP');
     } finally {
       setLoading(false);
