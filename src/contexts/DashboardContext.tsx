@@ -4,6 +4,8 @@ import { User } from 'firebase/auth';
 import { authService, UserProfile } from '../services/authService';
 import { userService } from '../services/userService';
 import { gamificationService } from '../services/gamificationService';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 interface DashboardContextType {
   sidebarOpen: boolean;
@@ -11,7 +13,7 @@ interface DashboardContextType {
   handleMouseEnterSidebarArea: () => void;
   handleMouseLeaveSidebarArea: () => void;
   handleSearch: (query: string) => void;
-  handleSignIn: (loginId: string, password: string, rememberMe?: boolean) => Promise<void>;
+  handleSignIn: (userId: string, password: string, rememberMe?: boolean) => Promise<void>;
   handleSignOut: () => Promise<void>;
   isAuthenticated: boolean;
   user: UserProfile | null;
@@ -51,6 +53,30 @@ export const useDashboard = () => {
 interface DashboardProviderProps {
   children: ReactNode;
 }
+
+// Generate device fingerprint (same as in authService)
+const generateDeviceId = (): string => {
+  const navigator = window.navigator;
+  const screen = window.screen;
+  
+  const fingerprint = [
+    navigator.userAgent,
+    navigator.language,
+    screen.colorDepth,
+    screen.width + 'x' + screen.height,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency || 'unknown',
+  ].join('|');
+  
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  
+  return 'device_' + Math.abs(hash).toString(36);
+};
 
 export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -93,6 +119,21 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           // Get user profile from Firestore using the user's ID
           const userProfile = await userService.getUserById(firebaseUser.uid);
           if (userProfile) {
+            // CRITICAL: Device verification for single-device login enforcement
+            const currentDeviceId = generateDeviceId();
+            const storedDeviceId = userProfile.deviceId;
+            
+            // If stored device ID exists and doesn't match current device, log out
+            if (storedDeviceId && storedDeviceId !== currentDeviceId) {
+              console.log('Different device detected. Logging out from this device.');
+              await authService.signOut();
+              setUser(null);
+              setIsAuthenticated(false);
+              setSidebarOpen(false);
+              setLoading(false);
+              return;
+            }
+            
             setUser(userProfile);
             setIsAuthenticated(true);
             // Only auto-open sidebar on desktop
@@ -273,11 +314,11 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     // Implement search functionality here
   };
 
-  const handleSignIn = async (loginId: string, password: string, rememberMe: boolean = false) => {
+  const handleSignIn = async (userId: string, password: string, rememberMe: boolean = false) => {
     try {
       setLoading(true);
       // Call authService.signIn with rememberMe parameter
-      const userProfile = await authService.signIn(loginId, password, rememberMe);
+      const userProfile = await authService.signIn(userId, password, rememberMe);
       setUser(userProfile);
       setIsAuthenticated(true);
       // Only auto-open sidebar on desktop
