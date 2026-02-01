@@ -4,6 +4,7 @@ import { X, Lock, Loader, CreditCard, AlertCircle, Eye, EyeOff } from 'lucide-re
 import { useDashboard } from '../../contexts/DashboardContext';
 import RegisterModal from './RegisterModal';
 import ForgotPasswordModal from './ForgotPasswordModal';
+import ForgotUserIdModal from './ForgotUserIdModal';
 
 interface SignInModalProps {
   onClose: () => void;
@@ -111,33 +112,12 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
     );
   }
 
-  // Placeholder for ForgotUserIdModal (to be created later)
   if (showForgotUserId) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <button
-            onClick={() => setShowForgotUserId(false)}
-            className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
-          >
-            <X size={24} />
-          </button>
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-4">
-              Forgot User ID
-            </h2>
-            <p className="text-gray-400 mb-6">
-              This feature will be available soon. Please contact your administrator for assistance.
-            </p>
-            <button
-              onClick={() => setShowForgotUserId(false)}
-              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
-            >
-              Back to Sign In
-            </button>
-          </div>
-        </div>
-      </div>
+      <ForgotUserIdModal
+        onClose={() => setShowForgotUserId(false)}
+        onSignInClick={() => setShowForgotUserId(false)}
+      />
     );
   }
 
