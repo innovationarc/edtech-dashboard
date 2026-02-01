@@ -8,9 +8,11 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
   User,
-  sendPasswordResetEmail
+  setPersistence,
+  browserSessionPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, Timestamp, query, collection, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
 export interface UserProfile {
@@ -43,31 +45,6 @@ export interface UserProfile {
   deviceId?: string;
   lastLoginIp?: string;
 }
-
-// Helper function to normalize phone number to 880XXXXXXXXXX format
-const normalizePhoneNumber = (phoneNumber: string): string => {
-  let cleaned = phoneNumber.replace(/\D/g, '');
-  
-  // Remove country code if present
-  if (cleaned.startsWith('880')) {
-    cleaned = cleaned.substring(3);
-  } else if (cleaned.startsWith('88')) {
-    cleaned = cleaned.substring(2);
-  }
-  
-  // Remove leading zero if present
-  if (cleaned.startsWith('0')) {
-    cleaned = cleaned.substring(1);
-  }
-  
-  // Should now have 10 digits
-  if (cleaned.length !== 10) {
-    throw new Error('Invalid phone number format');
-  }
-  
-  // Return in format: 880XXXXXXXXXX (no + sign)
-  return `880${cleaned}`;
-};
 
 // Password strength validation
 export const validatePasswordStrength = (password: string): {
@@ -123,8 +100,8 @@ export const validatePasswordStrength = (password: string): {
   };
 };
 
-// Helper function to find user by Student ID, Phone Number, or Email via BACKEND API
-const findUserByLoginId = async (loginId: string): Promise<any> => {
+// Helper function to find user by User ID via BACKEND API
+const findUserByUserId = async (userId: string): Promise<any> => {
   try {
     const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                        import.meta.env.VITE_API_URL ||
@@ -132,7 +109,7 @@ const findUserByLoginId = async (loginId: string): Promise<any> => {
     const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
     const requestBody: any = {
-      loginId,
+      loginId: userId, // User ID only
       purpose: 'user-lookup'
     };
 
@@ -157,7 +134,6 @@ const findUserByLoginId = async (loginId: string): Promise<any> => {
         errorData = { error: errorText || `Server error: ${response.status}` };
       }
       
-      // If 404, user not found
       if (response.status === 404) {
         return null;
       }
@@ -171,7 +147,6 @@ const findUserByLoginId = async (loginId: string): Promise<any> => {
       return null;
     }
     
-    // Return user data from backend
     return result.userData;
     
   } catch (error: any) {
@@ -203,143 +178,138 @@ const generateDeviceId = (): string => {
   return 'device_' + Math.abs(hash).toString(36);
 };
 
+// Helper function to get client IP
+async function getClientIp(): Promise<string> {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json');
+    const data = await response.json();
+    return data.ip || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export const authService = {
-  async signIn(loginId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
+  async signIn(userId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
       const currentDeviceId = generateDeviceId();
       
-      let userData = null;
-      let userCredential = null;
-      
-      // Check if loginId looks like an email
-      if (loginId.includes('@') && !loginId.includes('@student.local') && !loginId.includes('@admin.local')) {
-        try {
-          userCredential = await signInWithEmailAndPassword(auth, loginId, password);
-          const user = userCredential.user;
-          
-          // CRITICAL: Check if user exists in Firestore
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (!userDoc.exists()) {
-            await firebaseSignOut(auth);
-            throw new Error('Account not found in database. Please contact administrator.');
-          }
-          
-          userData = { uid: user.uid, ...userDoc.data() };
-        } catch (error) {
-          // Continue to backend search if direct email login fails
-        }
+      // Set persistence based on rememberMe
+      // If rememberMe is false, use session persistence (logout when browser closes)
+      // If rememberMe is true, use local persistence (stay logged in)
+      if (rememberMe) {
+        await setPersistence(auth, browserLocalPersistence);
+      } else {
+        await setPersistence(auth, browserSessionPersistence);
       }
       
-      // If direct email login failed or loginId is not email, use backend API
+      // Search for user by User ID only (no email or phone number login)
+      const userData = await findUserByUserId(userId);
+      
       if (!userData) {
-        userData = await findUserByLoginId(loginId);
-        
-        if (!userData) {
-          throw new Error('Account not found. Please check your Student ID, phone number, or email.');
-        }
-        
-        // Determine email for auth based on role
-        let emailForAuth = userData.email;
-        if (!emailForAuth || !emailForAuth.includes('@')) {
-          if (userData.role === 'admin') {
-            emailForAuth = `${userData.userId || userData.phoneNumber}@admin.local`;
-          } else {
-            emailForAuth = `${userData.userId || userData.phoneNumber}@student.local`;
-          }
-        }
-        
-        userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
-        
-        // CRITICAL: Verify user exists in Firestore after Firebase Auth login
-        const user = userCredential.user;
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (!userDoc.exists()) {
-          await firebaseSignOut(auth);
-          throw new Error('Account not found in database. Please contact administrator.');
-        }
-        
-        // Update userData with Firestore data
-        userData = { uid: user.uid, ...userDoc.data() };
+        throw new Error('Account not found. Please check your User ID.');
       }
       
-      if (!userData || !userCredential) {
-        throw new Error('Login failed. Please try again.');
+      // Determine email for auth based on role
+      let emailForAuth = userData.email;
+      if (!emailForAuth || !emailForAuth.includes('@')) {
+        if (userData.role === 'admin') {
+          emailForAuth = `${userData.userId || userData.phoneNumber}@admin.local`;
+        } else {
+          emailForAuth = `${userData.userId || userData.phoneNumber}@student.local`;
+        }
       }
       
+      const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
+      
+      // CRITICAL: Verify user exists in Firestore after Firebase Auth login
       const user = userCredential.user;
-      
-      if (userData.status === 'pending') {
-        throw new Error('Your account is pending approval. Please wait for administrator approval.');
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (!userDoc.exists()) {
+        await firebaseSignOut(auth);
+        throw new Error('Account not found in database. Please contact administrator.');
       }
       
-      if (userData.status === 'inactive') {
-        throw new Error('Your account has been deactivated. Please contact administrator.');
+      // Update userData with Firestore data
+      const firestoreData = userDoc.data();
+      
+      if (firestoreData.status === 'pending') {
+        await firebaseSignOut(auth);
+        throw new Error('Your account is pending approval. Please wait for an administrator to approve your account.');
       }
       
-      // Check for device change (if user has a deviceId)
-      if (userData.deviceId && userData.deviceId !== currentDeviceId) {
-        // Device change detected - we could log this or send notification
-        console.log('Device change detected for user:', userData.userId);
+      if (firestoreData.status === 'inactive') {
+        await firebaseSignOut(auth);
+        throw new Error('Your account has been deactivated. Please contact support.');
       }
       
-      // Update last login and device info
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        lastLogin: Timestamp.now(),
-        deviceId: currentDeviceId
-      }, { merge: true });
+      // Device management: Only one device can be logged in at a time
+      const storedDeviceId = firestoreData.deviceId;
+      
+      if (storedDeviceId && storedDeviceId !== currentDeviceId) {
+        // Different device detected - log out from other device by updating deviceId
+        // This will cause the other device to be logged out on next auth state check
+        await updateDoc(doc(db, 'users', user.uid), {
+          deviceId: currentDeviceId,
+          lastLogin: Timestamp.now(),
+          lastLoginIp: await getClientIp()
+        });
+      } else {
+        // Same device or first login - just update lastLogin
+        await updateDoc(doc(db, 'users', user.uid), {
+          deviceId: currentDeviceId,
+          lastLogin: Timestamp.now(),
+          lastLoginIp: await getClientIp()
+        });
+      }
       
       return {
         uid: user.uid,
-        ...userData,
-        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt),
+        ...firestoreData,
+        createdAt: firestoreData.createdAt?.toDate() || new Date(),
         lastLogin: new Date()
-      };
+      } as UserProfile;
     } catch (error: any) {
       let errorMessage = error.message;
       
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        errorMessage = 'Invalid password. Please try again.';
-      } else if (error.code === 'auth/user-not-found') {
-        errorMessage = 'Account not found. Please check your credentials.';
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        errorMessage = 'Invalid User ID or password';
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = 'Too many failed login attempts. Please try again later.';
       } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your internet connection.';
+        errorMessage = 'Network error. Please check your connection and try again.';
       }
       
       throw new Error(errorMessage);
     }
   },
 
-  async register(
-    email: string | undefined,
-    password: string,
+  async signUp(
+    userId: string,
     fullName: string,
     surname: string,
     dob: string,
     primaryPhone: string,
-    guardianPhone: string | undefined,
-    bloodGroup: string | undefined,
+    guardianPhone: string,
     gender: string,
-    religion: string | undefined,
-    classGrade: 'class6' | 'class7' | 'class8' | 'class9' | 'class10' | 'ssc' | 'class11' | 'class12' | 'hsc' | 'diploma' | 'undergraduate' | 'graduated',
-    role: 'admin' | 'teacher' | 'student' = 'student',
-    userId: string,
-    registrationNumber: string,
-    address?: string
+    bloodGroup: string,
+    religion: string,
+    address: string,
+    classGrade: string,
+    password: string,
+    email?: string,
+    role: 'student' | 'teacher' | 'admin' | 'parent' | 'coordinator' | 'manager' = 'student',
+    initialStatus: 'active' | 'pending' = 'pending',
+    registrationNumber?: string
   ): Promise<UserProfile> {
     try {
       const passwordValidation = validatePasswordStrength(password);
       if (!passwordValidation.isStrong) {
         throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
       }
-      
-      let initialStatus: 'active' | 'pending' = 'active';
-      
-      // Determine auth email based on role
-      let authEmail = email && email.trim() ? email.trim() : null;
-      if (!authEmail) {
+
+      let authEmail = email;
+      if (!authEmail || !authEmail.includes('@')) {
         if (role === 'admin') {
           authEmail = `${userId}@admin.local`;
         } else {
@@ -551,6 +521,13 @@ export const authService = {
 
   async signOut(): Promise<void> {
     try {
+      // Clear device ID on sign out
+      const user = auth.currentUser;
+      if (user) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          deviceId: null
+        });
+      }
       await firebaseSignOut(auth);
     } catch (error: any) {
       throw new Error(error.message);
