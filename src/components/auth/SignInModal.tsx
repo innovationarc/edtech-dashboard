@@ -1,6 +1,6 @@
 // src/components/auth/SignInModal.tsx
 import { useState, useEffect } from 'react';
-import { X, Lock, Loader, Smartphone, CreditCard, AlertCircle, Mail, Phone, Eye, EyeOff } from 'lucide-react';
+import { X, Lock, Loader, CreditCard, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import RegisterModal from './RegisterModal';
 import ForgotPasswordModal from './ForgotPasswordModal';
@@ -11,12 +11,13 @@ interface SignInModalProps {
 
 const SignInModal = ({ onClose }: SignInModalProps) => {
   const { handleSignIn } = useDashboard();
-  const [loginId, setLoginId] = useState('');
+  const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showForgotUserId, setShowForgotUserId] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [captchaLoaded, setCaptchaLoaded] = useState(false);
@@ -61,7 +62,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
     setError('');
     setLoading(true);
 
-    if (!loginId || !password) {
+    if (!userId || !password) {
       setError('Please fill in all fields');
       setLoading(false);
       return;
@@ -77,7 +78,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
     }
 
     try {
-      await handleSignIn(loginId, password, rememberMe);
+      await handleSignIn(userId, password, rememberMe);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Invalid credentials');
@@ -107,6 +108,36 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
         onClose={() => setShowForgotPassword(false)}
         onSuccess={handleForgotPasswordSuccess}
       />
+    );
+  }
+
+  // Placeholder for ForgotUserIdModal (to be created later)
+  if (showForgotUserId) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
+          <button
+            onClick={() => setShowForgotUserId(false)}
+            className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+          >
+            <X size={24} />
+          </button>
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-4">
+              Forgot User ID
+            </h2>
+            <p className="text-gray-400 mb-6">
+              This feature will be available soon. Please contact your administrator for assistance.
+            </p>
+            <button
+              onClick={() => setShowForgotUserId(false)}
+              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+            >
+              Back to Sign In
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -155,30 +186,22 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
           <div className="space-y-4 sm:space-y-5">
             <div className="group">
               <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                <Smartphone size={16} />
-                Student ID, Phone, or Email
+                <CreditCard size={16} />
+                User ID
               </label>
               <div className="relative">
                 <input
                   type="text"
-                  value={loginId}
-                  onChange={(e) => setLoginId(e.target.value)}
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
                   onKeyPress={handleKeyPress}
                   className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3.5 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
-                  placeholder="ST-2601-00001, phone, or email"
+                  placeholder="ST-2601-00001"
                   disabled={loading}
                 />
-                <div className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors">
-                  {loginId.includes('@') ? (
-                    <Mail size={18} />
-                  ) : loginId.startsWith('ST-') || loginId.startsWith('st-') ? (
-                    <CreditCard size={18} />
-                  ) : (
-                    <Phone size={18} />
-                  )}
-                </div>
+                <CreditCard size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
-              <p className="text-xs text-gray-500 mt-1.5">Enter your Student ID, phone number, or email</p>
+              <p className="text-xs text-gray-500 mt-1.5">Enter your User ID (e.g., ST-2601-00001)</p>
             </div>
 
             <div className="group">
@@ -222,13 +245,22 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                 </span>
               </label>
 
-              <button 
-                onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
-                disabled={loading}
-              >
-                Forgot password?
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button 
+                  onClick={() => setShowForgotUserId(true)}
+                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
+                  disabled={loading}
+                >
+                  Forgot User ID?
+                </button>
+                <button 
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
+                  disabled={loading}
+                >
+                  Forgot Password?
+                </button>
+              </div>
             </div>
 
             <button
@@ -261,7 +293,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </div>
               <div>
                 <p className="text-xs text-blue-200/90">
-                  <strong className="text-blue-100">First time signing in?</strong> Use the Student ID provided during registration along with your password.
+                  <strong className="text-blue-100">First time signing in?</strong> Use the User ID provided during registration along with your password.
                 </p>
               </div>
             </div>
