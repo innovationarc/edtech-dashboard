@@ -190,6 +190,10 @@ async function getClientIp(): Promise<string> {
 }
 
 export const authService = {
+  /**
+   * Sign in with User ID and password
+   * Supports all account types: admin, manager, teacher, student, parent, etc.
+   */
   async signIn(userId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
       const currentDeviceId = generateDeviceId();
@@ -274,6 +278,10 @@ export const authService = {
     }
   },
 
+  /**
+   * Sign up new user
+   * Supports all roles: admin, manager, teacher, student, parent, etc.
+   */
   async signUp(
     fullName: string,
     surname: string,
@@ -373,6 +381,11 @@ export const authService = {
     }
   },
 
+  /**
+   * Send Password Reset OTP
+   * Searches for user by User ID and returns phone number for OTP
+   * Works with all account types
+   */
   async sendPasswordResetOTP(loginId: string): Promise<{ success: boolean; phoneNumber?: string; message: string }> {
     try {
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
@@ -430,7 +443,25 @@ export const authService = {
     }
   },
 
-  async getUsersByPhone(phoneNumber: string): Promise<{ success: boolean; users?: Array<{ uid: string; userId: string; surname: string; role: string; status: string; fullName?: string; name?: string; }>; count?: number; message: string }> {
+  /**
+   * Get users by phone number
+   * Returns ALL account types associated with the phone number
+   * Used for User ID recovery (ForgotUserIdModal)
+   */
+  async getUsersByPhone(phoneNumber: string): Promise<{ 
+    success: boolean; 
+    users?: Array<{ 
+      uid: string; 
+      userId: string; 
+      surname: string; 
+      role: string; 
+      status: string; 
+      fullName?: string; 
+      name?: string; 
+    }>; 
+    count?: number; 
+    message: string 
+  }> {
     try {
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
@@ -439,7 +470,7 @@ export const authService = {
 
       const requestBody: any = {
         phoneNumber,
-        purpose: 'user-id-recovery'
+        purpose: 'user-id-recovery' // This purpose returns ALL account types
       };
 
       if (MASTER_API_KEY) {
@@ -501,6 +532,10 @@ export const authService = {
     }
   },
 
+  /**
+   * Reset password by phone number
+   * Works for ALL account types (admin, manager, teacher, student, parent, etc.)
+   */
   async resetPassword(phoneNumber: string, newPassword: string): Promise<void> {
     try {
       const passwordValidation = validatePasswordStrength(newPassword);
@@ -557,6 +592,9 @@ export const authService = {
     }
   },
 
+  /**
+   * Approve user account (Admin function)
+   */
   async approveUser(userId: string, approvedBy: string): Promise<void> {
     try {
       const userRef = doc(db, 'users', userId);
@@ -570,6 +608,9 @@ export const authService = {
     }
   },
 
+  /**
+   * Reject user account (Admin function)
+   */
   async rejectUser(userId: string): Promise<void> {
     try {
       const userRef = doc(db, 'users', userId);
@@ -581,6 +622,9 @@ export const authService = {
     }
   },
 
+  /**
+   * Sign out current user and clear device ID
+   */
   async signOut(): Promise<void> {
     try {
       // Clear device ID on sign out
@@ -596,18 +640,30 @@ export const authService = {
     }
   },
 
+  /**
+   * Listen to auth state changes
+   */
   onAuthStateChanged(callback: (user: User | null) => void) {
     return onAuthStateChanged(auth, callback);
   },
 
+  /**
+   * Get current authenticated user
+   */
   getCurrentUser(): User | null {
     return auth.currentUser;
   },
 
+  /**
+   * Check if user is authenticated
+   */
   isAuthenticated(): boolean {
     return !!auth.currentUser;
   },
 
+  /**
+   * Update user password (requires current password for reauthentication)
+   */
   async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
     try {
       const user = auth.currentUser;
