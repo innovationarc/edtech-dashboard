@@ -1,8 +1,9 @@
 // src/components/auth/ForgotPasswordModal.tsx
 import { useState, useEffect } from 'react';
-import { X, Lock, Loader, Shield, AlertCircle, CheckCircle, Phone, Eye, EyeOff, Smartphone } from 'lucide-react';
+import { X, Lock, Loader, Shield, AlertCircle, CheckCircle, CreditCard, Eye, EyeOff } from 'lucide-react';
 import { authService, validatePasswordStrength } from '../../services/authService';
 import { otpService } from '../../services/otpService';
+import ForgotUserIdModal from './ForgotUserIdModal';
 
 interface ForgotPasswordModalProps {
   onClose: () => void;
@@ -11,7 +12,7 @@ interface ForgotPasswordModalProps {
 
 const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) => {
   const [currentStep, setCurrentStep] = useState<'identify' | 'otp' | 'reset' | 'success'>('identify');
-  const [loginId, setLoginId] = useState('');
+  const [userId, setUserId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [newPassword, setNewPassword] = useState('');
@@ -24,6 +25,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
   const [canResendOTP, setCanResendOTP] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
   const [captchaLoaded, setCaptchaLoaded] = useState(false);
+  const [showForgotUserId, setShowForgotUserId] = useState(false);
 
   // Password strength state
   const [passwordStrength, setPasswordStrength] = useState<{
@@ -104,14 +106,14 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
     }, 1000);
   };
 
-  // Step 1: Identify user
+  // Step 1: Identify user by User ID only
   const handleIdentifyUser = async () => {
     setError('');
     setSuccess('');
     setLoading(true);
 
-    if (!loginId) {
-      setError('Please enter your Student ID, phone number, or email');
+    if (!userId) {
+      setError('Please enter your User ID');
       setLoading(false);
       return;
     }
@@ -124,7 +126,8 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
     }
 
     try {
-      const result = await authService.sendPasswordResetOTP(loginId);
+      // Use user-search API to find user by User ID
+      const result = await authService.sendPasswordResetOTP(userId);
       
       if (result.success && result.phoneNumber) {
         setPhoneNumber(result.phoneNumber);
@@ -215,25 +218,29 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
   const handleResendOTP = async () => {
     setError('');
     setSuccess('');
-    setOtp(['', '', '', '', '', '']);
-    
+    setLoading(true);
+
     try {
-      const result = await otpService.sendOTP(phoneNumber, 'password-reset');
+      const otpResult = await otpService.sendOTP(phoneNumber, 'password-reset');
       
-      if (result.success) {
-        setSuccess(result.message);
+      if (otpResult.success) {
+        setSuccess(otpResult.message);
+        setOtp(['', '', '', '', '', '']);
         startResendTimer();
       } else {
-        setError(result.message);
+        setError(otpResult.message);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to resend OTP');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Step 3: Reset password
+  // Step 3: Reset Password
   const handleResetPassword = async () => {
     setError('');
+    setSuccess('');
     setLoading(true);
 
     if (!newPassword || !confirmPassword) {
@@ -248,21 +255,19 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
       return;
     }
 
-    const validation = validatePasswordStrength(newPassword);
-    if (!validation.isStrong) {
-      setError('Password must meet all security requirements');
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.isStrong) {
+      setError('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
       setLoading(false);
       return;
     }
 
     try {
+      // Reset password using authService - works for all account types
       await authService.resetPassword(phoneNumber, newPassword);
-      setCurrentStep('success');
       
-      setTimeout(() => {
-        if (onSuccess) onSuccess();
-        onClose();
-      }, 3000);
+      setSuccess('Password reset successfully!');
+      setCurrentStep('success');
     } catch (err: any) {
       setError(err.message || 'Failed to reset password');
     } finally {
@@ -270,56 +275,62 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
     }
   };
 
-  // Password strength indicator
-  const getStrengthColor = () => {
-    switch (passwordStrength.strength) {
-      case 'very-strong': return 'bg-green-500';
-      case 'strong': return 'bg-blue-500';
-      case 'medium': return 'bg-yellow-500';
-      default: return 'bg-red-500';
-    }
-  };
-
-  const getStrengthWidth = () => {
-    switch (passwordStrength.strength) {
-      case 'very-strong': return 'w-full';
-      case 'strong': return 'w-3/4';
-      case 'medium': return 'w-1/2';
-      default: return 'w-1/4';
-    }
-  };
+  // Handle Forgot User ID click
+  if (showForgotUserId) {
+    return (
+      <ForgotUserIdModal
+        onClose={() => setShowForgotUserId(false)}
+        onSignInClick={() => {
+          setShowForgotUserId(false);
+          onClose();
+        }}
+      />
+    );
+  }
 
   // Success Screen
   if (currentStep === 'success') {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-green-500/10 rounded-3xl"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-blue-500/5 to-green-500/10 rounded-3xl pointer-events-none"></div>
           
           <div className="relative text-center">
             <div className="flex justify-center mb-6">
               <div className="relative">
                 <div className="absolute inset-0 bg-green-500/30 blur-2xl"></div>
-                <div className="relative bg-gradient-to-br from-green-400 to-emerald-500 rounded-full p-4 shadow-2xl shadow-green-500/50">
-                  <CheckCircle size={64} className="text-white" />
+                <div className="relative bg-gradient-to-br from-green-500 to-blue-600 rounded-full p-4 shadow-2xl shadow-green-500/50">
+                  <CheckCircle size={48} className="text-white" />
                 </div>
               </div>
             </div>
-            
-            <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-400 to-green-500 mb-4">
+
+            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-blue-400 to-green-500 mb-2">
               Password Reset!
             </h2>
-            
-            <p className="text-gray-300 mb-6">Your password has been successfully reset. You can now sign in with your new password.</p>
-            
+            <p className="text-gray-400 text-sm mb-6">
+              Your password has been successfully reset
+            </p>
+
+            {success && (
+              <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
+                <p className="text-sm flex items-center justify-center gap-2">
+                  <CheckCircle size={16} />
+                  {success}
+                </p>
+              </div>
+            )}
+
             <button
               onClick={() => {
-                if (onSuccess) onSuccess();
+                if (onSuccess) {
+                  onSuccess();
+                }
                 onClose();
               }}
-              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 font-semibold shadow-2xl hover:shadow-primary-500/50"
+              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
             >
-              Back to Sign In
+              <span>Back to Sign In</span>
             </button>
           </div>
         </div>
@@ -329,14 +340,32 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
 
   // Reset Password Screen
   if (currentStep === 'reset') {
+    const getPasswordStrengthColor = () => {
+      switch (passwordStrength.strength) {
+        case 'very-strong': return 'bg-green-500';
+        case 'strong': return 'bg-blue-500';
+        case 'medium': return 'bg-yellow-500';
+        default: return 'bg-red-500';
+      }
+    };
+
+    const getPasswordStrengthWidth = () => {
+      switch (passwordStrength.strength) {
+        case 'very-strong': return 'w-full';
+        case 'strong': return 'w-3/4';
+        case 'medium': return 'w-1/2';
+        default: return 'w-1/4';
+      }
+    };
+
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
           
           <button
-            onClick={onClose}
-            className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+            onClick={() => setCurrentStep('otp')}
+            className="absolute left-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 z-10"
           >
             <X size={24} />
           </button>
@@ -352,10 +381,10 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
             </div>
 
             <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2 text-center">
-              Create New Password
+              New Password
             </h2>
             <p className="text-gray-400 text-sm mb-6 text-center">
-              Enter a strong password for your account
+              Create a strong password for your account
             </p>
 
             {error && (
@@ -369,7 +398,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
 
             <div className="space-y-5">
               <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-2">New Password *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
                 <div className="relative">
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -388,21 +417,19 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
                     {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                
                 {newPassword && (
                   <div className="mt-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                        <div className={`h-full transition-all duration-300 ${getStrengthColor()} ${getStrengthWidth()}`}></div>
-                      </div>
-                      <span className="text-xs text-gray-400 capitalize">{passwordStrength.strength.replace('-', ' ')}</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-400">Password Strength</span>
+                      <span className="text-xs font-medium text-gray-300 capitalize">{passwordStrength.strength}</span>
+                    </div>
+                    <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                      <div className={`h-full ${getPasswordStrengthColor()} ${getPasswordStrengthWidth()} transition-all duration-300`}></div>
                     </div>
                     {passwordStrength.issues.length > 0 && (
-                      <div className="text-xs text-red-300 space-y-0.5">
-                        {passwordStrength.issues.map((issue, idx) => (
-                          <div key={idx} className="flex items-center gap-1">
-                            <span className="text-red-400">•</span> {issue}
-                          </div>
-                        ))}
+                      <div className="mt-2 text-xs text-gray-400">
+                        Missing: {passwordStrength.issues.join(', ')}
                       </div>
                     )}
                   </div>
@@ -410,14 +437,14 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
                 <div className="relative">
                   <input
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-11 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
-                    placeholder="Re-enter new password"
+                    placeholder="Confirm new password"
                     disabled={loading}
                   />
                   <Lock size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
@@ -451,7 +478,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-blue-500/10 rounded-3xl"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-blue-500/10 rounded-3xl pointer-events-none"></div>
           
           <button
             onClick={() => setCurrentStep('identify')}
@@ -551,7 +578,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
       <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
         
         <button
           onClick={onClose}
@@ -574,7 +601,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
             Reset Password
           </h2>
           <p className="text-gray-400 text-sm mb-6 text-center">
-            Enter your Student ID, phone, or email
+            Enter your User ID to reset your password
           </p>
 
           {error && (
@@ -588,18 +615,21 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
 
           <div className="space-y-5">
             <div className="group">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Student ID, Phone, or Email</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">User ID</label>
               <div className="relative">
                 <input
                   type="text"
-                  value={loginId}
-                  onChange={(e) => setLoginId(e.target.value)}
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
                   className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
-                  placeholder="ST-2601-00001, phone, or email"
+                  placeholder="ST-2601-00001"
                   disabled={loading}
                 />
-                <Smartphone size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                <CreditCard size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
+              <p className="text-xs text-gray-500 mt-1.5">
+                Enter your User ID (e.g., ST-2601-00001, AD-2601-00001)
+              </p>
             </div>
 
             <button
@@ -612,10 +642,16 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
             </button>
           </div>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
+            <button 
+              onClick={() => setShowForgotUserId(true)}
+              className="text-sm text-primary-400 hover:text-primary-300 transition-colors block mx-auto"
+            >
+              Forgot User ID?
+            </button>
             <button 
               onClick={onClose}
-              className="text-sm text-gray-400 hover:text-white transition-colors"
+              className="text-sm text-gray-400 hover:text-white transition-colors block mx-auto"
             >
               Back to Sign In
             </button>
