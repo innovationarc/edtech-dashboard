@@ -133,36 +133,11 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-      // Search for users with this phone number using checkDuplicates
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+      // Use authService.getUsersByPhone which uses user-search API with purpose: 'user-id-recovery'
+      // This will return ALL types of accounts (admin, teacher, student, etc.)
+      const result = await authService.getUsersByPhone(normalizedPhone);
 
-      const requestBody: any = {
-        phoneNumber: normalizedPhone,
-        checkDuplicates: true
-      };
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to search for users');
-      }
-
-      const result = await response.json();
-
-      if (result.count === 0) {
+      if (!result.success || !result.users || result.count === 0) {
         setError('No user found with this phone number');
         setUserCount(0);
       } else {
@@ -236,7 +211,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     setOtp(newOTP);
   };
 
-  // Step 2: Verify OTP and fetch user list
+  // Step 2: Verify OTP and fetch users
   const handleVerifyOTP = async () => {
     setError('');
     setSuccess('');
@@ -257,8 +232,16 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
       const result = await otpService.verifyOTP(normalizedPhone, otpCode, 'user-search');
       
       if (result.success) {
-        // Fetch all users with this phone number using authService
-        await fetchUsers(normalizedPhone);
+        // Fetch users using authService which uses user-search API
+        const usersResult = await authService.getUsersByPhone(normalizedPhone);
+        
+        if (usersResult.success && usersResult.users && usersResult.users.length > 0) {
+          setUsers(usersResult.users);
+          setSuccess('Phone verified! Here are your User IDs');
+          setCurrentStep('results');
+        } else {
+          setError('No users found with this phone number');
+        }
       } else {
         setError(result.message);
       }
@@ -266,23 +249,6 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
       setError(err.message || 'Failed to verify OTP');
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Fetch users after OTP verification using authService
-  const fetchUsers = async (normalizedPhone: string) => {
-    try {
-      const result = await authService.getUsersByPhone(normalizedPhone);
-
-      if (result.success && result.users) {
-        setUsers(result.users);
-        setCurrentStep('results');
-        setSuccess('User IDs retrieved successfully');
-      } else {
-        setError(result.message || 'Failed to retrieve user information');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch user information');
     }
   };
 
@@ -310,22 +276,50 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     }
   };
 
-  const handleGoToSignIn = () => {
-    if (onSignInClick) {
-      onSignInClick();
-    } else {
-      onClose();
+  // Format phone number for display
+  const getDisplayPhoneNumber = () => {
+    if (!phoneNumber) return '';
+    try {
+      const normalized = normalizePhoneNumber(phoneNumber);
+      return `+${normalized}`;
+    } catch {
+      return phoneNumber;
     }
   };
 
-  // Format phone number for display
-  const getDisplayPhoneNumber = (): string => {
-    try {
-      const normalized = normalizePhoneNumber(phoneNumber);
-      // Format as +880 XXXXX-XXXXX
-      return `+${normalized.substring(0, 3)} ${normalized.substring(3, 8)}-${normalized.substring(8)}`;
-    } catch {
-      return phoneNumber;
+  // Get role display name
+  const getRoleDisplayName = (role: string): string => {
+    const roleMap: { [key: string]: string } = {
+      admin: 'Admin',
+      manager: 'Manager',
+      course_manager: 'Course Manager',
+      student_manager: 'Student Manager',
+      coordinator: 'Coordinator',
+      teacher: 'Teacher',
+      parent: 'Parent',
+      student: 'Student'
+    };
+    return roleMap[role] || role;
+  };
+
+  // Get role icon
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'admin':
+      case 'manager':
+      case 'course_manager':
+      case 'student_manager':
+        return '👑';
+      case 'coordinator':
+        return '🎯';
+      case 'teacher':
+        return '👨‍🏫';
+      case 'parent':
+        return '👨‍👩‍👧';
+      case 'student':
+        return '🎓';
+      default:
+        return '👤';
     }
   };
 
@@ -333,8 +327,8 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   if (currentStep === 'results') {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-2xl p-8 relative shadow-2xl border border-gray-700/50 max-h-[90vh] overflow-y-auto">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-blue-500/5 to-green-500/10 rounded-3xl"></div>
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50 max-h-[90vh] overflow-y-auto">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-blue-500/5 rounded-3xl pointer-events-none"></div>
           
           <button
             onClick={onClose}
@@ -343,7 +337,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             <X size={24} />
           </button>
 
-          <div className="relative text-center">
+          <div className="relative">
             <div className="flex justify-center mb-6">
               <div className="relative">
                 <div className="absolute inset-0 bg-green-500/30 blur-2xl"></div>
@@ -353,22 +347,12 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               </div>
             </div>
 
-            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-blue-400 to-green-500 mb-2">
-              User ID{users.length > 1 ? 's' : ''} Found
+            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-blue-400 to-green-500 mb-2 text-center">
+              Your User ID{users.length > 1 ? 's' : ''}
             </h2>
-            <p className="text-gray-400 text-sm mb-6">
-              {users.length} user{users.length > 1 ? 's' : ''} found with phone number<br />
-              <span className="text-white font-semibold">{getDisplayPhoneNumber()}</span>
+            <p className="text-gray-400 text-sm mb-6 text-center">
+              Found {users.length} account{users.length > 1 ? 's' : ''} with this phone number
             </p>
-
-            {error && (
-              <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
-                <p className="text-sm flex items-center justify-center gap-2">
-                  <AlertCircle size={16} />
-                  {error}
-                </p>
-              </div>
-            )}
 
             {success && (
               <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
@@ -379,39 +363,46 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               </div>
             )}
 
-            <div className="space-y-4 mb-6">
+            <div className="space-y-4">
               {users.map((user, index) => (
-                <div
-                  key={user.uid || index}
-                  className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-xl rounded-xl p-5 border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 hover:scale-102 shadow-lg"
+                <div 
+                  key={user.uid}
+                  className="bg-gray-800/60 backdrop-blur-xl rounded-xl p-5 border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 hover:scale-105"
                 >
-                  <div className="grid grid-cols-2 gap-4 text-left">
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">User ID</p>
-                      <p className="text-white font-bold text-lg flex items-center gap-2">
-                        <CreditCard size={18} className="text-primary-400" />
-                        {user.userId}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Surname</p>
-                      <p className="text-white font-semibold">{user.surname || user.fullName || user.name || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Role</p>
-                      <p className="text-white font-semibold capitalize">{user.role || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Status</p>
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        user.status === 'active' 
-                          ? 'bg-green-900/50 text-green-300 border border-green-700/50' 
-                          : user.status === 'pending'
-                          ? 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50'
-                          : 'bg-red-900/50 text-red-300 border border-red-700/50'
-                      }`}>
-                        {user.status || 'N/A'}
-                      </span>
+                  <div className="flex items-start gap-4">
+                    <div className="text-4xl">{getRoleIcon(user.role)}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-white font-semibold text-lg">
+                          {user.fullName || user.name || user.surname}
+                        </h3>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          user.status === 'active' 
+                            ? 'bg-green-900/40 text-green-300 border border-green-700/50' 
+                            : user.status === 'pending'
+                            ? 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50'
+                            : 'bg-red-900/40 text-red-300 border border-red-700/50'
+                        }`}>
+                          {user.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-400 mb-2">{getRoleDisplayName(user.role)}</p>
+                      <div className="bg-gradient-to-r from-primary-900/40 to-purple-900/40 border border-primary-700/50 rounded-lg p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CreditCard size={18} className="text-primary-400" />
+                          <span className="text-white font-mono font-semibold">{user.userId}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(user.userId);
+                            setSuccess('User ID copied to clipboard!');
+                            setTimeout(() => setSuccess(''), 2000);
+                          }}
+                          className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-3 py-1 rounded-lg transition-colors"
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -419,18 +410,18 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             </div>
 
             <button
-              onClick={handleGoToSignIn}
-              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+              onClick={() => {
+                if (onSignInClick) {
+                  onSignInClick();
+                } else {
+                  onClose();
+                }
+              }}
+              className="w-full mt-6 bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
             >
               <LogIn size={20} />
               <span>Go to Sign In</span>
             </button>
-
-            <div className="mt-6 bg-gray-800/40 backdrop-blur-xl rounded-xl p-4 border border-gray-700/30">
-              <p className="text-xs text-gray-400">
-                Use any of the User IDs shown above to sign in to your account
-              </p>
-            </div>
           </div>
         </div>
       </div>
@@ -442,7 +433,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-blue-500/10 rounded-3xl"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-blue-500/10 rounded-3xl pointer-events-none"></div>
           
           <button
             onClick={() => setCurrentStep('phone')}
@@ -542,7 +533,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
       <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
         
         <button
           onClick={onClose}
