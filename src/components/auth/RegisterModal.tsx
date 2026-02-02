@@ -656,7 +656,6 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
 
                 <button
                   onClick={async () => {
-                    setCurrentStep('form');
                     await sendOTP();
                   }}
                   disabled={loading}
