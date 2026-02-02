@@ -267,23 +267,29 @@ export const otpService = {
 
       // Send SMS
       try {
-        let message = '';
-        
-        // Customize message based on purpose
-        if (purpose === 'registration') {
-          message = surname 
-            ? `Your Ed-tech verification code is ${otp}.
+        let message: string = '';
+
+if (purpose === 'registration') {
+  // If surname exists, you can customize the message; otherwise use the same message
+  message = surname
+    ? `Your Ed-tech verification code is ${otp}.
 This code expires in 02 minutes.
-If you didn’t request this, please ignore.`;
-        } else if (purpose === 'password-reset') {
-          message = `Your Ed-tech password reset code is ${otp}.
+If you didn't request this, please ignore.`
+    : `Your Ed-tech verification code is ${otp}.
+This code expires in 02 minutes.
+If you didn't request this, please ignore.`;
+} else if (purpose === 'password-reset') {
+  message = `Your Ed-tech password reset code is ${otp}.
 This code is valid for 02 minutes.
 Do not share this code with anyone.`;
-        } else if (purpose === 'user-search') {
-          message = `Your Ed-tech user search verification code is ${otp}.
+} else if (purpose === 'user-search') {
+  message = `Your Ed-tech user search verification code is ${otp}.
 This code is valid for 02 minutes.
 Do not share this code with anyone.`;
-        }
+} else {
+  // Optional: default/fallback message
+  message = `Your Ed-tech verification code is ${otp}.`;
+}
 
         const gsmMessage = toGSM7Bit(message);
         
