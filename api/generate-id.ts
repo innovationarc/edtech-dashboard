@@ -65,6 +65,21 @@ function initializeFirebaseAdmin() {
   }
 }
 
+// Helper function to check if a userId already exists
+async function userIdExists(db: admin.firestore.Firestore, userId: string): Promise<boolean> {
+  try {
+    const query = await db.collection('users')
+      .where('userId', '==', userId)
+      .limit(1)
+      .get();
+    
+    return !query.empty;
+  } catch (error) {
+    console.error('Error checking userId existence:', error);
+    return false;
+  }
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse<GenerateIdResponse>
@@ -157,96 +172,133 @@ export default async function handler(
     // Use a counter document for atomic sequential ID generation
     const counterRef = db.collection('counters').doc(`${prefix}-${yearMonth}`);
     
-    let userId: string;
+    let userId: string = '';
+    let maxRetries = 10; // Prevent infinite loops in case of issues
+    let retryCount = 0;
     
-    try {
-      // Use Firestore transaction for atomic increment
-      await db.runTransaction(async (transaction) => {
-        const counterDoc = await transaction.get(counterRef);
+    while (retryCount < maxRetries) {
+      try {
+        // Use Firestore transaction for atomic increment
+        const generatedId = await db.runTransaction(async (transaction) => {
+          const counterDoc = await transaction.get(counterRef);
+          
+          let nextNumber = 1;
+          
+          if (counterDoc.exists) {
+            const currentCount = counterDoc.data()?.count || 0;
+            nextNumber = currentCount + 1;
+          }
+          
+          // Generate the user ID
+          const proposedUserId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
+          
+          // Check if this ID already exists in the users collection
+          const existsCheck = await userIdExists(db, proposedUserId);
+          
+          if (existsCheck) {
+            console.warn(`⚠️ ID ${proposedUserId} already exists! Incrementing counter...`);
+            // If ID exists, skip this number and try the next one
+            transaction.set(counterRef, {
+              count: nextNumber,
+              prefix: prefix,
+              yearMonth: yearMonth,
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+              skippedDuplicate: true
+            }, { merge: true });
+            
+            throw new Error('DUPLICATE_ID_FOUND'); // Will trigger retry
+          }
+          
+          // Update the counter
+          transaction.set(counterRef, {
+            count: nextNumber,
+            prefix: prefix,
+            yearMonth: yearMonth,
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+          
+          return proposedUserId;
+        });
         
-        let nextNumber = 1;
+        userId = generatedId;
+        console.log(`✅ Generated unique ${role} ID:`, userId);
         
-        if (counterDoc.exists) {
-          const currentCount = counterDoc.data()?.count || 0;
-          nextNumber = currentCount + 1;
+        // Double-check one more time before returning
+        const finalCheck = await userIdExists(db, userId);
+        if (finalCheck) {
+          console.error(`🚨 CRITICAL: Generated ID ${userId} already exists despite checks!`);
+          retryCount++;
+          continue;
         }
         
-        // Update the counter
-        transaction.set(counterRef, {
-          count: nextNumber,
-          prefix: prefix,
-          yearMonth: yearMonth,
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        return res.status(200).json({
+          success: true,
+          userId
+        });
         
-        // Generate the user ID
-        userId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
-      });
-      
-      console.log(`✅ Generated ${role} ID:`, userId);
-
-      return res.status(200).json({
-        success: true,
-        userId: userId!
-      });
-      
-    } catch (transactionError: any) {
-      console.error('🔥 Transaction error:', transactionError);
-      
-      // Fallback: Query existing users as backup
-      console.log('⚠️ Using fallback query method');
-      
-      const usersQuery = await db.collection('users')
-        .where('userId', '>=', idPrefix)
-        .where('userId', '<', `${idPrefix}99999`)
-        .orderBy('userId', 'desc')
-        .limit(1)
-        .get();
-
-      let nextNumber = 1;
-
-      if (!usersQuery.empty) {
-        const lastUserId = usersQuery.docs[0].data().userId;
-        console.log(`📋 Last ${role} ID:`, lastUserId);
+      } catch (transactionError: any) {
+        if (transactionError.message === 'DUPLICATE_ID_FOUND') {
+          console.log(`🔄 Retry ${retryCount + 1}/${maxRetries}: Duplicate found, trying next number...`);
+          retryCount++;
+          continue;
+        }
         
-        // Extract the last number from ID format: PREFIX-YYMM-XXXXX
-        const parts = lastUserId.split('-');
-        if (parts.length === 3) {
-          const lastNumber = parseInt(parts[2]);
-          if (!isNaN(lastNumber)) {
-            nextNumber = lastNumber + 1;
+        console.error('🔥 Transaction error:', transactionError);
+        
+        // Fallback: Query existing users as backup
+        console.log('⚠️ Using fallback query method');
+        
+        const usersQuery = await db.collection('users')
+          .where('userId', '>=', idPrefix)
+          .where('userId', '<', `${idPrefix}99999`)
+          .orderBy('userId', 'desc')
+          .limit(1)
+          .get();
+
+        let nextNumber = 1;
+
+        if (!usersQuery.empty) {
+          const lastUserId = usersQuery.docs[0].data().userId;
+          console.log(`📋 Last ${role} ID:`, lastUserId);
+          
+          // Extract the last number from ID format: PREFIX-YYMM-XXXXX
+          const parts = lastUserId.split('-');
+          if (parts.length === 3) {
+            const lastNumber = parseInt(parts[2]);
+            if (!isNaN(lastNumber)) {
+              nextNumber = lastNumber + 1;
+            }
           }
         }
+
+        userId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
+        
+        // Check for duplicates in fallback method too
+        const fallbackCheck = await userIdExists(db, userId);
+        if (fallbackCheck) {
+          console.error(`🚨 Fallback ID ${userId} already exists!`);
+          retryCount++;
+          continue;
+        }
+        
+        console.log(`✅ Generated ${role} ID (fallback):`, userId);
+
+        return res.status(200).json({
+          success: true,
+          userId
+        });
       }
-
-      userId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
-      
-      console.log(`✅ Generated ${role} ID (fallback):`, userId);
-
-      return res.status(200).json({
-        success: true,
-        userId
-      });
     }
+    
+    // If we've exhausted all retries
+    throw new Error('Failed to generate unique ID after maximum retries');
 
   } catch (error: any) {
     console.error('🔥 Generate ID error:', error);
 
-    // Final fallback: use timestamp-based ID
-    const { role } = req.body as GenerateIdRequest;
-    const normalizedRole = role?.toLowerCase() || 'unknown';
-    const prefix = ROLE_PREFIXES[normalizedRole] || 'UN';
-    
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const fallbackId = `${prefix}-${year}${month}-${Date.now().toString().slice(-5)}`;
-    
-    console.log('⚠️ Using fallback ID:', fallbackId);
-
-    return res.status(200).json({
-      success: true,
-      userId: fallbackId
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to generate unique user ID. Please try again.',
     });
   }
 }
