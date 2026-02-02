@@ -149,44 +149,90 @@ export default async function handler(
     const now = new Date();
     const year = now.getFullYear().toString().slice(-2);
     const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const idPrefix = `${prefix}-${year}${month}-`;
+    const yearMonth = `${year}${month}`;
+    const idPrefix = `${prefix}-${yearMonth}-`;
 
     console.log(`🔢 Generating ${role} ID with prefix:`, idPrefix);
 
-    // Query for the highest number in current year-month for this role
-    const usersQuery = await db.collection('users')
-      .where('userId', '>=', idPrefix)
-      .where('userId', '<', `${prefix}-${year}${month}-99999`)
-      .where('role', '==', normalizedRole)
-      .orderBy('userId', 'desc')
-      .limit(1)
-      .get();
-
-    let nextNumber = 1;
-
-    if (!usersQuery.empty) {
-      const lastUserId = usersQuery.docs[0].data().userId;
-      console.log(`📋 Last ${role} ID:`, lastUserId);
-      
-      const lastNumber = parseInt(lastUserId.split('-')[2]);
-      if (!isNaN(lastNumber)) {
-        nextNumber = lastNumber + 1;
-      }
-    }
-
-    const userId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
+    // Use a counter document for atomic sequential ID generation
+    const counterRef = db.collection('counters').doc(`${prefix}-${yearMonth}`);
     
-    console.log(`✅ Generated ${role} ID:`, userId);
+    let userId: string;
+    
+    try {
+      // Use Firestore transaction for atomic increment
+      await db.runTransaction(async (transaction) => {
+        const counterDoc = await transaction.get(counterRef);
+        
+        let nextNumber = 1;
+        
+        if (counterDoc.exists) {
+          const currentCount = counterDoc.data()?.count || 0;
+          nextNumber = currentCount + 1;
+        }
+        
+        // Update the counter
+        transaction.set(counterRef, {
+          count: nextNumber,
+          prefix: prefix,
+          yearMonth: yearMonth,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        // Generate the user ID
+        userId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
+      });
+      
+      console.log(`✅ Generated ${role} ID:`, userId);
 
-    return res.status(200).json({
-      success: true,
-      userId
-    });
+      return res.status(200).json({
+        success: true,
+        userId: userId!
+      });
+      
+    } catch (transactionError: any) {
+      console.error('🔥 Transaction error:', transactionError);
+      
+      // Fallback: Query existing users as backup
+      console.log('⚠️ Using fallback query method');
+      
+      const usersQuery = await db.collection('users')
+        .where('userId', '>=', idPrefix)
+        .where('userId', '<', `${idPrefix}99999`)
+        .orderBy('userId', 'desc')
+        .limit(1)
+        .get();
+
+      let nextNumber = 1;
+
+      if (!usersQuery.empty) {
+        const lastUserId = usersQuery.docs[0].data().userId;
+        console.log(`📋 Last ${role} ID:`, lastUserId);
+        
+        // Extract the last number from ID format: PREFIX-YYMM-XXXXX
+        const parts = lastUserId.split('-');
+        if (parts.length === 3) {
+          const lastNumber = parseInt(parts[2]);
+          if (!isNaN(lastNumber)) {
+            nextNumber = lastNumber + 1;
+          }
+        }
+      }
+
+      userId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
+      
+      console.log(`✅ Generated ${role} ID (fallback):`, userId);
+
+      return res.status(200).json({
+        success: true,
+        userId
+      });
+    }
 
   } catch (error: any) {
     console.error('🔥 Generate ID error:', error);
 
-    // Fallback: use timestamp-based ID
+    // Final fallback: use timestamp-based ID
     const { role } = req.body as GenerateIdRequest;
     const normalizedRole = role?.toLowerCase() || 'unknown';
     const prefix = ROLE_PREFIXES[normalizedRole] || 'UN';
