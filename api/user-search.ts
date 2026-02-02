@@ -6,7 +6,8 @@ interface UserSearchRequest {
   loginId?: string;
   phoneNumber?: string;
   email?: string;
-  purpose?: 'password-reset' | 'user-lookup' | 'user-id-recovery';
+  userId?: string;
+  purpose?: 'password-reset' | 'user-lookup' | 'user-id-recovery' | 'check-userid-duplicate';
   checkDuplicates?: boolean;
   apiKey?: string;
 }
@@ -27,7 +28,7 @@ interface UserSearchResponse {
   message?: string;
   error?: string;
   exists?: boolean;
-  field?: 'phone' | 'email';
+  field?: 'phone' | 'email' | 'userId';
   count?: number;
 }
 
@@ -134,7 +135,7 @@ export default async function handler(
       });
     }
 
-    const { loginId, phoneNumber, email, purpose, checkDuplicates, apiKey } = req.body as UserSearchRequest;
+    const { loginId, phoneNumber, email, userId, purpose, checkDuplicates, apiKey } = req.body as UserSearchRequest;
 
     // Optional: Validate API Key if MASTER_KEY is set
     const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
@@ -149,7 +150,39 @@ export default async function handler(
     const db = admin.firestore();
 
     // ==========================================
-    // USER ID RECOVERY MODE (NEW)
+    // USER ID DUPLICATE CHECK MODE (NEW)
+    // ==========================================
+    if (purpose === 'check-userid-duplicate' && userId) {
+      console.log('🔍 Checking for duplicate userId:', userId);
+      
+      const userIdQuery = await db.collection('users')
+        .where('userId', '==', userId)
+        .limit(1)
+        .get();
+
+      const exists = !userIdQuery.empty;
+      
+      if (exists) {
+        console.log('⚠️ User ID already exists:', userId);
+        return res.status(200).json({
+          success: true,
+          exists: true,
+          field: 'userId',
+          message: 'This User ID already exists in the system'
+        });
+      }
+      
+      console.log('✅ User ID is available:', userId);
+      return res.status(200).json({
+        success: true,
+        exists: false,
+        field: 'userId',
+        message: 'User ID is available'
+      });
+    }
+
+    // ==========================================
+    // USER ID RECOVERY MODE
     // ==========================================
     if (purpose === 'user-id-recovery' && phoneNumber) {
       console.log('🔍 User ID recovery request for phone:', phoneNumber.substring(0, 5) + '****');
