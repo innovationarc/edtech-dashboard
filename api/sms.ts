@@ -101,7 +101,6 @@ export default async function handler(
 
     // Validate required fields
     if (!phoneNumber || !message) {
-      console.error('❌ Missing required fields');
       return res.status(400).json({
         success: false,
         error: 'Phone number and message are required',
@@ -115,11 +114,7 @@ export default async function handler(
 
     // Check if SMS service is configured
     if (!SMS_API_KEY || !SENDER_ID) {
-      console.error('❌ SMS provider credentials not configured');
-      console.error('Missing:', {
-        SMS_API_KEY: !!SMS_API_KEY,
-        SENDER_ID: !!SENDER_ID
-      });
+      console.error('SMS provider credentials not configured');
       return res.status(500).json({
         success: false,
         error: 'SMS provider not configured. Please contact administrator.',
@@ -138,7 +133,6 @@ export default async function handler(
       }
 
       if (!isAuthorized) {
-        console.error('❌ Unauthorized SMS request');
         return res.status(401).json({
           success: false,
           error: 'Unauthorized request',
@@ -165,12 +159,6 @@ export default async function handler(
     // Convert message to GSM 7-bit encoding
     const formattedMessage = toGSM7Bit(message);
 
-    console.log('📱 Sending SMS:', { 
-      number: formattedNumber.substring(0, 5) + '****' + formattedNumber.substring(formattedNumber.length - 2),
-      messageLength: formattedMessage.length,
-      encoding: 'GSM_7BIT'
-    });
-
     // Call BulkSMSBD API
     const url = 'http://bulksmsbd.net/api/smsapi';
 
@@ -193,8 +181,6 @@ export default async function handler(
 
     const rawText = await smsResponse.text();
 
-    console.log('📡 SMS Provider Response:', rawText);
-
     // BulkSMSBD returns different responses
     // Success: Usually contains "success" or specific success code
     const isSuccess = 
@@ -203,15 +189,13 @@ export default async function handler(
       /^[0-9]+$/.test(rawText.trim());
 
     if (!isSuccess) {
-      console.error('❌ SMS Provider Error:', rawText);
+      console.error('SMS Provider Error:', rawText);
       return res.status(500).json({
         success: false,
         error: 'Failed to send SMS',
         providerResponse: rawText
       });
     }
-
-    console.log('✅ SMS sent successfully');
 
     return res.status(200).json({
       success: true,
@@ -220,7 +204,7 @@ export default async function handler(
     });
 
   } catch (error: any) {
-    console.error('🔥 SMS API Error:', error);
+    console.error('SMS API Error:', error);
 
     return res.status(500).json({
       success: false,
