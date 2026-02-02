@@ -46,6 +46,30 @@ export interface UserProfile {
   lastLoginIp?: string;
 }
 
+// Helper function to normalize User ID format
+// Converts any case prefix to uppercase: st-2601-00001 → ST-2601-00001
+export const normalizeUserId = (userId: string): string => {
+  if (!userId) return userId;
+  
+  // Trim whitespace
+  userId = userId.trim();
+  
+  // Check if it matches the pattern: XX-YYMM-XXXXX (where XX can be any case)
+  const userIdPattern = /^([a-zA-Z]{2})-(\d{4})-(\d{5})$/;
+  const match = userId.match(userIdPattern);
+  
+  if (match) {
+    // Convert prefix to uppercase and reconstruct
+    const prefix = match[1].toUpperCase();
+    const yearMonth = match[2];
+    const sequence = match[3];
+    return `${prefix}-${yearMonth}-${sequence}`;
+  }
+  
+  // If no match, just return trimmed (might be invalid format)
+  return userId;
+};
+
 // Password strength validation
 export const validatePasswordStrength = (password: string): {
   isStrong: boolean;
@@ -103,13 +127,16 @@ export const validatePasswordStrength = (password: string): {
 // Helper function to find user by User ID via BACKEND API
 const findUserByUserId = async (userId: string): Promise<any> => {
   try {
+    // Normalize the User ID to uppercase prefix
+    const normalizedUserId = normalizeUserId(userId);
+    
     const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                        import.meta.env.VITE_API_URL ||
                        'https://edtech-dashboard-alpha.vercel.app';
     const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
     const requestBody: any = {
-      loginId: userId, // User ID only
+      loginId: normalizedUserId, // Normalized User ID only
       purpose: 'user-lookup'
     };
 
@@ -212,6 +239,9 @@ export const authService = {
     address: string | undefined
   ): Promise<UserProfile> {
     try {
+      // Normalize User ID to uppercase prefix
+      const normalizedUserId = normalizeUserId(userId);
+      
       // Validate password strength
       const passwordValidation = validatePasswordStrength(password);
       if (!passwordValidation.isStrong) {
@@ -222,9 +252,9 @@ export const authService = {
       let emailForAuth = email;
       if (!emailForAuth || !emailForAuth.includes('@')) {
         if (role === 'admin') {
-          emailForAuth = `${userId || phoneNumber}@admin.local`;
+          emailForAuth = `${normalizedUserId || phoneNumber}@admin.local`;
         } else {
-          emailForAuth = `${userId || phoneNumber}@student.local`;
+          emailForAuth = `${normalizedUserId || phoneNumber}@student.local`;
         }
       }
 
@@ -240,7 +270,7 @@ export const authService = {
       // Create user profile in Firestore
       const userProfile: any = {
         uid: user.uid,
-        userId: userId,
+        userId: normalizedUserId,
         email: email || null,
         name: fullName,
         surname: surname,
@@ -272,7 +302,7 @@ export const authService = {
 
       return {
         uid: user.uid,
-        userId: userId,
+        userId: normalizedUserId,
         email: email,
         name: fullName,
         surname: surname,
@@ -288,17 +318,17 @@ export const authService = {
         role: role as any,
         status: status as any,
         createdAt: new Date(),
-        lastLogin: new Date()
+        mobileNumber: mobileNumber
       };
     } catch (error: any) {
       let errorMessage = error.message;
       
       if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'An account with this email already exists';
+        errorMessage = 'This email is already registered';
       } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak';
+        errorMessage = 'Password must be at least 8 characters';
       } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
+        errorMessage = 'Invalid email format';
       }
       
       throw new Error(errorMessage);
@@ -306,95 +336,106 @@ export const authService = {
   },
 
   /**
-   * Sign in with User ID and password
-   * Supports all account types: admin, manager, teacher, student, parent, etc.
+   * Sign in existing user
+   * Supports userId-based login with device ID tracking
    */
-  async signIn(userId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
+  async signIn(identifier: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
-      const currentDeviceId = generateDeviceId();
+      // Normalize identifier (User ID) to uppercase prefix
+      const normalizedIdentifier = normalizeUserId(identifier);
       
       // Set persistence based on rememberMe
-      // If rememberMe is false, use session persistence (logout when browser closes)
-      // If rememberMe is true, use local persistence (stay logged in)
-      if (rememberMe) {
-        await setPersistence(auth, browserLocalPersistence);
-      } else {
-        await setPersistence(auth, browserSessionPersistence);
-      }
-      
-      // Search for user by User ID only (no email or phone number login)
-      const userData = await findUserByUserId(userId);
-      
-      if (!userData) {
-        throw new Error('Account not found. Please check your User ID.');
-      }
-      
-      // Determine email for auth based on role
-      let emailForAuth = userData.email;
-      if (!emailForAuth || !emailForAuth.includes('@')) {
-        if (userData.role === 'admin') {
-          emailForAuth = `${userData.userId || userData.phoneNumber}@admin.local`;
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+
+      let emailForAuth = normalizedIdentifier;
+
+      // Check if identifier is a User ID (e.g., ST-2601-00001)
+      if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(normalizedIdentifier)) {
+        // Use backend API to find user by User ID
+        const userData = await findUserByUserId(normalizedIdentifier);
+        
+        if (!userData) {
+          throw new Error('Invalid User ID or password');
+        }
+
+        // Construct email for Firebase Auth
+        if (userData.email && userData.email.includes('@')) {
+          emailForAuth = userData.email;
         } else {
-          emailForAuth = `${userData.userId || userData.phoneNumber}@student.local`;
+          if (userData.role === 'admin') {
+            emailForAuth = `${normalizedIdentifier}@admin.local`;
+          } else {
+            emailForAuth = `${normalizedIdentifier}@student.local`;
+          }
         }
       }
-      
+
+      // Authenticate with Firebase
       const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
-      
-      // CRITICAL: Verify user exists in Firestore after Firebase Auth login
       const user = userCredential.user;
+
+      // Fetch user profile
       const userDoc = await getDoc(doc(db, 'users', user.uid));
+      
       if (!userDoc.exists()) {
+        throw new Error('User profile not found');
+      }
+
+      const userData = userDoc.data();
+
+      // Check if user is approved
+      if (userData.status === 'pending') {
         await firebaseSignOut(auth);
-        throw new Error('Account not found in database. Please contact administrator.');
+        throw new Error('Your account is pending approval. Please contact an administrator.');
       }
-      
-      // Update userData with Firestore data
-      const firestoreData = userDoc.data();
-      
-      if (firestoreData.status === 'pending') {
+
+      if (userData.status === 'inactive') {
         await firebaseSignOut(auth);
-        throw new Error('Your account is pending approval. Please wait for an administrator to approve your account.');
+        throw new Error('Your account has been deactivated. Please contact an administrator.');
       }
+
+      // Generate and store device ID
+      const deviceId = generateDeviceId();
+      const clientIp = await getClientIp();
       
-      if (firestoreData.status === 'inactive') {
-        await firebaseSignOut(auth);
-        throw new Error('Your account has been deactivated. Please contact support.');
-      }
-      
-      // Device management: Only one device can be logged in at a time
-      const storedDeviceId = firestoreData.deviceId;
-      
-      if (storedDeviceId && storedDeviceId !== currentDeviceId) {
-        // Different device detected - log out from other device by updating deviceId
-        // This will cause the other device to be logged out on next auth state check
-        await updateDoc(doc(db, 'users', user.uid), {
-          deviceId: currentDeviceId,
-          lastLogin: Timestamp.now(),
-          lastLoginIp: await getClientIp()
-        });
-      } else {
-        // Same device or first login - just update lastLogin
-        await updateDoc(doc(db, 'users', user.uid), {
-          deviceId: currentDeviceId,
-          lastLogin: Timestamp.now(),
-          lastLoginIp: await getClientIp()
-        });
-      }
-      
+      await updateDoc(doc(db, 'users', user.uid), {
+        lastLogin: Timestamp.now(),
+        deviceId: deviceId,
+        lastLoginIp: clientIp
+      });
+
       return {
         uid: user.uid,
-        ...firestoreData,
-        createdAt: firestoreData.createdAt?.toDate() || new Date(),
-        lastLogin: new Date()
-      } as UserProfile;
+        userId: userData.userId,
+        email: userData.email,
+        name: userData.name,
+        surname: userData.surname,
+        fullName: userData.fullName,
+        dob: userData.dob,
+        phoneNumber: userData.phoneNumber,
+        guardianPhone: userData.guardianPhone,
+        bloodGroup: userData.bloodGroup,
+        gender: userData.gender,
+        religion: userData.religion,
+        address: userData.address,
+        classGrade: userData.classGrade,
+        role: userData.role,
+        status: userData.status,
+        createdAt: userData.createdAt.toDate(),
+        lastLogin: new Date(),
+        approvedBy: userData.approvedBy,
+        approvedAt: userData.approvedAt?.toDate(),
+        mobileNumber: userData.mobileNumber,
+        deviceId: deviceId,
+        lastLoginIp: clientIp
+      };
     } catch (error: any) {
       let errorMessage = error.message;
       
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        errorMessage = 'Invalid password. Please try again.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        errorMessage = 'Invalid User ID or password';
       } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later.';
+        errorMessage = 'Too many failed login attempts. Please try again later.';
       } else if (error.code === 'auth/network-request-failed') {
         errorMessage = 'Network error. Please check your connection.';
       }
@@ -404,11 +445,134 @@ export const authService = {
   },
 
   /**
-   * Check if account exists by phone number
-   * Used for duplicate checking during registration (student accounts only)
-   * Returns count of STUDENT accounts only (excludes admin/manager/teacher accounts)
+   * Get user profile by UID
    */
-  async checkAccountExists(phoneNumber: string): Promise<{ 
+  async getUserProfile(uid: string): Promise<UserProfile | null> {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      
+      if (!userDoc.exists()) {
+        return null;
+      }
+
+      const userData = userDoc.data();
+      
+      return {
+        uid: userDoc.id,
+        userId: userData.userId,
+        email: userData.email,
+        name: userData.name,
+        surname: userData.surname,
+        fullName: userData.fullName,
+        dob: userData.dob,
+        phoneNumber: userData.phoneNumber,
+        guardianPhone: userData.guardianPhone,
+        bloodGroup: userData.bloodGroup,
+        gender: userData.gender,
+        religion: userData.religion,
+        address: userData.address,
+        classGrade: userData.classGrade,
+        role: userData.role,
+        status: userData.status,
+        createdAt: userData.createdAt.toDate(),
+        lastLogin: userData.lastLogin?.toDate(),
+        approvedBy: userData.approvedBy,
+        approvedAt: userData.approvedAt?.toDate(),
+        mobileNumber: userData.mobileNumber
+      };
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
+  /**
+   * Send password reset OTP
+   * Find user by User ID, then send OTP to their registered phone number
+   * Returns phone number for OTP verification
+   */
+  async sendPasswordResetOTP(userId: string): Promise<{ 
+    success: boolean; 
+    phoneNumber?: string; 
+    message: string 
+  }> {
+    try {
+      // Normalize User ID to uppercase prefix
+      const normalizedUserId = normalizeUserId(userId);
+      
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const requestBody: any = {
+        loginId: normalizedUserId,
+        purpose: 'password-reset'
+      };
+
+      if (MASTER_API_KEY) {
+        requestBody.apiKey = MASTER_API_KEY;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `Server error: ${response.status}` };
+        }
+        
+        if (response.status === 404) {
+          return {
+            success: false,
+            message: 'User ID not found. Please check and try again.'
+          };
+        }
+        
+        throw new Error(errorData.error || 'Failed to find user');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        return {
+          success: false,
+          message: result.error || 'User ID not found'
+        };
+      }
+      
+      return {
+        success: true,
+        phoneNumber: result.phoneNumber,
+        message: result.message || 'User found. OTP will be sent to your registered phone number.'
+      };
+    } catch (error: any) {
+      let errorMessage = error.message;
+      if (errorMessage.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
+    }
+  },
+
+  /**
+   * Check if user exists by phone number
+   * Returns count of ALL account types (admin, teacher, student, parent, etc.)
+   * Used for password reset (ForgotPasswordModal)
+   */
+  async checkUserExistsByPhone(phoneNumber: string): Promise<{ 
     exists: boolean; 
     count: number; 
     phoneNumber?: string; 
@@ -422,7 +586,7 @@ export const authService = {
 
       const requestBody: any = {
         phoneNumber,
-        purpose: 'duplicate-check' // This purpose returns STUDENT accounts only
+        purpose: 'password-reset' // This purpose returns ALL account types
       };
 
       if (MASTER_API_KEY) {
@@ -450,11 +614,11 @@ export const authService = {
           return {
             exists: false,
             count: 0,
-            message: 'No existing accounts found'
+            message: 'No account found with this phone number'
           };
         }
         
-        throw new Error(errorData.error || 'Failed to check account');
+        throw new Error(errorData.error || 'Failed to check user');
       }
 
       const result = await response.json();
