@@ -138,6 +138,8 @@ export const validatePasswordStrength = (password: string): {
 };
 
 // Helper function to find user by User ID via BACKEND API
+// This function uses the backend API ONLY and does NOT access Firestore directly
+// This avoids permission errors during the sign-in flow
 const findUserByUserId = async (userId: string): Promise<any> => {
   try {
     // Normalize the User ID to uppercase prefix
@@ -330,7 +332,8 @@ export const authService = {
 
   /**
    * Sign in with User ID (or phone/email) and password
-   * Now includes account status validation
+   * CRITICAL: Uses ONLY the backend API to avoid Firestore permission errors
+   * The backend API can read user data because it uses Admin SDK with elevated permissions
    */
   async signIn(userId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
@@ -341,6 +344,9 @@ export const authService = {
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
 
       // Step 1: Find user by User ID (or phone/email) using backend API
+      // CRITICAL: This uses the backend API which has Admin SDK permissions
+      // This avoids the Firestore permission error that occurs when trying to read
+      // user documents before authentication
       const userData = await findUserByUserId(normalizedUserId);
       
       if (!userData) {
@@ -348,6 +354,8 @@ export const authService = {
       }
 
       // Step 2: Check account status BEFORE attempting Firebase sign-in
+      // CRITICAL: Status check happens here using data from backend API
+      // This prevents authenticated users with inactive/pending accounts from logging in
       if (userData.status !== 'active') {
         // Throw custom error with status information
         throw new AccountStatusError(
@@ -358,45 +366,35 @@ export const authService = {
       }
 
       // Step 3: Get the email for Firebase authentication
-      const userDoc = await getDoc(doc(db, 'users', userData.uid));
-      if (!userDoc.exists()) {
-        throw new Error('User profile not found');
-      }
-
-      const userProfile = userDoc.data();
-      const emailForAuth = userProfile.email || 
+      // We construct it from the userData we got from the backend API
+      const emailForAuth = userData.email || 
                           `${userData.userId || userData.phoneNumber}@${userData.role === 'admin' ? 'admin' : 'student'}.local`;
 
       // Step 4: Sign in with Firebase (only if status is active)
       const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
       const user = userCredential.user;
 
-      // Step 5: Generate and store device fingerprint
+      // Step 5: Generate device fingerprint and get IP
       const deviceId = generateDeviceId();
       const clientIp = await getClientIp();
 
       // Step 6: Update device ID and last login in Firestore
+      // NOW the user is authenticated, so this update will succeed
       await updateDoc(doc(db, 'users', user.uid), {
         deviceId: deviceId,
         lastLogin: Timestamp.now(),
         lastLoginIp: clientIp
       });
 
-      // Step 7: Get updated user profile
-      const updatedDoc = await getDoc(doc(db, 'users', user.uid));
-      const updatedProfile = updatedDoc.data() as UserProfile;
-
+      // Step 7: Return user profile from the backend API data
+      // We use the data from backend API (not Firestore) to avoid permission issues
       return {
-        ...updatedProfile,
+        ...userData,
         uid: user.uid,
-        createdAt: updatedProfile.createdAt instanceof Timestamp 
-          ? updatedProfile.createdAt.toDate() 
-          : new Date(updatedProfile.createdAt),
-        lastLogin: updatedProfile.lastLogin instanceof Timestamp 
-          ? updatedProfile.lastLogin.toDate() 
-          : updatedProfile.lastLogin 
-            ? new Date(updatedProfile.lastLogin) 
-            : undefined
+        deviceId: deviceId,
+        lastLogin: new Date(),
+        lastLoginIp: clientIp,
+        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt)
       };
     } catch (error: any) {
       // Re-throw AccountStatusError as-is
