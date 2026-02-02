@@ -1,6 +1,6 @@
 // src/components/auth/ForgotUserIdModal.tsx
 import { useState } from 'react';
-import { X, Loader, Shield, AlertCircle, CheckCircle, Phone, UserSearch, CreditCard, LogIn, Copy } from 'lucide-react';
+import { X, Loader, Shield, AlertCircle, CheckCircle, Phone, UserSearch, CreditCard, LogIn } from 'lucide-react';
 import { otpService } from '../../services/otpService';
 import { authService } from '../../services/authService';
 
@@ -30,7 +30,6 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   const [loading, setLoading] = useState(false);
   const [canResendOTP, setCanResendOTP] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
-  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
   // Handle phone number input
   const handlePhoneNumberChange = (value: string) => {
@@ -286,30 +285,24 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     return roleMap[role] || role;
   };
 
-  // Get role icon with Font Awesome
+  // Get role icon
   const getRoleIcon = (role: string) => {
-    const roleIcons: { [key: string]: string } = {
-      'admin': 'fa-solid fa-user-shield',
-      'manager': 'fa-solid fa-user-tie',
-      'course_manager': 'fa-solid fa-book-open-reader',
-      'student_manager': 'fa-solid fa-users-gear',
-      'coordinator': 'fa-solid fa-clipboard-user',
-      'teacher': 'fa-solid fa-chalkboard-user',
-      'student': 'fa-solid fa-user-graduate',
-      'parent': 'fa-solid fa-user-group',
-    };
-    
-    return roleIcons[role.toLowerCase()] || 'fa-solid fa-user';
-  };
-
-  // Copy user ID to clipboard
-  const handleCopyUserId = async (userId: string) => {
-    try {
-      await navigator.clipboard.writeText(userId);
-      setCopiedUserId(userId);
-      setTimeout(() => setCopiedUserId(null), 2000);
-    } catch (err) {
-      setError('Failed to copy User ID');
+    switch (role) {
+      case 'admin':
+      case 'manager':
+      case 'course_manager':
+      case 'student_manager':
+        return '👑';
+      case 'coordinator':
+        return '🎯';
+      case 'teacher':
+        return '👨‍🏫';
+      case 'parent':
+        return '👨‍👩‍👧';
+      case 'student':
+        return '🎓';
+      default:
+        return '👤';
     }
   };
 
@@ -360,67 +353,58 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
                   className="bg-gray-800/60 backdrop-blur-xl rounded-xl p-5 border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 hover:scale-105"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-xl p-3 border border-primary-500/30">
-                      <i className={`${getRoleIcon(user.role)} text-2xl text-primary-400`}></i>
-                    </div>
+                    <div className="text-4xl">{getRoleIcon(user.role)}</div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="text-white font-semibold text-lg">
                           {user.fullName || user.name || user.surname}
                         </h3>
-                        <span className="px-2 py-0.5 bg-primary-500/20 text-primary-300 text-xs rounded-full border border-primary-500/30">
-                          {getRoleDisplayName(user.role)}
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          user.status === 'active' 
+                            ? 'bg-green-900/40 text-green-300 border border-green-700/50' 
+                            : user.status === 'pending'
+                            ? 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50'
+                            : 'bg-red-900/40 text-red-300 border border-red-700/50'
+                        }`}>
+                          {user.status}
                         </span>
                       </div>
-                      
-                      <div className="flex items-center gap-2 mb-2">
-                        <p className="text-gray-400 text-sm">User ID:</p>
-                        <div className="flex items-center gap-2 bg-gray-900/50 px-3 py-1 rounded-lg border border-gray-700/50">
-                          <code className="text-primary-300 font-mono text-sm font-semibold">
-                            {user.userId}
-                          </code>
-                          <button
-                            onClick={() => handleCopyUserId(user.userId)}
-                            className="text-gray-400 hover:text-primary-400 transition-colors duration-200 active:scale-90"
-                            title="Copy User ID"
-                          >
-                            {copiedUserId === user.userId ? (
-                              <CheckCircle size={14} className="text-green-400" />
-                            ) : (
-                              <Copy size={14} />
-                            )}
-                          </button>
+                      <p className="text-sm text-gray-400 mb-2">{getRoleDisplayName(user.role)}</p>
+                      <div className="bg-gradient-to-r from-primary-900/40 to-purple-900/40 border border-primary-700/50 rounded-lg p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CreditCard size={18} className="text-primary-400" />
+                          <span className="text-white font-mono font-semibold">{user.userId}</span>
                         </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(user.userId);
+                            setSuccess('User ID copied to clipboard!');
+                            setTimeout(() => setSuccess('Phone verified! Here are your User IDs'), 2000);
+                          }}
+                          className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-3 py-1 rounded-lg transition-colors"
+                        >
+                          Copy
+                        </button>
                       </div>
-                      
-                      <p className="text-gray-500 text-xs">
-                        Status: <span className="text-green-400">{user.status}</span>
-                      </p>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="mt-6 space-y-3">
-              <button
-                onClick={() => {
+            <button
+              onClick={() => {
+                if (onSignInClick) {
+                  onSignInClick();
+                } else {
                   onClose();
-                  if (onSignInClick) onSignInClick();
-                }}
-                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-3 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
-              >
-                <LogIn size={18} />
-                <span>Sign In Now</span>
-              </button>
-            </div>
-
-            <div className="mt-6 bg-gray-800/40 backdrop-blur-xl rounded-xl p-4 border border-gray-700/30">
-              <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-2">
-                <Shield size={14} />
-                Keep your User ID safe and confidential
-              </p>
-            </div>
+                }
+              }}
+              className="w-full mt-6 bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+            >
+              <LogIn size={20} />
+              <span>Go to Sign In</span>
+            </button>
           </div>
         </div>
       </div>
@@ -432,11 +416,11 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-blue-500/10 rounded-3xl pointer-events-none"></div>
           
           <button
-            onClick={onClose}
-            className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+            onClick={() => setCurrentStep('phone')}
+            className="absolute left-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 z-10"
           >
             <X size={24} />
           </button>
