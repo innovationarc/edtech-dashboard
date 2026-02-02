@@ -1,7 +1,7 @@
 // /src/contexts/DashboardContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { authService, UserProfile } from '../services/authService';
+import { authService, UserProfile, AccountStatusError } from '../services/authService';
 import { userService } from '../services/userService';
 import { gamificationService } from '../services/gamificationService';
 import { getDoc, doc } from 'firebase/firestore';
@@ -50,11 +50,7 @@ export const useDashboard = () => {
   return context;
 };
 
-interface DashboardProviderProps {
-  children: ReactNode;
-}
-
-// Generate device fingerprint (same as in authService)
+// Generate a unique device ID based on browser fingerprint
 const generateDeviceId = (): string => {
   const navigator = window.navigator;
   const screen = window.screen;
@@ -65,7 +61,8 @@ const generateDeviceId = (): string => {
     screen.colorDepth,
     screen.width + 'x' + screen.height,
     new Date().getTimezoneOffset(),
-    navigator.hardwareConcurrency || 'unknown',
+    !!window.sessionStorage,
+    !!window.localStorage
   ].join('|');
   
   let hash = 0;
@@ -78,25 +75,24 @@ const generateDeviceId = (): string => {
   return 'device_' + Math.abs(hash).toString(36);
 };
 
-export const DashboardProvider = ({ children }: DashboardProviderProps) => {
+export const DashboardProvider = ({ children }: { children: ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '#6366f1');
-  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#10b981');
-  const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
-  const [siteName, setSiteName] = useState(() => localStorage.getItem('siteName') || 'Learning Management Portal');
-  const [siteTagline, setSiteTagline] = useState(() => localStorage.getItem('siteTagline') || 'Empowering educators, inspiring students');
-  const [contactEmail, setContactEmail] = useState(() => localStorage.getItem('contactEmail') || 'admin@example.com');
+  const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '#3b82f6');
+  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#8b5cf6');
+  const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter, system-ui, sans-serif');
+  const [siteName, setSiteName] = useState(() => localStorage.getItem('siteName') || 'EduPlatform');
+  const [siteTagline, setSiteTagline] = useState(() => localStorage.getItem('siteTagline') || 'Your Learning Journey Starts Here');
+  const [contactEmail, setContactEmail] = useState(() => localStorage.getItem('contactEmail') || 'support@eduplatform.com');
   const [siteLogoUrl, setSiteLogoUrl] = useState(() => localStorage.getItem('siteLogoUrl') || '');
-  const [timezone, setTimezone] = useState(() => localStorage.getItem('timezone') || 'utc');
-  const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const [timezone, setTimezone] = useState(() => localStorage.getItem('timezone') || 'UTC');
 
-  // Handle window resize to detect desktop/mobile
   useEffect(() => {
     const handleResize = () => {
       const desktop = window.innerWidth >= 1024;
@@ -119,6 +115,17 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           // Get user profile from Firestore using the user's ID
           const userProfile = await userService.getUserById(firebaseUser.uid);
           if (userProfile) {
+            // CRITICAL: Check account status before allowing session
+            if (userProfile.status === 'pending' || userProfile.status === 'inactive') {
+              console.log(`Account status is ${userProfile.status}. Logging out.`);
+              await authService.signOut();
+              setUser(null);
+              setIsAuthenticated(false);
+              setSidebarOpen(false);
+              setLoading(false);
+              return;
+            }
+
             // CRITICAL: Device verification for single-device login enforcement
             const currentDeviceId = generateDeviceId();
             const storedDeviceId = userProfile.deviceId;
@@ -198,6 +205,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           }
         } catch (error) {
           console.error('Error getting user profile:', error);
+          await authService.signOut();
           setUser(null);
           setIsAuthenticated(false);
           setSidebarOpen(false);
@@ -213,11 +221,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     return () => unsubscribe();
   }, [isDesktop]);
 
-  // Apply theme changes to document
+  // Persist theme, colors, and branding settings
   useEffect(() => {
-    const root = document.documentElement;
-    
-    // Save to localStorage
     localStorage.setItem('theme', theme);
     localStorage.setItem('primaryColor', primaryColor);
     localStorage.setItem('accentColor', accentColor);
@@ -227,6 +232,12 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     localStorage.setItem('contactEmail', contactEmail);
     localStorage.setItem('siteLogoUrl', siteLogoUrl);
     localStorage.setItem('timezone', timezone);
+    
+    // Update document title
+    document.title = siteName;
+    
+    // Apply theme and colors to root element
+    const root = document.documentElement;
     
     // Apply theme classes
     root.className = root.className.replace(/theme-\w+/g, '');
@@ -327,6 +338,10 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       }
     } catch (error: any) {
       setLoading(false);
+      // Re-throw AccountStatusError to be handled by SignInModal
+      if (error instanceof AccountStatusError) {
+        throw error;
+      }
       throw new Error(error.message);
     } finally {
       setLoading(false);
@@ -381,13 +396,13 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   };
 
   return (
-    <DashboardContext.Provider 
-      value={{ 
-        sidebarOpen, 
+    <DashboardContext.Provider
+      value={{
+        sidebarOpen,
         toggleSidebarClick,
         handleMouseEnterSidebarArea,
         handleMouseLeaveSidebarArea,
-        handleSearch, 
+        handleSearch,
         handleSignIn,
         handleSignOut,
         isAuthenticated,
