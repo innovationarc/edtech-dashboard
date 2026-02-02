@@ -80,6 +80,50 @@ async function userIdExists(db: admin.firestore.Firestore, userId: string): Prom
   }
 }
 
+// Helper function to get the highest serial number for a prefix across all months
+async function getHighestSerialNumber(db: admin.firestore.Firestore, prefix: string): Promise<number> {
+  try {
+    console.log(`🔍 Searching for highest serial number with prefix: ${prefix}`);
+    
+    // Query all users with this prefix, ordered by userId descending
+    // This will get the latest user ID regardless of month
+    const query = await db.collection('users')
+      .where('userId', '>=', `${prefix}-`)
+      .where('userId', '<', `${prefix}.`)  // Using '.' as it comes after '-' in ASCII
+      .orderBy('userId', 'desc')
+      .limit(100)  // Get top 100 to ensure we find the highest number
+      .get();
+
+    if (query.empty) {
+      console.log(`📋 No existing users found with prefix ${prefix}`);
+      return 0;
+    }
+
+    let highestNumber = 0;
+
+    // Parse all returned IDs to find the highest serial number
+    query.docs.forEach(doc => {
+      const userId = doc.data().userId;
+      // Format: PREFIX-YYMM-XXXXX
+      const parts = userId.split('-');
+      
+      if (parts.length === 3) {
+        const serialNumber = parseInt(parts[2]);
+        if (!isNaN(serialNumber) && serialNumber > highestNumber) {
+          highestNumber = serialNumber;
+          console.log(`📋 Found user ID: ${userId} with serial: ${serialNumber}`);
+        }
+      }
+    });
+
+    console.log(`✅ Highest serial number for ${prefix}: ${highestNumber}`);
+    return highestNumber;
+  } catch (error) {
+    console.error('Error getting highest serial number:', error);
+    return 0;
+  }
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse<GenerateIdResponse>
@@ -161,19 +205,19 @@ export default async function handler(
     const db = admin.firestore();
     
     // Generate User ID format: PREFIX-YYMM-XXXXX
+    // YYMM represents creation date, XXXXX is a global sequential number for this prefix
     const now = new Date();
     const year = now.getFullYear().toString().slice(-2);
     const month = (now.getMonth() + 1).toString().padStart(2, '0');
     const yearMonth = `${year}${month}`;
-    const idPrefix = `${prefix}-${yearMonth}-`;
 
-    console.log(`🔢 Generating ${role} ID with prefix:`, idPrefix);
+    console.log(`🔢 Generating ${role} ID with prefix: ${prefix}-${yearMonth}-`);
 
-    // Use a counter document for atomic sequential ID generation
-    const counterRef = db.collection('counters').doc(`${prefix}-${yearMonth}`);
+    // Use a global counter per prefix (not per month)
+    const counterRef = db.collection('counters').doc(prefix);
     
     let userId: string = '';
-    let maxRetries = 10; // Prevent infinite loops in case of issues
+    let maxRetries = 10;
     let retryCount = 0;
     
     while (retryCount < maxRetries) {
@@ -187,33 +231,39 @@ export default async function handler(
           if (counterDoc.exists) {
             const currentCount = counterDoc.data()?.count || 0;
             nextNumber = currentCount + 1;
+          } else {
+            // First time initialization - check existing users
+            console.log('🔄 Initializing counter for prefix:', prefix);
+            const highestSerial = await getHighestSerialNumber(db, prefix);
+            nextNumber = highestSerial + 1;
+            console.log(`📊 Starting from serial number: ${nextNumber}`);
           }
           
-          // Generate the user ID
-          const proposedUserId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
+          // Generate the user ID with current year-month but global serial number
+          const proposedUserId = `${prefix}-${yearMonth}-${nextNumber.toString().padStart(5, '0')}`;
           
-          // Check if this ID already exists in the users collection
+          // Check if this ID already exists
           const existsCheck = await userIdExists(db, proposedUserId);
           
           if (existsCheck) {
             console.warn(`⚠️ ID ${proposedUserId} already exists! Incrementing counter...`);
-            // If ID exists, skip this number and try the next one
+            // If ID exists, increment and try again
             transaction.set(counterRef, {
               count: nextNumber,
               prefix: prefix,
-              yearMonth: yearMonth,
               lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
               skippedDuplicate: true
             }, { merge: true });
             
-            throw new Error('DUPLICATE_ID_FOUND'); // Will trigger retry
+            throw new Error('DUPLICATE_ID_FOUND');
           }
           
-          // Update the counter
+          // Update the global counter for this prefix
           transaction.set(counterRef, {
             count: nextNumber,
             prefix: prefix,
-            yearMonth: yearMonth,
+            lastGenerated: proposedUserId,
+            lastYearMonth: yearMonth,
             lastUpdated: admin.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
           
@@ -245,33 +295,13 @@ export default async function handler(
         
         console.error('🔥 Transaction error:', transactionError);
         
-        // Fallback: Query existing users as backup
-        console.log('⚠️ Using fallback query method');
+        // Fallback: Get highest serial number and increment
+        console.log('⚠️ Using fallback method');
         
-        const usersQuery = await db.collection('users')
-          .where('userId', '>=', idPrefix)
-          .where('userId', '<', `${idPrefix}99999`)
-          .orderBy('userId', 'desc')
-          .limit(1)
-          .get();
-
-        let nextNumber = 1;
-
-        if (!usersQuery.empty) {
-          const lastUserId = usersQuery.docs[0].data().userId;
-          console.log(`📋 Last ${role} ID:`, lastUserId);
-          
-          // Extract the last number from ID format: PREFIX-YYMM-XXXXX
-          const parts = lastUserId.split('-');
-          if (parts.length === 3) {
-            const lastNumber = parseInt(parts[2]);
-            if (!isNaN(lastNumber)) {
-              nextNumber = lastNumber + 1;
-            }
-          }
-        }
-
-        userId = `${idPrefix}${nextNumber.toString().padStart(5, '0')}`;
+        const highestSerial = await getHighestSerialNumber(db, prefix);
+        const nextNumber = highestSerial + 1;
+        
+        userId = `${prefix}-${yearMonth}-${nextNumber.toString().padStart(5, '0')}`;
         
         // Check for duplicates in fallback method too
         const fallbackCheck = await userIdExists(db, userId);
