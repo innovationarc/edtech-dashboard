@@ -76,10 +76,8 @@ async function checkFirestoreAccess(): Promise<boolean> {
     const testQuery = query(testCollection, where('phoneNumber', '==', 'test_access_check'));
     await getDocs(testQuery);
     firestoreAvailable = true;
-    console.log('✅ Firestore access: Available');
     return true;
   } catch (error: any) {
-    console.warn('⚠️ Firestore access: Unavailable, using in-memory storage', error.code || error.message);
     firestoreAvailable = false;
     return false;
   }
@@ -87,7 +85,11 @@ async function checkFirestoreAccess(): Promise<boolean> {
 
 export const otpService = {
   generateOTP(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Use crypto.getRandomValues for secure random number generation
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    const randomNum = array[0] % 900000 + 100000;
+    return randomNum.toString();
   },
 
   /**
@@ -139,7 +141,6 @@ export const otpService = {
     for (const [key, value] of inMemoryOTPStore.entries()) {
       if (value.expiresAt < now) {
         inMemoryOTPStore.delete(key);
-        console.log('🧹 Cleaned up expired in-memory OTP for:', key.substring(0, 10) + '...');
       }
     }
   },
@@ -150,13 +151,9 @@ export const otpService = {
     surname?: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      console.log('📤 Sending OTP - Purpose:', purpose);
-      
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
-      console.log('📱 Normalized phone:', normalizedPhone.substring(0, 5) + '****' + normalizedPhone.substring(normalizedPhone.length - 2));
       
       if (!this.validatePhoneNumber(phoneNumber)) {
-        console.error('❌ Invalid phone number format');
         return { success: false, message: 'Invalid phone number format' };
       }
 
@@ -195,17 +192,16 @@ export const otpService = {
                 
                 if (timeSinceCreation < 60) {
                   hasRecentOTP = true;
-                  console.log('⏱️ Recent OTP found in Firestore');
                 } else {
                   await deleteDoc(doc.ref);
                 }
               }
             } catch (docError) {
-              console.warn('⚠️ Error processing OTP doc:', docError);
+              // Silent error handling for production
             }
           }
         } catch (firestoreError: any) {
-          console.warn('⚠️ Firestore check failed, checking in-memory:', firestoreError.code || firestoreError.message);
+          // Silent error handling for production
         }
       }
 
@@ -216,7 +212,6 @@ export const otpService = {
           const timeSinceCreation = (now.getTime() - stored.createdAt.getTime()) / 1000;
           if (timeSinceCreation < 60) {
             hasRecentOTP = true;
-            console.log('⏱️ Recent OTP found in memory');
           }
         }
       }
@@ -230,7 +225,6 @@ export const otpService = {
 
       // Generate OTP
       const otp = this.generateOTP();
-      console.log('🔐 OTP generated');
       
       const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
       
@@ -249,9 +243,8 @@ export const otpService = {
             purpose
           });
           storedInFirestore = true;
-          console.log('💾 OTP stored in Firestore');
         } catch (firestoreError: any) {
-          console.warn('⚠️ Failed to store OTP in Firestore:', firestoreError.code || firestoreError.message);
+          // Silent error handling for production
         }
       }
       
@@ -263,107 +256,44 @@ export const otpService = {
         attempts: 0,
         purpose
       });
-      console.log('💾 OTP stored in memory');
 
-      // Send SMS
-      try {
-        let message = '';
-        
-        // Customize message based on purpose
-        if (purpose === 'registration') {
-          message = surname 
-            ? `Welcome ${surname}! Your Ed-tech registration OTP is ${otp}. Valid for 2 minutes.`
-            : `Your Ed-tech registration OTP is ${otp}. Valid for 2 minutes.`;
-        } else if (purpose === 'password-reset') {
-          message = `Your Ed-tech password reset OTP is ${otp}. Valid for 2 minutes.`;
-        } else if (purpose === 'user-search') {
-          message = `Your Ed-tech user search OTP is ${otp}. Valid for 2 minutes.`;
-        }
-
-        const gsmMessage = toGSM7Bit(message);
-        
-        console.log('📤 Sending SMS...');
-        console.log('📝 Message length:', gsmMessage.length);
-
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                           import.meta.env.VITE_API_URL ||
-                           'https://edtech-dashboard-alpha.vercel.app';
-        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-        const requestBody: any = {
-          phoneNumber: normalizedPhone,
-          message: gsmMessage
-        };
-
-        if (MASTER_API_KEY) {
-          requestBody.apiKey = MASTER_API_KEY;
-        }
-
-        const smsResponse = await fetch(`${BACKEND_URL}/api/sms`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!smsResponse.ok) {
-          const errorText = await smsResponse.text();
-          console.error('❌ SMS API error:', errorText);
+      // Prepare SMS message based on purpose using GSM_7BIT_EX format
+      let message = '';
+      
+      switch (purpose) {
+        case 'registration':
+          message = toGSM7Bit(
+            `Your Ed-tech verification code is ${otp}.\n` +
+            `This code expires in 02 minutes.\n` +
+            `If you didn't request this, please ignore.`
+          );
+          break;
           
-          // Even if SMS fails, OTP is still valid (stored in Firestore/memory)
-          return {
-            success: true,
-            message: `OTP generated but SMS delivery failed. OTP: ${otp} (expires in 2 min)`
-          };
-        }
-
-        const smsResult = await smsResponse.json();
-        
-        if (smsResult.success) {
-          console.log('✅ SMS sent successfully');
-          return {
-            success: true,
-            message: `Verification code sent to ${this.formatForDisplay(normalizedPhone)}`
-          };
-        } else {
-          console.error('❌ SMS send failed:', smsResult.error);
-          return {
-            success: true,
-            message: `OTP generated but SMS delivery failed. OTP: ${otp} (expires in 2 min)`
-          };
-        }
-      } catch (smsError: any) {
-        console.error('❌ SMS sending error:', smsError.message);
-        return {
-          success: true,
-          message: `OTP generated but SMS delivery failed. OTP: ${otp} (expires in 2 min)`
-        };
+        case 'password-reset':
+          message = toGSM7Bit(
+            `Your Ed-tech password reset code is ${otp}.\n` +
+            `This code is valid for 02 minutes.\n` +
+            `Do not share this code with anyone.`
+          );
+          break;
+          
+        case 'user-search':
+          message = toGSM7Bit(
+            `Your Ed-tech user search verification code is ${otp}.\n` +
+            `This code is valid for 02 minutes.\n` +
+            `If you didn't request this, please ignore.`
+          );
+          break;
       }
-    } catch (error: any) {
-      console.error('❌ Error in sendOTP:', error.message);
-      return {
-        success: false,
-        message: 'Failed to generate OTP. Please try again.'
-      };
-    }
-  },
 
-  async sendRegistrationSuccessSMS(phoneNumber: string, userId: string, surname: string): Promise<void> {
-    try {
-      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
-      
-      const message = `Congratulations ${surname}! Registration successful. Your Student ID: ${userId}. Please save this ID for future logins.`;
-      const gsmMessage = toGSM7Bit(message);
-      
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+      // Send SMS via backend API
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.edtech.com';
+      const MASTER_API_KEY = import.meta.env.VITE_MASTER_API_KEY;
 
       const requestBody: any = {
         phoneNumber: normalizedPhone,
-        message
+        message,
+        encoding: 'GSM_7BIT_EX'
       };
 
       if (MASTER_API_KEY) {
@@ -378,22 +308,62 @@ export const otpService = {
         body: JSON.stringify(requestBody)
       });
 
-      if (response.ok) {
-        console.log('✅ Registration success SMS sent');
-      } else {
-        console.error('❌ Failed to send registration success SMS');
+      if (!response.ok) {
+        throw new Error('SMS service unavailable');
       }
+
+      return { 
+        success: true, 
+        message: 'OTP sent successfully' 
+      };
+    } catch (error: any) {
+      return { 
+        success: false, 
+        message: 'Failed to send OTP. Please try again.' 
+      };
+    }
+  },
+
+  async sendRegistrationSuccessSMS(phoneNumber: string, surname: string, studentId: string): Promise<void> {
+    try {
+      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
+
+      // Registration success message using GSM_7BIT_EX format
+      const message = toGSM7Bit(
+        `Dear ${surname},\n` +
+        `Your registration on Ed-tech has been successfully completed.\n` +
+        `Student ID: ${studentId}\n` +
+        `We look forward to supporting your learning journey.`
+      );
+
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.edtech.com';
+      const MASTER_API_KEY = import.meta.env.VITE_MASTER_API_KEY;
+
+      const requestBody: any = {
+        phoneNumber: normalizedPhone,
+        message,
+        encoding: 'GSM_7BIT_EX'
+      };
+
+      if (MASTER_API_KEY) {
+        requestBody.apiKey = MASTER_API_KEY;
+      }
+
+      await fetch(`${BACKEND_URL}/api/sms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
     } catch (error) {
-      console.error('❌ Error sending registration success SMS:', error);
+      // Silent error handling for production
     }
   },
 
   async verifyOTP(phoneNumber: string, otp: string, purpose: 'registration' | 'password-reset' | 'user-search' = 'registration'): Promise<{ success: boolean; message: string }> {
     try {
-      console.log('🔍 Verifying OTP - Purpose:', purpose);
-      
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
-      console.log('📱 Normalized phone:', normalizedPhone.substring(0, 5) + '****' + normalizedPhone.substring(normalizedPhone.length - 2));
       
       const otpKey = `${normalizedPhone}_${purpose}`;
       const now = new Date();
@@ -410,7 +380,6 @@ export const otpService = {
       // Try Firestore first if available
       if (hasFirestore) {
         try {
-          console.log('🔍 Checking Firestore for OTP...');
           const otpCollection = collection(db, 'otp_verifications');
           const otpQuery = query(
             otpCollection,
@@ -428,7 +397,6 @@ export const otpService = {
                 
                 if (expiresAt < now) {
                   await deleteDoc(doc.ref);
-                  console.log('🗑️ Deleted expired OTP from Firestore');
                 } else {
                   otpData = {
                     ...data,
@@ -436,37 +404,32 @@ export const otpService = {
                     expiresAt
                   };
                   source = 'firestore';
-                  console.log('✅ Found valid OTP in Firestore');
                   break;
                 }
               } catch (docError) {
-                console.warn('⚠️ Error processing OTP document:', docError);
+                // Silent error handling for production
               }
             }
           }
         } catch (firestoreError: any) {
-          console.warn('⚠️ Firestore verification failed, checking in-memory:', firestoreError.code || firestoreError.message);
+          // Silent error handling for production
         }
       }
 
       // Fallback to in-memory storage
       if (!otpData && inMemoryOTPStore.has(otpKey)) {
-        console.log('🔍 Checking in-memory storage for OTP...');
         const stored = inMemoryOTPStore.get(otpKey)!;
         
         if (stored.expiresAt < now) {
           inMemoryOTPStore.delete(otpKey);
-          console.log('🗑️ Deleted expired OTP from memory');
         } else {
           otpData = stored;
           source = 'memory';
-          console.log('✅ Found valid OTP in memory');
         }
       }
 
       // No OTP found
       if (!otpData) {
-        console.log('❌ No valid OTP found');
         return { 
           success: false, 
           message: 'No OTP found. Please request a new one.' 
@@ -475,7 +438,6 @@ export const otpService = {
 
       // Check if OTP has expired
       if (otpData.expiresAt < now) {
-        console.log('❌ OTP has expired');
         if (source === 'memory') {
           inMemoryOTPStore.delete(otpKey);
         }
@@ -487,12 +449,11 @@ export const otpService = {
 
       // Check max attempts
       if (otpData.attempts >= MAX_OTP_ATTEMPTS) {
-        console.log('❌ Max OTP attempts exceeded');
         if (source === 'firestore' && otpData.docRef) {
           try {
             await deleteDoc(otpData.docRef);
           } catch (e) {
-            console.warn('⚠️ Failed to delete OTP after max attempts');
+            // Silent error handling for production
           }
         }
         if (source === 'memory') {
@@ -506,20 +467,16 @@ export const otpService = {
 
       // Verify OTP
       if (otpData.otp === otp) {
-        console.log('✅ OTP verified successfully');
-        
         // Delete OTP after successful verification
         if (source === 'firestore' && otpData.docRef) {
           try {
             await deleteDoc(otpData.docRef);
-            console.log('🗑️ Deleted verified OTP from Firestore');
           } catch (deleteError) {
-            console.warn('⚠️ Failed to delete OTP after verification');
+            // Silent error handling for production
           }
         }
         if (source === 'memory') {
           inMemoryOTPStore.delete(otpKey);
-          console.log('🗑️ Deleted verified OTP from memory');
         }
         
         return { 
@@ -527,7 +484,6 @@ export const otpService = {
           message: 'Phone number verified successfully' 
         };
       } else {
-        console.log('❌ Invalid OTP entered');
         const newAttempts = otpData.attempts + 1;
         
         if (newAttempts >= MAX_OTP_ATTEMPTS) {
@@ -535,7 +491,7 @@ export const otpService = {
             try {
               await deleteDoc(otpData.docRef);
             } catch (e) {
-              console.warn('⚠️ Failed to delete OTP after max attempts');
+              // Silent error handling for production
             }
           }
           if (source === 'memory') {
@@ -551,16 +507,14 @@ export const otpService = {
         if (source === 'firestore' && otpData.docRef) {
           try {
             await updateDoc(otpData.docRef, { attempts: newAttempts });
-            console.log('📝 Updated attempt count in Firestore');
           } catch (updateError) {
-            console.warn('⚠️ Failed to update attempts in Firestore');
+            // Silent error handling for production
           }
         }
         if (source === 'memory') {
           const stored = inMemoryOTPStore.get(otpKey);
           if (stored) {
             stored.attempts = newAttempts;
-            console.log('📝 Updated attempt count in memory');
           }
         }
         
@@ -570,7 +524,6 @@ export const otpService = {
         };
       }
     } catch (error: any) {
-      console.error('❌ Error verifying OTP:', error.message);
       return { 
         success: false, 
         message: 'Failed to verify OTP. Please try again.' 
@@ -586,7 +539,6 @@ export const otpService = {
       // Clean up Firestore OTPs if available
       const hasFirestore = await checkFirestoreAccess();
       if (!hasFirestore) {
-        console.log('⚠️ Skipping Firestore cleanup - not available');
         return;
       }
 
@@ -605,14 +557,13 @@ export const otpService = {
             deletePromises.push(deleteDoc(doc.ref));
           }
         } catch (docError) {
-          console.warn('⚠️ Error processing OTP document during cleanup:', docError);
+          // Silent error handling for production
         }
       }
       
       await Promise.allSettled(deletePromises);
-      console.log(`🧹 Cleaned up ${deletePromises.length} expired OTPs from Firestore`);
     } catch (error) {
-      console.error('❌ Error cleaning up expired OTPs:', error);
+      // Silent error handling for production
     }
   }
 };
