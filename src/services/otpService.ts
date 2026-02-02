@@ -251,7 +251,7 @@ export const otpService = {
           storedInFirestore = true;
           console.log('💾 OTP stored in Firestore');
         } catch (firestoreError: any) {
-          console.warn('⚠️ Failed to store OTP in Firestore:', firestoreError.code || firestoreError.message);
+          console.warn('⚠️ Failed to store in Firestore, using in-memory only:', firestoreError.code || firestoreError.message);
         }
       }
       
@@ -263,94 +263,84 @@ export const otpService = {
         attempts: 0,
         purpose
       });
-      console.log('💾 OTP stored in memory');
+      
+      if (!storedInFirestore) {
+        console.log('💾 OTP stored in in-memory storage only');
+      }
 
-      // Send SMS
-      try {
-        let message: string = '';
-
-if (purpose === 'registration') {
-  // If surname exists, you can customize the message; otherwise use the same message
-  message = surname
-    ? `Your Ed-tech verification code is ${otp}.
-This code expires in 02 minutes.
-If you didn't request this, please ignore.`
-    : `Your Ed-tech verification code is ${otp}.
-This code expires in 02 minutes.
-If you didn't request this, please ignore.`;
-} else if (purpose === 'password-reset') {
-  message = `Your Ed-tech password reset code is ${otp}.
-This code is valid for 02 minutes.
+      let messageText: string;
+      if (purpose === 'user-search' && surname) {
+        messageText = `Dear ${surname},
+Your OTP code for User ID recovery is: ${otp}.
+Valid for ${OTP_EXPIRY_MINUTES} minutes.
+If you did not request this, please ignore.`;
+      } else if (purpose === 'password-reset') {
+        messageText = `Your OTP code for password reset is: ${otp}.
+Valid for ${OTP_EXPIRY_MINUTES} minutes.
+If you did not request this, please contact support immediately.`;
+      } else {
+        messageText = `Your OTP code for Ed-tech registration is: ${otp}.
+Valid for ${OTP_EXPIRY_MINUTES} minutes.
 Do not share this code with anyone.`;
-} else if (purpose === 'user-search') {
-  message = `Your Ed-tech user search verification code is ${otp}.
-This code is valid for 02 minutes.
-Do not share this code with anyone.`;
-} else {
-  // Optional: default/fallback message
-  message = `Your Ed-tech verification code is ${otp}.`;
-}
+      }
 
-        const gsmMessage = toGSM7Bit(message);
+      const gsmMessage = toGSM7Bit(messageText);
+      
+      console.log('📤 Sending SMS via backend...');
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const requestBody: any = {
+        phoneNumber: normalizedPhone,
+        message: gsmMessage
+      };
+
+      if (MASTER_API_KEY) {
+        requestBody.apiKey = MASTER_API_KEY;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/sms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ SMS API error:', response.status, errorText);
         
-        console.log('📤 Sending SMS...');
-        console.log('📝 Message length:', gsmMessage.length);
-
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                           import.meta.env.VITE_API_URL ||
-                           'https://edtech-dashboard-alpha.vercel.app';
-        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-        const requestBody: any = {
-          phoneNumber: normalizedPhone,
-          message: gsmMessage
-        };
-
-        if (MASTER_API_KEY) {
-          requestBody.apiKey = MASTER_API_KEY;
-        }
-
-        const smsResponse = await fetch(`${BACKEND_URL}/api/sms`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!smsResponse.ok) {
-          const errorText = await smsResponse.text();
-          console.error('❌ SMS API error:', errorText);
-          
-          // Even if SMS fails, OTP is still valid (stored in Firestore/memory)
-          return {
-            success: true,
-            message: `OTP generated but SMS delivery failed. OTP: ${otp} (expires in 2 min)`
-          };
-        }
-
-        const smsResult = await smsResponse.json();
-        
-        if (smsResult.success) {
-          console.log('✅ SMS sent successfully');
-          return {
-            success: true,
-            message: `Verification code sent to ${this.formatForDisplay(normalizedPhone)}`
-          };
+        if (storedInFirestore) {
+          console.log('⚠️ SMS failed but OTP stored in Firestore');
         } else {
-          console.error('❌ SMS send failed:', smsResult.error);
-          return {
-            success: true,
-            message: `OTP generated but SMS delivery failed. OTP: ${otp} (expires in 2 min)`
-          };
+          console.log('⚠️ SMS failed, OTP only in memory');
         }
-      } catch (smsError: any) {
-        console.error('❌ SMS sending error:', smsError.message);
+        
         return {
-          success: true,
-          message: `OTP generated but SMS delivery failed. OTP: ${otp} (expires in 2 min)`
+          success: false,
+          message: 'Failed to send OTP. Please check your phone number and try again.'
         };
       }
+
+      const result = await response.json();
+      console.log('✅ SMS API response:', result.success ? 'Success' : 'Failed');
+      
+      if (!result.success) {
+        console.error('❌ SMS sending failed:', result.error);
+        return {
+          success: false,
+          message: result.error || 'Failed to send OTP. Please try again.'
+        };
+      }
+
+      console.log('✅ OTP sent successfully');
+      return {
+        success: true,
+        message: `OTP sent successfully to ${this.formatForDisplay(phoneNumber)}`
+      };
     } catch (error: any) {
       console.error('❌ Error in sendOTP:', error.message);
       return {
@@ -360,13 +350,13 @@ Do not share this code with anyone.`;
     }
   },
 
-  async sendRegistrationSuccessSMS(phoneNumber: string, userId: string, surname: string): Promise<void> {
+  async sendRegistrationSuccessSMS(phoneNumber: string, fullName: string, userId: string): Promise<void> {
     try {
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
-      const message = `Dear ${userId},
+      const message = `Dear ${fullName},
 Your registration on Ed-tech has been successfully completed.
-Student ID: ${surname}.
+Student ID: ${userId}.
 We look forward to supporting your learning journey.`;
       const gsmMessage = toGSM7Bit(message);
       
