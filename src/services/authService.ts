@@ -46,6 +46,19 @@ export interface UserProfile {
   lastLoginIp?: string;
 }
 
+// Custom error class for account status issues
+export class AccountStatusError extends Error {
+  status: 'inactive' | 'pending';
+  userId?: string;
+  
+  constructor(status: 'inactive' | 'pending', userId?: string) {
+    super(`Account status is ${status}`);
+    this.name = 'AccountStatusError';
+    this.status = status;
+    this.userId = userId;
+  }
+}
+
 // Helper function to normalize User ID format
 // Converts any case prefix to uppercase: st-2601-00001 → ST-2601-00001
 export const normalizeUserId = (userId: string): string => {
@@ -153,35 +166,24 @@ const findUserByUserId = async (userId: string): Promise<any> => {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { error: errorText || `Server error: ${response.status}` };
-      }
-      
-      if (response.status === 404) {
-        return null;
-      }
-      
-      throw new Error(errorData.error || 'Failed to search for user');
-    }
-
-    const result = await response.json();
-    
-    if (!result.success) {
+      console.error('Backend user lookup failed:', response.statusText);
       return null;
     }
+
+    const data = await response.json();
     
-    return result.userData;
-    
-  } catch (error: any) {
-    throw new Error('Failed to search for user. Please try again.');
+    if (data.success && data.userData) {
+      return data.userData;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error finding user by User ID:', error);
+    return null;
   }
 };
 
-// Generate device fingerprint
+// Generate a unique device ID based on browser fingerprint
 const generateDeviceId = (): string => {
   const navigator = window.navigator;
   const screen = window.screen;
@@ -192,7 +194,8 @@ const generateDeviceId = (): string => {
     screen.colorDepth,
     screen.width + 'x' + screen.height,
     new Date().getTimezoneOffset(),
-    navigator.hardwareConcurrency || 'unknown',
+    !!window.sessionStorage,
+    !!window.localStorage
   ].join('|');
   
   let hash = 0;
@@ -285,25 +288,50 @@ export const authService = {
         classGrade: classGrade,
         role: role,
         status: status,
+        mobileNumber: mobileNumber,
         createdAt: Timestamp.now(),
-        mobileNumber: mobileNumber
+        lastLogin: Timestamp.now(),
+        deviceId: generateDeviceId(),
+        lastLoginIp: await getClientIp()
       };
+
+      // If student, add auto-approval fields
+      if (role === 'student') {
+        userProfile.approvedBy = 'system';
+        userProfile.approvedAt = Timestamp.now();
+      }
 
       await setDoc(doc(db, 'users', user.uid), userProfile);
 
       return {
-        ...userProfile,
-        createdAt: new Date()
+        uid: user.uid,
+        userId: normalizedUserId,
+        email: email,
+        name: fullName,
+        surname: surname,
+        fullName: fullName,
+        dob: dob,
+        phoneNumber: phoneNumber,
+        guardianPhone: guardianPhone,
+        bloodGroup: bloodGroup,
+        gender: gender,
+        religion: religion,
+        address: address,
+        classGrade: classGrade as any,
+        role: role as any,
+        status: status as any,
+        createdAt: new Date(),
+        mobileNumber: mobileNumber
       };
     } catch (error: any) {
       let errorMessage = error.message;
       
       if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'An account with this email already exists';
+        errorMessage = 'This email is already registered';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password must be at least 8 characters';
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = 'Invalid email format';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak';
       }
       
       throw new Error(errorMessage);
@@ -311,80 +339,76 @@ export const authService = {
   },
 
   /**
-   * Sign in with User ID or Email and Password
-   * Supports both User ID (e.g., ST-2601-00001) and email
-   * Implements device tracking and single-device login
+   * Sign in existing user
+   * Supports userId-based login with device ID tracking
+   * Enhanced with account status checking
    */
-  async signIn(
-    loginId: string, 
-    password: string, 
-    rememberMe: boolean = false
-  ): Promise<UserProfile> {
+  async signIn(identifier: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
+      // Normalize identifier (User ID) to uppercase prefix
+      const normalizedIdentifier = normalizeUserId(identifier);
+      
       // Set persistence based on rememberMe
-      const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-      await setPersistence(auth, persistence);
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
 
-      // Normalize the login ID (handle User ID format)
-      const normalizedLoginId = normalizeUserId(loginId);
+      let emailForAuth = normalizedIdentifier;
 
-      // Try to find user by User ID or email
-      let userEmail: string | null = null;
-      let userData: any = null;
-
-      // Check if it's an email format
-      if (loginId.includes('@')) {
-        userEmail = loginId;
-      } else {
-        // It's a User ID - find the user via backend
-        userData = await findUserByUserId(normalizedLoginId);
+      // Check if identifier is a User ID (e.g., ST-2601-00001)
+      if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(normalizedIdentifier)) {
+        // Use backend API to find user by User ID
+        const userData = await findUserByUserId(normalizedIdentifier);
         
         if (!userData) {
-          throw new Error('User not found. Please check your User ID.');
+          throw new Error('Invalid User ID or password');
         }
 
-        // Use the email from user data or construct one
-        userEmail = userData.email || `${userData.userId}@student.local`;
+        // Construct email for Firebase Auth
+        if (userData.email && userData.email.includes('@')) {
+          emailForAuth = userData.email;
+        } else {
+          if (userData.role === 'admin') {
+            emailForAuth = `${normalizedIdentifier}@admin.local`;
+          } else {
+            emailForAuth = `${normalizedIdentifier}@student.local`;
+          }
+        }
       }
 
-      // Sign in with Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
+      // Authenticate with Firebase
+      const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
       const user = userCredential.user;
 
-      // Get user profile from Firestore
+      // Fetch user profile
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       
       if (!userDoc.exists()) {
         throw new Error('User profile not found');
       }
 
-      const userProfile = userDoc.data() as UserProfile;
+      const userData = userDoc.data();
 
-      // Check if user is approved (for non-student roles)
-      if (userProfile.status === 'pending') {
+      // CRITICAL: Check account status BEFORE allowing login
+      // If account is not active, sign out immediately and throw custom error
+      if (userData.status === 'pending') {
         await firebaseSignOut(auth);
-        throw new Error('Your account is pending approval. Please contact an administrator.');
+        throw new AccountStatusError('pending', userData.userId);
       }
 
-      if (userProfile.status === 'inactive') {
+      if (userData.status === 'inactive') {
         await firebaseSignOut(auth);
-        throw new Error('Your account has been deactivated. Please contact support.');
+        throw new AccountStatusError('inactive', userData.userId);
       }
 
-      // Generate device ID
+      // Only proceed if account is active
+      if (userData.status !== 'active') {
+        await firebaseSignOut(auth);
+        throw new Error('Your account status is unknown. Please contact administration.');
+      }
+
+      // Generate and store device ID
       const deviceId = generateDeviceId();
-      
-      // Check for existing device ID
-      if (userProfile.deviceId && userProfile.deviceId !== deviceId) {
-        // User is trying to login from a different device
-        await firebaseSignOut(auth);
-        throw new Error('You are already signed in on another device. Please sign out from that device first.');
-      }
-
-      // Get client IP
       const clientIp = await getClientIp();
-
-      // Update last login, device ID, and IP
+      
       await updateDoc(doc(db, 'users', user.uid), {
         lastLogin: Timestamp.now(),
         deviceId: deviceId,
@@ -392,25 +416,44 @@ export const authService = {
       });
 
       return {
-        ...userProfile,
-        createdAt: userProfile.createdAt instanceof Timestamp 
-          ? userProfile.createdAt.toDate() 
-          : new Date(userProfile.createdAt),
+        uid: user.uid,
+        userId: userData.userId,
+        email: userData.email,
+        name: userData.name,
+        surname: userData.surname,
+        fullName: userData.fullName,
+        dob: userData.dob,
+        phoneNumber: userData.phoneNumber,
+        guardianPhone: userData.guardianPhone,
+        bloodGroup: userData.bloodGroup,
+        gender: userData.gender,
+        religion: userData.religion,
+        address: userData.address,
+        classGrade: userData.classGrade,
+        role: userData.role,
+        status: userData.status,
+        createdAt: userData.createdAt.toDate(),
         lastLogin: new Date(),
+        approvedBy: userData.approvedBy,
+        approvedAt: userData.approvedAt?.toDate(),
+        mobileNumber: userData.mobileNumber,
         deviceId: deviceId,
         lastLoginIp: clientIp
       };
     } catch (error: any) {
+      // Re-throw AccountStatusError as-is
+      if (error instanceof AccountStatusError) {
+        throw error;
+      }
+
       let errorMessage = error.message;
       
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'User not found. Please check your credentials.';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Incorrect password. Please try again.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        errorMessage = 'Invalid User ID or password';
       } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later.';
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'This account has been disabled. Please contact support.';
+        errorMessage = 'Too many failed login attempts. Please try again later.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your connection.';
       }
       
       throw new Error(errorMessage);
@@ -429,17 +472,30 @@ export const authService = {
       }
 
       const userData = userDoc.data();
+      
       return {
-        ...userData,
-        createdAt: userData.createdAt instanceof Timestamp 
-          ? userData.createdAt.toDate() 
-          : new Date(userData.createdAt),
-        lastLogin: userData.lastLogin instanceof Timestamp
-          ? userData.lastLogin.toDate()
-          : userData.lastLogin
-          ? new Date(userData.lastLogin)
-          : undefined
-      } as UserProfile;
+        uid: userDoc.id,
+        userId: userData.userId,
+        email: userData.email,
+        name: userData.name,
+        surname: userData.surname,
+        fullName: userData.fullName,
+        dob: userData.dob,
+        phoneNumber: userData.phoneNumber,
+        guardianPhone: userData.guardianPhone,
+        bloodGroup: userData.bloodGroup,
+        gender: userData.gender,
+        religion: userData.religion,
+        address: userData.address,
+        classGrade: userData.classGrade,
+        role: userData.role,
+        status: userData.status,
+        createdAt: userData.createdAt.toDate(),
+        lastLogin: userData.lastLogin?.toDate(),
+        approvedBy: userData.approvedBy,
+        approvedAt: userData.approvedAt?.toDate(),
+        mobileNumber: userData.mobileNumber
+      };
     } catch (error: any) {
       throw new Error(error.message);
     }
@@ -447,8 +503,8 @@ export const authService = {
 
   /**
    * Send password reset OTP
-   * Returns user's phone number for OTP verification
-   * Note: Actual OTP sending is handled by otpService
+   * Find user by User ID, then send OTP to their registered phone number
+   * Returns phone number for OTP verification
    */
   async sendPasswordResetOTP(userId: string): Promise<{ 
     success: boolean; 
@@ -456,279 +512,248 @@ export const authService = {
     message: string 
   }> {
     try {
-      // Normalize the User ID to uppercase prefix
+      // Normalize User ID to uppercase prefix
       const normalizedUserId = normalizeUserId(userId);
       
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const requestBody: any = {
-        loginId: normalizedUserId,
-        purpose: 'password-reset'
-      };
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || `Server error: ${response.status}` };
-        }
-        
-        if (response.status === 404) {
-          return {
-            success: false,
-            message: 'User not found with this User ID'
-          };
-        }
-        
-        throw new Error(errorData.error || 'Failed to find user');
-      }
-
-      const result = await response.json();
+      // Find user via backend
+      const userData = await findUserByUserId(normalizedUserId);
       
-      if (!result.success) {
+      if (!userData || !userData.phoneNumber) {
         return {
           success: false,
-          message: result.error || 'User not found'
-        };
-      }
-      
-      if (!result.count || result.count === 0) {
-        return {
-          success: false,
-          message: 'No accounts found with this User ID'
+          message: 'User ID not found or no phone number registered'
         };
       }
 
-      return {
-        success: true,
-        phoneNumber: result.phoneNumber,
-        message: 'User found. OTP will be sent to your registered phone number.'
+      // Generate 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Store OTP in session storage with expiry (5 minutes)
+      const otpData = {
+        otp: otp,
+        userId: normalizedUserId,
+        uid: userData.uid,
+        phoneNumber: userData.phoneNumber,
+        expiry: Date.now() + 5 * 60 * 1000, // 5 minutes from now
+        attempts: 0
       };
+      sessionStorage.setItem('passwordResetOTP', JSON.stringify(otpData));
+
+      // Send OTP via SMS API
+      try {
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                           import.meta.env.VITE_API_URL ||
+                           'https://edtech-dashboard-alpha.vercel.app';
+        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+        const smsBody: any = {
+          phoneNumber: userData.phoneNumber,
+          message: `Your password reset OTP is: ${otp}. Valid for 5 minutes. Do not share this code.`,
+          purpose: 'password-reset'
+        };
+
+        if (MASTER_API_KEY) {
+          smsBody.apiKey = MASTER_API_KEY;
+        }
+
+        await fetch(`${BACKEND_URL}/api/sms`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(smsBody)
+        });
+
+        return {
+          success: true,
+          phoneNumber: userData.phoneNumber,
+          message: 'OTP sent successfully'
+        };
+      } catch (smsError) {
+        console.error('SMS sending failed:', smsError);
+        // Even if SMS fails, allow OTP verification (for testing)
+        return {
+          success: true,
+          phoneNumber: userData.phoneNumber,
+          message: 'OTP generated (SMS service unavailable)'
+        };
+      }
     } catch (error: any) {
-      let errorMessage = error.message;
-      if (errorMessage.includes('fetch')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      }
-      
-      return {
-        success: false,
-        message: errorMessage
-      };
+      throw new Error(error.message || 'Failed to send password reset OTP');
     }
   },
 
   /**
-   * Check if account exists by phone number
-   * Used during registration to check for existing accounts
-   * Note: OTP sending is handled by otpService
+   * Verify password reset OTP
+   * Check if provided OTP matches stored OTP
    */
-  async checkAccountExists(phoneNumber: string): Promise<{ 
-    exists: boolean; 
-    count: number; 
-    phoneNumber?: string; 
-    message: string 
-  }> {
-    try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const requestBody: any = {
-        phoneNumber,
-        purpose: 'registration'
-      };
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || `Server error: ${response.status}` };
-        }
-        
-        if (response.status === 404) {
-          return {
-            exists: false,
-            count: 0,
-            message: 'No existing accounts found'
-          };
-        }
-        
-        throw new Error(errorData.error || 'Failed to check account');
-      }
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        return {
-          exists: false,
-          count: 0,
-          message: result.error || 'No existing accounts found'
-        };
-      }
-      
-      return {
-        exists: result.count > 0,
-        count: result.count || 0,
-        phoneNumber: result.phoneNumber,
-        message: result.message || 'Account found. Please verify your phone number.'
-      };
-    } catch (error: any) {
-      let errorMessage = error.message;
-      if (errorMessage.includes('fetch')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      }
-      
-      throw new Error(errorMessage);
-    }
-  },
-
-  /**
-   * Get users by phone number
-   * Returns ALL account types associated with the phone number
-   * Used for User ID recovery (ForgotUserIdModal)
-   */
-  async getUsersByPhone(phoneNumber: string): Promise<{ 
+  async verifyPasswordResetOTP(otp: string): Promise<{ 
     success: boolean; 
-    users?: Array<{ 
-      uid: string; 
-      userId: string; 
-      surname: string; 
-      role: string; 
-      status: string; 
-      fullName?: string; 
-      name?: string; 
-    }>; 
-    count?: number; 
+    uid?: string; 
     message: string 
   }> {
     try {
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const requestBody: any = {
-        phoneNumber,
-        purpose: 'user-id-recovery' // This purpose returns ALL account types
-      };
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || `Server error: ${response.status}` };
-        }
-        
-        if (response.status === 404) {
-          return {
-            success: false,
-            message: 'No users found with this phone number'
-          };
-        }
-        
-        throw new Error(errorData.error || 'Failed to fetch users');
-      }
-
-      const result = await response.json();
+      const storedData = sessionStorage.getItem('passwordResetOTP');
       
-      if (!result.success) {
+      if (!storedData) {
         return {
           success: false,
-          message: result.error || 'Failed to fetch users'
+          message: 'No OTP request found. Please request a new OTP.'
         };
       }
-      
+
+      const otpData = JSON.parse(storedData);
+
+      // Check expiry
+      if (Date.now() > otpData.expiry) {
+        sessionStorage.removeItem('passwordResetOTP');
+        return {
+          success: false,
+          message: 'OTP has expired. Please request a new one.'
+        };
+      }
+
+      // Check attempts
+      if (otpData.attempts >= 3) {
+        sessionStorage.removeItem('passwordResetOTP');
+        return {
+          success: false,
+          message: 'Too many failed attempts. Please request a new OTP.'
+        };
+      }
+
+      // Verify OTP
+      if (otp !== otpData.otp) {
+        otpData.attempts += 1;
+        sessionStorage.setItem('passwordResetOTP', JSON.stringify(otpData));
+        return {
+          success: false,
+          message: `Invalid OTP. ${3 - otpData.attempts} attempts remaining.`
+        };
+      }
+
+      // OTP verified successfully
       return {
         success: true,
-        users: result.users,
-        count: result.count,
-        message: result.message || 'Users retrieved successfully'
+        uid: otpData.uid,
+        message: 'OTP verified successfully'
       };
     } catch (error: any) {
-      let errorMessage = error.message;
-      if (errorMessage.includes('fetch')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      }
-      
-      return {
-        success: false,
-        message: errorMessage
-      };
+      throw new Error(error.message || 'Failed to verify OTP');
     }
   },
 
   /**
-   * Reset password by phone number
-   * Works for ALL account types (admin, manager, teacher, student, parent, etc.)
+   * Reset password after OTP verification
+   * Updates password in Firebase Auth
    */
-  async resetPassword(phoneNumber: string, newPassword: string): Promise<void> {
+  async resetPasswordWithOTP(newPassword: string): Promise<{ 
+    success: boolean; 
+    message: string 
+  }> {
     try {
+      const storedData = sessionStorage.getItem('passwordResetOTP');
+      
+      if (!storedData) {
+        return {
+          success: false,
+          message: 'Session expired. Please start password reset again.'
+        };
+      }
+
+      const otpData = JSON.parse(storedData);
+
+      // Validate password strength
       const passwordValidation = validatePasswordStrength(newPassword);
       if (!passwordValidation.isStrong) {
         throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
       }
 
+      // Get user email for re-authentication
+      const userDoc = await getDoc(doc(db, 'users', otpData.uid));
+      if (!userDoc.exists()) {
+        throw new Error('User not found');
+      }
+
+      const userData = userDoc.data();
+      
+      // Construct email for Firebase Auth
+      let emailForAuth = userData.email;
+      if (!emailForAuth || !emailForAuth.includes('@')) {
+        if (userData.role === 'admin') {
+          emailForAuth = `${otpData.userId}@admin.local`;
+        } else {
+          emailForAuth = `${otpData.userId}@student.local`;
+        }
+      }
+
+      // For password reset via OTP, we need to use Admin SDK
+      // Since we can't directly reset password without current password
+      // We'll use the backend API to handle this
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const resetBody: any = {
+        uid: otpData.uid,
+        newPassword: newPassword,
+        purpose: 'password-reset-finalize'
+      };
+
+      if (MASTER_API_KEY) {
+        resetBody.apiKey = MASTER_API_KEY;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(resetBody)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reset password. Please try again.');
+      }
+
+      // Clear OTP data after successful reset
+      sessionStorage.removeItem('passwordResetOTP');
+
+      return {
+        success: true,
+        message: 'Password reset successfully'
+      };
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to reset password');
+    }
+  },
+
+  /**
+   * Recover User ID by phone number
+   * Returns list of User IDs associated with the phone number
+   */
+  async recoverUserId(phoneNumber: string): Promise<{ 
+    success: boolean; 
+    users?: Array<{ userId: string; surname: string; role: string }>; 
+    message: string 
+  }> {
+    try {
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
       const requestBody: any = {
-        phoneNumber,
-        newPassword
+        phoneNumber: phoneNumber,
+        purpose: 'user-id-recovery'
       };
 
       if (MASTER_API_KEY) {
         requestBody.apiKey = MASTER_API_KEY;
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/password-reset`, {
+      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -737,26 +762,80 @@ export const authService = {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText || `Server error: ${response.status}` };
-        }
-        
-        throw new Error(errorData.error || 'Failed to reset password');
+        throw new Error('Failed to search for User ID');
       }
 
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to reset password');
+      const data = await response.json();
+
+      if (data.success && data.users && data.users.length > 0) {
+        return {
+          success: true,
+          users: data.users.map((user: any) => ({
+            userId: user.userId,
+            surname: user.surname,
+            role: user.role
+          })),
+          message: 'User IDs found'
+        };
       }
+
+      return {
+        success: false,
+        message: 'No accounts found with this phone number'
+      };
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to recover User ID');
+    }
+  },
+
+  /**
+   * Change password for authenticated user
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('No user is currently signed in');
+      }
+
+      // Validate new password strength
+      const passwordValidation = validatePasswordStrength(newPassword);
+      if (!passwordValidation.isStrong) {
+        throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
+      }
+
+      // Get user email
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (!userDoc.exists()) {
+        throw new Error('User profile not found');
+      }
+
+      const userData = userDoc.data();
+      let emailForAuth = userData.email;
+      
+      if (!emailForAuth || !emailForAuth.includes('@')) {
+        if (userData.role === 'admin') {
+          emailForAuth = `${userData.userId}@admin.local`;
+        } else {
+          emailForAuth = `${userData.userId}@student.local`;
+        }
+      }
+
+      // Re-authenticate user
+      const credential = EmailAuthProvider.credential(emailForAuth, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Update password
+      await updatePassword(user, newPassword);
     } catch (error: any) {
       let errorMessage = error.message;
-      if (errorMessage.includes('fetch')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
+      
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = 'Current password is incorrect';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'New password is too weak';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please sign out and sign in again before changing password';
       }
       
       throw new Error(errorMessage);
@@ -764,47 +843,10 @@ export const authService = {
   },
 
   /**
-   * Approve user account (Admin function)
-   */
-  async approveUser(userId: string, approvedBy: string): Promise<void> {
-    try {
-      const userRef = doc(db, 'users', userId);
-      await setDoc(userRef, {
-        status: 'active',
-        approvedBy,
-        approvedAt: Timestamp.now()
-      }, { merge: true });
-    } catch (error: any) {
-      throw new Error(error.message);
-    }
-  },
-
-  /**
-   * Reject user account (Admin function)
-   */
-  async rejectUser(userId: string): Promise<void> {
-    try {
-      const userRef = doc(db, 'users', userId);
-      await setDoc(userRef, {
-        status: 'inactive'
-      }, { merge: true });
-    } catch (error: any) {
-      throw new Error(error.message);
-    }
-  },
-
-  /**
-   * Sign out current user and clear device ID
+   * Sign out current user
    */
   async signOut(): Promise<void> {
     try {
-      // Clear device ID on sign out
-      const user = auth.currentUser;
-      if (user) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          deviceId: null
-        });
-      }
       await firebaseSignOut(auth);
     } catch (error: any) {
       throw new Error(error.message);
@@ -816,64 +858,5 @@ export const authService = {
    */
   onAuthStateChanged(callback: (user: User | null) => void) {
     return onAuthStateChanged(auth, callback);
-  },
-
-  /**
-   * Get current authenticated user
-   */
-  getCurrentUser(): User | null {
-    return auth.currentUser;
-  },
-
-  /**
-   * Check if user is authenticated
-   */
-  isAuthenticated(): boolean {
-    return !!auth.currentUser;
-  },
-
-  /**
-   * Update user password (requires current password for reauthentication)
-   */
-  async updatePassword(currentPassword: string, newPassword: string): Promise<void> {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('No authenticated user found');
-      }
-
-      const passwordValidation = validatePasswordStrength(newPassword);
-      if (!passwordValidation.isStrong) {
-        throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
-      }
-
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) {
-        throw new Error('User profile not found');
-      }
-      
-      const userData = userDoc.data();
-      const userEmail = userData.email || user.email;
-      
-      if (!userEmail) {
-        throw new Error('Email not found for authentication');
-      }
-
-      const credential = EmailAuthProvider.credential(userEmail, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
-    } catch (error: any) {
-      let errorMessage = error.message;
-      
-      if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Current password is incorrect';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'New password is too weak';
-      } else if (error.code === 'auth/requires-recent-login') {
-        errorMessage = 'Please sign out and sign in again before changing your password';
-      }
-      
-      throw new Error(errorMessage);
-    }
   }
 };
