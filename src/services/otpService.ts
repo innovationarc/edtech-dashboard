@@ -364,9 +364,9 @@ Do not share this code with anyone.`;
     try {
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
-      const message = `Dear ${surname},
+      const message = `Dear ${userId},
 Your registration on Ed-tech has been successfully completed.
-Student ID: ${userId}.
+Student ID: ${surname}.
 We look forward to supporting your learning journey.`;
       const gsmMessage = toGSM7Bit(message);
       
