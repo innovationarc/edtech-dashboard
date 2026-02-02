@@ -191,6 +191,121 @@ async function getClientIp(): Promise<string> {
 
 export const authService = {
   /**
+   * Register a new user account
+   * Supports student registration with automatic approval
+   */
+  async register(
+    email: string | undefined,
+    password: string,
+    fullName: string,
+    surname: string,
+    dob: string,
+    phoneNumber: string,
+    guardianPhone: string | undefined,
+    bloodGroup: string | undefined,
+    gender: string,
+    religion: string | undefined,
+    classGrade: string,
+    role: string,
+    userId: string,
+    mobileNumber: string,
+    address: string | undefined
+  ): Promise<UserProfile> {
+    try {
+      // Validate password strength
+      const passwordValidation = validatePasswordStrength(password);
+      if (!passwordValidation.isStrong) {
+        throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
+      }
+
+      // Determine email for Firebase Auth
+      let emailForAuth = email;
+      if (!emailForAuth || !emailForAuth.includes('@')) {
+        if (role === 'admin') {
+          emailForAuth = `${userId || phoneNumber}@admin.local`;
+        } else {
+          emailForAuth = `${userId || phoneNumber}@student.local`;
+        }
+      }
+
+      // Create Firebase Auth user
+      const userCredential = await createUserWithEmailAndPassword(auth, emailForAuth, password);
+      const user = userCredential.user;
+
+      // Determine status based on role
+      // Students are automatically approved (active)
+      // Other roles require admin approval (pending)
+      const status = role === 'student' ? 'active' : 'pending';
+
+      // Create user profile in Firestore
+      const userProfile: any = {
+        uid: user.uid,
+        userId: userId,
+        email: email || null,
+        name: fullName,
+        surname: surname,
+        fullName: fullName,
+        dob: dob,
+        phoneNumber: phoneNumber,
+        guardianPhone: guardianPhone || null,
+        bloodGroup: bloodGroup || null,
+        gender: gender,
+        religion: religion || null,
+        address: address || null,
+        classGrade: classGrade,
+        role: role,
+        status: status,
+        mobileNumber: mobileNumber,
+        createdAt: Timestamp.now(),
+        lastLogin: Timestamp.now(),
+        deviceId: generateDeviceId(),
+        lastLoginIp: await getClientIp()
+      };
+
+      // If student, add auto-approval fields
+      if (role === 'student') {
+        userProfile.approvedBy = 'system';
+        userProfile.approvedAt = Timestamp.now();
+      }
+
+      await setDoc(doc(db, 'users', user.uid), userProfile);
+
+      return {
+        uid: user.uid,
+        userId: userId,
+        email: email,
+        name: fullName,
+        surname: surname,
+        fullName: fullName,
+        dob: dob,
+        phoneNumber: phoneNumber,
+        guardianPhone: guardianPhone,
+        bloodGroup: bloodGroup,
+        gender: gender,
+        religion: religion,
+        address: address,
+        classGrade: classGrade as any,
+        role: role as any,
+        status: status as any,
+        createdAt: new Date(),
+        lastLogin: new Date()
+      };
+    } catch (error: any) {
+      let errorMessage = error.message;
+      
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'An account with this email already exists';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
+      }
+      
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Sign in with User ID and password
    * Supports all account types: admin, manager, teacher, student, parent, etc.
    */
@@ -274,107 +389,14 @@ export const authService = {
         lastLogin: new Date()
       } as UserProfile;
     } catch (error: any) {
-      throw new Error(error.message || 'Sign in failed');
-    }
-  },
-
-  /**
-   * Sign up new user
-   * Supports all roles: admin, manager, teacher, student, parent, etc.
-   */
-  async signUp(
-    fullName: string,
-    surname: string,
-    dob: string,
-    primaryPhone: string,
-    email: string,
-    password: string,
-    gender: string,
-    classGrade: string,
-    role: string,
-    userId: string,
-    registrationNumber: string,
-    guardianPhone?: string,
-    religion?: string,
-    bloodGroup?: string,
-    address?: string
-  ): Promise<UserProfile> {
-    try {
-      const passwordValidation = validatePasswordStrength(password);
-      if (!passwordValidation.isStrong) {
-        throw new Error('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
-      }
-
-      let emailForAuth = email;
-      if (!email || !email.includes('@')) {
-        if (role === 'admin') {
-          emailForAuth = `${userId || primaryPhone}@admin.local`;
-        } else {
-          emailForAuth = `${userId || primaryPhone}@student.local`;
-        }
-      }
-
-      const initialStatus = role === 'admin' ? 'active' : 'pending';
-
-      const userCredential = await createUserWithEmailAndPassword(auth, emailForAuth, password);
-      const user = userCredential.user;
-      
-      const userProfile: any = {
-        userId: userId,
-        name: fullName,
-        surname,
-        fullName,
-        dob,
-        phoneNumber: primaryPhone,
-        gender,
-        classGrade,
-        role,
-        status: initialStatus,
-        createdAt: Timestamp.now(),
-        registrationNumber,
-        deviceId: generateDeviceId()
-      };
-
-      if (email && email.trim()) {
-        userProfile.email = email.trim();
-      }
-      
-      if (guardianPhone && guardianPhone.trim()) {
-        userProfile.guardianPhone = guardianPhone.trim();
-      }
-      
-      if (religion && religion.trim()) {
-        userProfile.religion = religion.trim();
-      }
-      
-      if (bloodGroup && bloodGroup.trim()) {
-        userProfile.bloodGroup = bloodGroup.trim();
-      }
-      
-      if (address && address.trim()) {
-        userProfile.address = address.trim();
-      }
-      
-      await setDoc(doc(db, 'users', user.uid), userProfile);
-      
-      if (initialStatus === 'pending') {
-        await firebaseSignOut(auth);
-      }
-      
-      return {
-        uid: user.uid,
-        ...userProfile,
-        createdAt: new Date()
-      };
-    } catch (error: any) {
       let errorMessage = error.message;
       
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'This email is already registered. Please use a different email or sign in.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak. Please choose a stronger password';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid password. Please try again.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your connection.';
       }
       
       throw new Error(errorMessage);
@@ -382,11 +404,16 @@ export const authService = {
   },
 
   /**
-   * Send Password Reset OTP
-   * Searches for user by User ID and returns phone number for OTP
-   * Works with all account types
+   * Check if account exists by phone number
+   * Used for duplicate checking during registration (student accounts only)
+   * Returns count of STUDENT accounts only (excludes admin/manager/teacher accounts)
    */
-  async sendPasswordResetOTP(loginId: string): Promise<{ success: boolean; phoneNumber?: string; message: string }> {
+  async checkAccountExists(phoneNumber: string): Promise<{ 
+    exists: boolean; 
+    count: number; 
+    phoneNumber?: string; 
+    message: string 
+  }> {
     try {
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
@@ -394,8 +421,8 @@ export const authService = {
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
       const requestBody: any = {
-        loginId,
-        purpose: 'password-reset'
+        phoneNumber,
+        purpose: 'duplicate-check' // This purpose returns STUDENT accounts only
       };
 
       if (MASTER_API_KEY) {
@@ -419,17 +446,30 @@ export const authService = {
           errorData = { error: errorText || `Server error: ${response.status}` };
         }
         
-        throw new Error(errorData.error || 'Failed to search for account');
+        if (response.status === 404) {
+          return {
+            exists: false,
+            count: 0,
+            message: 'No existing accounts found'
+          };
+        }
+        
+        throw new Error(errorData.error || 'Failed to check account');
       }
 
       const result = await response.json();
       
       if (!result.success) {
-        throw new Error(result.error || 'Account not found');
+        return {
+          exists: false,
+          count: 0,
+          message: result.error || 'No existing accounts found'
+        };
       }
       
       return {
-        success: true,
+        exists: result.count > 0,
+        count: result.count || 0,
         phoneNumber: result.phoneNumber,
         message: result.message || 'Account found. Please verify your phone number.'
       };
