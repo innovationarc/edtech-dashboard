@@ -68,7 +68,7 @@ export const normalizeUserId = (userId: string): string => {
   userId = userId.trim();
   
   // Check if it matches the pattern: XX-YYMM-XXXXX (where XX can be any case)
-  const userIdPattern = /^([a-zA-Z]{2})-(\d{4})-(\d{5})$/;
+  const userIdPattern = /^([a-zA-Z]{2})-?(\d{4})-?(\d{5})$/;
   const match = userId.match(userIdPattern);
   
   if (match) {
@@ -284,163 +284,173 @@ export const authService = {
 
       // Create user profile in Firestore
       const userProfile: any = {
-        uid: user.uid,
         userId: normalizedUserId,
-        email: email || null,
         name: fullName,
-        surname: surname,
-        fullName: fullName,
-        dob: dob,
-        phoneNumber: phoneNumber,
-        guardianPhone: guardianPhone || null,
-        bloodGroup: bloodGroup || null,
-        gender: gender,
-        religion: religion || null,
-        address: address || null,
-        classGrade: classGrade,
-        role: role,
-        status: status,
+        surname,
+        fullName,
+        dob,
+        phoneNumber,
+        gender,
+        classGrade,
+        role,
+        status,
         createdAt: Timestamp.now(),
-        lastLogin: null,
-        mobileNumber: mobileNumber || phoneNumber,
-        deviceId: null,
-        lastLoginIp: null
+        mobileNumber,
+        deviceId: generateDeviceId()
       };
+
+      // Add optional fields
+      if (email && email.trim()) {
+        userProfile.email = email.trim();
+      }
+      
+      if (guardianPhone && guardianPhone.trim()) {
+        userProfile.guardianPhone = guardianPhone.trim();
+      }
+      
+      if (religion && religion.trim()) {
+        userProfile.religion = religion.trim();
+      }
+      
+      if (bloodGroup && bloodGroup.trim()) {
+        userProfile.bloodGroup = bloodGroup.trim();
+      }
+      
+      if (address && address.trim()) {
+        userProfile.address = address.trim();
+      }
 
       // Save to Firestore
       await setDoc(doc(db, 'users', user.uid), userProfile);
 
+      // If status is pending (non-student roles), sign out immediately
+      if (status === 'pending') {
+        await firebaseSignOut(auth);
+      }
+
       return {
+        uid: user.uid,
         ...userProfile,
-        createdAt: userProfile.createdAt.toDate()
+        createdAt: new Date()
       };
     } catch (error: any) {
-      // Handle Firebase Auth errors
       let errorMessage = error.message;
-      
+
       if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'This email is already registered';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email format';
+        errorMessage = 'This email is already registered. Please use a different email or sign in.';
       } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak';
+        errorMessage = 'Password is too weak. Please choose a stronger password';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
       }
-      
+
       throw new Error(errorMessage);
     }
   },
 
   /**
-   * Sign in with User ID (or phone/email) and password
-   * CRITICAL: Uses ONLY the backend API to avoid Firestore permission errors
-   * The backend API can read user data because it uses Admin SDK with elevated permissions
+   * Sign in user
+   * Supports sign-in with User ID only (normalized to uppercase)
    */
   async signIn(userId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
-      // Normalize the User ID to uppercase prefix before searching
+      // Normalize User ID to uppercase prefix format
       const normalizedUserId = normalizeUserId(userId);
-      
+
       // Set persistence based on rememberMe
-      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+      if (rememberMe) {
+        await setPersistence(auth, browserLocalPersistence);
+      } else {
+        await setPersistence(auth, browserSessionPersistence);
+      }
 
-      // Step 1: Find user by User ID (or phone/email) using backend API
-      // CRITICAL: This uses the backend API which has Admin SDK permissions
-      // This avoids the Firestore permission error that occurs when trying to read
-      // user documents before authentication
+      // Use backend API to find user by User ID
       const userData = await findUserByUserId(normalizedUserId);
-      
+
       if (!userData) {
-        throw new Error('Invalid User ID or password');
+        throw new Error('User ID not found. Please check your User ID and try again.');
       }
 
-      // Step 2: Check account status BEFORE attempting Firebase sign-in
-      // CRITICAL: Status check happens here using data from backend API
-      // This prevents authenticated users with inactive/pending accounts from logging in
-      if (userData.status !== 'active') {
-        // Throw custom error with status information
-        throw new AccountStatusError(
-          userData.status as 'inactive' | 'pending',
-          userData.userId,
-          `Your account status is ${userData.status}. Please contact administration.`
-        );
+      // Check account status BEFORE attempting sign-in
+      if (userData.status === 'pending') {
+        throw new AccountStatusError('pending', userData.userId, 'Your account is pending approval. Please wait for admin approval.');
       }
 
-      // Step 3: Get the email for Firebase authentication
-      // We construct it from the userData we got from the backend API
-      const emailForAuth = userData.email || 
-                          `${userData.userId || userData.phoneNumber}@${userData.role === 'admin' ? 'admin' : 'student'}.local`;
+      if (userData.status === 'inactive') {
+        throw new AccountStatusError('inactive', userData.userId, 'Your account has been deactivated. Please contact support.');
+      }
 
-      // Step 4: Sign in with Firebase (only if status is active)
+      // Determine email for auth based on role
+      let emailForAuth = userData.email;
+      if (!emailForAuth || !emailForAuth.includes('@')) {
+        if (userData.role === 'admin') {
+          emailForAuth = `${userData.userId || userData.phoneNumber}@admin.local`;
+        } else {
+          emailForAuth = `${userData.userId || userData.phoneNumber}@student.local`;
+        }
+      }
+
+      // Sign in with Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
       const user = userCredential.user;
 
-      // Step 5: Generate device fingerprint and get IP
-      const deviceId = generateDeviceId();
+      // Generate and update device info
+      const currentDeviceId = generateDeviceId();
       const clientIp = await getClientIp();
 
-      // Step 6: Update device ID and last login in Firestore
-      // NOW the user is authenticated, so this update will succeed
+      // Update last login info
       await updateDoc(doc(db, 'users', user.uid), {
-        deviceId: deviceId,
         lastLogin: Timestamp.now(),
+        deviceId: currentDeviceId,
         lastLoginIp: clientIp
       });
 
-      // Step 7: Return user profile from the backend API data
-      // We use the data from backend API (not Firestore) to avoid permission issues
       return {
-        ...userData,
         uid: user.uid,
-        deviceId: deviceId,
-        lastLogin: new Date(),
-        lastLoginIp: clientIp,
-        createdAt: userData.createdAt?.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt)
+        ...userData,
+        createdAt: userData.createdAt?.toDate?.() || new Date(),
+        lastLogin: new Date()
       };
     } catch (error: any) {
-      // Re-throw AccountStatusError as-is
+      // If it's an AccountStatusError, throw it as-is
       if (error instanceof AccountStatusError) {
         throw error;
       }
 
-      // Handle Firebase Auth errors
       let errorMessage = error.message;
-      
-      if (error.code === 'auth/invalid-credential' || 
-          error.code === 'auth/wrong-password' || 
-          error.code === 'auth/user-not-found') {
-        errorMessage = 'Invalid User ID or password';
+
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = 'Invalid User ID or password. Please check your credentials and try again.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid User ID format';
       } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = 'Too many failed attempts. Please try again later';
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = 'This account has been disabled';
+        errorMessage = 'Too many failed login attempts. Please try again later.';
       } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your connection';
+        errorMessage = 'Network error. Please check your connection and try again.';
       }
-      
+
       throw new Error(errorMessage);
     }
   },
 
   /**
-   * Check if phone number or email already exists
-   * Works for ALL account types (admin, manager, teacher, student, parent, etc.)
+   * Send password reset OTP
+   * Finds user by Student ID, phone number, or email and returns phone for OTP
+   * Used by ForgotPasswordModal
    */
-  async checkExistingAccount(phoneNumber?: string, email?: string): Promise<{
-    exists: boolean;
-    count: number;
-    phoneNumber?: string;
-    message: string;
-  }> {
+  async sendPasswordResetOTP(loginId: string): Promise<{ success: boolean; phoneNumber?: string; message: string }> {
     try {
+      // Normalize the loginId (especially for Student IDs)
+      const normalizedLoginId = normalizeUserId(loginId);
+      
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
       const requestBody: any = {
-        phoneNumber,
-        email,
-        checkDuplicates: true
+        loginId: normalizedLoginId,
+        purpose: 'password-reset'
       };
 
       if (MASTER_API_KEY) {
@@ -464,7 +474,82 @@ export const authService = {
           errorData = { error: errorText || `Server error: ${response.status}` };
         }
         
-        throw new Error(errorData.error || 'Failed to check existing account');
+        throw new Error(errorData.error || 'Failed to search for account');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Account not found');
+      }
+      
+      return {
+        success: true,
+        phoneNumber: result.phoneNumber,
+        message: result.message || 'Account found. Please verify your phone number.'
+      };
+    } catch (error: any) {
+      let errorMessage = error.message;
+      if (errorMessage.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Check if phone number exists in system
+   * Returns count of accounts and phone number for OTP verification
+   * Used by ForgotUserIdModal for initial phone verification
+   */
+  async checkPhoneExists(phoneNumber: string): Promise<{ 
+    exists: boolean; 
+    count: number; 
+    phoneNumber?: string; 
+    message: string 
+  }> {
+    try {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const requestBody: any = {
+        phoneNumber,
+        purpose: 'phone-check'
+      };
+
+      if (MASTER_API_KEY) {
+        requestBody.apiKey = MASTER_API_KEY;
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch {
+          errorData = { error: errorText || `Server error: ${response.status}` };
+        }
+        
+        if (response.status === 404) {
+          return {
+            exists: false,
+            count: 0,
+            message: 'No accounts found with this phone number'
+          };
+        }
+        
+        throw new Error(errorData.error || 'Failed to check phone number');
       }
 
       const result = await response.json();
