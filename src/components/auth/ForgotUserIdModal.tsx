@@ -1,6 +1,6 @@
 // src/components/auth/ForgotUserIdModal.tsx
 import { useState } from 'react';
-import { X, Loader, Shield, AlertCircle, CheckCircle, Phone, UserSearch, CreditCard, LogIn } from 'lucide-react';
+import { X, Loader, Shield, AlertCircle, CheckCircle, Phone, UserSearch, Copy } from 'lucide-react';
 import { otpService } from '../../services/otpService';
 import { authService } from '../../services/authService';
 
@@ -30,6 +30,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   const [loading, setLoading] = useState(false);
   const [canResendOTP, setCanResendOTP] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
+  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
   // Handle phone number input
   const handlePhoneNumberChange = (value: string) => {
@@ -118,8 +119,6 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
       }
 
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
-
-      // Use authService which handles all API communication securely
       const result = await authService.getUsersByPhone(normalizedPhone);
 
       if (!result.success || !result.users || result.count === 0) {
@@ -210,24 +209,25 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
     try {
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
+      const otpResult = await otpService.verifyOTP(normalizedPhone, otpCode);
       
-      // Verify OTP
-      const result = await otpService.verifyOTP(normalizedPhone, otpCode, 'user-search');
-      
-      if (result.success) {
-        // Fetch users using authService (secure method)
-        const usersResult = await authService.getUsersByPhone(normalizedPhone);
-        
-        if (usersResult.success && usersResult.users && usersResult.users.length > 0) {
-          setUsers(usersResult.users);
-          setSuccess('Phone verified! Here are your User IDs');
-          setCurrentStep('results');
-        } else {
-          setError('No users found with this phone number');
-        }
-      } else {
-        setError(result.message);
+      if (!otpResult.success) {
+        setError(otpResult.message);
+        setLoading(false);
+        return;
       }
+
+      const result = await authService.getUsersByPhone(normalizedPhone);
+      
+      if (!result.success || !result.users || result.count === 0) {
+        setError('No user found with this phone number');
+        setLoading(false);
+        return;
+      }
+
+      setUsers(result.users);
+      setCurrentStep('results');
+      setSuccess('User IDs retrieved successfully');
     } catch (err: any) {
       setError(err.message || 'Failed to verify OTP');
     } finally {
@@ -243,14 +243,19 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
     try {
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
-      const otpResult = await otpService.sendOTP(normalizedPhone, 'user-search');
+      const result = await otpService.sendOTP(normalizedPhone, 'user-search');
       
-      if (otpResult.success) {
-        setSuccess(otpResult.message);
+      if (result.success) {
+        setSuccess('OTP resent successfully');
         setOtp(['', '', '', '', '', '']);
         startResendTimer();
+        
+        setTimeout(() => {
+          const firstInput = document.getElementById('userid-otp-0');
+          firstInput?.focus();
+        }, 100);
       } else {
-        setError(otpResult.message);
+        setError(result.message);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to resend OTP');
@@ -259,58 +264,74 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     }
   };
 
-  // Format phone number for display
-  const getDisplayPhoneNumber = () => {
-    if (!phoneNumber) return '';
-    try {
-      const normalized = normalizePhoneNumber(phoneNumber);
-      return `+${normalized}`;
-    } catch {
-      return phoneNumber;
+  // Handle Sign In navigation
+  const handleSignIn = () => {
+    onClose();
+    if (onSignInClick) {
+      onSignInClick();
     }
   };
 
-  // Get role display name
-  const getRoleDisplayName = (role: string): string => {
-    const roleMap: { [key: string]: string } = {
-      admin: 'Admin',
-      manager: 'Manager',
-      course_manager: 'Course Manager',
-      student_manager: 'Student Manager',
-      coordinator: 'Coordinator',
-      teacher: 'Teacher',
-      parent: 'Parent',
-      student: 'Student'
-    };
-    return roleMap[role] || role;
-  };
-
-  // Get role icon
+  // Get role icon - Only 8 roles
   const getRoleIcon = (role: string) => {
-    switch (role) {
-      case 'admin':
-      case 'manager':
-      case 'course_manager':
-      case 'student_manager':
-        return '👑';
-      case 'coordinator':
-        return '🎯';
-      case 'teacher':
-        return '👨‍🏫';
-      case 'parent':
-        return '👨‍👩‍👧';
-      case 'student':
-        return '🎓';
+    const roleIcons: { [key: string]: string } = {
+      'admin': 'fa-solid fa-user-shield',
+      'manager': 'fa-solid fa-user-tie',
+      'course manager': 'fa-solid fa-book-open-reader',
+      'course_manager': 'fa-solid fa-book-open-reader',
+      'student manager': 'fa-solid fa-users-gear',
+      'student_manager': 'fa-solid fa-users-gear',
+      'coordinator': 'fa-solid fa-clipboard-user',
+      'teacher': 'fa-solid fa-chalkboard-user',
+      'student': 'fa-solid fa-user-graduate',
+      'parent': 'fa-solid fa-user-group',
+    };
+    
+    return roleIcons[role.toLowerCase()] || 'fa-solid fa-user';
+  };
+
+  // Get status badge color
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'bg-green-500/20 text-green-300 border-green-500/30';
+      case 'inactive':
+        return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
+      case 'suspended':
+        return 'bg-red-500/20 text-red-300 border-red-500/30';
+      case 'pending':
+        return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
       default:
-        return '👤';
+        return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
     }
   };
 
-  // Results Screen
+  // Get display phone number
+  const getDisplayPhoneNumber = () => {
+    if (phoneNumber.length === 10) {
+      return `+880 ${phoneNumber.substring(0, 4)} ${phoneNumber.substring(4)}`;
+    } else if (phoneNumber.length === 11) {
+      return `+88 ${phoneNumber}`;
+    }
+    return phoneNumber;
+  };
+
+  // Copy user ID to clipboard
+  const handleCopyUserId = async (userId: string) => {
+    try {
+      await navigator.clipboard.writeText(userId);
+      setCopiedUserId(userId);
+      setTimeout(() => setCopiedUserId(null), 2000);
+    } catch (err) {
+      setError('Failed to copy User ID');
+    }
+  };
+
+  // Results Screen - Show all users
   if (currentStep === 'results') {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50 max-h-[90vh] overflow-y-auto">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-2xl p-8 relative shadow-2xl border border-gray-700/50 max-h-[90vh] overflow-y-auto">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-blue-500/5 rounded-3xl pointer-events-none"></div>
           
           <button
@@ -334,7 +355,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               Your User ID{users.length > 1 ? 's' : ''}
             </h2>
             <p className="text-gray-400 text-sm mb-6 text-center">
-              Found {users.length} account{users.length > 1 ? 's' : ''} with this phone number
+              Found {users.length} account{users.length > 1 ? 's' : ''} associated with {getDisplayPhoneNumber()}
             </p>
 
             {success && (
@@ -346,45 +367,65 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               </div>
             )}
 
-            <div className="space-y-4">
-              {users.map((user) => (
-                <div 
-                  key={user.uid}
-                  className="bg-gray-800/60 backdrop-blur-xl rounded-xl p-5 border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 hover:scale-105"
+            {error && (
+              <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
+                <p className="text-sm flex items-center justify-center gap-2">
+                  <AlertCircle size={16} />
+                  {error}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-4 mb-6">
+              {users.map((user, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-800/60 backdrop-blur-xl rounded-xl p-5 border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary-500/20"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="text-4xl">{getRoleIcon(user.role)}</div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-white font-semibold text-lg">
-                          {user.fullName || user.name || user.surname}
-                        </h3>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          user.status === 'active' 
-                            ? 'bg-green-900/40 text-green-300 border border-green-700/50' 
-                            : user.status === 'pending'
-                            ? 'bg-yellow-900/40 text-yellow-300 border border-yellow-700/50'
-                            : 'bg-red-900/40 text-red-300 border border-red-700/50'
-                        }`}>
-                          {user.status}
-                        </span>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-xl p-3 border border-primary-500/30">
+                        <i className={`${getRoleIcon(user.role)} text-2xl text-primary-400`}></i>
                       </div>
-                      <p className="text-sm text-gray-400 mb-2">{getRoleDisplayName(user.role)}</p>
-                      <div className="bg-gradient-to-r from-primary-900/40 to-purple-900/40 border border-primary-700/50 rounded-lg p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <CreditCard size={18} className="text-primary-400" />
-                          <span className="text-white font-mono font-semibold">{user.userId}</span>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-lg font-semibold text-white truncate">
+                            {user.fullName || user.name || `${user.surname}`}
+                          </h3>
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${getStatusColor(user.status)}`}>
+                            {user.status}
+                          </span>
                         </div>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(user.userId);
-                            setSuccess('User ID copied to clipboard!');
-                            setTimeout(() => setSuccess('Phone verified! Here are your User IDs'), 2000);
-                          }}
-                          className="text-xs bg-primary-600 hover:bg-primary-700 text-white px-3 py-1 rounded-lg transition-colors"
-                        >
-                          Copy
-                        </button>
+                        
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-400">User ID:</span>
+                            <div className="flex items-center gap-2 bg-gray-900/50 px-3 py-1.5 rounded-lg border border-gray-700/50">
+                              <span className="text-sm font-mono text-primary-300 font-semibold">
+                                {user.userId}
+                              </span>
+                              <button
+                                onClick={() => handleCopyUserId(user.userId)}
+                                className="text-gray-400 hover:text-primary-400 transition-colors duration-200 active:scale-90"
+                                title="Copy User ID"
+                              >
+                                {copiedUserId === user.userId ? (
+                                  <CheckCircle size={16} className="text-green-400" />
+                                ) : (
+                                  <Copy size={16} />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-400">Role:</span>
+                            <span className="text-sm text-white capitalize">
+                              {user.role.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -393,18 +434,18 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             </div>
 
             <button
-              onClick={() => {
-                if (onSignInClick) {
-                  onSignInClick();
-                } else {
-                  onClose();
-                }
-              }}
-              className="w-full mt-6 bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+              onClick={handleSignIn}
+              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
             >
-              <LogIn size={20} />
-              <span>Go to Sign In</span>
+              <span>Sign In Now</span>
             </button>
+
+            <div className="mt-6 bg-gray-800/40 backdrop-blur-xl rounded-xl p-4 border border-gray-700/30">
+              <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-2">
+                <Shield size={14} />
+                Keep your User ID safe and confidential
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -416,11 +457,11 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-blue-500/10 rounded-3xl pointer-events-none"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
           
           <button
-            onClick={() => setCurrentStep('phone')}
-            className="absolute left-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 z-10"
+            onClick={onClose}
+            className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
           >
             <X size={24} />
           </button>
