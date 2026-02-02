@@ -1,6 +1,6 @@
 // src/components/auth/SignInModal.tsx
 import { useState, useEffect } from 'react';
-import { X, Lock, Loader, CreditCard, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { X, Lock, Loader, CreditCard, AlertCircle, Eye, EyeOff, UserCircle, Shield, ArrowRight } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { AccountStatusError } from '../../services/authService';
 import RegisterModal from './RegisterModal';
@@ -172,42 +172,54 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-6 sm:p-8 relative shadow-2xl border border-gray-700/50">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 rounded-3xl w-full max-w-md relative shadow-2xl border border-gray-700/50 my-8 animate-in fade-in duration-300">
+        {/* Decorative gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 via-purple-500/10 to-blue-500/10 rounded-3xl pointer-events-none"></div>
         
+        {/* Animated background pattern */}
+        <div className="absolute inset-0 opacity-5 rounded-3xl overflow-hidden pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-500 via-purple-500 to-blue-500 animate-pulse"></div>
+        </div>
+        
+        {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+          className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-300 hover:rotate-90 hover:scale-110 z-10 rounded-full p-2 hover:bg-white/10 backdrop-blur-sm"
           disabled={loading}
+          aria-label="Close modal"
         >
-          <X size={24} />
+          <X size={20} />
         </button>
 
-        <div className="relative">
-          <div className="text-center mb-6 sm:mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-600 to-primary-500 mb-4 shadow-2xl shadow-primary-500/50 hover:scale-110 transition-transform duration-300">
-              <CreditCard size={32} className="sm:w-10 sm:h-10 text-white" />
+        <div className="relative p-6 sm:p-8">
+          {/* Header Section */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-600 to-blue-600 mb-5 shadow-2xl shadow-primary-500/30 hover:scale-105 transition-all duration-300">
+              <Shield size={36} className="text-white drop-shadow-lg" />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2">
+            <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-blue-400 mb-3 tracking-tight">
               Welcome Back
-            </h2>
-            <p className="text-gray-400 text-sm">Sign in to continue learning</p>
+            </h1>
+            <p className="text-gray-400 text-base">Sign in to access your account</p>
           </div>
 
+          {/* Error Message */}
           {error && (
-            <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
-              <p className="text-sm flex items-center gap-2">
-                <AlertCircle size={16} />
-                {error}
-              </p>
+            <div className="bg-red-900/30 border-l-4 border-red-500 text-red-200 px-5 py-4 rounded-lg mb-6 backdrop-blur-sm shadow-lg animate-in slide-in-from-top duration-300">
+              <div className="flex items-start gap-3">
+                <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+                <p className="text-sm font-medium">{error}</p>
+              </div>
             </div>
           )}
 
-          <div className="space-y-4 sm:space-y-5">
+          {/* Form */}
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-5">
+            {/* User ID Input */}
             <div className="group">
-              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                <CreditCard size={16} />
+              <label className="block text-sm font-semibold text-gray-300 mb-2.5 flex items-center gap-2">
+                <UserCircle size={16} className="text-primary-400" />
                 User ID
               </label>
               <div className="relative">
@@ -216,18 +228,30 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3.5 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                  className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-4 pl-12 pr-4 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="ST-2601-00001"
                   disabled={loading}
+                  autoComplete="username"
                 />
-                <CreditCard size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                <CreditCard size={20} className="absolute left-4 top-4 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
               </div>
-              <p className="text-xs text-gray-500 mt-1.5">Enter your User ID (e.g., ST-2601-00001)</p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-gray-500">Enter your unique User ID</p>
+                <button 
+                  type="button"
+                  onClick={() => setShowForgotUserId(true)}
+                  className="text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
+                  disabled={loading}
+                >
+                  Forgot User ID?
+                </button>
+              </div>
             </div>
 
+            {/* Password Input */}
             <div className="group">
-              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
-                <Lock size={16} />
+              <label className="block text-sm font-semibold text-gray-300 mb-2.5 flex items-center gap-2">
+                <Lock size={16} className="text-primary-400" />
                 Password
               </label>
               <div className="relative">
@@ -236,47 +260,28 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3.5 pl-11 pr-11 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                  className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-4 pl-12 pr-12 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your password"
                   disabled={loading}
+                  autoComplete="current-password"
                 />
-                <Lock size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                <Lock size={20} className="absolute left-4 top-4 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-3.5 text-gray-400 hover:text-white transition-colors"
+                  className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
                   disabled={loading}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-primary-600 focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer"
-                  disabled={loading}
-                />
-                <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors select-none">
-                  Remember me
-                </span>
-              </label>
-
-              <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-gray-500">Use a strong password</p>
                 <button 
-                  onClick={() => setShowForgotUserId(true)}
-                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
-                  disabled={loading}
-                >
-                  Forgot User ID?
-                </button>
-                <button 
+                  type="button"
                   onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
+                  className="text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
                   disabled={loading}
                 >
                   Forgot Password?
@@ -284,51 +289,100 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </div>
             </div>
 
+            {/* Remember Me Checkbox */}
+            <div className="flex items-center pt-1">
+              <label className="flex items-center gap-3 cursor-pointer group select-none">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="peer w-5 h-5 rounded-md border-2 border-gray-600 bg-gray-800/50 text-primary-600 focus:ring-2 focus:ring-primary-500/30 transition-all cursor-pointer checked:bg-primary-600 checked:border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={loading}
+                  />
+                  <div className="absolute inset-0 rounded-md bg-primary-500/20 scale-0 peer-checked:scale-100 transition-transform pointer-events-none"></div>
+                </div>
+                <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium">
+                  Keep me signed in
+                </span>
+              </label>
+            </div>
+
+            {/* Sign In Button */}
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={loading || !captchaLoaded}
-              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-blue-600 hover:from-primary-700 hover:via-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:via-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 font-bold text-base shadow-2xl hover:shadow-primary-500/50 disabled:shadow-none group relative overflow-hidden"
             >
-              {loading && <Loader size={20} className="animate-spin" />}
-              <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
+              {/* Button gradient overlay animation */}
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
+              
+              <span className="relative flex items-center gap-3">
+                {loading && <Loader size={20} className="animate-spin" />}
+                <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
+                {!loading && captchaLoaded && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
+              </span>
             </button>
+          </form>
+
+          {/* Divider */}
+          <div className="relative my-8">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700/50"></div>
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-4 bg-gray-900 text-gray-500 font-medium">New to our platform?</span>
+            </div>
           </div>
 
-          <div className="mt-6 sm:mt-8 pt-6 border-t border-gray-700/50">
-            <p className="text-sm text-gray-400 text-center">
-              Don't have an account?{' '}
-              <button 
-                onClick={() => setShowRegister(true)}
-                className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-500 hover:from-primary-300 hover:to-purple-400 transition-all duration-200 font-semibold"
-                disabled={loading}
-              >
-                Create one here
-              </button>
-            </p>
-          </div>
+          {/* Create Account Button */}
+          <button 
+            type="button"
+            onClick={() => setShowRegister(true)}
+            className="w-full bg-gray-800/50 hover:bg-gray-800/80 backdrop-blur-sm border-2 border-gray-700/50 hover:border-primary-500/50 text-white py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 font-bold text-base shadow-lg group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
+          >
+            <span className="relative flex items-center gap-3">
+              <UserCircle size={20} className="group-hover:rotate-12 transition-transform" />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-400 group-hover:from-primary-300 group-hover:to-purple-300">
+                Create New Account
+              </span>
+              <ArrowRight size={20} className="text-primary-400 group-hover:translate-x-1 transition-transform" />
+            </span>
+          </button>
 
-          <div className="mt-6 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/30 rounded-xl p-4 backdrop-blur-xl hover:scale-105 transition-transform duration-300">
+          {/* Info Box */}
+          <div className="mt-7 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/20 rounded-xl p-5 backdrop-blur-sm hover:scale-[1.02] transition-all duration-300 shadow-lg">
             <div className="flex items-start gap-3">
-              <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg">
-                <span className="text-xs text-white font-bold">i</span>
+              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+                <span className="text-sm text-white font-bold">i</span>
               </div>
-              <div>
-                <p className="text-xs text-blue-200/90">
-                  <strong className="text-blue-100">First time signing in?</strong> Use the User ID provided during registration along with your password.
+              <div className="flex-1">
+                <p className="text-xs text-blue-100/90 leading-relaxed">
+                  <strong className="text-blue-50 font-semibold block mb-1">First time signing in?</strong>
+                  Use the User ID provided during registration along with your password to access your account.
                 </p>
               </div>
             </div>
           </div>
 
+          {/* Security Badge */}
+          {captchaLoaded && (
+            <div className="mt-5 flex items-center justify-center gap-2 text-xs text-gray-500">
+              <Shield size={14} className="text-green-500" />
+              <span>Protected by reCAPTCHA</span>
+            </div>
+          )}
+
           {/* Terms and Privacy Notice */}
-          <div className="mt-4 text-center">
-            <p className="text-xs text-gray-500">
+          <div className="mt-6 text-center">
+            <p className="text-xs text-gray-500 leading-relaxed">
               By continuing, you agree to our{' '}
               <a 
                 href="/terms-of-service" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-primary-400 hover:text-primary-300 underline"
+                className="text-primary-400 hover:text-primary-300 underline underline-offset-2 transition-colors font-medium"
               >
                 Terms of Service
               </a>
@@ -337,7 +391,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                 href="/privacy-policy" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-primary-400 hover:text-primary-300 underline"
+                className="text-primary-400 hover:text-primary-300 underline underline-offset-2 transition-colors font-medium"
               >
                 Privacy Policy
               </a>
