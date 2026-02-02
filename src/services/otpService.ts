@@ -350,11 +350,11 @@ Do not share this code with anyone.`;
     }
   },
 
-  async sendRegistrationSuccessSMS(phoneNumber: string, fullName: string, userId: string): Promise<void> {
+  async sendRegistrationSuccessSMS(phoneNumber: string, surname: string, userId: string): Promise<void> {
     try {
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
       
-      const message = `Dear ${fullName},
+      const message = `Dear ${surname},
 Your registration on Ed-tech has been successfully completed.
 Student ID: ${userId}.
 We look forward to supporting your learning journey.`;
