@@ -25,12 +25,10 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   const [rememberMe, setRememberMe] = useState(false);
   const [captchaLoaded, setCaptchaLoaded] = useState(false);
   
-  // Account status state
-  const [accountStatus, setAccountStatus] = useState<{
-    show: boolean;
-    status: 'inactive' | 'pending';
-    userId?: string;
-  }>({ show: false, status: 'pending' });
+  // Account status modal state
+  const [showAccountStatusModal, setShowAccountStatusModal] = useState(false);
+  const [accountStatus, setAccountStatus] = useState<'inactive' | 'pending' | null>(null);
+  const [accountUserId, setAccountUserId] = useState<string | undefined>(undefined);
 
   // Load reCAPTCHA v3
   useEffect(() => {
@@ -61,11 +59,9 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
 
       window.grecaptcha.ready(() => {
         window.grecaptcha
-          .execute(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { 
-            action: 'login' 
-          })
-          .then((token: string) => resolve(token))
-          .catch((err: any) => reject(err));
+          .execute(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'login' })
+          .then(resolve)
+          .catch(reject);
       });
     });
   };
@@ -93,13 +89,11 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       await handleSignIn(userId, password, rememberMe);
       onClose();
     } catch (err: any) {
-      // Check if this is an AccountStatusError
+      // Check if it's an AccountStatusError
       if (err instanceof AccountStatusError) {
-        setAccountStatus({
-          show: true,
-          status: err.status,
-          userId: err.userId
-        });
+        setAccountStatus(err.status);
+        setAccountUserId(err.userId);
+        setShowAccountStatusModal(true);
       } else {
         setError(err.message || 'Invalid credentials');
       }
@@ -124,22 +118,26 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   };
 
   const handleAccountStatusClose = () => {
-    setAccountStatus({ show: false, status: 'pending' });
+    setShowAccountStatusModal(false);
+    setAccountStatus(null);
+    setAccountUserId(undefined);
   };
 
   const handleSignInAnotherAccount = () => {
-    setAccountStatus({ show: false, status: 'pending' });
+    setShowAccountStatusModal(false);
+    setAccountStatus(null);
+    setAccountUserId(undefined);
     setUserId('');
     setPassword('');
     setError('');
   };
 
-  // Show account status modal if needed
-  if (accountStatus.show) {
+  // Show AccountStatusModal if account is not active
+  if (showAccountStatusModal && accountStatus) {
     return (
       <AccountStatusModal
-        status={accountStatus.status}
-        userId={accountStatus.userId}
+        status={accountStatus}
+        userId={accountUserId}
         onClose={handleAccountStatusClose}
         onSignInAnotherAccount={handleSignInAnotherAccount}
       />
@@ -191,81 +189,67 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
             <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-600 to-primary-500 mb-4 shadow-2xl shadow-primary-500/50 hover:scale-110 transition-transform duration-300">
               <CreditCard size={32} className="sm:w-10 sm:h-10 text-white" />
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Welcome Back</h2>
-            <p className="text-sm sm:text-base text-gray-400">Sign in to continue your learning journey</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2">
+              Welcome Back
+            </h2>
+            <p className="text-gray-400 text-sm">Sign in to continue learning</p>
           </div>
 
           {error && (
-            <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-400">{error}</p>
+            <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
+              <p className="text-sm flex items-center gap-2">
+                <AlertCircle size={16} />
+                {error}
+              </p>
             </div>
           )}
 
           <div className="space-y-4 sm:space-y-5">
-            <div>
-              <label htmlFor="userId" className="block text-sm font-medium text-gray-300 mb-2">
+            <div className="group">
+              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+                <CreditCard size={16} />
                 User ID
               </label>
               <div className="relative">
                 <input
-                  id="userId"
                   type="text"
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  className="w-full px-4 py-3 sm:py-3.5 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
-                  placeholder="e.g., ST-2601-00001"
+                  className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3.5 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                  placeholder="ST-2601-00001"
                   disabled={loading}
-                  autoComplete="username"
                 />
-                <CreditCard className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <CreditCard size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
-              <button
-                onClick={() => setShowForgotUserId(true)}
-                className="mt-2 text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
-                disabled={loading}
-              >
-                Forgot User ID?
-              </button>
+              <p className="text-xs text-gray-500 mt-1.5">Enter your User ID (e.g., ST-2601-00001)</p>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+            <div className="group">
+              <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+                <Lock size={16} />
                 Password
               </label>
               <div className="relative">
                 <input
-                  id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  className="w-full px-4 py-3 sm:py-3.5 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 pr-20"
+                  className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3.5 pl-11 pr-11 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
                   placeholder="Enter your password"
                   disabled={loading}
-                  autoComplete="current-password"
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-gray-500 hover:text-gray-400 transition-colors duration-200"
-                    disabled={loading}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                  <Lock className="w-5 h-5 text-gray-500" />
-                </div>
+                <Lock size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3.5 text-gray-400 hover:text-white transition-colors"
+                  disabled={loading}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
-              <button
-                onClick={() => setShowForgotPassword(true)}
-                className="mt-2 text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
-                disabled={loading}
-              >
-                Forgot Password?
-              </button>
             </div>
 
             <div className="flex items-center justify-between">
@@ -274,54 +258,89 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-700 bg-gray-800/50 text-primary-500 focus:ring-primary-500 focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-primary-600 focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer"
                   disabled={loading}
                 />
-                <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors duration-200">
+                <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors select-none">
                   Remember me
                 </span>
               </label>
+
+              <div className="flex flex-col items-end gap-1">
+                <button 
+                  onClick={() => setShowForgotUserId(true)}
+                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
+                  disabled={loading}
+                >
+                  Forgot User ID?
+                </button>
+                <button 
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-sm text-primary-400 hover:text-primary-300 transition-colors duration-200"
+                  disabled={loading}
+                >
+                  Forgot Password?
+                </button>
+              </div>
             </div>
 
             <button
               onClick={handleSubmit}
               disabled={loading || !captchaLoaded}
-              className="w-full px-6 py-3.5 sm:py-4 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-xl font-semibold hover:from-primary-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-primary-500/50 transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <Loader className="w-5 h-5 animate-spin" />
-                  Signing In...
-                </span>
-              ) : !captchaLoaded ? (
-                'Loading Security Check...'
-              ) : (
-                'Sign In'
-              )}
-            </button>
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-700"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-gray-900 text-gray-500">or</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowRegister(true)}
-              disabled={loading}
-              className="w-full px-6 py-3.5 bg-gray-800 text-gray-300 rounded-xl font-semibold hover:bg-gray-700 transition-all duration-200 border border-gray-700 hover:border-gray-600 transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              Create New Account
+              {loading && <Loader size={20} className="animate-spin" />}
+              <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
             </button>
           </div>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 sm:mt-8 pt-6 border-t border-gray-700/50">
+            <p className="text-sm text-gray-400 text-center">
+              Don't have an account?{' '}
+              <button 
+                onClick={() => setShowRegister(true)}
+                className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-500 hover:from-primary-300 hover:to-purple-400 transition-all duration-200 font-semibold"
+                disabled={loading}
+              >
+                Create one here
+              </button>
+            </p>
+          </div>
+
+          <div className="mt-6 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-700/30 rounded-xl p-4 backdrop-blur-xl hover:scale-105 transition-transform duration-300">
+            <div className="flex items-start gap-3">
+              <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg">
+                <span className="text-xs text-white font-bold">i</span>
+              </div>
+              <div>
+                <p className="text-xs text-blue-200/90">
+                  <strong className="text-blue-100">First time signing in?</strong> Use the User ID provided during registration along with your password.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Terms and Privacy Notice */}
+          <div className="mt-4 text-center">
             <p className="text-xs text-gray-500">
-              Protected by reCAPTCHA and subject to the{' '}
-              <a href="#" className="text-primary-400 hover:text-primary-300">Privacy Policy</a>
+              By continuing, you agree to our{' '}
+              <a 
+                href="/terms-of-service" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary-400 hover:text-primary-300 underline"
+              >
+                Terms of Service
+              </a>
+              {' '}and{' '}
+              <a 
+                href="/privacy-policy" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-primary-400 hover:text-primary-300 underline"
+              >
+                Privacy Policy
+              </a>
             </p>
           </div>
         </div>
