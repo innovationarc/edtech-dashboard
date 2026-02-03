@@ -4,62 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 
 // Global cache for Firebase Admin instance
 let firebaseAdmin: any = null;
-let initializationAttempts = 0;
-const MAX_INIT_ATTEMPTS = 3;
 
 /**
- * Properly format and clean private key
- * Handles multiple input formats from environment variables
- */
-function formatPrivateKey(key: string): string {
-  if (!key) {
-    throw new Error('Private key is empty or undefined');
-  }
-
-  let cleaned = key.trim();
-  
-  // CRITICAL: First, replace escaped newlines (\\n) with actual newlines
-  // This handles keys stored in .env files as single-line strings
-  cleaned = cleaned.replace(/\\n/g, '\n');
-  
-  // If the key already has proper headers and newlines, return as-is
-  // This prevents double-processing of already-formatted keys
-  if (cleaned.startsWith('-----BEGIN PRIVATE KEY-----\n') && 
-      cleaned.endsWith('\n-----END PRIVATE KEY-----') &&
-      cleaned.split('\n').length > 2) {
-    console.log('✅ Private key already properly formatted');
-    return cleaned;
-  }
-  
-  // Extract just the key content (remove headers/footers if present)
-  let keyContent = cleaned
-    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
-    .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/\r/g, '') // Remove carriage returns
-    .trim();
-  
-  // Remove any remaining newlines/spaces from the base64 content
-  // The base64 content should be continuous
-  keyContent = keyContent.replace(/\s/g, '');
-  
-  // Validate that we have base64 content
-  if (keyContent.length === 0) {
-    throw new Error('Private key content is empty after processing');
-  }
-  
-  // Check if it looks like valid base64
-  if (!/^[A-Za-z0-9+/=]+$/.test(keyContent)) {
-    throw new Error('Private key does not appear to be valid base64');
-  }
-  
-  // Return properly formatted key with newlines every 64 characters
-  const formattedContent = keyContent.match(/.{1,64}/g)?.join('\n') || keyContent;
-  
-  return `-----BEGIN PRIVATE KEY-----\n${formattedContent}\n-----END PRIVATE KEY-----`;
-}
-
-/**
- * Initialize and return Firebase Admin SDK with enhanced error handling
+ * Initialize Firebase Admin SDK with COMPREHENSIVE DEBUGGING
  */
 async function initializeFirebaseAdmin() {
   // Return cached instance if available
@@ -68,15 +15,9 @@ async function initializeFirebaseAdmin() {
     return firebaseAdmin;
   }
 
-  // Check if we've exceeded max attempts
-  if (initializationAttempts >= MAX_INIT_ATTEMPTS) {
-    throw new Error(`Firebase Admin initialization failed after ${MAX_INIT_ATTEMPTS} attempts`);
-  }
-
-  initializationAttempts++;
-
   try {
-    console.log(`🔧 Initializing Firebase Admin SDK (Attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS})...`);
+    console.log('🔧 Initializing Firebase Admin SDK...');
+    console.log('='.repeat(60));
     
     // Use dynamic import for ES module compatibility
     const admin = await import('firebase-admin').then(m => m.default || m);
@@ -85,104 +26,199 @@ async function initializeFirebaseAdmin() {
     if (admin.apps && admin.apps.length > 0) {
       console.log('✅ Firebase Admin already initialized');
       firebaseAdmin = admin;
-      initializationAttempts = 0; // Reset on success
       return admin;
     }
 
     // Get credentials from environment variables
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
+    const privateKeyEnv = process.env.FIREBASE_PRIVATE_KEY;
 
-    // Validate all required environment variables
-    const missingVars = [];
-    if (!projectId) missingVars.push('FIREBASE_PROJECT_ID');
-    if (!clientEmail) missingVars.push('FIREBASE_CLIENT_EMAIL');
-    if (!privateKeyRaw) missingVars.push('FIREBASE_PRIVATE_KEY');
-
-    if (missingVars.length > 0) {
-      const error = `Missing required environment variables: ${missingVars.join(', ')}`;
-      console.error('❌', error);
-      throw new Error(error);
+    // Validate required environment variables
+    if (!projectId || !clientEmail || !privateKeyEnv) {
+      const missing = [];
+      if (!projectId) missing.push('FIREBASE_PROJECT_ID');
+      if (!clientEmail) missing.push('FIREBASE_CLIENT_EMAIL');
+      if (!privateKeyEnv) missing.push('FIREBASE_PRIVATE_KEY');
+      throw new Error(`Missing environment variables: ${missing.join(', ')}`);
     }
 
-    // Format private key properly with fallback
-    let privateKey: string;
-    let privateKeyFormatted: string | null = null;
+    console.log('📋 Environment Variables Status:');
+    console.log('  ✓ Project ID:', projectId);
+    console.log('  ✓ Client Email:', clientEmail);
+    console.log('  ✓ Private Key exists: YES');
+    console.log('  ✓ Private Key raw length:', privateKeyEnv.length);
+    console.log('');
+
+    // DEEP INSPECTION of the private key
+    console.log('🔍 DEEP PRIVATE KEY INSPECTION:');
+    console.log('-'.repeat(60));
     
-    try {
-      console.log('🔑 Processing private key...');
-      console.log('  - Raw key length:', privateKeyRaw!.length);
-      console.log('  - Raw key preview:', privateKeyRaw!.substring(0, 50).replace(/\n/g, '\\n'));
+    // Show first 100 characters
+    console.log('First 100 chars (raw):');
+    console.log(JSON.stringify(privateKeyEnv.substring(0, 100)));
+    console.log('');
+    
+    // Show last 100 characters
+    console.log('Last 100 chars (raw):');
+    console.log(JSON.stringify(privateKeyEnv.substring(privateKeyEnv.length - 100)));
+    console.log('');
+    
+    // Check for different newline patterns
+    const hasBackslashN = privateKeyEnv.includes('\\n');
+    const hasActualNewline = privateKeyEnv.includes('\n');
+    const hasCarriageReturn = privateKeyEnv.includes('\r');
+    
+    console.log('Newline Analysis:');
+    console.log('  - Contains \\\\n (escaped):', hasBackslashN);
+    console.log('  - Contains \\n (actual):', hasActualNewline);
+    console.log('  - Contains \\r (carriage return):', hasCarriageReturn);
+    console.log('');
+
+    // Process the private key - TRY MULTIPLE APPROACHES
+    let privateKey: string;
+    
+    console.log('🔑 Processing Private Key...');
+    console.log('-'.repeat(60));
+    
+    if (hasBackslashN && !hasActualNewline) {
+      // Case 1: Has literal \n that needs to be replaced
+      console.log('  Approach: Replacing \\\\n with actual newlines');
+      privateKey = privateKeyEnv.replace(/\\n/g, '\n');
+    } else if (hasActualNewline) {
+      // Case 2: Already has actual newlines
+      console.log('  Approach: Using key as-is (already has newlines)');
+      privateKey = privateKeyEnv;
+    } else {
+      // Case 3: No newlines at all - this is wrong
+      console.log('  ⚠️ WARNING: No newlines found in private key!');
+      console.log('  Approach: Attempting to add newlines manually...');
       
-      privateKeyFormatted = formatPrivateKey(privateKeyRaw!);
-      privateKey = privateKeyFormatted;
+      // Try to fix by adding newlines
+      let fixed = privateKeyEnv.trim();
       
-      console.log('✅ Private key formatted successfully');
-      console.log('  - Formatted key length:', privateKey.length);
-      console.log('  - Line count:', privateKey.split('\n').length);
-      console.log('  - First line:', privateKey.split('\n')[0]);
-      console.log('  - Last line:', privateKey.split('\n')[privateKey.split('\n').length - 1]);
-    } catch (keyError: any) {
-      console.error('⚠️ Private key formatting failed:', keyError.message);
-      console.log('🔄 Trying original key with basic \\n replacement as fallback...');
+      // Remove headers if present
+      fixed = fixed.replace('-----BEGIN PRIVATE KEY-----', '');
+      fixed = fixed.replace('-----END PRIVATE KEY-----', '');
+      fixed = fixed.trim();
       
-      // Fallback: Just replace \\n with actual newlines
-      privateKey = privateKeyRaw!.replace(/\\n/g, '\n');
-      console.log('  - Fallback key length:', privateKey.length);
-      console.log('  - Fallback key preview (first 50):', privateKey.substring(0, 50));
+      // Add newlines every 64 characters
+      const lines = [];
+      for (let i = 0; i < fixed.length; i += 64) {
+        lines.push(fixed.substring(i, i + 64));
+      }
+      
+      privateKey = '-----BEGIN PRIVATE KEY-----\n' + lines.join('\n') + '\n-----END PRIVATE KEY-----';
+      console.log('  Applied manual formatting');
     }
+    
+    console.log('');
+    console.log('Processed Key Analysis:');
+    console.log('  - Final length:', privateKey.length);
+    console.log('  - Number of lines:', privateKey.split('\n').length);
+    console.log('  - Has BEGIN header:', privateKey.includes('-----BEGIN PRIVATE KEY-----'));
+    console.log('  - Has END footer:', privateKey.includes('-----END PRIVATE KEY-----'));
+    console.log('');
+    
+    // Show the structure
+    const lines = privateKey.split('\n');
+    console.log('Key Structure:');
+    console.log('  Line 1 (header):', JSON.stringify(lines[0]));
+    if (lines.length > 1) {
+      console.log('  Line 2 (first data):', JSON.stringify(lines[1].substring(0, 50)) + '...');
+    }
+    if (lines.length > 2) {
+      console.log('  Line', lines.length - 1, '(last data):', '...' + JSON.stringify(lines[lines.length - 2].substring(Math.max(0, lines[lines.length - 2].length - 50))));
+    }
+    console.log('  Line', lines.length, '(footer):', JSON.stringify(lines[lines.length - 1]));
+    console.log('');
+    
+    // Additional validation
+    console.log('Final Validation:');
+    const hasProperStart = privateKey.trim().startsWith('-----BEGIN PRIVATE KEY-----');
+    const hasProperEnd = privateKey.trim().endsWith('-----END PRIVATE KEY-----');
+    console.log('  ✓ Starts with header:', hasProperStart);
+    console.log('  ✓ Ends with footer:', hasProperEnd);
+    console.log('  ✓ Minimum length (>100):', privateKey.length > 100);
+    console.log('');
+    
+    if (!hasProperStart || !hasProperEnd) {
+      console.error('❌ CRITICAL: Private key missing proper headers/footers!');
+      console.log('This will definitely cause PEM parsing to fail.');
+      console.log('');
+    }
+    
+    console.log('='.repeat(60));
+    console.log('');
+    
+    // Try to initialize
+    console.log('🚀 Attempting Firebase Admin initialization...');
+    
+    const credential = {
+      projectId: projectId,
+      clientEmail: clientEmail,
+      privateKey: privateKey
+    };
 
-    console.log('📋 Initializing with:');
-    console.log('  - Project ID:', projectId);
-    console.log('  - Client Email:', clientEmail);
-
-    // Initialize Firebase Admin with credentials
     admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: projectId!,
-        clientEmail: clientEmail!,
-        privateKey: privateKey,
-      }),
-      projectId: projectId!,
+      credential: admin.credential.cert(credential)
     });
 
-    console.log('✅ Firebase Admin SDK initialized successfully');
+    console.log('✅ Firebase Admin SDK initialized successfully!');
+    console.log('');
     
-    // Cache the instance and reset attempts
+    // Cache the instance
     firebaseAdmin = admin;
-    initializationAttempts = 0;
     
     return admin;
 
   } catch (error: any) {
-    console.error('❌ Firebase Admin initialization failed');
-    console.error('Error type:', error.constructor.name);
-    console.error('Error message:', error.message);
-    console.error('Error code:', error.code || 'N/A');
+    console.error('');
+    console.error('❌ FIREBASE ADMIN INITIALIZATION FAILED');
+    console.error('='.repeat(60));
+    console.error('Error Type:', error.constructor.name);
+    console.error('Error Message:', error.message);
+    console.error('Error Code:', error.code || 'N/A');
+    console.error('');
     
     if (error.stack) {
-      console.error('Stack trace (first 5 lines):');
-      console.error(error.stack.split('\n').slice(0, 5).join('\n'));
+      console.error('Stack Trace:');
+      const stackLines = error.stack.split('\n').slice(0, 15);
+      stackLines.forEach((line: string) => console.error(line));
+      console.error('');
     }
+    
+    // Check for specific error patterns
+    if (error.message && error.message.includes('PEM')) {
+      console.error('🔍 PEM ERROR DETECTED:');
+      console.error('This means the private key format is not recognized by the crypto library.');
+      console.error('');
+      console.error('Common causes:');
+      console.error('  1. Missing newlines between header and key data');
+      console.error('  2. Wrong header (should be "-----BEGIN PRIVATE KEY-----")');
+      console.error('  3. Extra whitespace or special characters');
+      console.error('  4. Key data is corrupted or incomplete');
+      console.error('');
+      console.error('Please check the FIREBASE_PRIVATE_KEY environment variable.');
+      console.error('It should look like this (with actual newlines):');
+      console.error('-----BEGIN PRIVATE KEY-----');
+      console.error('MIIEvQIBADANBgkqhkiG9w0BAQ...');
+      console.error('...more base64 lines...');
+      console.error('-----END PRIVATE KEY-----');
+      console.error('');
+      console.error('Or as a single line with \\n:');
+      console.error('"-----BEGIN PRIVATE KEY-----\\nMIIEvQIB...\\n-----END PRIVATE KEY-----"');
+      console.error('');
+    }
+    
+    console.error('='.repeat(60));
+    console.error('');
     
     // Reset cache on failure
     firebaseAdmin = null;
     
-    // Provide more specific error messages based on error type
-    if (error.message && (error.message.includes('DECODER') || error.message.includes('PEM'))) {
-      throw new Error(
-        'Firebase private key format error. Please ensure FIREBASE_PRIVATE_KEY environment variable contains a valid private key. ' +
-        'The key should start with "-----BEGIN PRIVATE KEY-----" and end with "-----END PRIVATE KEY-----". ' +
-        'If stored as a single line, use \\n for line breaks (e.g., "-----BEGIN PRIVATE KEY-----\\nMIIE...\\n-----END PRIVATE KEY-----")'
-      );
-    }
-    
-    if (error.message && error.message.includes('base64')) {
-      throw new Error('Firebase private key contains invalid base64 characters. Please check your FIREBASE_PRIVATE_KEY environment variable.');
-    }
-    
-    throw new Error(`Firebase Admin initialization failed: ${error.message}`);
+    // Re-throw with clear message
+    throw new Error(`Firebase initialization failed: ${error.message}`);
   }
 }
 
@@ -204,7 +240,6 @@ async function deleteProfilePicture(profilePictureUrl: string): Promise<boolean>
     const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Extract file path from URL
-    // URL format: https://xxx.supabase.co/storage/v1/object/public/uploads/profile-pictures/xxx.jpg
     const urlParts = profilePictureUrl.split('/uploads/');
     if (urlParts.length < 2) {
       console.warn('⚠️ Invalid profile picture URL format');
@@ -234,18 +269,16 @@ async function deleteProfilePicture(profilePictureUrl: string): Promise<boolean>
 
 /**
  * Unified API handler for deleting users
- * Deletes from: Firestore (MUST SUCCEED), Supabase Storage (optional), Firebase Auth (optional)
- * Firestore deletion MUST always succeed - other deletions are best-effort
  */
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  console.log('\n==========================================');
-  console.log('UNIFIED DELETE USER API - Request received');
+  console.log('\n' + '='.repeat(80));
+  console.log('DELETE USER API - Request received');
   console.log('Time:', new Date().toISOString());
   console.log('Method:', req.method);
-  console.log('==========================================\n');
+  console.log('='.repeat(80) + '\n');
 
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -276,7 +309,6 @@ export default async function handler(
     console.log('  - Email:', email || '[NONE]');
     console.log('  - Action:', action || '[MISSING]');
     console.log('  - Profile Picture URL:', profilePictureUrl ? '[PROVIDED]' : '[NONE]');
-    console.log('  - API Key:', apiKey ? '[PROVIDED]' : '[NONE]');
 
     // Validate action parameter
     if (action !== 'delete-auth-user') {
@@ -298,31 +330,30 @@ export default async function handler(
 
     // Verify API key if configured
     const masterKey = process.env.VITE_SMS_MASTER_KEY || process.env.SMS_MASTER_KEY;
-    if (masterKey) {
-      if (apiKey !== masterKey) {
-        console.log('❌ API key mismatch');
-        return res.status(403).json({
-          success: false,
-          error: 'Unauthorized: Invalid API key'
-        });
-      }
-      console.log('✅ API key validated');
-    } else {
-      console.log('⚠️ No master API key configured - skipping validation');
+    if (masterKey && apiKey !== masterKey) {
+      console.log('❌ API key mismatch');
+      return res.status(403).json({
+        success: false,
+        error: 'Unauthorized: Invalid API key'
+      });
     }
 
-    console.log('\n--- Starting unified deletion process ---\n');
+    console.log('\n' + '-'.repeat(80));
+    console.log('Starting deletion process...');
+    console.log('-'.repeat(80) + '\n');
 
     // Initialize Firebase Admin
     let admin: any;
     try {
       admin = await initializeFirebaseAdmin();
     } catch (initError: any) {
-      console.error('❌ Failed to initialize Firebase Admin:', initError.message);
+      console.error('❌ Failed to initialize Firebase Admin');
+      console.error('Error details:', initError.message);
       return res.status(500).json({
         success: false,
         error: 'Failed to initialize Firebase Admin SDK',
-        details: initError.message
+        details: initError.message,
+        hint: 'Check server logs for detailed private key inspection'
       });
     }
 
@@ -335,8 +366,8 @@ export default async function handler(
     let authDeleted = false;
     const errors: string[] = [];
 
-    // STEP 1: Delete from Firestore (CRITICAL - MUST SUCCEED)
-    console.log('📄 STEP 1: Deleting from Firestore (CRITICAL)...');
+    // STEP 1: Delete from Firestore (CRITICAL)
+    console.log('📄 STEP 1: Deleting from Firestore...');
     try {
       const userRef = firestore.collection('users').doc(uid);
       const userDoc = await userRef.get();
@@ -344,120 +375,90 @@ export default async function handler(
       if (userDoc.exists) {
         await userRef.delete();
         firestoreDeleted = true;
-        console.log('✅ Successfully deleted from Firestore');
+        console.log('✅ Deleted from Firestore');
       } else {
-        console.log('ℹ️ User not found in Firestore (already deleted or never existed)');
-        firestoreDeleted = true; // Consider this a success
+        console.log('ℹ️ User not found in Firestore');
+        firestoreDeleted = true;
       }
     } catch (firestoreError: any) {
-      const errorMsg = `CRITICAL: Firestore deletion failed: ${firestoreError.message}`;
+      const errorMsg = `Firestore deletion failed: ${firestoreError.message}`;
       console.error('❌', errorMsg);
       errors.push(errorMsg);
       
-      // Firestore deletion failure is critical
       return res.status(500).json({
         success: false,
-        error: 'Critical error: Failed to delete user from database',
-        details: {
-          firestoreDeleted: false,
-          errors: [errorMsg]
-        }
+        error: 'Failed to delete user from database',
+        details: { firestoreDeleted: false, errors: [errorMsg] }
       });
     }
 
-    // STEP 2: Delete profile picture from Supabase (OPTIONAL - non-blocking)
+    // STEP 2: Delete profile picture (OPTIONAL)
     if (profilePictureUrl) {
-      console.log('\n🖼️ STEP 2: Deleting profile picture from Supabase (optional)...');
+      console.log('\n🖼️ STEP 2: Deleting profile picture...');
       try {
         profilePicDeleted = await deleteProfilePicture(profilePictureUrl);
         if (!profilePicDeleted) {
-          console.warn('⚠️ Profile picture deletion failed, but continuing...');
           errors.push('Profile picture deletion failed (non-critical)');
         }
-      } catch (supabaseError: any) {
-        console.warn('⚠️ Profile picture deletion error:', supabaseError.message);
-        errors.push(`Profile picture deletion error: ${supabaseError.message} (non-critical)`);
+      } catch (error: any) {
+        errors.push(`Profile picture error: ${error.message} (non-critical)`);
       }
     } else {
-      console.log('\n🖼️ STEP 2: No profile picture to delete');
-      profilePicDeleted = true; // No picture to delete = success
+      console.log('\n🖼️ STEP 2: No profile picture');
+      profilePicDeleted = true;
     }
 
-    // STEP 3: Delete from Firebase Authentication (OPTIONAL - non-blocking)
-    console.log('\n🔐 STEP 3: Deleting from Firebase Authentication (optional)...');
+    // STEP 3: Delete from Firebase Auth (OPTIONAL)
+    console.log('\n🔐 STEP 3: Deleting from Firebase Auth...');
     try {
       await auth.deleteUser(uid);
       authDeleted = true;
-      console.log('✅ Successfully deleted from Firebase Auth');
+      console.log('✅ Deleted from Firebase Auth');
     } catch (authError: any) {
-      // Check if user was already deleted
       if (authError.code === 'auth/user-not-found') {
-        console.log('ℹ️ User not found in Auth (already deleted or never existed)');
-        authDeleted = true; // Consider this a success
+        console.log('ℹ️ User not found in Auth');
+        authDeleted = true;
       } else {
-        const errorMsg = `Firebase Auth deletion failed: ${authError.message} (code: ${authError.code})`;
+        const errorMsg = `Auth deletion failed: ${authError.message}`;
         console.warn('⚠️', errorMsg);
         errors.push(`${errorMsg} (non-critical)`);
-        // Don't fail the entire operation - Firestore deletion succeeded
-        authDeleted = false;
       }
     }
 
-    // Determine final success status
-    // Success = Firestore deleted (required), others are optional
-    const overallSuccess = firestoreDeleted;
+    // Success response
+    console.log('\n' + '-'.repeat(80));
+    console.log('DELETION SUMMARY:');
+    console.log('  Firestore:', firestoreDeleted ? '✅ SUCCESS' : '❌ FAILED');
+    console.log('  Profile Picture:', profilePicDeleted ? '✅ SUCCESS' : '⚠️ FAILED');
+    console.log('  Firebase Auth:', authDeleted ? '✅ SUCCESS' : '⚠️ FAILED');
+    console.log('-'.repeat(80) + '\n');
 
-    console.log('\n--- Deletion Summary ---');
-    console.log('Firestore (CRITICAL):', firestoreDeleted ? '✅ DELETED' : '❌ FAILED');
-    console.log('Profile Picture:', profilePicDeleted ? '✅ DELETED' : '⚠️ FAILED (non-critical)');
-    console.log('Firebase Auth:', authDeleted ? '✅ DELETED' : '⚠️ FAILED (non-critical)');
-    console.log('Overall Status:', overallSuccess ? '✅ SUCCESS' : '❌ FAILURE');
-    
-    if (errors.length > 0) {
-      console.log('Warnings/Errors:', errors);
-    }
-    console.log('==========================================\n');
-
-    // Return appropriate response
-    if (overallSuccess) {
-      return res.status(200).json({
-        success: true,
-        message: 'User successfully deleted (Firestore deletion completed)',
-        uid,
-        email: email || null,
-        details: {
-          firestoreDeleted: true,
-          profilePicDeleted,
-          authDeleted,
-          timestamp: new Date().toISOString(),
-          warnings: errors.length > 0 ? errors : null
-        }
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        error: 'Critical failure: Could not delete user from database',
-        uid,
-        details: {
-          firestoreDeleted,
-          profilePicDeleted,
-          authDeleted,
-          errors: errors.length > 0 ? errors : ['Unknown error occurred']
-        }
-      });
-    }
+    return res.status(200).json({
+      success: true,
+      message: 'User successfully deleted',
+      uid,
+      email: email || null,
+      details: {
+        firestoreDeleted: true,
+        profilePicDeleted,
+        authDeleted,
+        timestamp: new Date().toISOString(),
+        warnings: errors.length > 0 ? errors : null
+      }
+    });
 
   } catch (error: any) {
-    console.error('\n❌ UNEXPECTED ERROR:');
+    console.error('\n' + '='.repeat(80));
+    console.error('❌ UNEXPECTED ERROR');
+    console.error('='.repeat(80));
     console.error('Message:', error.message);
     console.error('Stack:', error.stack);
-    console.log('==========================================\n');
+    console.error('='.repeat(80) + '\n');
     
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
-      details: error.message,
-      stack: error.stack?.split('\n').slice(0, 3).join('\n')
+      details: error.message
     });
   }
 }
