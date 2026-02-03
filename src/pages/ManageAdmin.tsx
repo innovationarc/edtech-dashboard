@@ -365,7 +365,7 @@ const ManageAdmin = () => {
             </thead>
             <tbody>
               {filteredAdmins.map((admin, index) => (
-                <tr 
+                 
                   key={admin.uid} 
                 const isHighlighted = admin.uid === highlightUserId;
                 
