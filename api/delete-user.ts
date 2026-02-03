@@ -19,8 +19,8 @@ async function initializeFirebaseAdmin() {
   try {
     console.log('🔧 Initializing Firebase Admin SDK...');
     
-    // Use require for better compatibility in Vercel serverless functions
-    const admin = require('firebase-admin');
+    // Use dynamic import for ES module compatibility
+    const admin = await import('firebase-admin').then(m => m.default || m);
     
     // Check if already initialized
     if (admin.apps && admin.apps.length > 0) {
