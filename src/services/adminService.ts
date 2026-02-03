@@ -13,7 +13,7 @@ import {
   setDoc,
   addDoc
 } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut, getAuth } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 
 export interface Admin {
@@ -367,62 +367,123 @@ export const adminService = {
     }
   },
 
-  // Create new admin
+  // Create new admin - Updated to use userId@admin.local format
   async createAdmin(
-    adminData: Omit<Admin, 'uid' | 'createdAt' | 'role'> & { password: string },
-    createdByAdmin: Admin
-  ): Promise<string> {
-    let tempUser: any = null;
-    let newUid: string | null = null;
-
+    phoneNumber: string,
+    email: string,
+    password: string,
+    surname: string,
+    fullName: string,
+    dob: string,
+    phone: string,
+    bloodGroup: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-' | '',
+    gender: 'male' | 'female' | 'other' | '',
+    religion: string,
+    address: string,
+    birthCertificateNumber: string,
+    nid: string,
+    createdByAdminId: string,
+    createdByAdminUid: string,
+    createdByAdminSurname: string,
+    profilePictureUrl?: string
+  ): Promise<Admin> {
+    // CRITICAL: Store current auth state
+    const currentUser = auth.currentUser;
+    
     try {
-      console.log('Creating admin account...');
+      console.log('🚀 Creating admin account...');
       
-      // Create auth user
+      // Generate unique userId
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const userId = `ADM${timestamp}${random}`;
+      
+      console.log('📝 Generated userId:', userId);
+      
+      // IMPORTANT: Use userId@admin.local format for Firebase Auth
+      const authEmail = `${userId}@admin.local`;
+      console.log('📧 Auth email format:', authEmail);
+      
+      // Create Firebase Auth user with new email format
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        adminData.email!,
-        adminData.password
+        authEmail,
+        password
       );
-      tempUser = userCredential.user;
-      newUid = tempUser.uid;
-
-      console.log('✅ Auth user created:', newUid);
-
-      // Prepare user data
-      const userData = {
-        ...adminData,
+      const newUid = userCredential.user.uid;
+      
+      console.log('✅ Auth user created with UID:', newUid);
+      
+      // CRITICAL: Immediately sign out the newly created user
+      // This prevents the current admin from being logged out
+      await signOut(auth);
+      console.log('✅ New user signed out to prevent admin logout');
+      
+      // Re-authenticate the current admin if they were logged in
+      // This step is handled by the auth state listener in DashboardContext
+      
+      // Prepare admin data for Firestore
+      const adminData: any = {
         uid: newUid,
-        role: 'admin' as const,
+        userId: userId,
+        surname: surname,
+        fullName: fullName || '',
+        email: email || '', // Store the optional contact email separately
+        phoneNumber: phone,
+        dob: dob || '',
+        gender: gender || '',
+        bloodGroup: bloodGroup || '',
+        religion: religion || '',
+        address: address || '',
+        birthCertificateNumber: birthCertificateNumber || '',
+        nid: nid || '',
+        role: 'admin',
+        status: 'active',
         createdAt: Timestamp.now(),
-        password: undefined,
+        createdBy: createdByAdminId,
+        deviceId: '', // Will be set on first login
+        profilePictureUrl: profilePictureUrl || ''
       };
-      delete userData.password;
-
+      
       // Save to Firestore
-      await setDoc(doc(db, 'users', newUid), userData);
-      console.log('✅ User data saved to Firestore');
-
-      // Log in security logs
+      await setDoc(doc(db, 'users', newUid), adminData);
+      console.log('✅ Admin data saved to Firestore');
+      
+      // Log admin creation in security logs with FULL details
       try {
         await addDoc(collection(db, 'security_logs'), {
           action: 'admin_created',
           targetAdminUid: newUid,
-          targetAdminUserId: adminData.userId,
-          targetAdminSurname: adminData.surname,
-          performedByUid: createdByAdmin.uid,
-          performedByUserId: createdByAdmin.userId || 'N/A',
-          performedBySurname: createdByAdmin.surname || 'N/A',
+          targetAdminUserId: userId,
+          targetAdminSurname: surname,
+          performedByUid: createdByAdminUid,
+          performedByUserId: createdByAdminId,
+          performedBySurname: createdByAdminSurname,
           timestamp: Timestamp.now(),
-          details: `Admin ${adminData.surname} (${adminData.userId}) was created by ${createdByAdmin.surname} (${createdByAdmin.userId})`,
+          details: `New admin account created: ${surname} (${userId}) by ${createdByAdminSurname} (${createdByAdminId}). Contact: ${phone}${email ? ', Email: ' + email : ''}`,
           changes: JSON.stringify({
             action: 'create',
-            adminData: {
-              userId: adminData.userId,
-              surname: adminData.surname,
-              email: adminData.email,
-              phoneNumber: adminData.phoneNumber,
-              status: adminData.status
+            createdAdmin: {
+              userId: userId,
+              surname: surname,
+              fullName: fullName,
+              email: email || 'Not provided',
+              phoneNumber: phone,
+              dob: dob || 'Not provided',
+              gender: gender || 'Not provided',
+              bloodGroup: bloodGroup || 'Not provided',
+              religion: religion || 'Not provided',
+              address: address || 'Not provided',
+              birthCertificateNumber: birthCertificateNumber || 'Not provided',
+              nid: nid || 'Not provided',
+              status: 'active',
+              authEmail: authEmail,
+              profilePictureUrl: profilePictureUrl || 'Not provided'
+            },
+            createdBy: {
+              uid: createdByAdminUid,
+              userId: createdByAdminId,
+              surname: createdByAdminSurname
             }
           })
         });
@@ -430,58 +491,195 @@ export const adminService = {
       } catch (logError) {
         console.warn('⚠️ Failed to log admin creation:', logError);
       }
-
+      
       // Send SMS notification
       try {
-        await sendAdminCreationSMS(adminData.phoneNumber, adminData.userId);
+        await sendAdminCreationSMS(phone, userId);
+        console.log('✅ SMS notification sent');
       } catch (smsError) {
         console.warn('⚠️ Failed to send SMS notification:', smsError);
       }
-
-      // Sign out the newly created user
-      await signOut(auth);
-      console.log('✅ Signed out newly created user');
-
-      return newUid;
-
-    } catch (error: any) {
-      console.error('Error in createAdmin:', error);
       
-      // Rollback: delete Firestore document if it was created
-      if (newUid) {
-        try {
-          await deleteDoc(doc(db, 'users', newUid));
-          console.log('🔄 Rolled back Firestore document');
-        } catch (rollbackError) {
-          console.error('Failed to rollback Firestore:', rollbackError);
-        }
-      }
-
-      throw new Error(error.message || 'Failed to create admin');
+      // Return the created admin data
+      return {
+        ...adminData,
+        createdAt: adminData.createdAt.toDate()
+      } as Admin;
+      
+    } catch (error: any) {
+      console.error('❌ Error in createAdmin:', error);
+      throw new Error(error.message || 'Failed to create admin account');
     }
   },
 
-  // Update admin
+  // Get security logs for a specific admin
+  async getSecurityLogs(adminUid: string): Promise<SecurityLog[]> {
+    try {
+      const logsCollection = collection(db, 'security_logs');
+      const logsQuery = query(
+        logsCollection,
+        where('targetAdminUid', '==', adminUid),
+        orderBy('timestamp', 'desc')
+      );
+      const logsSnapshot = await getDocs(logsQuery);
+      
+      return logsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          timestamp: data.timestamp?.toDate() || new Date(),
+        };
+      }) as SecurityLog[];
+    } catch (error: any) {
+      console.error('Error fetching security logs:', error);
+      throw new Error(error.message || 'Failed to fetch security logs');
+    }
+  },
+
+  // Get ALL security logs (for all admins) - for the All Admin Logs modal
+  async getAllSecurityLogs(): Promise<SecurityLog[]> {
+    try {
+      const logsCollection = collection(db, 'security_logs');
+      const logsQuery = query(
+        logsCollection,
+        orderBy('timestamp', 'desc')
+      );
+      const logsSnapshot = await getDocs(logsQuery);
+      
+      return logsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          timestamp: data.timestamp?.toDate() || new Date(),
+        };
+      }) as SecurityLog[];
+    } catch (error: any) {
+      console.error('Error fetching all security logs:', error);
+      throw new Error(error.message || 'Failed to fetch security logs');
+    }
+  },
+
+  // Reset admin password
+  async resetAdminPassword(
+    uid: string,
+    newPassword: string,
+    reason: string,
+    resetByAdmin: Admin
+  ): Promise<void> {
+    try {
+      console.log('🔄 Resetting admin password...');
+      
+      // Get admin data
+      const adminDoc = await getDoc(doc(db, 'users', uid));
+      if (!adminDoc.exists()) {
+        throw new Error('Admin not found');
+      }
+      
+      const adminData = adminDoc.data();
+      
+      // Call backend API to reset password
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+      
+      const response = await fetch(`${BACKEND_URL}/api/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uid: uid,
+          newPassword: newPassword,
+          apiKey: MASTER_API_KEY
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to reset password');
+      }
+      
+      console.log('✅ Password reset successful');
+      
+      // Log password reset with full details
+      try {
+        await addDoc(collection(db, 'security_logs'), {
+          action: 'password_reset',
+          targetAdminUid: uid,
+          targetAdminUserId: adminData.userId || 'N/A',
+          targetAdminSurname: adminData.surname || 'N/A',
+          performedByUid: resetByAdmin.uid,
+          performedByUserId: resetByAdmin.userId || 'N/A',
+          performedBySurname: resetByAdmin.surname || 'N/A',
+          timestamp: Timestamp.now(),
+          reason: reason || 'No reason provided',
+          details: `Password reset for admin ${adminData.surname} (${adminData.userId}) by ${resetByAdmin.surname} (${resetByAdmin.userId})${reason ? '. Reason: ' + reason : ''}`,
+          changes: JSON.stringify({
+            action: 'password_reset',
+            targetAdmin: {
+              uid: uid,
+              userId: adminData.userId,
+              surname: adminData.surname
+            },
+            performedBy: {
+              uid: resetByAdmin.uid,
+              userId: resetByAdmin.userId,
+              surname: resetByAdmin.surname
+            },
+            reason: reason || 'No reason provided'
+          })
+        });
+        console.log('✅ Password reset logged in security logs');
+      } catch (logError) {
+        console.warn('⚠️ Failed to log password reset:', logError);
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Error resetting password:', error);
+      throw new Error(error.message || 'Failed to reset password');
+    }
+  },
+
+  // Update admin with full change tracking
   async updateAdmin(
     uid: string, 
     updates: Partial<Admin>,
-    updatedByAdmin: Admin,
-    currentAdmin: Admin
+    updatedByAdmin: Admin
   ): Promise<void> {
     try {
-      console.log('Updating admin:', uid);
+      console.log('🔄 Updating admin...');
       
-      // Prepare updates with timestamp
-      const updateData = {
-        ...updates,
-        updatedAt: Timestamp.now(),
-      };
-
-      // Update Firestore
-      await updateDoc(doc(db, 'users', uid), updateData);
+      // Get current admin data to compare changes
+      const currentAdminDoc = await getDoc(doc(db, 'users', uid));
+      if (!currentAdminDoc.exists()) {
+        throw new Error('Admin not found');
+      }
+      const currentAdmin = currentAdminDoc.data();
+      
+      // Track what changed with before/after values
+      const changedFields: any = {};
+      const changesArray: string[] = [];
+      
+      Object.keys(updates).forEach(key => {
+        const oldValue = currentAdmin[key];
+        const newValue = (updates as any)[key];
+        
+        if (oldValue !== newValue) {
+          changedFields[key] = {
+            from: oldValue || 'Empty',
+            to: newValue || 'Empty'
+          };
+          changesArray.push(`${key}: "${oldValue || 'Empty'}" → "${newValue || 'Empty'}"`);
+        }
+      });
+      
+      // Update in Firestore
+      await updateDoc(doc(db, 'users', uid), updates);
       console.log('✅ Admin updated in Firestore');
-
-      // Handle status change separately
+      
+      // Log status change separately if status was changed
       if (updates.status && updates.status !== currentAdmin.status) {
         try {
           await addDoc(collection(db, 'security_logs'), {
@@ -493,20 +691,30 @@ export const adminService = {
             performedByUserId: updatedByAdmin.userId || 'N/A',
             performedBySurname: updatedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
-            details: `Admin ${currentAdmin.surname} (${currentAdmin.userId}) status changed from ${currentAdmin.status} to ${updates.status}`,
+            details: `Status changed from "${currentAdmin.status}" to "${updates.status}" for admin ${currentAdmin.surname} (${currentAdmin.userId}) by ${updatedByAdmin.surname} (${updatedByAdmin.userId})`,
             changes: JSON.stringify({
               action: 'status_change',
               from: currentAdmin.status,
-              to: updates.status
+              to: updates.status,
+              targetAdmin: {
+                uid: uid,
+                userId: currentAdmin.userId,
+                surname: currentAdmin.surname
+              },
+              performedBy: {
+                uid: updatedByAdmin.uid,
+                userId: updatedByAdmin.userId,
+                surname: updatedByAdmin.surname
+              }
             })
           });
           console.log('✅ Status change logged in security logs');
-
+          
           // Send SMS for status change
           try {
             await sendStatusChangeSMS(
-              currentAdmin.phoneNumber, 
-              currentAdmin.userId, 
+              currentAdmin.phoneNumber,
+              currentAdmin.userId,
               updates.status
             );
           } catch (smsError) {
@@ -516,8 +724,8 @@ export const adminService = {
           console.warn('⚠️ Failed to log status change:', logError);
         }
       }
-
-      // Handle phone number change separately
+      
+      // Log phone number change separately if phone was changed
       if (updates.phoneNumber && updates.phoneNumber !== currentAdmin.phoneNumber) {
         try {
           await addDoc(collection(db, 'security_logs'), {
@@ -529,11 +737,21 @@ export const adminService = {
             performedByUserId: updatedByAdmin.userId || 'N/A',
             performedBySurname: updatedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
-            details: `Phone number changed for ${currentAdmin.surname} (${currentAdmin.userId})`,
+            details: `Phone number changed from "${currentAdmin.phoneNumber}" to "${updates.phoneNumber}" for admin ${currentAdmin.surname} (${currentAdmin.userId}) by ${updatedByAdmin.surname} (${updatedByAdmin.userId})`,
             changes: JSON.stringify({
-              action: 'phone_number_change',
+              action: 'phone_change',
               from: currentAdmin.phoneNumber,
-              to: updates.phoneNumber
+              to: updates.phoneNumber,
+              targetAdmin: {
+                uid: uid,
+                userId: currentAdmin.userId,
+                surname: currentAdmin.surname
+              },
+              performedBy: {
+                uid: updatedByAdmin.uid,
+                userId: updatedByAdmin.userId,
+                surname: updatedByAdmin.surname
+              }
             })
           });
           console.log('✅ Phone number change logged in security logs');
@@ -541,50 +759,7 @@ export const adminService = {
           console.warn('⚠️ Failed to log phone number change:', logError);
         }
       }
-
-      // Track all other changes
-      const changedFields: any = {};
-      const changesArray: string[] = [];
       
-      // Track all changes except status and phoneNumber (already handled)
-      Object.keys(updates).forEach(key => {
-        if (key !== 'status' && key !== 'phoneNumber' && key !== 'updatedAt') {
-          const updateKey = key as keyof Admin;
-          if (updates[updateKey] !== currentAdmin[key]) {
-            changedFields[key] = { from: currentAdmin[key], to: updates[updateKey] };
-            changesArray.push(`${key} changed`);
-          }
-        }
-      });
-
-      // Special handling for profilePictureUrl
-      if (updates.profilePictureUrl && updates.profilePictureUrl !== currentAdmin.profilePictureUrl) {
-        changedFields.profilePictureUrl = { from: 'previous', to: 'updated' };
-        changesArray.push(`profile picture updated`);
-        
-        // Create separate log for profile picture update
-        try {
-          await addDoc(collection(db, 'security_logs'), {
-            action: 'profile_updated',
-            targetAdminUid: uid,
-            targetAdminUserId: currentAdmin.userId || 'N/A',
-            targetAdminSurname: currentAdmin.surname || 'N/A',
-            performedByUid: updatedByAdmin.uid,
-            performedByUserId: updatedByAdmin.userId || 'N/A',
-            performedBySurname: updatedByAdmin.surname || 'N/A',
-            timestamp: Timestamp.now(),
-            details: `Profile picture updated for ${currentAdmin.surname} (${currentAdmin.userId})`,
-            changes: JSON.stringify({
-              action: 'profile_picture_update',
-              hasProfilePicture: !!updates.profilePictureUrl
-            })
-          });
-          console.log('✅ Profile picture update logged in security logs');
-        } catch (logError) {
-          console.warn('⚠️ Failed to log profile update:', logError);
-        }
-      }
-
       // Create main edit log (only if there are non-status/non-phone changes)
       if (changesArray.length > 0) {
         try {
@@ -597,15 +772,25 @@ export const adminService = {
             performedByUserId: updatedByAdmin.userId || 'N/A',
             performedBySurname: updatedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
-            details: `Admin details updated for ${currentAdmin.surname} (${currentAdmin.userId}). Changed fields: ${changesArray.join(', ')}`,
+            details: `Admin ${currentAdmin.surname} (${currentAdmin.userId}) details updated by ${updatedByAdmin.surname} (${updatedByAdmin.userId}). Changes: ${changesArray.join(', ')}`,
             changes: JSON.stringify({
               action: 'edit',
               changedFields: changedFields,
-              fieldCount: Object.keys(changedFields).length
+              fieldCount: Object.keys(changedFields).length,
+              targetAdmin: {
+                uid: uid,
+                userId: currentAdmin.userId,
+                surname: currentAdmin.surname
+              },
+              performedBy: {
+                uid: updatedByAdmin.uid,
+                userId: updatedByAdmin.userId,
+                surname: updatedByAdmin.surname
+              }
             })
           });
           console.log('✅ Admin edit logged in security logs');
-
+          
           // Send SMS for profile edit
           try {
             await sendAdminEditSMS(
@@ -720,7 +905,7 @@ export const adminService = {
       console.log('  - Profile Picture:', deleteResult.details.profilePicDeleted ? 'DELETED' : 'SKIPPED/FAILED');
       console.log('  - Firebase Auth:', deleteResult.details.authDeleted ? 'DELETED' : 'SKIPPED/FAILED');
       
-      // Log admin deletion in security logs
+      // Log admin deletion with FULL details in security logs
       if (deletedByAdmin && adminData) {
         try {
           await addDoc(collection(db, 'security_logs'), {
@@ -732,17 +917,26 @@ export const adminService = {
             performedByUserId: deletedByAdmin.userId || 'N/A',
             performedBySurname: deletedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
-            details: `Admin ${adminData.surname || adminData.name} (${adminData.userId}) was permanently deleted by ${deletedByAdmin.surname} (${deletedByAdmin.userId})`,
+            details: `Admin ${adminData.surname || adminData.name} (${adminData.userId}) was permanently deleted by ${deletedByAdmin.surname} (${deletedByAdmin.userId}). All associated data including profile picture and authentication have been removed.`,
             changes: JSON.stringify({
               action: 'delete',
               deletedAdmin: {
                 uid: uid,
                 userId: adminData.userId,
                 surname: adminData.surname || adminData.name,
+                fullName: adminData.fullName || 'Not provided',
                 email: adminData.email || 'Not provided',
                 phoneNumber: adminData.phoneNumber,
+                dob: adminData.dob || 'Not provided',
+                gender: adminData.gender || 'Not provided',
+                bloodGroup: adminData.bloodGroup || 'Not provided',
+                religion: adminData.religion || 'Not provided',
+                address: adminData.address || 'Not provided',
+                birthCertificateNumber: adminData.birthCertificateNumber || 'Not provided',
+                nid: adminData.nid || 'Not provided',
                 status: adminData.status,
-                createdAt: adminData.createdAt?.toDate?.()?.toISOString() || 'Unknown'
+                createdAt: adminData.createdAt?.toDate?.()?.toISOString() || 'Unknown',
+                createdBy: adminData.createdBy || 'Unknown'
               },
               deletedBy: {
                 uid: deletedByAdmin.uid,
