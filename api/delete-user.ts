@@ -4,10 +4,40 @@ import { createClient } from '@supabase/supabase-js';
 
 // Global cache for Firebase Admin instance
 let firebaseAdmin: any = null;
+let initializationAttempts = 0;
+const MAX_INIT_ATTEMPTS = 3;
 
 /**
- * Initialize and return Firebase Admin SDK
- * Uses caching to prevent re-initialization
+ * Properly format and clean private key
+ */
+function formatPrivateKey(key: string): string {
+  if (!key) {
+    throw new Error('Private key is empty or undefined');
+  }
+
+  // Remove all whitespace and newlines
+  let cleaned = key.trim();
+  
+  // Replace literal \n with actual newlines
+  if (cleaned.includes('\\n')) {
+    cleaned = cleaned.replace(/\\n/g, '\n');
+  }
+  
+  // Remove any existing headers/footers
+  cleaned = cleaned.replace(/-----BEGIN PRIVATE KEY-----/g, '');
+  cleaned = cleaned.replace(/-----END PRIVATE KEY-----/g, '');
+  
+  // Remove all whitespace and newlines from the key content
+  cleaned = cleaned.replace(/\s+/g, '');
+  
+  // Add proper headers and format with line breaks every 64 characters
+  const keyContent = cleaned.match(/.{1,64}/g)?.join('\n') || cleaned;
+  
+  return `-----BEGIN PRIVATE KEY-----\n${keyContent}\n-----END PRIVATE KEY-----`;
+}
+
+/**
+ * Initialize and return Firebase Admin SDK with enhanced error handling
  */
 async function initializeFirebaseAdmin() {
   // Return cached instance if available
@@ -16,8 +46,15 @@ async function initializeFirebaseAdmin() {
     return firebaseAdmin;
   }
 
+  // Check if we've exceeded max attempts
+  if (initializationAttempts >= MAX_INIT_ATTEMPTS) {
+    throw new Error(`Firebase Admin initialization failed after ${MAX_INIT_ATTEMPTS} attempts`);
+  }
+
+  initializationAttempts++;
+
   try {
-    console.log('🔧 Initializing Firebase Admin SDK...');
+    console.log(`🔧 Initializing Firebase Admin SDK (Attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS})...`);
     
     // Use dynamic import for ES module compatibility
     const admin = await import('firebase-admin').then(m => m.default || m);
@@ -26,19 +63,20 @@ async function initializeFirebaseAdmin() {
     if (admin.apps && admin.apps.length > 0) {
       console.log('✅ Firebase Admin already initialized');
       firebaseAdmin = admin;
+      initializationAttempts = 0; // Reset on success
       return admin;
     }
 
     // Get credentials from environment variables
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
 
     // Validate all required environment variables
     const missingVars = [];
     if (!projectId) missingVars.push('FIREBASE_PROJECT_ID');
     if (!clientEmail) missingVars.push('FIREBASE_CLIENT_EMAIL');
-    if (!privateKey) missingVars.push('FIREBASE_PRIVATE_KEY');
+    if (!privateKeyRaw) missingVars.push('FIREBASE_PRIVATE_KEY');
 
     if (missingVars.length > 0) {
       const error = `Missing required environment variables: ${missingVars.join(', ')}`;
@@ -46,51 +84,54 @@ async function initializeFirebaseAdmin() {
       throw new Error(error);
     }
 
-    // Process private key properly
-    // Handle both formats: with literal \n and with actual newlines
-    if (privateKey!.includes('\\n')) {
-      privateKey = privateKey!.replace(/\\n/g, '\n');
-    }
-    
-    // Ensure private key starts and ends correctly
-    privateKey = privateKey!.trim();
-    if (!privateKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
-      privateKey = '-----BEGIN PRIVATE KEY-----\n' + privateKey;
-    }
-    if (!privateKey.endsWith('-----END PRIVATE KEY-----')) {
-      privateKey = privateKey + '\n-----END PRIVATE KEY-----';
+    // Format private key properly
+    let privateKey: string;
+    try {
+      privateKey = formatPrivateKey(privateKeyRaw!);
+      console.log('✅ Private key formatted successfully');
+      console.log('  - Length:', privateKey.length);
+      console.log('  - Starts with:', privateKey.substring(0, 30));
+      console.log('  - Ends with:', privateKey.substring(privateKey.length - 30));
+    } catch (keyError: any) {
+      console.error('❌ Private key formatting failed:', keyError.message);
+      throw new Error(`Private key formatting failed: ${keyError.message}`);
     }
 
     console.log('📋 Initializing with:');
     console.log('  - Project ID:', projectId);
     console.log('  - Client Email:', clientEmail);
-    console.log('  - Private Key starts with:', privateKey.substring(0, 30));
-    console.log('  - Private Key ends with:', privateKey.substring(privateKey.length - 30));
 
     // Initialize Firebase Admin with credentials
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
+        projectId: projectId!,
+        clientEmail: clientEmail!,
+        privateKey: privateKey,
       }),
-      projectId,
+      projectId: projectId!,
     });
 
     console.log('✅ Firebase Admin SDK initialized successfully');
     
-    // Cache the instance
+    // Cache the instance and reset attempts
     firebaseAdmin = admin;
+    initializationAttempts = 0;
     
     return admin;
 
   } catch (error: any) {
     console.error('❌ Firebase Admin initialization failed');
     console.error('Error:', error.message);
+    console.error('Code:', error.code);
     console.error('Stack:', error.stack);
     
     // Reset cache on failure
     firebaseAdmin = null;
+    
+    // Provide more specific error messages
+    if (error.message && error.message.includes('DECODER')) {
+      throw new Error('Firebase private key decoding failed. Please check your FIREBASE_PRIVATE_KEY environment variable format.');
+    }
     
     throw new Error(`Firebase Admin initialization failed: ${error.message}`);
   }
