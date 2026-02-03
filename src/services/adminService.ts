@@ -86,8 +86,13 @@ const toGSM7Bit = (text: string): string => {
 };
 
 /**
- * Normalize phone number to 880XXXXXXXXXX format (13 digits, no + sign)
- * This is the SAME normalization logic as used in RegisterModal
+ * Normalize phone number to 13-digit format: 8801XXXXXXXXX
+ * 
+ * Rules:
+ * - 10-digit starting with 1 (1XXXXXXXXX) → add 880 prefix → 8801XXXXXXXXX
+ * - 11-digit starting with 0 (01XXXXXXXXX) → add 88 prefix → 8801XXXXXXXXX
+ * - Already 13-digit starting with 880 → keep as is
+ * - Result is always 13 digits
  */
 const normalizePhoneNumber = (phoneNumber: string): string => {
   // Handle null, undefined, or empty string
@@ -95,9 +100,15 @@ const normalizePhoneNumber = (phoneNumber: string): string => {
     throw new Error('Phone number is required');
   }
 
+  // Remove all non-digit characters
   let cleaned = phoneNumber.replace(/\D/g, '');
   
-  // If starts with 880, remove it to get the 10 digit number
+  // If already 13 digits starting with 880, it's already normalized
+  if (cleaned.length === 13 && cleaned.startsWith('880')) {
+    return cleaned;
+  }
+  
+  // If starts with 880 (but not 13 digits), remove it and reprocess
   if (cleaned.startsWith('880')) {
     cleaned = cleaned.substring(3);
   } 
@@ -106,18 +117,32 @@ const normalizePhoneNumber = (phoneNumber: string): string => {
     cleaned = cleaned.substring(2);
   }
   
-  // If starts with 0, remove it (11 digit number starting with 0)
-  if (cleaned.startsWith('0')) {
+  // Now handle the two main cases:
+  
+  // Case 1: 11-digit number starting with 0 (01XXXXXXXXX)
+  if (cleaned.length === 11 && cleaned.startsWith('0')) {
+    // Remove the leading 0, then add 880
+    return `880${cleaned.substring(1)}`;
+  }
+  
+  // Case 2: 10-digit number starting with 1 (1XXXXXXXXX)
+  if (cleaned.length === 10 && cleaned.startsWith('1')) {
+    // Add 880 prefix
+    return `880${cleaned}`;
+  }
+  
+  // If we have 10 digits but starting with 0, remove it
+  if (cleaned.length === 10 && cleaned.startsWith('0')) {
     cleaned = cleaned.substring(1);
   }
   
-  // Now we should have a 10 digit number
-  if (cleaned.length !== 10) {
-    throw new Error('Invalid phone number format');
+  // After all processing, we should have 10 digits starting with 1
+  if (cleaned.length === 10 && cleaned.startsWith('1')) {
+    return `880${cleaned}`;
   }
   
-  // Add 880 prefix
-  return `880${cleaned}`;
+  // If none of the above conditions match, it's an invalid number
+  throw new Error('Invalid phone number format. Please enter a valid Bangladesh phone number.');
 };
 
 /**
@@ -295,6 +320,16 @@ export const adminService = {
         })
       });
 
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        throw new Error(`API returned status ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('API did not return JSON response');
+      }
+
       const data = await response.json();
       
       if (!data.success || !data.userId) {
@@ -314,7 +349,7 @@ export const adminService = {
     }
   },
 
-  // Create new admin - FIXED VERSION with proper parameter handling
+  // Create new admin - FIXED VERSION with proper parameter handling and error checking
   async createAdmin(
     phoneNumber: string,
     email: string,
@@ -386,6 +421,20 @@ export const adminService = {
         },
         body: JSON.stringify(adminData)
       });
+
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        throw new Error(`API returned status ${response.status}: ${errorText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON Response:', responseText);
+        throw new Error('API did not return JSON response');
+      }
 
       const result = await response.json();
 
@@ -611,6 +660,17 @@ export const adminService = {
           apiKey: MASTER_API_KEY
         })
       });
+
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API returned status ${response.status}: ${errorText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('API did not return JSON response');
+      }
 
       const result = await response.json();
 
@@ -864,6 +924,17 @@ export const adminService = {
           apiKey: MASTER_API_KEY
         })
       });
+
+      // Check if response is ok before parsing JSON
+      if (!deleteResponse.ok) {
+        const errorText = await deleteResponse.text();
+        throw new Error(`API returned status ${deleteResponse.status}: ${errorText}`);
+      }
+
+      const contentType = deleteResponse.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('API did not return JSON response');
+      }
 
       const deleteResult = await deleteResponse.json();
 
