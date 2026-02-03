@@ -25,6 +25,8 @@ export interface User extends UserProfile {
   mobileNumber?: string;
   registrationNumber?: string;
   profilePictureUrl?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
 }
 
 /**
@@ -52,6 +54,37 @@ const ensureUserFields = (userData: any): any => {
   return fixed;
 };
 
+/**
+ * Check if the current user can edit a specific user based on role-based permissions
+ */
+export const canEditUserRole = (currentUserRole: string, targetUserRole: string): boolean => {
+  switch (currentUserRole) {
+    case 'admin':
+      // Admin can edit ALL roles
+      return true;
+    
+    case 'manager':
+      // Manager can edit all EXCEPT Admin and Manager
+      return targetUserRole !== 'admin' && targetUserRole !== 'manager';
+    
+    case 'coordinator':
+      // Coordinator can edit ONLY Student and Parent
+      return targetUserRole === 'student' || targetUserRole === 'parent';
+    
+    case 'student_manager':
+      // Student Manager can edit ONLY Student and Parent
+      return targetUserRole === 'student' || targetUserRole === 'parent';
+    
+    case 'course_manager':
+      // Course Manager can edit ONLY Teacher, Student, and Parent
+      return targetUserRole === 'teacher' || targetUserRole === 'student' || targetUserRole === 'parent';
+    
+    default:
+      // Teacher, Student, Parent cannot edit anyone
+      return false;
+  }
+};
+
 export const userService = {
   // Upload profile picture to Firebase Storage
   async uploadProfilePicture(file: File, userId: string): Promise<string> {
@@ -69,6 +102,7 @@ export const userService = {
   },
 
   // Get all users (regardless of status)
+  // Non-admin users will not see admin accounts (filtered on frontend)
   async getAllUsers(): Promise<User[]> {
     try {
       const usersCollection = collection(db, 'users');
@@ -203,9 +237,21 @@ export const userService = {
     }
   },
 
-  // Update user
-  async updateUser(uid: string, updates: Partial<User>): Promise<void> {
+  // Update user - with authorization check
+  async updateUser(uid: string, updates: Partial<User>, currentUserRole?: string): Promise<void> {
     try {
+      // If currentUserRole is provided, check permissions
+      if (currentUserRole) {
+        const targetUser = await this.getUserById(uid);
+        if (!targetUser) {
+          throw new Error('User not found');
+        }
+        
+        if (!canEditUserRole(currentUserRole, targetUser.role)) {
+          throw new Error('You do not have permission to edit this user');
+        }
+      }
+      
       const userRef = doc(db, 'users', uid);
       const updateData = { ...updates };
       
@@ -229,75 +275,8 @@ export const userService = {
     }
   },
 
-  // Delete user from Firestore and Supabase (Auth deletion is optional)
-  async deleteUser(uid: string, userEmail?: string): Promise<void> {
-    try {
-      // Get user data first to check for profile picture URL
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      const userData = userDoc.exists() ? userDoc.data() : null;
-      
-      // STEP 1: Delete from Firestore (PRIMARY - MUST SUCCEED)
-      if (userDoc.exists()) {
-        await deleteDoc(doc(db, 'users', uid));
-      }
-      
-      // STEP 2: Delete profile picture from Supabase (MANDATORY)
-      if (userData?.profilePictureUrl) {
-        try {
-          const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                             import.meta.env.VITE_API_URL ||
-                             'https://edtech-dashboard-alpha.vercel.app';
-          const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-          const response = await fetch(`${BACKEND_URL}/api/delete-profile-picture`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              profilePictureUrl: userData.profilePictureUrl,
-              uid: uid,
-              apiKey: MASTER_API_KEY
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to delete profile picture from Supabase');
-          }
-        } catch (supabaseError: any) {
-          throw new Error(`Failed to delete profile picture: ${supabaseError.message}`);
-        }
-      }
-      
-      // STEP 3: Optionally attempt to delete from Firebase Auth (non-critical)
-      try {
-        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                           import.meta.env.VITE_API_URL ||
-                           'https://edtech-dashboard-alpha.vercel.app';
-        const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-        await fetch(`${BACKEND_URL}/api/delete-user`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            uid,
-            email: userEmail,
-            action: 'delete-auth-user',
-            apiKey: MASTER_API_KEY
-          })
-        });
-        
-        // Don't check response - Auth deletion is optional
-      } catch (authError) {
-        // Auth deletion failure is non-critical, silently continue
-      }
-      
-    } catch (error: any) {
-      throw new Error(error.message || 'Failed to delete user');
-    }
-  },
+  // Delete user is REMOVED as per requirements
+  // Delete functionality is completely removed from user management
 
   // Search users
   async searchUsers(searchTerm: string): Promise<User[]> {
