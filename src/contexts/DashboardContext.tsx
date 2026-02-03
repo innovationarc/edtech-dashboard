@@ -38,6 +38,7 @@ interface DashboardContextType {
   setSiteLogoUrl: (url: string) => void;
   timezone: string;
   setTimezone: (timezone: string) => void;
+  canAccessUserManagement: () => boolean;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -95,6 +96,17 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [timezone, setTimezone] = useState(() => localStorage.getItem('timezone') || 'utc');
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+
+  // Function to check if user can access User Management
+  const canAccessUserManagement = (): boolean => {
+    if (!user) return false;
+    // Teacher, Student, Parent MUST NOT have access
+    return user.role === 'admin' || 
+           user.role === 'manager' || 
+           user.role === 'coordinator' ||
+           user.role === 'student_manager' ||
+           user.role === 'course_manager';
+  };
 
   // Handle window resize to detect desktop/mobile
   useEffect(() => {
@@ -414,7 +426,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         siteLogoUrl,
         setSiteLogoUrl: handleSetSiteLogoUrl,
         timezone,
-        setTimezone: handleSetTimezone
+        setTimezone: handleSetTimezone,
+        canAccessUserManagement
       }}
     >
       {children}
