@@ -1063,3 +1063,4 @@ export const adminService = {
       throw new Error(error.message || 'Failed to get admin statistics');
     }
   }
+}
