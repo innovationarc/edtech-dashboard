@@ -13,7 +13,7 @@ import {
   setDoc,
   addDoc
 } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 
 export interface Admin {
@@ -136,9 +136,13 @@ const normalizePhoneNumber = (phoneNumber: string): string => {
     cleaned = cleaned.substring(1);
   }
   
-  // After all processing, we should have 10 digits starting with 1
+  // After all processing, we should have 10 digits starting with 1 or 9 digits
   if (cleaned.length === 10 && cleaned.startsWith('1')) {
     return `880${cleaned}`;
+  }
+  
+  if (cleaned.length === 9) {
+    return `8801${cleaned}`;
   }
   
   // If none of the above conditions match, it's an invalid number
@@ -326,18 +330,16 @@ export const adminService = {
       }
 
       const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('API did not return JSON response');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        
+        if (data.success && data.userId) {
+          console.log('✅ Generated Admin ID:', data.userId);
+          return data.userId;
+        }
       }
-
-      const data = await response.json();
       
-      if (!data.success || !data.userId) {
-        throw new Error('Failed to generate Admin ID');
-      }
-
-      console.log('✅ Generated Admin ID:', data.userId);
-      return data.userId;
+      throw new Error('Failed to generate Admin ID');
     } catch (error: any) {
       console.error('Error generating Admin ID:', error);
       // Fallback to timestamp-based ID with AD prefix
@@ -349,7 +351,7 @@ export const adminService = {
     }
   },
 
-  // Create new admin - FIXED VERSION with proper parameter handling and error checking
+  // Create new admin - DIRECTLY via Firebase (NO API CALLS)
   async createAdmin(
     phoneNumber: string,
     email: string,
@@ -369,6 +371,8 @@ export const adminService = {
     createdByAdminSurname?: string,
     profilePictureUrl?: string
   ): Promise<Admin> {
+    let newUserCredential: any = null;
+    
     try {
       // Validate required fields
       if (!phoneNumber || phoneNumber.trim() === '') {
@@ -381,70 +385,62 @@ export const adminService = {
         throw new Error('Password is required');
       }
 
-      // Normalize phone number BEFORE sending to API
+      // Normalize phone number
       const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
       
-      // Generate Admin ID first
+      // Generate Admin ID
       const userId = await this.generateAdminId();
       
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+      console.log('📝 Creating admin with User ID:', userId);
 
-      // Prepare admin data
-      const adminData: any = {
-        surname,
-        fullName,
-        phoneNumber: normalizedPhoneNumber,
-        email: email || '',
-        password,
-        dob,
-        gender,
-        bloodGroup,
-        religion,
-        address,
-        birthCertificateNumber,
-        nid,
+      // Create email for Firebase Auth (if not provided, use phone-based email)
+      const authEmail = email && email.trim() !== '' 
+        ? email 
+        : `${normalizedPhoneNumber}@edtech.temp`;
+
+      console.log('🔐 Creating Firebase Auth account...');
+      
+      // Create user in Firebase Authentication
+      newUserCredential = await createUserWithEmailAndPassword(auth, authEmail, password);
+      const newUser = newUserCredential.user;
+      
+      console.log('✅ Firebase Auth account created with UID:', newUser.uid);
+
+      // Prepare admin data for Firestore
+      const adminData = {
+        uid: newUser.uid,
         userId,
+        surname,
+        fullName: fullName || '',
+        email: email || '',
+        phoneNumber: normalizedPhoneNumber,
+        dob: dob || '',
+        gender: gender || '',
+        bloodGroup: bloodGroup || '',
+        religion: religion || '',
+        address: address || '',
+        birthCertificateNumber: birthCertificateNumber || '',
+        nid: nid || '',
         role: 'admin',
         status: 'active',
-        profilePictureUrl,
-        apiKey: MASTER_API_KEY
+        profilePictureUrl: profilePictureUrl || '',
+        createdAt: Timestamp.now(),
+        createdBy: createdByAdminId || 'system',
+        lastLogin: null,
       };
 
-      // Register the admin using the register.ts API with normalized phone
-      const response = await fetch(`${BACKEND_URL}/api/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(adminData)
-      });
+      console.log('💾 Saving admin data to Firestore...');
+      
+      // Save to Firestore
+      await setDoc(doc(db, 'users', newUser.uid), adminData);
+      
+      console.log('✅ Admin data saved to Firestore');
 
-      // Check if response is ok before parsing JSON
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error Response:', errorText);
-        throw new Error(`API returned status ${response.status}: ${errorText}`);
-      }
+      // Sign out the newly created user to keep the current admin logged in
+      await signOut(auth);
+      console.log('🔓 Signed out new admin to maintain current session');
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text();
-        console.error('Non-JSON Response:', responseText);
-        throw new Error('API did not return JSON response');
-      }
-
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.message || 'Failed to create admin');
-      }
-
-      console.log('✅ Admin created successfully with normalized phone:', normalizedPhoneNumber);
-
-      // Send SMS notification to new admin (use normalized phone)
+      // Send SMS notification
       if (normalizedPhoneNumber) {
         await sendAdminCreationSMS(normalizedPhoneNumber, userId);
       }
@@ -454,7 +450,7 @@ export const adminService = {
         try {
           await addDoc(collection(db, 'security_logs'), {
             action: 'admin_created',
-            targetAdminUid: result.uid,
+            targetAdminUid: newUser.uid,
             targetAdminUserId: userId,
             targetAdminSurname: surname,
             performedByUid: createdByAdminUid,
@@ -481,7 +477,7 @@ export const adminService = {
       }
 
       return {
-        uid: result.uid,
+        uid: newUser.uid,
         userId,
         surname,
         fullName,
@@ -501,7 +497,22 @@ export const adminService = {
         createdBy: createdByAdminId || 'system',
       };
     } catch (error: any) {
-      console.error('Error creating admin:', error);
+      console.error('❌ Error creating admin:', error);
+      
+      // If we created a Firebase Auth user but failed later, try to clean up
+      if (newUserCredential && newUserCredential.user) {
+        try {
+          console.log('🧹 Attempting cleanup: deleting Firebase Auth user...');
+          // Note: This will only work if the user is still authenticated
+          // Otherwise, admin will need to manually delete from Firebase Console
+          await newUserCredential.user.delete();
+          console.log('✅ Cleanup successful: Firebase Auth user deleted');
+        } catch (cleanupError) {
+          console.error('⚠️ Cleanup failed:', cleanupError);
+          console.error('⚠️ Manual cleanup may be required for UID:', newUserCredential.user.uid);
+        }
+      }
+      
       throw new Error(error.message || 'Failed to create admin');
     }
   },
