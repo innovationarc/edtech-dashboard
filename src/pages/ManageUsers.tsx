@@ -1,6 +1,6 @@
 // src/pages/ManageUsers.tsx
 import { useState, useEffect } from 'react';
-import { Search, Loader, CheckCircle, XCircle, Clock, RefreshCw, Filter, Info, Edit, Users, GraduationCap, UserCog, Shield, Briefcase, UsersRound, X, User as UserIcon, BookOpen, UserCheck } from 'lucide-react';
+import { Search, Loader, CheckCircle, XCircle, Clock, RefreshCw, Filter, Info, Edit, Users, GraduationCap, UserCog, Shield, Briefcase, UsersRound, AlertTriangle, X, User as UserIcon, BookOpen, UserCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import { userService, User } from '../services/userService';
@@ -157,27 +157,6 @@ const ManageUsers = () => {
     }
   };
 
-  const handleSaveQuickEdit = async (updates: Partial<User>) => {
-    if (!selectedUser) return;
-    
-    try {
-      setError('');
-      await userService.updateUser(selectedUser.uid, updates);
-      
-      // Update local state
-      setAllUsers(allUsers.map(u => 
-        u.uid === selectedUser.uid ? { ...u, ...updates } : u
-      ));
-      
-      setSuccessMessage('User updated successfully');
-      setShowQuickEditModal(false);
-      setSelectedUser(null);
-    } catch (error: any) {
-      console.error('Update error:', error);
-      setError(error.message || 'Failed to update user');
-    }
-  };
-
   // If not authorized, show access denied
   if (!hasAccess) {
     return (
@@ -227,387 +206,387 @@ const ManageUsers = () => {
     return matchesSearch && matchesStatus && matchesRole;
   });
 
-  const formatRoleName = (role: string): string => {
-    const roleNames: Record<string, string> = {
-      admin: 'Admin',
-      manager: 'Manager',
-      course_manager: 'Course Manager',
-      student_manager: 'Student Manager',
-      coordinator: 'Coordinator',
-      teacher: 'Teacher',
-      parent: 'Parent',
-      student: 'Student'
-    };
-    return roleNames[role] || role;
-  };
-
-  const getRoleIcon = (role: string) => {
-    const roleIcons: Record<string, any> = {
-      admin: Shield,
-      manager: Briefcase,
-      course_manager: BookOpen,
-      student_manager: UserCheck,
-      coordinator: UserCog,
-      teacher: GraduationCap,
-      parent: UsersRound,
-      student: UserIcon
-    };
-    return roleIcons[role] || UserIcon;
-  };
-
-  const getRoleGradient = (role: string): string => {
-    const roleGradients: Record<string, string> = {
-      admin: 'from-red-600 to-red-700',
-      manager: 'from-purple-600 to-purple-700',
-      course_manager: 'from-indigo-600 to-indigo-700',
-      student_manager: 'from-teal-600 to-teal-700',
-      coordinator: 'from-blue-600 to-blue-700',
-      teacher: 'from-green-600 to-green-700',
-      parent: 'from-orange-600 to-orange-700',
-      student: 'from-cyan-600 to-cyan-700'
-    };
-    return roleGradients[role] || 'from-gray-600 to-gray-700';
-  };
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      active: { icon: CheckCircle, color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-700/30', label: 'Active' },
-      inactive: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700/30', label: 'Inactive' },
-      pending: { icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700/30', label: 'Pending' }
-    };
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
-    const Icon = config.icon;
-    
-    return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ${config.bg} ${config.color} border ${config.border}`}>
-        <Icon size={14} />
-        {config.label}
-      </span>
-    );
-  };
-
-  // Calculate statistics for role cards - exclude Admins from non-Admin users
+  // Get counts for different statuses - exclude Admins from non-Admin users
   const visibleUsers = currentUser?.role === 'admin' 
     ? allUsers 
     : allUsers.filter(u => u.role !== 'admin');
-    
-  const stats = {
-    total: visibleUsers.length,
+
+  const statusCounts = {
+    all: visibleUsers.length,
     active: visibleUsers.filter(u => u.status === 'active').length,
     pending: visibleUsers.filter(u => u.status === 'pending').length,
-    inactive: visibleUsers.filter(u => u.status === 'inactive').length,
-    byRole: {
-      admin: allUsers.filter(u => u.role === 'admin').length,
-      manager: allUsers.filter(u => u.role === 'manager').length,
-      course_manager: allUsers.filter(u => u.role === 'course_manager').length,
-      student_manager: allUsers.filter(u => u.role === 'student_manager').length,
-      coordinator: allUsers.filter(u => u.role === 'coordinator').length,
-      teacher: allUsers.filter(u => u.role === 'teacher').length,
-      parent: allUsers.filter(u => u.role === 'parent').length,
-      student: allUsers.filter(u => u.role === 'student').length,
+    inactive: visibleUsers.filter(u => u.status === 'inactive').length
+  };
+
+  // Format date to DD/MM/YYYY
+  const formatDate = (date: Date | undefined): string => {
+    if (!date) return 'N/A';
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Management cards configuration
+  const managementCards = [
+    {
+      title: 'Student Management',
+      icon: GraduationCap,
+      route: '/manage/students',
+      visible: canViewStudentManagement,
+      gradient: 'from-blue-600/80 via-blue-700/80 to-indigo-700/80',
+      hoverGradient: 'hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700',
+      count: allUsers.filter(u => u.role === 'student').length
+    },
+    {
+      title: 'Parent Management',
+      icon: Users,
+      route: '/manage/parents',
+      visible: canViewParentManagement,
+      gradient: 'from-purple-600/80 via-purple-700/80 to-pink-700/80',
+      hoverGradient: 'hover:from-purple-600 hover:via-purple-700 hover:to-pink-700',
+      count: allUsers.filter(u => u.role === 'parent').length
+    },
+    {
+      title: 'Teacher Management',
+      icon: UsersRound,
+      route: '/manage/teachers',
+      visible: canViewTeacherManagement,
+      gradient: 'from-green-600/80 via-green-700/80 to-emerald-700/80',
+      hoverGradient: 'hover:from-green-600 hover:via-green-700 hover:to-emerald-700',
+      count: allUsers.filter(u => u.role === 'teacher').length
+    },
+    {
+      title: 'Coordinator Management',
+      icon: UserCog,
+      route: '/manage/coordinators',
+      visible: canViewCoordinatorManagement,
+      gradient: 'from-orange-600/80 via-orange-700/80 to-red-700/80',
+      hoverGradient: 'hover:from-orange-600 hover:via-orange-700 hover:to-red-700',
+      count: allUsers.filter(u => u.role === 'coordinator').length
+    },
+    {
+      title: 'Course Manager Management',
+      icon: BookOpen,
+      route: '/manage/course-managers',
+      visible: canViewCourseManagerManagement,
+      gradient: 'from-cyan-600/80 via-cyan-700/80 to-blue-700/80',
+      hoverGradient: 'hover:from-cyan-600 hover:via-cyan-700 hover:to-blue-700',
+      count: allUsers.filter(u => u.role === 'course_manager').length
+    },
+    {
+      title: 'Student Manager Management',
+      icon: UserCheck,
+      route: '/manage/student-managers',
+      visible: canViewStudentManagerManagement,
+      gradient: 'from-teal-600/80 via-teal-700/80 to-green-700/80',
+      hoverGradient: 'hover:from-teal-600 hover:via-teal-700 hover:to-green-700',
+      count: allUsers.filter(u => u.role === 'student_manager').length
+    },
+    {
+      title: 'Manager Management',
+      icon: Briefcase,
+      route: '/manage/managers',
+      visible: canViewManagerManagement,
+      gradient: 'from-red-600/80 via-red-700/80 to-rose-700/80',
+      hoverGradient: 'hover:from-red-600 hover:via-red-700 hover:to-rose-700',
+      count: allUsers.filter(u => u.role === 'manager').length
+    },
+    {
+      title: 'Admin Management',
+      icon: Shield,
+      route: '/manage/admins',
+      visible: canViewAdminManagement,
+      gradient: 'from-gray-700/80 via-gray-800/80 to-slate-800/80',
+      hoverGradient: 'hover:from-gray-700 hover:via-gray-800 hover:to-slate-800',
+      count: allUsers.filter(u => u.role === 'admin').length
+    }
+  ];
+
+  // Helper function to get role color
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'bg-gray-800/60 text-gray-300';
+      case 'manager':
+        return 'bg-red-800/60 text-red-300';
+      case 'course_manager':
+        return 'bg-cyan-800/60 text-cyan-300';
+      case 'student_manager':
+        return 'bg-teal-800/60 text-teal-300';
+      case 'coordinator':
+        return 'bg-orange-800/60 text-orange-300';
+      case 'teacher':
+        return 'bg-green-800/60 text-green-300';
+      case 'parent':
+        return 'bg-purple-800/60 text-purple-300';
+      case 'student':
+        return 'bg-blue-800/60 text-blue-300';
+      default:
+        return 'bg-gray-800/60 text-gray-300';
     }
   };
 
-  return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">User Management</h1>
-          <p className="text-gray-400">Manage and monitor all users across the platform</p>
+  // Helper function to get role gradient
+  const getRoleGradient = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'from-gray-700 to-gray-800';
+      case 'manager':
+        return 'from-red-600 to-rose-700';
+      case 'course_manager':
+        return 'from-cyan-600 to-blue-700';
+      case 'student_manager':
+        return 'from-teal-600 to-green-700';
+      case 'coordinator':
+        return 'from-orange-600 to-red-700';
+      case 'teacher':
+        return 'from-green-600 to-emerald-700';
+      case 'parent':
+        return 'from-purple-600 to-pink-700';
+      case 'student':
+        return 'from-blue-600 to-indigo-700';
+      default:
+        return 'from-gray-700 to-gray-800';
+    }
+  };
+
+  // Helper function to get role icon
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return Shield;
+      case 'manager':
+        return Briefcase;
+      case 'course_manager':
+        return BookOpen;
+      case 'student_manager':
+        return UserCheck;
+      case 'coordinator':
+        return UserCog;
+      case 'teacher':
+        return UsersRound;
+      case 'parent':
+        return Users;
+      case 'student':
+        return GraduationCap;
+      default:
+        return UserIcon;
+    }
+  };
+
+  // Helper function to format role name for display
+  const formatRoleName = (role: string) => {
+    if (role === 'course_manager') return 'Course Manager';
+    if (role === 'student_manager') return 'Student Manager';
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader size={48} className="animate-spin text-primary-500 mx-auto mb-4" />
+          <p className="text-gray-400 text-lg">Loading users...</p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600/90 hover:bg-primary-600 text-white rounded-xl transition-all duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
-          <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-8">
+      {/* Header Section - Clean Style */}
+      <div className="bg-background-800/50 backdrop-blur-sm rounded-2xl p-6 border border-background-700/50">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div>
+            <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">
+              User Management
+            </h1>
+            <p className="text-gray-400">
+              Comprehensive user oversight • <span className="text-primary-400 font-semibold">{visibleUsers.length}</span> total users registered
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3 flex-wrap">
+            {statusCounts.pending > 0 && (
+              <div className="flex items-center gap-2 bg-yellow-900/30 border border-yellow-700/40 text-yellow-300 px-4 py-2.5 rounded-xl backdrop-blur-sm">
+                <Clock size={16} />
+                <span className="text-sm font-medium">
+                  {statusCounts.pending} pending
+                </span>
+              </div>
+            )}
+            
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 bg-primary-600/90 hover:bg-primary-600 text-white px-5 py-2.5 rounded-xl transition-all duration-200 disabled:opacity-50 font-medium"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Success Message */}
       {successMessage && (
-        <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-top duration-300">
-          <CheckCircle className="text-green-400 flex-shrink-0 mt-0.5" size={20} />
-          <div className="flex-1">
-            <p className="text-green-300 font-medium">{successMessage}</p>
-          </div>
-          <button onClick={() => setSuccessMessage('')} className="text-green-400 hover:text-green-300 transition-colors">
-            <X size={18} />
+        <div className="bg-green-900/30 border border-green-700/40 text-green-300 px-5 py-3.5 rounded-xl backdrop-blur-sm flex items-center gap-3">
+          <CheckCircle size={18} className="flex-shrink-0" />
+          <p className="flex-1 font-medium">{successMessage}</p>
+          <button onClick={() => setSuccessMessage('')} className="text-green-400 hover:text-white transition-colors">
+            <X size={16} />
           </button>
         </div>
       )}
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-900/20 border border-red-700/30 rounded-xl p-4 flex items-start gap-3 animate-in slide-in-from-top duration-300">
-          <XCircle className="text-red-400 flex-shrink-0 mt-0.5" size={20} />
-          <div className="flex-1">
-            <p className="text-red-300 font-medium">{error}</p>
-          </div>
-          <button onClick={() => setError('')} className="text-red-400 hover:text-red-300 transition-colors">
-            <X size={18} />
+        <div className="bg-red-900/30 border border-red-700/40 text-red-300 px-5 py-3.5 rounded-xl backdrop-blur-sm flex items-center gap-3">
+          <AlertTriangle size={18} className="flex-shrink-0" />
+          <p className="flex-1 font-medium">{error}</p>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-white transition-colors">
+            <X size={16} />
           </button>
         </div>
       )}
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-700/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm font-medium mb-1">Total Users</p>
-              <p className="text-3xl font-bold text-white">{stats.total}</p>
-            </div>
-            <Users className="text-blue-400" size={40} />
-          </div>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-700/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm font-medium mb-1">Active</p>
-              <p className="text-3xl font-bold text-white">{stats.active}</p>
-            </div>
-            <CheckCircle className="text-green-400" size={40} />
-          </div>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-yellow-900/20 to-yellow-800/10 border-yellow-700/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm font-medium mb-1">Pending</p>
-              <p className="text-3xl font-bold text-white">{stats.pending}</p>
-            </div>
-            <Clock className="text-yellow-400" size={40} />
-          </div>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-red-900/20 to-red-800/10 border-red-700/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm font-medium mb-1">Inactive</p>
-              <p className="text-3xl font-bold text-white">{stats.inactive}</p>
-            </div>
-            <XCircle className="text-red-400" size={40} />
-          </div>
-        </Card>
+      {/* Management Cards Grid - Semi-transparent Style */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {managementCards.filter(card => card.visible).map((card, index) => {
+          const Icon = card.icon;
+          return (
+            <button
+              key={card.route}
+              onClick={() => navigate(card.route)}
+              className="group relative overflow-hidden bg-background-800/40 backdrop-blur-sm rounded-xl p-5 border border-background-700/50 hover:border-background-600/50 transition-all duration-300 hover:scale-105 text-left"
+              style={{ animationDelay: `${index * 50}ms` }}
+            >
+              {/* Subtle gradient overlay */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+              
+              <div className="relative z-10">
+                <div className={`inline-flex p-3 rounded-xl bg-gradient-to-br ${card.gradient} mb-3 shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                  <Icon size={24} className="text-white" />
+                </div>
+                
+                <h3 className="text-white font-semibold text-sm mb-2 line-clamp-2">
+                  {card.title}
+                </h3>
+                
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl font-bold text-white">{card.count}</p>
+                  <span className="text-xs text-gray-400 font-medium">users</span>
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Role Management Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {canViewAdminManagement && (
-          <Card 
-            className="bg-gradient-to-br from-red-900/20 to-red-800/10 border-red-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/admins')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Admins</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.admin}</p>
+      {/* User List Card - Semi-transparent Style */}
+      <div className="bg-background-800/40 backdrop-blur-sm rounded-xl border border-background-700/50 overflow-hidden">
+        <div className="bg-background-800/60 p-5 border-b border-background-700/50">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
+            {/* Status Filter Tabs - Muted Colors */}
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { key: 'all', label: 'All', count: statusCounts.all, bg: 'bg-gray-700/60', hoverBg: 'hover:bg-gray-600/60', activeBg: 'bg-gray-600', icon: Users },
+                { key: 'active', label: 'Active', count: statusCounts.active, bg: 'bg-green-700/60', hoverBg: 'hover:bg-green-600/60', activeBg: 'bg-green-600', icon: CheckCircle },
+                { key: 'pending', label: 'Pending', count: statusCounts.pending, bg: 'bg-yellow-700/60', hoverBg: 'hover:bg-yellow-600/60', activeBg: 'bg-yellow-600', icon: Clock },
+                { key: 'inactive', label: 'Inactive', count: statusCounts.inactive, bg: 'bg-red-700/60', hoverBg: 'hover:bg-red-600/60', activeBg: 'bg-red-600', icon: XCircle }
+              ].map((status) => {
+                const StatusIcon = status.icon;
+                return (
+                  <button
+                    key={status.key}
+                    onClick={() => setStatusFilter(status.key as any)}
+                    className={`px-4 py-2.5 rounded-lg transition-all duration-200 font-medium flex items-center gap-2 ${
+                      statusFilter === status.key
+                        ? `${status.activeBg} text-white`
+                        : `${status.bg} ${status.hoverBg} text-gray-300 hover:text-white`
+                    }`}
+                  >
+                    <StatusIcon size={14} />
+                    <span>{status.label}</span>
+                    <span className={`ml-1 px-2 py-0.5 rounded-md text-xs font-semibold ${
+                      statusFilter === status.key ? 'bg-white/20' : 'bg-gray-900/40'
+                    }`}>
+                      {status.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Search and Filters */}
+            <div className="flex gap-3 w-full lg:w-auto flex-wrap lg:flex-nowrap">
+              <div className="relative flex-1 lg:flex-none lg:w-80">
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  className="w-full bg-background-900/60 text-white rounded-lg py-2.5 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary-500/50 border border-background-700/50 focus:border-primary-500/50 transition-all duration-200 placeholder:text-gray-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <Search size={16} className="absolute left-3 top-3 text-gray-400" />
               </div>
-              <Shield className="text-red-400" size={40} />
+              
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as any)}
+                className="bg-background-900/60 text-white rounded-lg py-2.5 px-4 pr-10 focus:outline-none focus:ring-2 focus:ring-primary-500/50 appearance-none border border-background-700/50 focus:border-primary-500/50 cursor-pointer transition-all duration-200 font-medium"
+              >
+                <option value="all">All Roles</option>
+                {currentUser?.role === 'admin' && <option value="admin">Admin</option>}
+                <option value="manager">Manager</option>
+                <option value="course_manager">Course Manager</option>
+                <option value="student_manager">Student Manager</option>
+                <option value="coordinator">Coordinator</option>
+                <option value="teacher">Teacher</option>
+                <option value="parent">Parent</option>
+                <option value="student">Student</option>
+              </select>
             </div>
-          </Card>
-        )}
-
-        {canViewManagerManagement && (
-          <Card 
-            className="bg-gradient-to-br from-purple-900/20 to-purple-800/10 border-purple-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/managers')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Managers</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.manager}</p>
-              </div>
-              <Briefcase className="text-purple-400" size={40} />
-            </div>
-          </Card>
-        )}
-
-        {canViewCourseManagerManagement && (
-          <Card 
-            className="bg-gradient-to-br from-indigo-900/20 to-indigo-800/10 border-indigo-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/course-managers')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Course Managers</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.course_manager}</p>
-              </div>
-              <BookOpen className="text-indigo-400" size={40} />
-            </div>
-          </Card>
-        )}
-
-        {canViewStudentManagerManagement && (
-          <Card 
-            className="bg-gradient-to-br from-teal-900/20 to-teal-800/10 border-teal-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/student-managers')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Student Managers</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.student_manager}</p>
-              </div>
-              <UserCheck className="text-teal-400" size={40} />
-            </div>
-          </Card>
-        )}
-
-        {canViewCoordinatorManagement && (
-          <Card 
-            className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/coordinators')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Coordinators</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.coordinator}</p>
-              </div>
-              <UserCog className="text-blue-400" size={40} />
-            </div>
-          </Card>
-        )}
-
-        {canViewTeacherManagement && (
-          <Card 
-            className="bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/teachers')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Teachers</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.teacher}</p>
-              </div>
-              <GraduationCap className="text-green-400" size={40} />
-            </div>
-          </Card>
-        )}
-
-        {canViewParentManagement && (
-          <Card 
-            className="bg-gradient-to-br from-orange-900/20 to-orange-800/10 border-orange-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/parents')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Parents</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.parent}</p>
-              </div>
-              <UsersRound className="text-orange-400" size={40} />
-            </div>
-          </Card>
-        )}
-
-        {canViewStudentManagement && (
-          <Card 
-            className="bg-gradient-to-br from-cyan-900/20 to-cyan-800/10 border-cyan-700/20 cursor-pointer hover:scale-105 transition-transform duration-200"
-            onClick={() => navigate('/manage/students')}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm font-medium mb-1">Students</p>
-                <p className="text-3xl font-bold text-white">{stats.byRole.student}</p>
-              </div>
-              <UserIcon className="text-cyan-400" size={40} />
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {/* Filters and Search */}
-      <Card>
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Search */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search by name, email, phone, or user ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-background-900/60 text-white rounded-lg py-2.5 pl-10 pr-4 border border-background-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all duration-200"
-              />
-            </div>
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="text-gray-400" size={20} />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="bg-background-900/60 text-white rounded-lg py-2.5 px-4 border border-background-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500/50 cursor-pointer transition-all duration-200 font-medium"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="pending">Pending</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-
-          {/* Role Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="text-gray-400" size={20} />
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value as any)}
-              className="bg-background-900/60 text-white rounded-lg py-2.5 px-4 border border-background-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500/50 cursor-pointer transition-all duration-200 font-medium"
-            >
-              <option value="all">All Roles</option>
-              {currentUser?.role === 'admin' && <option value="admin">Admin</option>}
-              <option value="manager">Manager</option>
-              <option value="course_manager">Course Manager</option>
-              <option value="student_manager">Student Manager</option>
-              <option value="coordinator">Coordinator</option>
-              <option value="teacher">Teacher</option>
-              <option value="parent">Parent</option>
-              <option value="student">Student</option>
-            </select>
           </div>
         </div>
-      </Card>
-
-      {/* Users Table */}
-      <Card>
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader className="animate-spin text-primary-500 mb-4" size={40} />
-            <p className="text-gray-400">Loading users...</p>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Users className="text-gray-600 mb-4" size={60} />
-            <p className="text-gray-400 text-lg">No users found</p>
-            <p className="text-gray-500 text-sm mt-2">Try adjusting your filters or search term</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-background-700/50">
-                  <th className="text-left py-4 px-4 text-gray-400 font-semibold text-sm">User</th>
-                  <th className="text-left py-4 px-4 text-gray-400 font-semibold text-sm">Role</th>
-                  <th className="text-left py-4 px-4 text-gray-400 font-semibold text-sm">Contact</th>
-                  <th className="text-left py-4 px-4 text-gray-400 font-semibold text-sm">Status</th>
-                  <th className="text-left py-4 px-4 text-gray-400 font-semibold text-sm">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => {
-                  const RoleIcon = getRoleIcon(user.role);
-                  const canEdit = canEditUser(user.role);
-                  
-                  return (
-                    <tr key={user.uid} className="border-b border-background-700/30 hover:bg-background-700/20 transition-colors">
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
+        
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-background-700/50 bg-background-900/30">
+                <th className="p-4 text-left">
+                  <div className="flex items-center gap-2 text-xs uppercase text-gray-400 font-bold tracking-wider">
+                    <Users size={12} />
+                    <span>User Details</span>
+                  </div>
+                </th>
+                <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden sm:table-cell">Surname</th>
+                <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden md:table-cell">Role</th>
+                <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden lg:table-cell">Status</th>
+                <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden xl:table-cell">Joined</th>
+                <th className="p-4 text-left text-xs uppercase text-gray-400 font-bold tracking-wider hidden xl:table-cell">Last Login</th>
+                <th className="p-4 text-right text-xs uppercase text-gray-400 font-bold tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map((user, index) => {
+                const RoleIcon = getRoleIcon(user.role);
+                const canEdit = canEditUser(user.role);
+                
+                return (
+                  <tr 
+                    key={user.uid} 
+                    className="border-b border-background-800/30 last:border-0 hover:bg-background-700/20 transition-all duration-200 group"
+                    style={{ animationDelay: `${index * 20}ms` }}
+                  >
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
                           {user.profilePictureUrl ? (
-                            <div className="h-10 w-10 rounded-xl overflow-hidden border-2 border-background-700/50">
+                            <div className="h-11 w-11 rounded-xl overflow-hidden border-2 border-background-700/50 shadow-lg group-hover:scale-110 transition-transform duration-200">
                               <img 
                                 src={user.profilePictureUrl} 
                                 alt={user.name || 'User'} 
@@ -615,71 +594,142 @@ const ManageUsers = () => {
                               />
                             </div>
                           ) : (
-                            <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${getRoleGradient(user.role)} flex items-center justify-center`}>
-                              <span className="text-white font-bold text-sm">{user.surname?.charAt(0) || user.name?.charAt(0) || 'U'}</span>
+                            <div className={`h-11 w-11 rounded-xl flex items-center justify-center bg-gradient-to-br ${getRoleGradient(user.role)} shadow-lg group-hover:scale-110 transition-transform duration-200`}>
+                              <span className="text-white font-bold text-base">
+                                {user.surname?.charAt(0) || user.name?.charAt(0) || 'U'}
+                              </span>
                             </div>
                           )}
-                          <div>
-                            <p className="text-white font-semibold">{user.name || 'Unknown'}</p>
-                            <p className="text-gray-400 text-sm">{user.userId || user.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2">
-                          <RoleIcon size={16} className="text-gray-400" />
-                          <span className="text-white font-medium capitalize">{formatRoleName(user.role)}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div>
-                          <p className="text-white text-sm">{user.phoneNumber || 'N/A'}</p>
-                          <p className="text-gray-400 text-xs">{user.email}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        {getStatusBadge(user.status)}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleShowInfo(user)}
-                            className="p-2 bg-blue-700/30 hover:bg-blue-600/40 text-blue-300 rounded-lg transition-all duration-200"
-                            title="View Info"
-                          >
-                            <Info size={16} />
-                          </button>
-                          {canEdit && (
-                            <button
-                              onClick={() => handleQuickEdit(user)}
-                              className="p-2 bg-green-700/30 hover:bg-green-600/40 text-green-300 rounded-lg transition-all duration-200"
-                              title="Quick Edit"
-                            >
-                              <Edit size={16} />
-                            </button>
+                          {user.status === 'active' && (
+                            <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 bg-green-500 rounded-full border-2 border-background-800"></div>
                           )}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-white font-semibold truncate text-sm">{user.userId || 'N/A'}</span>
+                            {user.uid === currentUser?.uid && (
+                              <span className="text-xs bg-primary-900/60 text-primary-300 px-1.5 py-0.5 rounded font-medium">You</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-400 truncate">{user.name}</p>
+                          <div className="flex items-center gap-2 mt-1 md:hidden">
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getRoleColor(user.role)}`}>
+                              {formatRoleName(user.role)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-gray-300 font-medium hidden sm:table-cell text-sm">{user.surname || 'N/A'}</td>
+                    <td className="p-4 hidden md:table-cell">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${getRoleColor(user.role)}`}>
+                        <RoleIcon size={11} />
+                        <span>{formatRoleName(user.role)}</span>
+                      </span>
+                    </td>
+                    <td className="p-4 hidden lg:table-cell">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                        user.status === 'active' ? 'bg-green-800/60 text-green-300' :
+                        user.status === 'pending' ? 'bg-yellow-800/60 text-yellow-300' :
+                        'bg-red-800/60 text-red-300'
+                      }`}>
+                        {user.status === 'active' && <CheckCircle size={11} />}
+                        {user.status === 'pending' && <Clock size={11} />}
+                        {user.status === 'inactive' && <XCircle size={11} />}
+                        <span className="capitalize">{user.status}</span>
+                      </span>
+                    </td>
+                    <td className="p-4 text-gray-400 text-sm hidden xl:table-cell">{formatDate(user.createdAt)}</td>
+                    <td className="p-4 text-gray-400 text-sm hidden xl:table-cell">{formatDate(user.lastLogin)}</td>
+                    <td className="p-4">
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => handleShowInfo(user)}
+                          className="p-2 bg-blue-700/60 hover:bg-blue-600/60 text-white rounded-lg transition-all duration-200 hover:scale-110"
+                          title="View user info"
+                        >
+                          <Info size={14} />
+                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleQuickEdit(user)}
+                            className="p-2 bg-green-700/60 hover:bg-green-600/60 text-white rounded-lg transition-all duration-200 hover:scale-110"
+                            title="Quick edit"
+                          >
+                            <Edit size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Empty State */}
+        {filteredUsers.length === 0 && (
+          <div className="py-16 text-center">
+            <div className="inline-flex p-5 rounded-full bg-background-700/40 mb-5">
+              <Users size={48} className="text-gray-600" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">No Users Found</h3>
+            <p className="text-gray-400 max-w-md mx-auto">
+              {searchTerm || statusFilter !== 'all' || roleFilter !== 'all' 
+                ? 'No users match your current filters.' 
+                : 'No users have been registered yet.'
+              }
+            </p>
+            {(searchTerm || statusFilter !== 'all' || roleFilter !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setRoleFilter('all');
+                }}
+                className="mt-5 px-5 py-2.5 bg-primary-600/90 hover:bg-primary-600 text-white rounded-lg transition-all duration-200 font-medium"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         )}
-      </Card>
+        
+        {/* Summary Footer */}
+        {filteredUsers.length > 0 && (
+          <div className="bg-background-900/30 px-5 py-3.5 border-t border-background-700/50 flex flex-col sm:flex-row justify-between items-center gap-3 text-sm">
+            <div className="flex items-center gap-2 text-gray-400">
+              <span>Showing</span>
+              <span className="px-2.5 py-1 bg-primary-900/30 text-primary-300 rounded-md font-semibold">
+                {filteredUsers.length}
+              </span>
+              <span>of</span>
+              <span className="px-2.5 py-1 bg-background-700/50 text-white rounded-md font-semibold">
+                {visibleUsers.length}
+              </span>
+              <span>users</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-400">
+              <Clock size={13} />
+              <span>Updated: {new Date().toLocaleTimeString()}</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Info Modal */}
       {showInfoModal && selectedUser && (
-        <InfoModal
+        <UserInfoModal
           user={selectedUser}
           onClose={() => {
             setShowInfoModal(false);
             setSelectedUser(null);
           }}
+          getRoleGradient={getRoleGradient}
         />
       )}
-
+      
       {/* Quick Edit Modal */}
       {showQuickEditModal && selectedUser && (
         <QuickEditModal
@@ -688,7 +738,19 @@ const ManageUsers = () => {
             setShowQuickEditModal(false);
             setSelectedUser(null);
           }}
-          onSave={handleSaveQuickEdit}
+          onSave={async (updates) => {
+            try {
+              await userService.updateUser(selectedUser.uid, updates);
+              setAllUsers(allUsers.map(u => 
+                u.uid === selectedUser.uid ? { ...u, ...updates } : u
+              ));
+              setSuccessMessage(`User "${selectedUser.name}" updated successfully`);
+              setShowQuickEditModal(false);
+              setSelectedUser(null);
+            } catch (error: any) {
+              setError(error.message);
+            }
+          }}
           onManage={handleManageUser}
           formatRoleName={formatRoleName}
           getRoleIcon={getRoleIcon}
@@ -698,13 +760,14 @@ const ManageUsers = () => {
   );
 };
 
-// Info Modal Component - Shows ONLY specified fields
-interface InfoModalProps {
+// User Info Modal Component - ONLY shows specified fields
+interface UserInfoModalProps {
   user: User;
   onClose: () => void;
+  getRoleGradient: (role: string) => string;
 }
 
-const InfoModal = ({ user, onClose }: InfoModalProps) => {
+const UserInfoModal = ({ user, onClose, getRoleGradient }: UserInfoModalProps) => {
   // ONLY show these fields as per requirements
   const infoFields = [
     { label: 'Surname', value: user.surname || 'N/A' },
@@ -717,7 +780,7 @@ const InfoModal = ({ user, onClose }: InfoModalProps) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-background-800/95 backdrop-blur-xl w-full max-w-2xl rounded-2xl overflow-hidden border border-background-700/50">
+      <div className="bg-background-800/95 backdrop-blur-xl w-full max-w-4xl rounded-2xl overflow-hidden border border-background-700/50">
         <div className="p-5 border-b border-background-700/50 bg-background-900/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -730,7 +793,7 @@ const InfoModal = ({ user, onClose }: InfoModalProps) => {
                   />
                 </div>
               ) : (
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-lg">
+                <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${getRoleGradient(user.role)} flex items-center justify-center shadow-lg`}>
                   <span className="text-white font-bold text-2xl">{user.surname?.charAt(0) || user.name?.charAt(0) || 'U'}</span>
                 </div>
               )}
@@ -749,7 +812,7 @@ const InfoModal = ({ user, onClose }: InfoModalProps) => {
         </div>
         
         <div className="p-5 max-h-[60vh] overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {infoFields.map((field, index) => (
               <div key={index} className="bg-background-900/40 rounded-xl p-3.5 border border-background-700/30">
                 <p className="text-xs text-gray-400 mb-1.5 font-semibold uppercase tracking-wide">{field.label}</p>
