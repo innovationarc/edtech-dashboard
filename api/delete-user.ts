@@ -4,14 +4,54 @@ import { createClient } from '@supabase/supabase-js';
 
 // Global cache for Firebase Admin instance
 let firebaseAdmin: any = null;
+let adminInitialized = false;
 
 /**
- * Initialize Firebase Admin SDK using SERVICE ACCOUNT JSON approach
- * This bypasses the private key string parsing issues
+ * Fix for DECODER routines::unsupported error
+ * This processes the private key to ensure it's in the correct format
+ */
+function fixPrivateKey(privateKey: string): string {
+  // Remove any quotes that might be wrapping the key
+  let key = privateKey.trim().replace(/^["']|["']$/g, '');
+  
+  // Replace literal \n with actual newlines
+  key = key.replace(/\\n/g, '\n');
+  
+  // Remove any \r characters
+  key = key.replace(/\r/g, '');
+  
+  // Ensure the key starts and ends with the proper markers
+  if (!key.includes('-----BEGIN PRIVATE KEY-----')) {
+    throw new Error('Invalid private key format: missing BEGIN marker');
+  }
+  if (!key.includes('-----END PRIVATE KEY-----')) {
+    throw new Error('Invalid private key format: missing END marker');
+  }
+  
+  // Split into lines and rebuild with proper line endings
+  const lines = key.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  // Reconstruct the key with proper formatting
+  const header = lines[0];
+  const footer = lines[lines.length - 1];
+  const body = lines.slice(1, -1).join('');
+  
+  // Break the body into 64-character chunks (PEM standard)
+  const chunks: string[] = [];
+  for (let i = 0; i < body.length; i += 64) {
+    chunks.push(body.substring(i, i + 64));
+  }
+  
+  // Rebuild with proper line breaks
+  return [header, ...chunks, footer].join('\n');
+}
+
+/**
+ * Initialize Firebase Admin SDK with proper error handling
  */
 async function initializeFirebaseAdmin() {
-  // Return cached instance if available
-  if (firebaseAdmin !== null) {
+  // Return cached instance if available and initialized
+  if (firebaseAdmin !== null && adminInitialized) {
     console.log('✅ Using cached Firebase Admin instance');
     return firebaseAdmin;
   }
@@ -27,6 +67,7 @@ async function initializeFirebaseAdmin() {
     if (admin.apps && admin.apps.length > 0) {
       console.log('✅ Firebase Admin already initialized');
       firebaseAdmin = admin;
+      adminInitialized = true;
       return admin;
     }
 
@@ -50,26 +91,15 @@ async function initializeFirebaseAdmin() {
     console.log('  ✓ Private Key length:', privateKeyEnv.length);
     console.log('');
 
-    // Process private key with MULTIPLE fallback strategies
-    let privateKey = privateKeyEnv;
-    
-    // Strategy 1: Replace \\n with actual newlines
-    if (privateKey.includes('\\n')) {
-      console.log('🔑 Strategy 1: Replacing \\\\n with newlines');
-      privateKey = privateKey.replace(/\\n/g, '\n');
-    }
-    
-    // Strategy 2: Ensure proper line endings (remove \r if present)
-    if (privateKey.includes('\r')) {
-      console.log('🔑 Strategy 2: Removing carriage returns');
-      privateKey = privateKey.replace(/\r/g, '');
-    }
-    
-    // Strategy 3: Ensure proper trimming
-    privateKey = privateKey.trim();
-    
+    // CRITICAL FIX: Process private key with proper formatting
+    console.log('🔑 Processing private key...');
+    const privateKey = fixPrivateKey(privateKeyEnv);
+    console.log('✅ Private key processed successfully');
+    console.log('  - Starts with:', privateKey.substring(0, 30));
+    console.log('  - Ends with:', privateKey.substring(privateKey.length - 30));
+    console.log('');
+
     // Create a complete service account object
-    // This is the RECOMMENDED way by Firebase Admin SDK
     const serviceAccount = {
       type: 'service_account',
       project_id: projectId,
@@ -87,8 +117,6 @@ async function initializeFirebaseAdmin() {
     console.log('  - Type:', serviceAccount.type);
     console.log('  - Project ID:', serviceAccount.project_id);
     console.log('  - Client Email:', serviceAccount.client_email);
-    console.log('  - Has Private Key:', !!serviceAccount.private_key);
-    console.log('  - Private Key starts with:', serviceAccount.private_key.substring(0, 30));
     console.log('');
 
     // Initialize Firebase Admin with the service account object
@@ -101,8 +129,9 @@ async function initializeFirebaseAdmin() {
     console.log('='.repeat(60));
     console.log('');
     
-    // Cache the instance
+    // Cache the instance and mark as initialized
     firebaseAdmin = admin;
+    adminInitialized = true;
     
     return admin;
 
@@ -127,6 +156,7 @@ async function initializeFirebaseAdmin() {
     
     // Reset cache on failure
     firebaseAdmin = null;
+    adminInitialized = false;
     
     // Re-throw with clear message
     throw new Error(`Firebase Admin initialization failed: ${error.message}`);
@@ -263,7 +293,7 @@ export default async function handler(
       // Add timeout to prevent hanging
       const deletePromise = userRef.delete();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Firestore delete timeout after 10s')), 10000)
+        setTimeout(() => reject(new Error('Firestore delete timeout after 15s')), 15000)
       );
       
       await Promise.race([deletePromise, timeoutPromise]);
@@ -271,7 +301,7 @@ export default async function handler(
       firestoreDeleted = true;
       console.log('✅ Firestore deleted');
     } catch (firestoreError: any) {
-      const errorMsg = `Firestore error: ${firestoreError.message}`;
+      const errorMsg = `Firestore error: ${firestoreError.code || firestoreError.message}`;
       console.error('❌', errorMsg);
       
       // Log the full error for debugging
@@ -291,7 +321,7 @@ export default async function handler(
           firestoreDeleted: false,
           errors: [errorMsg],
           errorCode: firestoreError.code,
-          errorDetails: firestoreError.details
+          errorDetails: firestoreError.details || firestoreError.message
         }
       });
     }
