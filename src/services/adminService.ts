@@ -84,7 +84,7 @@ const toGSM7Bit = (text: string): string => {
     return replacements[char] || char;
   }).join('');
 };
- * Normalize phone number to 13-digit format: 8801XXXXXXXXX
+ /* Normalize phone number to 13-digit format: 8801XXXXXXXXX
  * 
  * Rules:
  * - 10-digit starting with 1 (1XXXXXXXXX) → add 880 prefix → 8801XXXXXXXXX
