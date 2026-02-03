@@ -9,31 +9,53 @@ const MAX_INIT_ATTEMPTS = 3;
 
 /**
  * Properly format and clean private key
+ * Handles multiple input formats from environment variables
  */
 function formatPrivateKey(key: string): string {
   if (!key) {
     throw new Error('Private key is empty or undefined');
   }
 
-  // Remove all whitespace and newlines
   let cleaned = key.trim();
   
-  // Replace literal \n with actual newlines
-  if (cleaned.includes('\\n')) {
-    cleaned = cleaned.replace(/\\n/g, '\n');
+  // CRITICAL: First, replace escaped newlines (\\n) with actual newlines
+  // This handles keys stored in .env files as single-line strings
+  cleaned = cleaned.replace(/\\n/g, '\n');
+  
+  // If the key already has proper headers and newlines, return as-is
+  // This prevents double-processing of already-formatted keys
+  if (cleaned.startsWith('-----BEGIN PRIVATE KEY-----\n') && 
+      cleaned.endsWith('\n-----END PRIVATE KEY-----') &&
+      cleaned.split('\n').length > 2) {
+    console.log('✅ Private key already properly formatted');
+    return cleaned;
   }
   
-  // Remove any existing headers/footers
-  cleaned = cleaned.replace(/-----BEGIN PRIVATE KEY-----/g, '');
-  cleaned = cleaned.replace(/-----END PRIVATE KEY-----/g, '');
+  // Extract just the key content (remove headers/footers if present)
+  let keyContent = cleaned
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\r/g, '') // Remove carriage returns
+    .trim();
   
-  // Remove all whitespace and newlines from the key content
-  cleaned = cleaned.replace(/\s+/g, '');
+  // Remove any remaining newlines/spaces from the base64 content
+  // The base64 content should be continuous
+  keyContent = keyContent.replace(/\s/g, '');
   
-  // Add proper headers and format with line breaks every 64 characters
-  const keyContent = cleaned.match(/.{1,64}/g)?.join('\n') || cleaned;
+  // Validate that we have base64 content
+  if (keyContent.length === 0) {
+    throw new Error('Private key content is empty after processing');
+  }
   
-  return `-----BEGIN PRIVATE KEY-----\n${keyContent}\n-----END PRIVATE KEY-----`;
+  // Check if it looks like valid base64
+  if (!/^[A-Za-z0-9+/=]+$/.test(keyContent)) {
+    throw new Error('Private key does not appear to be valid base64');
+  }
+  
+  // Return properly formatted key with newlines every 64 characters
+  const formattedContent = keyContent.match(/.{1,64}/g)?.join('\n') || keyContent;
+  
+  return `-----BEGIN PRIVATE KEY-----\n${formattedContent}\n-----END PRIVATE KEY-----`;
 }
 
 /**
@@ -84,17 +106,31 @@ async function initializeFirebaseAdmin() {
       throw new Error(error);
     }
 
-    // Format private key properly
+    // Format private key properly with fallback
     let privateKey: string;
+    let privateKeyFormatted: string | null = null;
+    
     try {
-      privateKey = formatPrivateKey(privateKeyRaw!);
+      console.log('🔑 Processing private key...');
+      console.log('  - Raw key length:', privateKeyRaw!.length);
+      console.log('  - Raw key preview:', privateKeyRaw!.substring(0, 50).replace(/\n/g, '\\n'));
+      
+      privateKeyFormatted = formatPrivateKey(privateKeyRaw!);
+      privateKey = privateKeyFormatted;
+      
       console.log('✅ Private key formatted successfully');
-      console.log('  - Length:', privateKey.length);
-      console.log('  - Starts with:', privateKey.substring(0, 30));
-      console.log('  - Ends with:', privateKey.substring(privateKey.length - 30));
+      console.log('  - Formatted key length:', privateKey.length);
+      console.log('  - Line count:', privateKey.split('\n').length);
+      console.log('  - First line:', privateKey.split('\n')[0]);
+      console.log('  - Last line:', privateKey.split('\n')[privateKey.split('\n').length - 1]);
     } catch (keyError: any) {
-      console.error('❌ Private key formatting failed:', keyError.message);
-      throw new Error(`Private key formatting failed: ${keyError.message}`);
+      console.error('⚠️ Private key formatting failed:', keyError.message);
+      console.log('🔄 Trying original key with basic \\n replacement as fallback...');
+      
+      // Fallback: Just replace \\n with actual newlines
+      privateKey = privateKeyRaw!.replace(/\\n/g, '\n');
+      console.log('  - Fallback key length:', privateKey.length);
+      console.log('  - Fallback key preview (first 50):', privateKey.substring(0, 50));
     }
 
     console.log('📋 Initializing with:');
@@ -121,16 +157,29 @@ async function initializeFirebaseAdmin() {
 
   } catch (error: any) {
     console.error('❌ Firebase Admin initialization failed');
-    console.error('Error:', error.message);
-    console.error('Code:', error.code);
-    console.error('Stack:', error.stack);
+    console.error('Error type:', error.constructor.name);
+    console.error('Error message:', error.message);
+    console.error('Error code:', error.code || 'N/A');
+    
+    if (error.stack) {
+      console.error('Stack trace (first 5 lines):');
+      console.error(error.stack.split('\n').slice(0, 5).join('\n'));
+    }
     
     // Reset cache on failure
     firebaseAdmin = null;
     
-    // Provide more specific error messages
-    if (error.message && error.message.includes('DECODER')) {
-      throw new Error('Firebase private key decoding failed. Please check your FIREBASE_PRIVATE_KEY environment variable format.');
+    // Provide more specific error messages based on error type
+    if (error.message && (error.message.includes('DECODER') || error.message.includes('PEM'))) {
+      throw new Error(
+        'Firebase private key format error. Please ensure FIREBASE_PRIVATE_KEY environment variable contains a valid private key. ' +
+        'The key should start with "-----BEGIN PRIVATE KEY-----" and end with "-----END PRIVATE KEY-----". ' +
+        'If stored as a single line, use \\n for line breaks (e.g., "-----BEGIN PRIVATE KEY-----\\nMIIE...\\n-----END PRIVATE KEY-----")'
+      );
+    }
+    
+    if (error.message && error.message.includes('base64')) {
+      throw new Error('Firebase private key contains invalid base64 characters. Please check your FIREBASE_PRIVATE_KEY environment variable.');
     }
     
     throw new Error(`Firebase Admin initialization failed: ${error.message}`);
