@@ -46,13 +46,26 @@ async function initializeFirebaseAdmin() {
       throw new Error(error);
     }
 
-    // Process private key: replace literal \n with actual newlines
-    privateKey = privateKey!.replace(/\\n/g, '\n');
+    // Process private key properly
+    // Handle both formats: with literal \n and with actual newlines
+    if (privateKey!.includes('\\n')) {
+      privateKey = privateKey!.replace(/\\n/g, '\n');
+    }
+    
+    // Ensure private key starts and ends correctly
+    privateKey = privateKey!.trim();
+    if (!privateKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
+      privateKey = '-----BEGIN PRIVATE KEY-----\n' + privateKey;
+    }
+    if (!privateKey.endsWith('-----END PRIVATE KEY-----')) {
+      privateKey = privateKey + '\n-----END PRIVATE KEY-----';
+    }
 
     console.log('📋 Initializing with:');
     console.log('  - Project ID:', projectId);
     console.log('  - Client Email:', clientEmail);
-    console.log('  - Private Key: [length:', privateKey.length, ']');
+    console.log('  - Private Key starts with:', privateKey.substring(0, 30));
+    console.log('  - Private Key ends with:', privateKey.substring(privateKey.length - 30));
 
     // Initialize Firebase Admin with credentials
     admin.initializeApp({
