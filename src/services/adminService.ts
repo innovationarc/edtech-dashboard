@@ -90,6 +90,11 @@ const toGSM7Bit = (text: string): string => {
  * This is the SAME normalization logic as used in RegisterModal
  */
 const normalizePhoneNumber = (phoneNumber: string): string => {
+  // Handle null, undefined, or empty string
+  if (!phoneNumber || phoneNumber.trim() === '') {
+    throw new Error('Phone number is required');
+  }
+
   let cleaned = phoneNumber.replace(/\D/g, '');
   
   // If starts with 880, remove it to get the 10 digit number
@@ -238,7 +243,7 @@ The status of your Ed-tech administrator account has been updated from ${previou
 Admin ID: ${adminId}
 Changed by: ${changedByAdminId}
 
-If you were not aware of this change, please take immediate action.
+If you have any questions, please contact your administrator.
 
 Regards,
 Ed-tech Team`;
@@ -256,11 +261,14 @@ const sendPhoneNumberChangeSMS = async (
   changedByAdminId: string
 ): Promise<void> => {
   const message = `Sir,
-The primary mobile number of your Ed-tech administrator account has been updated to ${newPhoneNumber}.
+The phone number for your Ed-tech administrator account has been changed.
 Admin ID: ${adminId}
+Old Number: ${oldPhoneNumber}
+New Number: ${newPhoneNumber}
 Changed by: ${changedByAdminId}
 
-If you were not aware of this change, please take immediate action.
+If you were not aware of this change, please take immediate action to secure your account.
+
 Regards,
 Ed-tech Team`;
   
@@ -268,7 +276,7 @@ Ed-tech Team`;
 };
 
 export const adminService = {
-  // Generate Admin ID using generate-id.ts API
+  // Generate unique Admin ID
   async generateAdminId(): Promise<string> {
     try {
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
@@ -306,27 +314,40 @@ export const adminService = {
     }
   },
 
-  // Create new admin using register.ts API with phone normalization
-  async createAdmin(adminData: {
-    surname: string;
-    fullName?: string;
-    phoneNumber: string;
-    email: string;
-    password: string;
-    dob?: string;
-    gender?: 'male' | 'female' | 'other';
-    bloodGroup?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
-    religion?: string;
-    address?: string;
-    birthCertificateNumber?: string;
-    nid?: string;
-    status?: 'active' | 'inactive' | 'pending';
-    profilePictureUrl?: string;
-    createdByAdmin?: Admin;
-  }): Promise<Admin> {
+  // Create new admin - FIXED VERSION with proper parameter handling
+  async createAdmin(
+    phoneNumber: string,
+    email: string,
+    password: string,
+    surname: string,
+    fullName?: string,
+    dob?: string,
+    phone?: string,
+    bloodGroup?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-',
+    gender?: 'male' | 'female' | 'other',
+    religion?: string,
+    address?: string,
+    birthCertificateNumber?: string,
+    nid?: string,
+    createdByAdminId?: string,
+    createdByAdminUid?: string,
+    createdByAdminSurname?: string,
+    profilePictureUrl?: string
+  ): Promise<Admin> {
     try {
+      // Validate required fields
+      if (!phoneNumber || phoneNumber.trim() === '') {
+        throw new Error('Phone number is required');
+      }
+      if (!surname || surname.trim() === '') {
+        throw new Error('Surname is required');
+      }
+      if (!password || password.trim() === '') {
+        throw new Error('Password is required');
+      }
+
       // Normalize phone number BEFORE sending to API
-      const normalizedPhoneNumber = normalizePhoneNumber(adminData.phoneNumber);
+      const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
       
       // Generate Admin ID first
       const userId = await this.generateAdminId();
@@ -336,19 +357,34 @@ export const adminService = {
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
+      // Prepare admin data
+      const adminData: any = {
+        surname,
+        fullName,
+        phoneNumber: normalizedPhoneNumber,
+        email: email || '',
+        password,
+        dob,
+        gender,
+        bloodGroup,
+        religion,
+        address,
+        birthCertificateNumber,
+        nid,
+        userId,
+        role: 'admin',
+        status: 'active',
+        profilePictureUrl,
+        apiKey: MASTER_API_KEY
+      };
+
       // Register the admin using the register.ts API with normalized phone
       const response = await fetch(`${BACKEND_URL}/api/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...adminData,
-          phoneNumber: normalizedPhoneNumber, // Use normalized phone
-          userId,
-          role: 'admin',
-          apiKey: MASTER_API_KEY
-        })
+        body: JSON.stringify(adminData)
       });
 
       const result = await response.json();
@@ -365,27 +401,27 @@ export const adminService = {
       }
 
       // Log admin creation in security logs
-      if (adminData.createdByAdmin) {
+      if (createdByAdminUid && createdByAdminId && createdByAdminSurname) {
         try {
           await addDoc(collection(db, 'security_logs'), {
             action: 'admin_created',
             targetAdminUid: result.uid,
             targetAdminUserId: userId,
-            targetAdminSurname: adminData.surname,
-            performedByUid: adminData.createdByAdmin.uid,
-            performedByUserId: adminData.createdByAdmin.userId || 'N/A',
-            performedBySurname: adminData.createdByAdmin.surname || 'N/A',
+            targetAdminSurname: surname,
+            performedByUid: createdByAdminUid,
+            performedByUserId: createdByAdminId,
+            performedBySurname: createdByAdminSurname,
             timestamp: Timestamp.now(),
-            details: `New admin ${adminData.surname} (${userId}) was created by ${adminData.createdByAdmin.surname} (${adminData.createdByAdmin.userId})`,
+            details: `New admin ${surname} (${userId}) was created by ${createdByAdminSurname} (${createdByAdminId})`,
             changes: JSON.stringify({
               action: 'create',
               adminData: {
                 userId,
-                surname: adminData.surname,
-                fullName: adminData.fullName,
+                surname,
+                fullName,
                 phoneNumber: normalizedPhoneNumber,
-                email: adminData.email,
-                status: adminData.status || 'active'
+                email: email || '',
+                status: 'active'
               }
             })
           });
@@ -398,22 +434,22 @@ export const adminService = {
       return {
         uid: result.uid,
         userId,
-        surname: adminData.surname,
-        fullName: adminData.fullName,
-        email: adminData.email,
-        phoneNumber: normalizedPhoneNumber, // Return normalized phone
-        dob: adminData.dob,
-        gender: adminData.gender,
-        bloodGroup: adminData.bloodGroup,
-        religion: adminData.religion,
-        address: adminData.address,
-        birthCertificateNumber: adminData.birthCertificateNumber,
-        nid: adminData.nid,
+        surname,
+        fullName,
+        email: email || '',
+        phoneNumber: normalizedPhoneNumber,
+        dob,
+        gender,
+        bloodGroup,
+        religion,
+        address,
+        birthCertificateNumber,
+        nid,
         role: 'admin',
-        status: adminData.status || 'active',
-        profilePictureUrl: adminData.profilePictureUrl,
+        status: 'active',
+        profilePictureUrl,
         createdAt: new Date(),
-        createdBy: adminData.createdByAdmin?.userId || 'system',
+        createdBy: createdByAdminId || 'system',
       };
     } catch (error: any) {
       console.error('Error creating admin:', error);
@@ -550,18 +586,20 @@ export const adminService = {
     resetByAdmin?: Admin
   ): Promise<void> {
     try {
-      // Get admin data first for SMS notification
+      // Get admin data first for SMS and logging
       const adminDoc = await getDoc(doc(db, 'users', uid));
       if (!adminDoc.exists()) {
         throw new Error('Admin not found');
       }
-
+      
       const adminData = adminDoc.data();
+      
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
+      // Call password-reset API
       const response = await fetch(`${BACKEND_URL}/api/password-reset`, {
         method: 'POST',
         headers: {
@@ -580,14 +618,14 @@ export const adminService = {
         throw new Error(result.message || 'Failed to reset password');
       }
 
-      console.log('✅ Admin password reset successfully');
+      console.log('✅ Password reset successfully');
 
       // Send SMS notification
-      if (adminData.phoneNumber && resetByAdmin) {
+      if (adminData.phoneNumber) {
         await sendPasswordResetSMS(
-          adminData.phoneNumber, 
-          adminData.userId,
-          resetByAdmin.userId
+          adminData.phoneNumber,
+          adminData.userId || 'N/A',
+          resetByAdmin?.userId || 'System'
         );
       }
 
@@ -598,13 +636,16 @@ export const adminService = {
             action: 'password_reset',
             targetAdminUid: uid,
             targetAdminUserId: adminData.userId || 'N/A',
-            targetAdminSurname: adminData.surname || 'N/A',
+            targetAdminSurname: adminData.surname || adminData.name || 'N/A',
             performedByUid: resetByAdmin.uid,
             performedByUserId: resetByAdmin.userId || 'N/A',
             performedBySurname: resetByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
-            details: `Password reset for ${adminData.surname} (${adminData.userId}) by ${resetByAdmin.surname} (${resetByAdmin.userId})`,
-            reason: 'Password reset by administrator'
+            details: `Password was reset for ${adminData.surname || adminData.name} (${adminData.userId}) by ${resetByAdmin.surname} (${resetByAdmin.userId})`,
+            changes: JSON.stringify({
+              action: 'password_reset',
+              resetBy: resetByAdmin.userId
+            })
           });
           console.log('✅ Password reset logged in security logs');
         } catch (logError) {
@@ -612,179 +653,178 @@ export const adminService = {
         }
       }
     } catch (error: any) {
-      console.error('Error resetting admin password:', error);
-      throw new Error(error.message || 'Failed to reset admin password');
+      console.error('Error resetting password:', error);
+      throw new Error(error.message || 'Failed to reset password');
     }
   },
 
-  // Update admin using Firestore directly
+  // Update admin
   async updateAdmin(
-    uid: string,
+    uid: string, 
     updates: Partial<Admin>,
-    updatedByAdmin?: Admin
+    updatedByAdmin: Admin
   ): Promise<void> {
     try {
-      const adminRef = doc(db, 'users', uid);
-      
-      // Get current admin data for comparison and SMS
-      const currentAdminDoc = await getDoc(adminRef);
-      if (!currentAdminDoc.exists()) {
+      // Get current admin data first
+      const adminDoc = await getDoc(doc(db, 'users', uid));
+      if (!adminDoc.exists()) {
         throw new Error('Admin not found');
       }
-      const currentAdmin = currentAdminDoc.data();
-
-      // If phone number is being updated, normalize it
-      if (updates.phoneNumber && updates.phoneNumber !== currentAdmin.phoneNumber) {
+      
+      const currentAdmin = adminDoc.data() as Admin;
+      
+      // Normalize phone number if it's being updated
+      if (updates.phoneNumber) {
         updates.phoneNumber = normalizePhoneNumber(updates.phoneNumber);
       }
 
       // Update the admin document
-      await updateDoc(adminRef, {
+      const adminRef = doc(db, 'users', uid);
+      const updateData: any = {
         ...updates,
         updatedAt: Timestamp.now()
-      });
+      };
 
+      await updateDoc(adminRef, updateData);
       console.log('✅ Admin updated successfully');
 
-      // Security logging and SMS notifications
-      if (updatedByAdmin) {
-        // Check for status change
-        if (updates.status && updates.status !== currentAdmin.status) {
-          try {
-            await addDoc(collection(db, 'security_logs'), {
-              action: 'status_changed',
-              targetAdminUid: uid,
-              targetAdminUserId: currentAdmin.userId || 'N/A',
-              targetAdminSurname: currentAdmin.surname || 'N/A',
-              performedByUid: updatedByAdmin.uid,
-              performedByUserId: updatedByAdmin.userId || 'N/A',
-              performedBySurname: updatedByAdmin.surname || 'N/A',
-              timestamp: Timestamp.now(),
-              details: `Status changed from ${currentAdmin.status} to ${updates.status}`,
-              changes: JSON.stringify({
-                action: 'status_change',
-                oldStatus: currentAdmin.status,
-                newStatus: updates.status
-              })
-            });
-            console.log('✅ Status change logged in security logs');
-
-            // Send SMS notification
-            if (currentAdmin.phoneNumber) {
-              await sendStatusChangeSMS(
-                currentAdmin.phoneNumber,
-                currentAdmin.userId,
-                currentAdmin.status,
-                updates.status,
-                updatedByAdmin.userId
-              );
-            }
-          } catch (logError) {
-            console.warn('⚠️ Failed to log status change:', logError);
-          }
+      // Handle status change separately
+      if (updates.status && updates.status !== currentAdmin.status) {
+        // Send SMS notification for status change
+        if (currentAdmin.phoneNumber) {
+          await sendStatusChangeSMS(
+            currentAdmin.phoneNumber,
+            currentAdmin.userId,
+            currentAdmin.status,
+            updates.status,
+            updatedByAdmin.userId
+          );
         }
 
-        // Check for phone number change
-        if (updates.phoneNumber && updates.phoneNumber !== currentAdmin.phoneNumber) {
-          try {
-            await addDoc(collection(db, 'security_logs'), {
-              action: 'phone_number_changed',
-              targetAdminUid: uid,
-              targetAdminUserId: currentAdmin.userId || 'N/A',
-              targetAdminSurname: currentAdmin.surname || 'N/A',
-              performedByUid: updatedByAdmin.uid,
-              performedByUserId: updatedByAdmin.userId || 'N/A',
-              performedBySurname: updatedByAdmin.surname || 'N/A',
-              timestamp: Timestamp.now(),
-              details: `Phone number changed from ${currentAdmin.phoneNumber} to ${updates.phoneNumber}`,
-              changes: JSON.stringify({
-                action: 'phone_change',
-                oldPhone: currentAdmin.phoneNumber,
-                newPhone: updates.phoneNumber
-              })
-            });
-            console.log('✅ Phone number change logged in security logs');
+        // Log status change in security logs
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'status_changed',
+            targetAdminUid: uid,
+            targetAdminUserId: currentAdmin.userId || 'N/A',
+            targetAdminSurname: currentAdmin.surname || 'N/A',
+            performedByUid: updatedByAdmin.uid,
+            performedByUserId: updatedByAdmin.userId || 'N/A',
+            performedBySurname: updatedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            details: `Status changed from ${currentAdmin.status} to ${updates.status} for ${currentAdmin.surname} (${currentAdmin.userId})`,
+            changes: JSON.stringify({
+              action: 'status_change',
+              previousStatus: currentAdmin.status,
+              newStatus: updates.status
+            })
+          });
+          console.log('✅ Status change logged in security logs');
+        } catch (logError) {
+          console.warn('⚠️ Failed to log status change:', logError);
+        }
+      }
 
-            // Send SMS to old number
-            if (currentAdmin.phoneNumber) {
-              await sendPhoneNumberChangeSMS(
-                currentAdmin.phoneNumber,
-                updates.phoneNumber,
-                currentAdmin.userId,
-                updatedByAdmin.userId
-              );
-            }
-          } catch (logError) {
-            console.warn('⚠️ Failed to log phone number change:', logError);
+      // Handle phone number change separately
+      if (updates.phoneNumber && updates.phoneNumber !== currentAdmin.phoneNumber) {
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'phone_number_changed',
+            targetAdminUid: uid,
+            targetAdminUserId: currentAdmin.userId || 'N/A',
+            targetAdminSurname: currentAdmin.surname || 'N/A',
+            performedByUid: updatedByAdmin.uid,
+            performedByUserId: updatedByAdmin.userId || 'N/A',
+            performedBySurname: updatedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            details: `Phone number changed for ${currentAdmin.surname} (${currentAdmin.userId})`,
+            changes: JSON.stringify({
+              action: 'phone_number_change',
+              oldPhoneNumber: currentAdmin.phoneNumber,
+              newPhoneNumber: updates.phoneNumber
+            })
+          });
+          console.log('✅ Phone number change logged in security logs');
+
+          // Send SMS to old number
+          if (currentAdmin.phoneNumber) {
+            await sendPhoneNumberChangeSMS(
+              currentAdmin.phoneNumber,
+              updates.phoneNumber,
+              currentAdmin.userId,
+              updatedByAdmin.userId
+            );
+          }
+        } catch (logError) {
+          console.warn('⚠️ Failed to log phone number change:', logError);
+        }
+      }
+
+      // Log other changes (excluding status and phone which were handled above)
+      const changedFields: any = {};
+      const changesArray: string[] = [];
+      
+      // Track all changes except status and phoneNumber (already handled)
+      Object.keys(updates).forEach(key => {
+        if (key !== 'status' && key !== 'phoneNumber' && key !== 'updatedAt') {
+          const updateKey = key as keyof Admin;
+          if (updates[updateKey] !== currentAdmin[key]) {
+            changedFields[key] = { from: currentAdmin[key], to: updates[updateKey] };
+            changesArray.push(`${key} changed`);
           }
         }
+      });
 
-        // Log other changes (excluding status and phone which were handled above)
-        const changedFields: any = {};
-        const changesArray: string[] = [];
+      // Special handling for profilePictureUrl
+      if (updates.profilePictureUrl && updates.profilePictureUrl !== currentAdmin.profilePictureUrl) {
+        changedFields.profilePictureUrl = { from: 'previous', to: 'updated' };
+        changesArray.push(`profile picture updated`);
         
-        // Track all changes except status and phoneNumber (already handled)
-        Object.keys(updates).forEach(key => {
-          if (key !== 'status' && key !== 'phoneNumber' && key !== 'updatedAt') {
-            const updateKey = key as keyof Admin;
-            if (updates[updateKey] !== currentAdmin[key]) {
-              changedFields[key] = { from: currentAdmin[key], to: updates[updateKey] };
-              changesArray.push(`${key} changed`);
-            }
-          }
-        });
-
-        // Special handling for profilePictureUrl
-        if (updates.profilePictureUrl && updates.profilePictureUrl !== currentAdmin.profilePictureUrl) {
-          changedFields.profilePictureUrl = { from: 'previous', to: 'updated' };
-          changesArray.push(`profile picture updated`);
-          
-          // Create separate log for profile picture update
-          try {
-            await addDoc(collection(db, 'security_logs'), {
-              action: 'profile_updated',
-              targetAdminUid: uid,
-              targetAdminUserId: currentAdmin.userId || 'N/A',
-              targetAdminSurname: currentAdmin.surname || 'N/A',
-              performedByUid: updatedByAdmin.uid,
-              performedByUserId: updatedByAdmin.userId || 'N/A',
-              performedBySurname: updatedByAdmin.surname || 'N/A',
-              timestamp: Timestamp.now(),
-              details: `Profile picture updated for ${currentAdmin.surname} (${currentAdmin.userId})`,
-              changes: JSON.stringify({
-                action: 'profile_picture_update',
-                hasProfilePicture: !!updates.profilePictureUrl
-              })
-            });
-            console.log('✅ Profile picture update logged in security logs');
-          } catch (logError) {
-            console.warn('⚠️ Failed to log profile update:', logError);
-          }
+        // Create separate log for profile picture update
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'profile_updated',
+            targetAdminUid: uid,
+            targetAdminUserId: currentAdmin.userId || 'N/A',
+            targetAdminSurname: currentAdmin.surname || 'N/A',
+            performedByUid: updatedByAdmin.uid,
+            performedByUserId: updatedByAdmin.userId || 'N/A',
+            performedBySurname: updatedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            details: `Profile picture updated for ${currentAdmin.surname} (${currentAdmin.userId})`,
+            changes: JSON.stringify({
+              action: 'profile_picture_update',
+              hasProfilePicture: !!updates.profilePictureUrl
+            })
+          });
+          console.log('✅ Profile picture update logged in security logs');
+        } catch (logError) {
+          console.warn('⚠️ Failed to log profile update:', logError);
         }
+      }
 
-        // Create main edit log (only if there are non-status/non-phone changes)
-        if (changesArray.length > 0) {
-          try {
-            await addDoc(collection(db, 'security_logs'), {
-              action: 'admin_edited',
-              targetAdminUid: uid,
-              targetAdminUserId: currentAdmin.userId || 'N/A',
-              targetAdminSurname: currentAdmin.surname || 'N/A',
-              performedByUid: updatedByAdmin.uid,
-              performedByUserId: updatedByAdmin.userId || 'N/A',
-              performedBySurname: updatedByAdmin.surname || 'N/A',
-              timestamp: Timestamp.now(),
-              details: `Admin details updated for ${currentAdmin.surname} (${currentAdmin.userId}). Changed fields: ${changesArray.join(', ')}`,
-              changes: JSON.stringify({
-                action: 'edit',
-                changedFields: changedFields,
-                fieldCount: Object.keys(changedFields).length
-              })
-            });
-            console.log('✅ Admin edit logged in security logs');
-          } catch (logError) {
-            console.warn('⚠️ Failed to log admin edit:', logError);
-          }
+      // Create main edit log (only if there are non-status/non-phone changes)
+      if (changesArray.length > 0) {
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'admin_edited',
+            targetAdminUid: uid,
+            targetAdminUserId: currentAdmin.userId || 'N/A',
+            targetAdminSurname: currentAdmin.surname || 'N/A',
+            performedByUid: updatedByAdmin.uid,
+            performedByUserId: updatedByAdmin.userId || 'N/A',
+            performedBySurname: updatedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            details: `Admin details updated for ${currentAdmin.surname} (${currentAdmin.userId}). Changed fields: ${changesArray.join(', ')}`,
+            changes: JSON.stringify({
+              action: 'edit',
+              changedFields: changedFields,
+              fieldCount: Object.keys(changedFields).length
+            })
+          });
+          console.log('✅ Admin edit logged in security logs');
+        } catch (logError) {
+          console.warn('⚠️ Failed to log admin edit:', logError);
         }
       }
     } catch (error: any) {
