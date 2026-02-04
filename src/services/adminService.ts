@@ -753,7 +753,7 @@ export const adminService = {
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
       
-      const response = await fetch(`${BACKEND_URL}/api/reset-password`, {
+      const response = await fetch(`${BACKEND_URL}/api/password-reset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
