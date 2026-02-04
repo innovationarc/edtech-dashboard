@@ -286,26 +286,33 @@ export default async function handler(
     });
 
     const rawText = await smsResponse.text();
+    const trimmedResponse = rawText.trim();
 
-    // BulkSMSBD returns different responses
-    // Success: Usually contains "success" or specific success code (202)
-    const isSuccess = 
-      rawText.toLowerCase().includes('success') ||
-      rawText.toLowerCase().includes('ok') ||
-      rawText.trim() === '202' ||
-      /^[0-9]+$/.test(rawText.trim());
+    // Log the raw response from SMS panel for debugging
+    console.log('SMS Panel Response:', {
+      statusCode: smsResponse.status,
+      statusText: smsResponse.statusText,
+      rawResponse: trimmedResponse,
+      phoneNumber: formattedNumber
+    });
+
+    // Check if response is an error code from the SMS panel
+    // Success code is 202, anything else is an error
+    const { code, message: errorMessage } = parseErrorCode(trimmedResponse);
+    
+    // Determine if this is a success or failure
+    const isSuccess = trimmedResponse === '202' || 
+                     rawText.toLowerCase().includes('success') ||
+                     rawText.toLowerCase().includes('ok');
 
     if (!isSuccess) {
-      // Log detailed failure information
+      // Log detailed failure information with error code from SMS panel
       logSMSFailure(phoneNumber, rawText, {
         senderId: SENDER_ID,
         messageLength: formattedMessage.length,
         formattedNumber: formattedNumber
       });
 
-      // Parse error for user-friendly message
-      const { code, message: errorMessage } = parseErrorCode(rawText);
-      
       return res.status(500).json({
         success: false,
         error: code ? `SMS Error (${code}): ${errorMessage}` : 'Failed to send SMS',
