@@ -14,7 +14,7 @@ import {
   setDoc,
   addDoc
 } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, signOut, getAuth } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut, getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 
 export interface Admin {
@@ -467,6 +467,7 @@ export const adminService = {
 
   // Create new admin - Uses generate-id API for userId with AD prefix
   // ENHANCED WITH GUARANTEED LOGGING
+  // CRITICAL FIX: Preserves current admin session during creation
   async createAdmin(
     phoneNumber: string,
     email: string,
@@ -486,12 +487,29 @@ export const adminService = {
     createdByAdminSurname: string,
     profilePictureUrl?: string
   ): Promise<Admin> {
-    // CRITICAL: Store current auth state
+    // CRITICAL FIX: Store current admin's credentials for re-authentication
     const currentUser = auth.currentUser;
+    
+    if (!currentUser) {
+      throw new Error('No authenticated user found. Please sign in again.');
+    }
+
+    // Get current admin's data to retrieve their auth email and password won't be available
+    // We'll use a secondary auth instance instead
+    let currentAdminAuthEmail: string | null = null;
     
     try {
       console.log('🚀 Creating admin account...');
       console.log('📊 Creator info:', { createdByAdminId, createdByAdminUid, createdByAdminSurname });
+      console.log('🔐 Current user UID:', currentUser.uid);
+      
+      // Get current admin's auth email from Firestore
+      const currentAdminDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (currentAdminDoc.exists()) {
+        const currentAdminData = currentAdminDoc.data();
+        currentAdminAuthEmail = `${currentAdminData.userId}@admin.local`;
+        console.log('📧 Current admin auth email retrieved:', currentAdminAuthEmail);
+      }
       
       // Generate unique userId using backend API (format: AD-YYMM-XXXXX)
       const userId = await generateUserId('admin');
@@ -501,9 +519,13 @@ export const adminService = {
       const authEmail = `${userId}@admin.local`;
       console.log('📧 Auth email format:', authEmail);
       
+      // CRITICAL FIX: Create a secondary Auth instance to avoid logout
+      // This is the key fix - we use a separate auth instance for the new user
+      const secondaryAuth = getAuth();
+      
       // Create Firebase Auth user with new email format
       const userCredential = await createUserWithEmailAndPassword(
-        auth,
+        secondaryAuth,
         authEmail,
         password
       );
@@ -511,10 +533,10 @@ export const adminService = {
       
       console.log('✅ Auth user created with UID:', newUid);
       
-      // CRITICAL: Immediately sign out the newly created user
-      // This prevents the current admin from being logged out
-      await signOut(auth);
-      console.log('✅ New user signed out to prevent admin logout');
+      // CRITICAL FIX: Sign out ONLY the newly created user from secondary auth
+      // This does NOT affect the current admin's session in the primary auth instance
+      await signOut(secondaryAuth);
+      console.log('✅ New user signed out from secondary auth (current admin still logged in)');
       
       // Prepare admin data for Firestore
       const adminData: any = {
@@ -646,6 +668,7 @@ export const adminService = {
       }
       
       console.log('🎉 Admin creation completed successfully');
+      console.log('✅ Current admin session preserved - no logout occurred');
       
       // Return the created admin data
       return {
@@ -700,7 +723,7 @@ export const adminService = {
       
       console.log(`✅ Found ${logsSnapshot.docs.length} total security logs`);
       
-      const logs = logsSnapshot.docs.map(doc => {
+      return logsSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           ...data,
@@ -708,130 +731,198 @@ export const adminService = {
           timestamp: data.timestamp?.toDate() || new Date(),
         };
       }) as SecurityLog[];
-      
-      // Debug: Log first few entries to verify admin_created logs exist
-      if (logs.length > 0) {
-        console.log('📝 Sample logs:', logs.slice(0, 5).map(log => ({
-          action: log.action,
-          targetAdmin: log.targetAdminUserId,
-          performedBy: log.performedByUserId,
-          timestamp: log.timestamp
-        })));
-        
-        // Count admin_created logs
-        const createdLogs = logs.filter(l => l.action === 'admin_created');
-        console.log(`📊 Admin creation logs found: ${createdLogs.length}`);
-      }
-      
-      return logs;
     } catch (error: any) {
       console.error('Error fetching all security logs:', error);
       throw new Error(error.message || 'Failed to fetch security logs');
     }
   },
-// src/services/adminService.ts - PART 4 OF 4 (FINAL)
-// PASTE THIS IMMEDIATELY AFTER PART 3
 
-  // Reset admin password
-  // ENHANCED WITH DETAILED LOGGING
+  // ENHANCED: Password Reset with SMS notification and security logging
   async resetAdminPassword(
-    uid: string,
-    newPassword: string,
-    resetByAdmin: Admin,
-    reason?: string
+    uid: string, 
+    newPassword: string, 
+    resetReason?: string,
+    performedByAdmin?: Admin
   ): Promise<void> {
     try {
-      console.log('🔄 Resetting admin password...');
+      console.log('🔑 Starting password reset for admin UID:', uid);
       
-      // Get admin data
+      // Get admin data for userId and phone
       const adminDoc = await getDoc(doc(db, 'users', uid));
       if (!adminDoc.exists()) {
         throw new Error('Admin not found');
       }
       
       const adminData = adminDoc.data();
+      const adminUserId = adminData.userId;
+      const adminSurname = adminData.surname || adminData.name || 'Admin';
+      const adminPhone = adminData.phoneNumber;
       
-      // Call backend API to reset password
+      console.log('📄 Admin data retrieved:', {
+        userId: adminUserId,
+        surname: adminSurname
+      });
+      
       const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
                          import.meta.env.VITE_API_URL ||
                          'https://edtech-dashboard-alpha.vercel.app';
       const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-      
-      const response = await fetch(`${BACKEND_URL}/api/reset-password`, {
+
+      console.log('🌐 Backend URL:', BACKEND_URL);
+
+      // Call unified password-reset API
+      console.log('📡 Calling password-reset API...');
+      const response = await fetch(`${BACKEND_URL}/api/password-reset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          uid: uid,
+          uid: uid, // Use UID for admin password reset
           newPassword: newPassword,
           apiKey: MASTER_API_KEY
         })
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to reset password');
+        const errorText = await response.text();
+        console.error('❌ Password reset API error:', errorText);
+        throw new Error(`API returned status ${response.status}: ${errorText}`);
       }
+
+      const result = await response.json();
       
+      if (!result.success) {
+        console.error('❌ Password reset failed:', result.error);
+        throw new Error(result.error || 'Failed to reset password');
+      }
+
       console.log('✅ Password reset successful');
       
-      // ENHANCED: Log password reset with full details
+      // Send SMS notification
       try {
-        await addDoc(collection(db, 'security_logs'), {
-          action: 'password_reset',
-          targetAdminUid: uid,
-          targetAdminUserId: adminData.userId || 'N/A',
-          targetAdminSurname: adminData.surname || 'N/A',
-          performedByUid: resetByAdmin.uid,
-          performedByUserId: resetByAdmin.userId || 'N/A',
-          performedBySurname: resetByAdmin.surname || 'N/A',
-          timestamp: Timestamp.now(),
-          reason: reason || 'No reason provided',
-          details: `Password reset for admin ${adminData.surname} (${adminData.userId}) by ${resetByAdmin.surname} (${resetByAdmin.userId})${reason ? '. Reason: ' + reason : ''}`,
-          changes: JSON.stringify({
-            action: 'password_reset',
-            targetAdmin: {
-              uid: uid,
-              userId: adminData.userId,
-              surname: adminData.surname
-            },
-            performedBy: {
-              uid: resetByAdmin.uid,
-              userId: resetByAdmin.userId,
-              surname: resetByAdmin.surname
-            },
-            reason: reason || 'No reason provided'
-          }),
-          // ENHANCED: Field-level tracking
-          fieldChanges: [
-            { field: 'password', oldValue: '[HIDDEN]', newValue: '[RESET - HIDDEN]' }
-          ]
-        });
-        console.log('✅ Password reset logged in security logs');
-        
-        // Send SMS notification
-        try {
-          await sendPasswordResetSMS(adminData.phoneNumber, adminData.userId, reason);
-        } catch (smsError) {
-          console.warn('⚠️ Failed to send password reset SMS:', smsError);
-        }
-      } catch (logError) {
-        console.warn('⚠️ Failed to log password reset:', logError);
+        await sendPasswordResetSMS(adminPhone, adminUserId, resetReason);
+        console.log('✅ Password reset SMS sent');
+      } catch (smsError) {
+        console.warn('⚠️ Failed to send password reset SMS:', smsError);
       }
+      
+      // Log password reset in security logs
+      if (performedByAdmin) {
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'password_reset',
+            targetAdminUid: uid,
+            targetAdminUserId: adminUserId,
+            targetAdminSurname: adminSurname,
+            performedByUid: performedByAdmin.uid,
+            performedByUserId: performedByAdmin.userId || 'N/A',
+            performedBySurname: performedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            reason: resetReason || 'No reason provided',
+            details: `Password reset for admin ${adminSurname} (${adminUserId}) by ${performedByAdmin.surname} (${performedByAdmin.userId}). ${resetReason ? 'Reason: ' + resetReason : ''}`,
+            changes: JSON.stringify({
+              action: 'password_reset',
+              targetAdmin: {
+                uid: uid,
+                userId: adminUserId,
+                surname: adminSurname
+              },
+              performedBy: {
+                uid: performedByAdmin.uid,
+                userId: performedByAdmin.userId,
+                surname: performedByAdmin.surname
+              },
+              reason: resetReason || 'No reason provided'
+            })
+          });
+          console.log('✅ Password reset logged in security logs');
+        } catch (logError) {
+          console.warn('⚠️ Failed to log password reset:', logError);
+        }
+      }
+      
     } catch (error: any) {
-      console.error('Error resetting password:', error);
+      console.error('❌ Password reset error:', error);
       throw new Error(error.message || 'Failed to reset password');
     }
   },
+  
+// src/services/adminService.ts - PART 4 OF 4
+// PASTE THIS IMMEDIATELY AFTER PART 3
 
-  // Update admin
-  // ENHANCED WITH DETAILED FIELD-LEVEL CHANGE TRACKING
-  async updateAdmin(uid: string, updates: Partial<Admin>, updatedByAdmin: Admin): Promise<void> {
+  // ENHANCED: Update admin status with SMS notification and security logging
+  async updateAdminStatus(
+    uid: string, 
+    newStatus: 'active' | 'inactive', 
+    reason?: string,
+    updatedByAdmin?: Admin
+  ): Promise<void> {
     try {
-      console.log('🔄 Updating admin:', uid);
-      console.log('📝 Updates:', updates);
+      console.log('🔄 Updating admin status:', { uid, newStatus, reason });
       
-      // Get current admin data first to track changes
+      // Get current admin data first
+      const adminDoc = await getDoc(doc(db, 'users', uid));
+      if (!adminDoc.exists()) {
+        throw new Error('Admin not found');
+      }
+      
+      const currentAdmin = adminDoc.data();
+      const oldStatus = currentAdmin.status;
+      
+      // Update status in Firestore
+      await updateDoc(doc(db, 'users', uid), {
+        status: newStatus
+      });
+      
+      console.log('✅ Admin status updated in Firestore');
+      
+      // Log status change in security logs
+      if (updatedByAdmin) {
+        try {
+          await addDoc(collection(db, 'security_logs'), {
+            action: 'status_changed',
+            targetAdminUid: uid,
+            targetAdminUserId: currentAdmin.userId || 'N/A',
+            targetAdminSurname: currentAdmin.surname || currentAdmin.name || 'N/A',
+            performedByUid: updatedByAdmin.uid,
+            performedByUserId: updatedByAdmin.userId || 'N/A',
+            performedBySurname: updatedByAdmin.surname || 'N/A',
+            timestamp: Timestamp.now(),
+            reason: reason || 'No reason provided',
+            details: `Status changed from ${oldStatus} to ${newStatus} for admin ${currentAdmin.surname} (${currentAdmin.userId}) by ${updatedByAdmin.surname} (${updatedByAdmin.userId}). ${reason ? 'Reason: ' + reason : ''}`,
+            changes: JSON.stringify({
+              action: 'status_change',
+              oldStatus: oldStatus,
+              newStatus: newStatus,
+              reason: reason || 'No reason provided'
+            }),
+            fieldChanges: [
+              { field: 'status', oldValue: oldStatus, newValue: newStatus }
+            ]
+          });
+          console.log('✅ Status change logged in security logs');
+        } catch (logError) {
+          console.warn('⚠️ Failed to log status change:', logError);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error updating admin status:', error);
+      throw new Error(error.message || 'Failed to update admin status');
+    }
+  },
+
+  // ENHANCED: Update admin profile with SMS notification and detailed logging
+  async updateAdmin(
+    uid: string, 
+    updates: Partial<Admin>,
+    updatedByAdmin?: Admin
+  ): Promise<void> {
+    try {
+      console.log('📝 Updating admin profile:', uid);
+      console.log('📊 Updates:', updates);
+      
+      // Get current admin data first for comparison
       const adminDoc = await getDoc(doc(db, 'users', uid));
       if (!adminDoc.exists()) {
         throw new Error('Admin not found');
@@ -842,45 +933,36 @@ export const adminService = {
       // Calculate field-level changes
       const fieldChanges = calculateFieldChanges(currentAdmin, updates);
       
-      console.log('📊 Detected field changes:', fieldChanges);
-      
-      // Update the admin document
-      await updateDoc(doc(db, 'users', uid), updates);
-      console.log('✅ Admin updated in Firestore');
-      
-      // ENHANCED: Log admin edit with detailed field-level changes
       if (fieldChanges.length > 0) {
+        console.log('🔍 Detected changes:', fieldChanges);
+        
+        // Update in Firestore
+        await updateDoc(doc(db, 'users', uid), updates);
+        console.log('✅ Admin profile updated in Firestore');
+        
+        // Log in security logs
         try {
-          const changesArray = fieldChanges.map(c => `${c.field}: "${c.oldValue}" → "${c.newValue}"`);
+          const changesArray = fieldChanges.map(c => c.field);
           
           await addDoc(collection(db, 'security_logs'), {
             action: 'admin_edited',
             targetAdminUid: uid,
             targetAdminUserId: currentAdmin.userId || 'N/A',
-            targetAdminSurname: currentAdmin.surname || 'N/A',
-            performedByUid: updatedByAdmin.uid,
-            performedByUserId: updatedByAdmin.userId || 'N/A',
-            performedBySurname: updatedByAdmin.surname || 'N/A',
+            targetAdminSurname: currentAdmin.surname || currentAdmin.name || 'N/A',
+            performedByUid: updatedByAdmin?.uid || 'system',
+            performedByUserId: updatedByAdmin?.userId || 'N/A',
+            performedBySurname: updatedByAdmin?.surname || 'System',
             timestamp: Timestamp.now(),
-            details: `Admin ${currentAdmin.surname} (${currentAdmin.userId}) was updated by ${updatedByAdmin.surname} (${updatedByAdmin.userId}). Changes: ${changesArray.join(', ')}`,
+            details: `Admin profile updated: ${currentAdmin.surname} (${currentAdmin.userId}). Changed fields: ${changesArray.join(', ')}`,
             changes: JSON.stringify({
               action: 'edit',
-              fieldChanges: fieldChanges,
-              targetAdmin: {
-                uid: uid,
-                userId: currentAdmin.userId,
-                surname: currentAdmin.surname
-              },
-              performedBy: {
-                uid: updatedByAdmin.uid,
-                userId: updatedByAdmin.userId,
-                surname: updatedByAdmin.surname
-              }
+              changedFields: changesArray,
+              oldValues: Object.fromEntries(fieldChanges.map(c => [c.field, c.oldValue])),
+              newValues: Object.fromEntries(fieldChanges.map(c => [c.field, c.newValue]))
             }),
-            // ENHANCED: Store field changes in structured format
             fieldChanges: fieldChanges
           });
-          console.log('✅ Admin edit logged in security logs with', fieldChanges.length, 'field changes');
+          console.log('✅ Admin edit logged in security logs');
           
           // Send SMS for profile edit
           try {
