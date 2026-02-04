@@ -10,6 +10,7 @@ interface UserSearchRequest {
   purpose?: 'password-reset' | 'user-lookup' | 'user-id-recovery' | 'check-userid-duplicate';
   checkDuplicates?: boolean;
   apiKey?: string;
+  recaptchaToken?: string; // NEW: Optional reCAPTCHA token
 }
 
 interface UserSearchResponse {
@@ -87,6 +88,40 @@ function initializeFirebaseAdmin() {
   }
 }
 
+// NEW: Verify reCAPTCHA token (optional - backend validation)
+async function verifyRecaptcha(token: string): Promise<boolean> {
+  // If no reCAPTCHA secret is configured, skip verification (backward compatible)
+  const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY;
+  if (!RECAPTCHA_SECRET) {
+    console.log('⚠️ reCAPTCHA secret not configured - skipping verification');
+    return true;
+  }
+
+  try {
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
+    });
+
+    const data = await response.json();
+    
+    if (data.success && data.score >= 0.5) {
+      console.log('✅ reCAPTCHA verified successfully, score:', data.score);
+      return true;
+    }
+    
+    console.log('❌ reCAPTCHA verification failed, score:', data.score);
+    return false;
+  } catch (error) {
+    console.error('⚠️ reCAPTCHA verification error:', error);
+    // On error, allow request to proceed (backward compatible)
+    return true;
+  }
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse<UserSearchResponse>
@@ -135,7 +170,19 @@ export default async function handler(
       });
     }
 
-    const { loginId, phoneNumber, email, userId, purpose, checkDuplicates, apiKey } = req.body as UserSearchRequest;
+    const { loginId, phoneNumber, email, userId, purpose, checkDuplicates, apiKey, recaptchaToken } = req.body as UserSearchRequest;
+
+    // NEW: Verify reCAPTCHA if token is provided (optional - backward compatible)
+    if (recaptchaToken) {
+      const isValidRecaptcha = await verifyRecaptcha(recaptchaToken);
+      if (!isValidRecaptcha) {
+        console.log('❌ reCAPTCHA verification failed');
+        return res.status(400).json({
+          success: false,
+          error: 'Verification failed. Please try again.',
+        });
+      }
+    }
 
     // Optional: Validate API Key if MASTER_KEY is set
     const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
@@ -349,7 +396,8 @@ export default async function handler(
     console.log('🔍 User search request:', {
       purpose,
       loginIdPrefix: loginId?.substring(0, 5) + '...',
-      hasApiKey: !!apiKey
+      hasApiKey: !!apiKey,
+      hasRecaptcha: !!recaptchaToken
     });
     
     let userDoc = null;
@@ -366,13 +414,13 @@ export default async function handler(
       if (!userIdQuery.empty) {
         userDoc = userIdQuery.docs[0];
         userData = userDoc.data();
-        console.log('✅ User found by Student ID');
+        console.log('✅ User found by User ID');
       }
     } catch (queryError: any) {
       console.error('⚠️ Error querying by userId:', queryError.message);
     }
 
-    // Try to find by phone number
+    // Try to find by phone number (backward compatibility)
     if (!userData) {
       console.log('🔍 Searching by phoneNumber...');
       try {
@@ -391,7 +439,7 @@ export default async function handler(
       }
     }
 
-    // Try to find by email
+    // Try to find by email (backward compatibility)
     if (!userData) {
       console.log('🔍 Searching by email...');
       try {
@@ -414,7 +462,7 @@ export default async function handler(
       console.log('❌ User not found with login ID:', loginId.substring(0, 5) + '...');
       return res.status(404).json({
         success: false,
-        error: 'Account not found. Please check your Student ID, phone number, or email.',
+        error: 'Account not found. Please check your User ID.',
       });
     }
 
