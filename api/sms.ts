@@ -291,6 +291,19 @@ export default async function handler(
       type: 'text',
     });
 
+    // Log the exact SMS being sent to the panel
+    console.log('========== SENDING SMS ==========');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('API URL:', url);
+    console.log('Sender ID:', SENDER_ID);
+    console.log('Recipient Number:', formattedNumber);
+    console.log('Original Message:', message);
+    console.log('Formatted Message (GSM7):', formattedMessage);
+    console.log('Message Length:', formattedMessage.length, 'characters');
+    console.log('Message Type:', 'text');
+    console.log('Full Request URL:', `${url}?${params.toString()}`);
+    console.log('=================================');
+
     const smsResponse = await fetch(`${url}?${params.toString()}`, {
       method: 'GET',
       headers: {
