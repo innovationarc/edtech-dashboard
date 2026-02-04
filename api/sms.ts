@@ -75,6 +75,8 @@ function logSMSFailure(
     senderId?: string;
     messageLength?: number;
     formattedNumber?: string;
+    smsContent?: string;
+    originalMessage?: string;
   } = {}
 ): void {
   const { code, message } = parseErrorCode(rawResponse);
@@ -87,6 +89,12 @@ function logSMSFailure(
   }
   if (context.senderId) {
     console.error('Sender ID:', context.senderId);
+  }
+  if (context.originalMessage) {
+    console.error('Original Message:', context.originalMessage);
+  }
+  if (context.smsContent && context.smsContent !== context.originalMessage) {
+    console.error('Formatted SMS Content (GSM7):', context.smsContent);
   }
   if (context.messageLength) {
     console.error('Message Length:', context.messageLength, 'characters');
@@ -105,8 +113,15 @@ function logSMSFailure(
 }
 
 // Log successful SMS with minimal info
-function logSMSSuccess(phoneNumber: string, rawResponse: string): void {
+function logSMSSuccess(
+  phoneNumber: string, 
+  rawResponse: string,
+  smsContent?: string
+): void {
   console.log('SMS sent successfully to', phoneNumber, '- Response:', rawResponse);
+  if (smsContent) {
+    console.log('SMS Content:', smsContent);
+  }
 }
 
 // GSM 7-bit character set - extended
@@ -293,7 +308,9 @@ export default async function handler(
       statusCode: smsResponse.status,
       statusText: smsResponse.statusText,
       rawResponse: trimmedResponse,
-      phoneNumber: formattedNumber
+      phoneNumber: formattedNumber,
+      smsContent: formattedMessage,
+      originalMessage: message
     });
 
     // Check if response is an error code from the SMS panel
@@ -310,7 +327,9 @@ export default async function handler(
       logSMSFailure(phoneNumber, rawText, {
         senderId: SENDER_ID,
         messageLength: formattedMessage.length,
-        formattedNumber: formattedNumber
+        formattedNumber: formattedNumber,
+        smsContent: formattedMessage,
+        originalMessage: message
       });
 
       return res.status(500).json({
@@ -321,7 +340,7 @@ export default async function handler(
     }
 
     // Log success (minimal logging)
-    logSMSSuccess(phoneNumber, rawText);
+    logSMSSuccess(phoneNumber, rawText, formattedMessage);
 
     return res.status(200).json({
       success: true,
