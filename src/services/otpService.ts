@@ -254,19 +254,18 @@ export const otpService = {
       });
 
       let messageText: string;
-      if (purpose === 'user-search' && surname) {
-        messageText = `Dear ${surname},
-Your OTP code for User ID recovery is: ${otp}.
-Valid for ${OTP_EXPIRY_MINUTES} minutes.
-If you did not request this, please ignore.`;
+      if (purpose === 'user-search') {
+        messageText = `Your Ed-tech User ID recovery verification code is ${otp}.
+This code is valid for ${OTP_EXPIRY_MINUTES} minutes.
+If you didn’t request this, please ignore.`;
       } else if (purpose === 'password-reset') {
-        messageText = `Your OTP code for password reset is: ${otp}.
-Valid for ${OTP_EXPIRY_MINUTES} minutes.
-If you did not request this, please contact support immediately.`;
+        messageText = `Your Ed-tech password reset code is ${otp}.
+This code is valid for ${OTP_EXPIRY_MINUTES} minutes.
+Do not share this code with anyone.`;
       } else {
         messageText = `Your OTP code for Ed-tech registration is: ${otp}.
 Valid for ${OTP_EXPIRY_MINUTES} minutes.
-Do not share this code with anyone.`;
+If you did not request this, please ignore.`;
       }
 
       const gsmMessage = toGSM7Bit(messageText);
