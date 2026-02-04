@@ -15,6 +15,100 @@ interface SMSResponse {
   providerResponse?: string;
 }
 
+// SMS Panel Error Code Mapping
+const SMS_ERROR_CODES: { [key: string]: string } = {
+  '202': 'SMS Submitted Successfully',
+  '1001': 'Invalid Number',
+  '1002': 'Sender ID not correct/Sender ID is disabled',
+  '1003': 'Please Required all fields/Contact Your System Administrator',
+  '1005': 'Internal Error',
+  '1006': 'Balance Validity Not Available',
+  '1007': 'Balance Insufficient',
+  '1011': 'User ID not found',
+  '1012': 'Masking SMS must be sent in Bengali',
+  '1013': 'Sender ID has not found Gateway by API key',
+  '1014': 'Sender Type Name not found using this sender by API key',
+  '1015': 'Sender ID has not found Any Valid Gateway by API key',
+  '1016': 'Sender Type Name Active Price Info not found by this sender ID',
+  '1017': 'Sender Type Name Price Info not found by this sender ID',
+  '1018': 'The Owner of this (username) Account is disabled',
+  '1019': 'The (sender type name) Price of this (username) Account is disabled',
+  '1020': 'The parent of this account is not found',
+  '1021': 'The parent active (sender type name) price of this account is not found',
+  '1031': 'Your Account Not Verified, Please Contact Administrator',
+  '1032': 'IP Not whitelisted',
+};
+
+// Parse error code from response
+function parseErrorCode(response: string): { code: string | null; message: string } {
+  const trimmedResponse = response.trim();
+  
+  // Check if response matches an error code
+  if (SMS_ERROR_CODES[trimmedResponse]) {
+    return {
+      code: trimmedResponse,
+      message: SMS_ERROR_CODES[trimmedResponse]
+    };
+  }
+  
+  // Try to extract error code from response text
+  const codeMatch = trimmedResponse.match(/\b(202|10\d{2}|1032)\b/);
+  if (codeMatch) {
+    const code = codeMatch[1];
+    return {
+      code: code,
+      message: SMS_ERROR_CODES[code] || 'Unknown error code'
+    };
+  }
+  
+  return {
+    code: null,
+    message: trimmedResponse
+  };
+}
+
+// Log SMS failure with detailed information
+function logSMSFailure(
+  phoneNumber: string,
+  rawResponse: string,
+  context: {
+    senderId?: string;
+    messageLength?: number;
+    formattedNumber?: string;
+  } = {}
+): void {
+  const { code, message } = parseErrorCode(rawResponse);
+  
+  console.error('========== SMS FAILURE ==========');
+  console.error('Timestamp:', new Date().toISOString());
+  console.error('Phone Number:', phoneNumber);
+  if (context.formattedNumber && context.formattedNumber !== phoneNumber) {
+    console.error('Formatted Number:', context.formattedNumber);
+  }
+  if (context.senderId) {
+    console.error('Sender ID:', context.senderId);
+  }
+  if (context.messageLength) {
+    console.error('Message Length:', context.messageLength, 'characters');
+  }
+  console.error('Raw Response:', rawResponse);
+  
+  if (code) {
+    console.error('Error Code:', code);
+    console.error('Error Description:', message);
+  } else {
+    console.error('Error Type: Unknown/Unparsed Error');
+    console.error('Error Message:', message);
+  }
+  
+  console.error('=================================');
+}
+
+// Log successful SMS with minimal info
+function logSMSSuccess(phoneNumber: string, rawResponse: string): void {
+  console.log('SMS sent successfully to', phoneNumber, '- Response:', rawResponse);
+}
+
 // GSM 7-bit character set - extended
 const GSM_7BIT_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 const GSM_7BIT_EXTENDED = "^{}\\[~]|€";
@@ -101,6 +195,10 @@ export default async function handler(
 
     // Validate required fields
     if (!phoneNumber || !message) {
+      console.error('SMS request missing required fields:', { 
+        hasPhoneNumber: !!phoneNumber, 
+        hasMessage: !!message 
+      });
       return res.status(400).json({
         success: false,
         error: 'Phone number and message are required',
@@ -114,7 +212,10 @@ export default async function handler(
 
     // Check if SMS service is configured
     if (!SMS_API_KEY || !SENDER_ID) {
-      console.error('SMS provider credentials not configured');
+      console.error('SMS provider credentials not configured:', {
+        hasSmsApiKey: !!SMS_API_KEY,
+        hasSenderId: !!SENDER_ID
+      });
       return res.status(500).json({
         success: false,
         error: 'SMS provider not configured. Please contact administrator.',
@@ -133,6 +234,11 @@ export default async function handler(
       }
 
       if (!isAuthorized) {
+        console.error('Unauthorized SMS request attempt:', {
+          phoneNumber,
+          hasApiKey: !!apiKey,
+          hasSignature: !!requestSignature
+        });
         return res.status(401).json({
           success: false,
           error: 'Unauthorized request',
@@ -182,20 +288,33 @@ export default async function handler(
     const rawText = await smsResponse.text();
 
     // BulkSMSBD returns different responses
-    // Success: Usually contains "success" or specific success code
+    // Success: Usually contains "success" or specific success code (202)
     const isSuccess = 
       rawText.toLowerCase().includes('success') ||
       rawText.toLowerCase().includes('ok') ||
+      rawText.trim() === '202' ||
       /^[0-9]+$/.test(rawText.trim());
 
     if (!isSuccess) {
-      console.error('SMS Provider Error:', rawText);
+      // Log detailed failure information
+      logSMSFailure(phoneNumber, rawText, {
+        senderId: SENDER_ID,
+        messageLength: formattedMessage.length,
+        formattedNumber: formattedNumber
+      });
+
+      // Parse error for user-friendly message
+      const { code, message: errorMessage } = parseErrorCode(rawText);
+      
       return res.status(500).json({
         success: false,
-        error: 'Failed to send SMS',
+        error: code ? `SMS Error (${code}): ${errorMessage}` : 'Failed to send SMS',
         providerResponse: rawText
       });
     }
+
+    // Log success (minimal logging)
+    logSMSSuccess(phoneNumber, rawText);
 
     return res.status(200).json({
       success: true,
@@ -204,7 +323,12 @@ export default async function handler(
     });
 
   } catch (error: any) {
-    console.error('SMS API Error:', error);
+    console.error('========== SMS API EXCEPTION ==========');
+    console.error('Timestamp:', new Date().toISOString());
+    console.error('Error Type:', error.name || 'Unknown');
+    console.error('Error Message:', error.message);
+    console.error('Stack Trace:', error.stack);
+    console.error('=======================================');
 
     return res.status(500).json({
       success: false,
