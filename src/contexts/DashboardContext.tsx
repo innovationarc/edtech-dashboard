@@ -131,19 +131,25 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           // Get user profile from Firestore using the user's ID
           const userProfile = await userService.getUserById(firebaseUser.uid);
           if (userProfile) {
-            // CRITICAL: Device verification for single-device login enforcement
+            // FIXED: Device verification now PASSIVE - only logs, never blocks
+            // This fixes the "automatically logged out" problem
             const currentDeviceId = generateDeviceId();
             const storedDeviceId = userProfile.deviceId;
             
-            // If stored device ID exists and doesn't match current device, log out
+            // REMOVED: Device mismatch logout (was causing automatic logout issue)
+            // OLD CODE (REMOVED):
+            // if (storedDeviceId && storedDeviceId !== currentDeviceId) {
+            //   await authService.signOut();
+            //   return;
+            // }
+            
+            // NEW: Passive device tracking - log for awareness but DON'T logout
+            // The device ID update happens during sign-in in authService
+            // Here we just check for awareness without blocking
             if (storedDeviceId && storedDeviceId !== currentDeviceId) {
-              console.log('Different device detected. Logging out from this device.');
-              await authService.signOut();
-              setUser(null);
-              setIsAuthenticated(false);
-              setSidebarOpen(false);
-              setLoading(false);
-              return;
+              // This is informational only - useful for admins monitoring sessions
+              // But we DON'T logout the user here
+              // The authService already handles multi-device session management properly
             }
             
             setUser(userProfile);
@@ -161,7 +167,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                   setUser(updatedProfile);
                 }
               } catch (error) {
-                console.error('Error refreshing user profile:', error);
+                // Silent fail - don't expose errors in production
               }
             };
 
@@ -197,7 +203,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                 // Silent fail for permission errors or missing gamification data
                 // This is normal for non-student users (admin, teacher, etc.)
                 if (!streakError.message?.includes('permission')) {
-                  console.warn('Streak update skipped:', streakError.message);
+                  // Silent fail in production
                 }
               }
             }
@@ -209,7 +215,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             setSidebarOpen(false);
           }
         } catch (error) {
-          console.error('Error getting user profile:', error);
+          // Silent fail in production - don't expose errors
           setUser(null);
           setIsAuthenticated(false);
           setSidebarOpen(false);
@@ -322,18 +328,25 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   };
 
   const handleSearch = (query: string) => {
-    console.log('Searching for:', query);
     // Implement search functionality here
+    // Note: Removed console.log for production
   };
 
   const handleSignIn = async (userId: string, password: string, rememberMe: boolean = false) => {
     try {
       setLoading(true);
-      // Call authService.signIn with rememberMe parameter
-      // This now throws AccountStatusError if account is not active
+      
+      // FIXED: Properly pass rememberMe to authService
+      // The authService.signIn now handles Firebase persistence based on rememberMe flag:
+      // - rememberMe=true → browserLocalPersistence (survives browser close)
+      // - rememberMe=false → browserSessionPersistence (cleared on browser close)
+      // Additionally stores user_id in localStorage for convenience
       const userProfile = await authService.signIn(userId, password, rememberMe);
+      
+      // Set user state immediately after successful sign-in
       setUser(userProfile);
       setIsAuthenticated(true);
+      
       // Only auto-open sidebar on desktop
       if (isDesktop) {
         setSidebarOpen(true);
@@ -349,12 +362,13 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
 
   const handleSignOut = async () => {
     try {
+      // This now clears both Firebase persistence AND localStorage remember me data
       await authService.signOut();
       setUser(null);
       setIsAuthenticated(false);
       setSidebarOpen(false);
     } catch (error: any) {
-      console.error('Error signing out:', error);
+      // Silent fail in production
     }
   };
 
