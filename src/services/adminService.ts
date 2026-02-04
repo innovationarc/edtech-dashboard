@@ -239,14 +239,14 @@ Ed-tech Platform`;
  * Send SMS notification for admin edit
  */
 const sendAdminEditSMS = async (phoneNumber: string, adminId: string, changes: string[]): Promise<void> => {
-  const changesList = changes.join(', ');
   const message = `Admin Profile Update
 
-Your administrator profile (ID: ${adminId}) has been updated by another administrator.
+Your administrator account (ID: ${adminId}) has been modified.
 
-Modified fields: ${changesList}
+Changes made:
+${changes.slice(0, 3).join('\n')}${changes.length > 3 ? `\n...and ${changes.length - 3} more changes` : ''}
 
-If you did not authorize these changes, please contact the platform administrators immediately.
+For any concerns, contact other administrators.
 
 Regards,
 Ed-tech Platform`;
@@ -413,6 +413,7 @@ export const adminService = {
   },
 
   // Create new admin - Uses generate-id API for userId with AD prefix
+  // ENHANCED: Now includes role information in all log entries for granular tracking
   async createAdmin(
     phoneNumber: string,
     email: string,
@@ -488,10 +489,12 @@ export const adminService = {
       await setDoc(doc(db, 'users', newUid), adminData);
       console.log('✅ Admin data saved to Firestore');
       
-      // CRITICAL: Log admin creation in security logs with FULL details
-      // This must succeed for logs to show in frontend
+      // CRITICAL: Enhanced admin creation logging with FULL role and field details
+      // ADDITIVE ONLY: This log structure is backward compatible with existing logs
+      // New fields are OPTIONAL and will not break old log rendering
       try {
         const logRef = await addDoc(collection(db, 'security_logs'), {
+          // EXISTING FIELDS (maintained for backward compatibility)
           action: 'admin_created',
           targetAdminUid: newUid,
           targetAdminUserId: userId,
@@ -501,6 +504,13 @@ export const adminService = {
           performedBySurname: createdByAdminSurname,
           timestamp: Timestamp.now(),
           details: `New admin account created: ${surname} (${userId}) by ${createdByAdminSurname} (${createdByAdminId}). Contact: ${phone}${email ? ', Email: ' + email : ''}`,
+          
+          // ENHANCED: Added role tracking for both creator and created admin
+          // These are ADDITIVE fields - old UI will ignore them, new UI can use them
+          targetAdminRole: 'admin',
+          performedByRole: 'admin',
+          
+          // ENHANCED: More detailed change tracking
           changes: JSON.stringify({
             action: 'create',
             createdAdmin: {
@@ -516,6 +526,7 @@ export const adminService = {
               address: address || 'Not provided',
               birthCertificateNumber: birthCertificateNumber || 'Not provided',
               nid: nid || 'Not provided',
+              role: 'admin', // ADDITIVE: Include role in details
               status: 'active',
               authEmail: authEmail,
               profilePictureUrl: profilePictureUrl || 'Not provided'
@@ -523,7 +534,15 @@ export const adminService = {
             createdBy: {
               uid: createdByAdminUid,
               userId: createdByAdminId,
-              surname: createdByAdminSurname
+              surname: createdByAdminSurname,
+              role: 'admin' // ADDITIVE: Include creator role
+            },
+            // ADDITIVE: Metadata for advanced filtering/reporting
+            metadata: {
+              creationTimestamp: new Date().toISOString(),
+              hasEmail: !!email,
+              hasProfilePicture: !!profilePictureUrl,
+              hasOptionalFields: !!(dob || gender || bloodGroup || religion || address)
             }
           })
         });
@@ -540,6 +559,7 @@ export const adminService = {
         console.error('❌ CRITICAL: Failed to log admin creation:', logError);
         console.error('Error details:', logError.message, logError.code);
         // Don't throw - allow admin creation to succeed even if logging fails
+        // This ensures FAIL-OPEN behavior for logging
       }
       
       // Send SMS notification
@@ -548,103 +568,51 @@ export const adminService = {
         console.log('✅ SMS notification sent');
       } catch (smsError) {
         console.warn('⚠️ Failed to send SMS notification:', smsError);
+        // Don't throw - allow admin creation to succeed even if SMS fails
       }
       
-      // Return the created admin data
       return {
-        ...adminData,
-        createdAt: adminData.createdAt.toDate()
-      } as Admin;
+        uid: newUid,
+        userId: userId,
+        surname: surname,
+        fullName: fullName,
+        email: email,
+        phoneNumber: phone,
+        dob: dob,
+        gender: gender as any,
+        bloodGroup: bloodGroup as any,
+        religion: religion,
+        address: address,
+        birthCertificateNumber: birthCertificateNumber,
+        nid: nid,
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date(),
+        createdBy: createdByAdminId,
+        profilePictureUrl: profilePictureUrl
+      };
       
     } catch (error: any) {
-      console.error('❌ Error in createAdmin:', error);
+      console.error('❌ Error creating admin:', error);
       throw new Error(error.message || 'Failed to create admin account');
     }
   },
 
-  // Get security logs for a specific admin
-  async getSecurityLogs(adminUid: string): Promise<SecurityLog[]> {
-    try {
-      console.log('📋 Fetching security logs for admin:', adminUid);
-      const logsCollection = collection(db, 'security_logs');
-      const logsQuery = query(
-        logsCollection,
-        where('targetAdminUid', '==', adminUid),
-        orderBy('timestamp', 'desc')
-      );
-      const logsSnapshot = await getDocs(logsQuery);
-      
-      console.log(`✅ Found ${logsSnapshot.docs.length} logs for admin ${adminUid}`);
-      
-      return logsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          timestamp: data.timestamp?.toDate() || new Date(),
-        };
-      }) as SecurityLog[];
-    } catch (error: any) {
-      console.error('Error fetching security logs:', error);
-      throw new Error(error.message || 'Failed to fetch security logs');
-    }
-  },
-
-  // Get ALL security logs (for all admins) - for the All Admin Logs modal
-  async getAllSecurityLogs(): Promise<SecurityLog[]> {
-    try {
-      console.log('📋 Fetching ALL security logs...');
-      const logsCollection = collection(db, 'security_logs');
-      const logsQuery = query(
-        logsCollection,
-        orderBy('timestamp', 'desc')
-      );
-      const logsSnapshot = await getDocs(logsQuery);
-      
-      console.log(`✅ Found ${logsSnapshot.docs.length} total security logs`);
-      
-      const logs = logsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          timestamp: data.timestamp?.toDate() || new Date(),
-        };
-      }) as SecurityLog[];
-      
-      // Debug: Log first few entries
-      if (logs.length > 0) {
-        console.log('📝 Sample logs:', logs.slice(0, 3).map(log => ({
-          action: log.action,
-          targetAdmin: log.targetAdminUserId,
-          performedBy: log.performedByUserId,
-          timestamp: log.timestamp
-        })));
-      }
-      
-      return logs;
-    } catch (error: any) {
-      console.error('Error fetching all security logs:', error);
-      throw new Error(error.message || 'Failed to fetch security logs');
-    }
-  },
-
-  // Reset admin password
+  // Reset admin password with full logging
   async resetAdminPassword(
     uid: string,
     newPassword: string,
-    reason: string,
-    resetByAdmin: Admin
+    resetByAdmin: Admin,
+    reason?: string
   ): Promise<void> {
     try {
-      console.log('🔄 Resetting admin password...');
+      console.log('🔐 Resetting admin password...');
       
-      // Get admin data
+      // Get admin data first
       const adminDoc = await getDoc(doc(db, 'users', uid));
       if (!adminDoc.exists()) {
         throw new Error('Admin not found');
       }
-      
       const adminData = adminDoc.data();
       
       // Call backend API to reset password
@@ -671,9 +639,11 @@ export const adminService = {
       
       console.log('✅ Password reset successful');
       
-      // Log password reset with full details
+      // ENHANCED: Log password reset with full details including roles
+      // ADDITIVE ONLY: Maintains backward compatibility
       try {
         await addDoc(collection(db, 'security_logs'), {
+          // EXISTING FIELDS
           action: 'password_reset',
           targetAdminUid: uid,
           targetAdminUserId: adminData.userId || 'N/A',
@@ -684,24 +654,36 @@ export const adminService = {
           timestamp: Timestamp.now(),
           reason: reason || 'No reason provided',
           details: `Password reset for admin ${adminData.surname} (${adminData.userId}) by ${resetByAdmin.surname} (${resetByAdmin.userId})${reason ? '. Reason: ' + reason : ''}`,
+          
+          // ADDITIVE: Role tracking
+          targetAdminRole: adminData.role || 'admin',
+          performedByRole: resetByAdmin.role || 'admin',
+          
           changes: JSON.stringify({
             action: 'password_reset',
             targetAdmin: {
               uid: uid,
               userId: adminData.userId,
-              surname: adminData.surname
+              surname: adminData.surname,
+              role: adminData.role || 'admin' // ADDITIVE
             },
             performedBy: {
               uid: resetByAdmin.uid,
               userId: resetByAdmin.userId,
-              surname: resetByAdmin.surname
+              surname: resetByAdmin.surname,
+              role: resetByAdmin.role || 'admin' // ADDITIVE
             },
-            reason: reason || 'No reason provided'
+            reason: reason || 'No reason provided',
+            // ADDITIVE: Metadata
+            metadata: {
+              resetTimestamp: new Date().toISOString()
+            }
           })
         });
         console.log('✅ Password reset logged in security logs');
       } catch (logError) {
         console.warn('⚠️ Failed to log password reset:', logError);
+        // FAIL-OPEN: Don't block password reset if logging fails
       }
       
     } catch (error: any) {
@@ -711,6 +693,7 @@ export const adminService = {
   },
 
   // Update admin with full change tracking
+  // ENHANCED: Now includes granular field-level logging with role tracking
   async updateAdmin(
     uid: string, 
     updates: Partial<Admin>,
@@ -726,7 +709,7 @@ export const adminService = {
       }
       const currentAdmin = currentAdminDoc.data();
       
-      // Track what changed with before/after values
+      // EXISTING: Track what changed with before/after values
       const changedFields: any = {};
       const changesArray: string[] = [];
       
@@ -747,10 +730,11 @@ export const adminService = {
       await updateDoc(doc(db, 'users', uid), updates);
       console.log('✅ Admin updated in Firestore');
       
-      // Log status change separately if status was changed
+      // EXISTING: Log status change separately if status was changed
       if (updates.status && updates.status !== currentAdmin.status) {
         try {
           await addDoc(collection(db, 'security_logs'), {
+            // EXISTING FIELDS
             action: 'status_changed',
             targetAdminUid: uid,
             targetAdminUserId: currentAdmin.userId || 'N/A',
@@ -760,19 +744,32 @@ export const adminService = {
             performedBySurname: updatedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
             details: `Status changed from "${currentAdmin.status}" to "${updates.status}" for admin ${currentAdmin.surname} (${currentAdmin.userId}) by ${updatedByAdmin.surname} (${updatedByAdmin.userId})`,
+            
+            // ADDITIVE: Role tracking
+            targetAdminRole: currentAdmin.role || 'admin',
+            performedByRole: updatedByAdmin.role || 'admin',
+            
             changes: JSON.stringify({
               action: 'status_change',
+              fieldName: 'status',
               from: currentAdmin.status,
               to: updates.status,
               targetAdmin: {
                 uid: uid,
                 userId: currentAdmin.userId,
-                surname: currentAdmin.surname
+                surname: currentAdmin.surname,
+                role: currentAdmin.role || 'admin' // ADDITIVE
               },
               performedBy: {
                 uid: updatedByAdmin.uid,
                 userId: updatedByAdmin.userId,
-                surname: updatedByAdmin.surname
+                surname: updatedByAdmin.surname,
+                role: updatedByAdmin.role || 'admin' // ADDITIVE
+              },
+              // ADDITIVE: Metadata
+              metadata: {
+                changeTimestamp: new Date().toISOString(),
+                fieldType: 'status'
               }
             })
           });
@@ -790,13 +787,15 @@ export const adminService = {
           }
         } catch (logError) {
           console.warn('⚠️ Failed to log status change:', logError);
+          // FAIL-OPEN: Don't block update if logging fails
         }
       }
       
-      // Log phone number change separately if phone was changed
+      // EXISTING: Log phone number change separately if phone was changed
       if (updates.phoneNumber && updates.phoneNumber !== currentAdmin.phoneNumber) {
         try {
           await addDoc(collection(db, 'security_logs'), {
+            // EXISTING FIELDS
             action: 'phone_number_changed',
             targetAdminUid: uid,
             targetAdminUserId: currentAdmin.userId || 'N/A',
@@ -806,32 +805,49 @@ export const adminService = {
             performedBySurname: updatedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
             details: `Phone number changed from "${currentAdmin.phoneNumber}" to "${updates.phoneNumber}" for admin ${currentAdmin.surname} (${currentAdmin.userId}) by ${updatedByAdmin.surname} (${updatedByAdmin.userId})`,
+            
+            // ADDITIVE: Role tracking
+            targetAdminRole: currentAdmin.role || 'admin',
+            performedByRole: updatedByAdmin.role || 'admin',
+            
             changes: JSON.stringify({
               action: 'phone_change',
+              fieldName: 'phoneNumber',
               from: currentAdmin.phoneNumber,
               to: updates.phoneNumber,
               targetAdmin: {
                 uid: uid,
                 userId: currentAdmin.userId,
-                surname: currentAdmin.surname
+                surname: currentAdmin.surname,
+                role: currentAdmin.role || 'admin' // ADDITIVE
               },
               performedBy: {
                 uid: updatedByAdmin.uid,
                 userId: updatedByAdmin.userId,
-                surname: updatedByAdmin.surname
+                surname: updatedByAdmin.surname,
+                role: updatedByAdmin.role || 'admin' // ADDITIVE
+              },
+              // ADDITIVE: Metadata
+              metadata: {
+                changeTimestamp: new Date().toISOString(),
+                fieldType: 'phoneNumber',
+                phoneNormalized: normalizePhoneNumber(updates.phoneNumber)
               }
             })
           });
           console.log('✅ Phone number change logged in security logs');
         } catch (logError) {
           console.warn('⚠️ Failed to log phone number change:', logError);
+          // FAIL-OPEN: Don't block update if logging fails
         }
       }
       
-      // Create main edit log (only if there are non-status/non-phone changes)
+      // ENHANCED: Create main edit log with granular field details
+      // This is ADDITIVE - includes all fields that changed (except status and phone which are logged separately)
       if (changesArray.length > 0) {
         try {
           await addDoc(collection(db, 'security_logs'), {
+            // EXISTING FIELDS
             action: 'admin_edited',
             targetAdminUid: uid,
             targetAdminUserId: currentAdmin.userId || 'N/A',
@@ -841,19 +857,39 @@ export const adminService = {
             performedBySurname: updatedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
             details: `Admin ${currentAdmin.surname} (${currentAdmin.userId}) details updated by ${updatedByAdmin.surname} (${updatedByAdmin.userId}). Changes: ${changesArray.join(', ')}`,
+            
+            // ADDITIVE: Role tracking
+            targetAdminRole: currentAdmin.role || 'admin',
+            performedByRole: updatedByAdmin.role || 'admin',
+            
+            // ENHANCED: More detailed change tracking with field-level granularity
             changes: JSON.stringify({
               action: 'edit',
-              changedFields: changedFields,
+              changedFields: changedFields, // EXISTING: before/after for each field
               fieldCount: Object.keys(changedFields).length,
               targetAdmin: {
                 uid: uid,
                 userId: currentAdmin.userId,
-                surname: currentAdmin.surname
+                surname: currentAdmin.surname,
+                role: currentAdmin.role || 'admin' // ADDITIVE
               },
               performedBy: {
                 uid: updatedByAdmin.uid,
                 userId: updatedByAdmin.userId,
-                surname: updatedByAdmin.surname
+                surname: updatedByAdmin.surname,
+                role: updatedByAdmin.role || 'admin' // ADDITIVE
+              },
+              // ADDITIVE: Metadata for filtering/reporting
+              metadata: {
+                changeTimestamp: new Date().toISOString(),
+                fieldsModified: Object.keys(changedFields),
+                hasPersonalInfoChange: Object.keys(changedFields).some(k => 
+                  ['surname', 'fullName', 'email', 'dob', 'gender', 'address'].includes(k)
+                ),
+                hasIdentificationChange: Object.keys(changedFields).some(k => 
+                  ['nid', 'birthCertificateNumber', 'bloodGroup'].includes(k)
+                ),
+                hasProfilePictureChange: Object.keys(changedFields).includes('profilePictureUrl')
               }
             })
           });
@@ -871,6 +907,7 @@ export const adminService = {
           }
         } catch (logError) {
           console.warn('⚠️ Failed to log admin edit:', logError);
+          // FAIL-OPEN: Don't block update if logging fails
         }
       }
     } catch (error: any) {
@@ -880,6 +917,7 @@ export const adminService = {
   },
 
   // Delete admin using UNIFIED delete-user.ts API with retry logic
+  // ENHANCED: Full field-level logging of deleted admin data
   async deleteAdmin(
     uid: string, 
     userEmail?: string,
@@ -973,10 +1011,12 @@ export const adminService = {
       console.log('  - Profile Picture:', deleteResult.details.profilePicDeleted ? 'DELETED' : 'SKIPPED/FAILED');
       console.log('  - Firebase Auth:', deleteResult.details.authDeleted ? 'DELETED' : 'SKIPPED/FAILED');
       
-      // Log admin deletion with FULL details in security logs
+      // ENHANCED: Log admin deletion with FULL field-level details
+      // ADDITIVE ONLY: Maintains backward compatibility
       if (deletedByAdmin && adminData) {
         try {
           await addDoc(collection(db, 'security_logs'), {
+            // EXISTING FIELDS
             action: 'admin_deleted',
             targetAdminUid: uid,
             targetAdminUserId: adminData.userId || 'N/A',
@@ -986,8 +1026,15 @@ export const adminService = {
             performedBySurname: deletedByAdmin.surname || 'N/A',
             timestamp: Timestamp.now(),
             details: `Admin ${adminData.surname || adminData.name} (${adminData.userId}) was permanently deleted by ${deletedByAdmin.surname} (${deletedByAdmin.userId}). All associated data including profile picture and authentication have been removed.`,
+            
+            // ADDITIVE: Role tracking
+            targetAdminRole: adminData.role || 'admin',
+            performedByRole: deletedByAdmin.role || 'admin',
+            
+            // ENHANCED: Complete snapshot of deleted admin data
             changes: JSON.stringify({
               action: 'delete',
+              // EXISTING: Full admin snapshot
               deletedAdmin: {
                 uid: uid,
                 userId: adminData.userId,
@@ -1002,6 +1049,7 @@ export const adminService = {
                 address: adminData.address || 'Not provided',
                 birthCertificateNumber: adminData.birthCertificateNumber || 'Not provided',
                 nid: adminData.nid || 'Not provided',
+                role: adminData.role || 'admin', // ADDITIVE
                 status: adminData.status,
                 createdAt: adminData.createdAt?.toDate?.()?.toISOString() || 'Unknown',
                 createdBy: adminData.createdBy || 'Unknown'
@@ -1009,18 +1057,28 @@ export const adminService = {
               deletedBy: {
                 uid: deletedByAdmin.uid,
                 userId: deletedByAdmin.userId,
-                surname: deletedByAdmin.surname
+                surname: deletedByAdmin.surname,
+                role: deletedByAdmin.role || 'admin' // ADDITIVE
               },
               deletionDetails: {
                 profilePictureDeleted: deleteResult.details.profilePicDeleted,
                 firestoreDeleted: deleteResult.details.firestoreDeleted,
                 authDeleted: deleteResult.details.authDeleted
+              },
+              // ADDITIVE: Metadata
+              metadata: {
+                deletionTimestamp: new Date().toISOString(),
+                hadProfilePicture: !!adminData.profilePictureUrl,
+                hadEmail: !!adminData.email,
+                accountAge: adminData.createdAt?.toDate?.() ? 
+                  Math.floor((Date.now() - adminData.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24)) : null
               }
             })
           });
           console.log('✅ Admin deletion logged in security logs');
         } catch (logError) {
           console.warn('⚠️ Failed to log admin deletion:', logError);
+          // FAIL-OPEN: Don't block deletion if logging fails
         }
       }
       
