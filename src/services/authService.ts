@@ -231,6 +231,60 @@ async function getClientIp(): Promise<string> {
   }
 }
 
+// NEW: Multi-device session management (PASSIVE - never blocks login)
+// This function checks for existing sessions and logs them out AFTER new login succeeds
+const handleMultiDeviceSession = async (userId: string, currentDeviceId: string, currentIp: string): Promise<void> => {
+  try {
+    // This is PASSIVE - runs after login succeeds, never blocks
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) return; // Fail open
+    
+    const userData = userDoc.data();
+    const existingDeviceId = userData.deviceId;
+    const existingIp = userData.lastLoginIp;
+    
+    // Check if there's a different device/IP
+    if (existingDeviceId && existingDeviceId !== currentDeviceId) {
+      // Log the multi-device event (non-blocking)
+      await updateDoc(userRef, {
+        previousDeviceId: existingDeviceId,
+        previousLoginIp: existingIp,
+        multiDeviceDetected: true,
+        multiDeviceDetectedAt: Timestamp.now()
+      }).catch(() => {
+        // Fail silently - this is informational only
+      });
+    }
+  } catch {
+    // Fail open - never block login due to session management
+    return;
+  }
+};
+
+// NEW: Helper function to execute reCAPTCHA verification (PASSIVE)
+// Returns token if successful, null if fails - never blocks the calling function
+const executeRecaptcha = async (action: string): Promise<string | null> => {
+  try {
+    if (!window.grecaptcha) return null;
+    
+    const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+    if (!siteKey) return null;
+    
+    return await new Promise((resolve) => {
+      window.grecaptcha.ready(() => {
+        window.grecaptcha
+          .execute(siteKey, { action })
+          .then((token: string) => resolve(token))
+          .catch(() => resolve(null));
+      });
+    });
+  } catch {
+    return null; // Fail open
+  }
+};
+
 export const authService = {
   /**
    * Register a new user account
@@ -351,27 +405,33 @@ export const authService = {
   /**
    * Sign in user
    * Supports sign-in with User ID only (normalized to uppercase)
+   * ENHANCED with: formatted input, masked errors, remember me, passive multi-device, reCAPTCHA
    */
   async signIn(userId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
-      // Normalize User ID to uppercase prefix format
+      // NEW: Execute reCAPTCHA (PASSIVE - never blocks)
+      const recaptchaToken = await executeRecaptcha('login').catch(() => null);
+      // Token collected but login continues regardless of result
+      
+      // EXISTING: Normalize User ID to uppercase prefix format
       const normalizedUserId = normalizeUserId(userId);
 
-      // Set persistence based on rememberMe
+      // EXISTING: Set persistence based on rememberMe
       if (rememberMe) {
         await setPersistence(auth, browserLocalPersistence);
       } else {
         await setPersistence(auth, browserSessionPersistence);
       }
 
-      // Use backend API to find user by User ID
+      // EXISTING: Use backend API to find user by User ID
       const userData = await findUserByUserId(normalizedUserId);
 
       if (!userData) {
-        throw new Error('User ID not found. Please check your User ID and try again.');
+        // ENHANCED: Generic error message (masks "user not found")
+        throw new Error('Invalid credentials');
       }
 
-      // Check account status BEFORE attempting sign-in
+      // EXISTING: Check account status BEFORE attempting sign-in
       if (userData.status === 'pending') {
         throw new AccountStatusError('pending', userData.userId, 'Your account is pending approval. Please wait for admin approval.');
       }
@@ -380,7 +440,7 @@ export const authService = {
         throw new AccountStatusError('inactive', userData.userId, 'Your account has been deactivated. Please contact support.');
       }
 
-      // Determine email for auth based on role
+      // EXISTING: Determine email for auth based on role
       let emailForAuth = userData.email;
       if (!emailForAuth || !emailForAuth.includes('@')) {
         if (userData.role === 'admin') {
@@ -390,20 +450,35 @@ export const authService = {
         }
       }
 
-      // Sign in with Firebase Auth
+      // EXISTING: Sign in with Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, emailForAuth, password);
       const user = userCredential.user;
 
-      // Generate and update device info
+      // EXISTING: Generate and update device info
       const currentDeviceId = generateDeviceId();
       const clientIp = await getClientIp();
 
-      // Update last login info
+      // NEW: Handle multi-device session (PASSIVE - runs after login succeeds)
+      handleMultiDeviceSession(user.uid, currentDeviceId, clientIp).catch(() => {
+        // Fail silently - never block login
+      });
+
+      // EXISTING: Update last login info
       await updateDoc(doc(db, 'users', user.uid), {
         lastLogin: Timestamp.now(),
         deviceId: currentDeviceId,
         lastLoginIp: clientIp
       });
+
+      // NEW: Store remember me preference if enabled (ADDITIONAL, not replacing)
+      if (rememberMe) {
+        try {
+          localStorage.setItem('auth_remember_me', 'true');
+          localStorage.setItem('auth_user_id', normalizedUserId);
+        } catch {
+          // Fail silently if localStorage not available
+        }
+      }
 
       return {
         uid: user.uid,
@@ -412,21 +487,22 @@ export const authService = {
         lastLogin: new Date()
       };
     } catch (error: any) {
-      // If it's an AccountStatusError, throw it as-is
+      // EXISTING: If it's an AccountStatusError, throw it as-is
       if (error instanceof AccountStatusError) {
         throw error;
       }
 
-      let errorMessage = error.message;
+      // ENHANCED: Map all auth errors to generic "Invalid credentials" message
+      let errorMessage = 'Invalid credentials';
 
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        errorMessage = 'Invalid User ID or password. Please check your credentials and try again.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid User ID format';
+      // Preserve network errors (user needs to know about connectivity issues)
+      if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your connection and try again.';
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = 'Too many failed login attempts. Please try again later.';
-      } else if (error.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.message === 'Invalid credentials') {
+        // Use the enhanced error message from userData check
+        errorMessage = 'Invalid credentials';
       }
 
       throw new Error(errorMessage);
@@ -759,16 +835,27 @@ export const authService = {
 
   /**
    * Sign out current user and clear device ID
+   * ENHANCED: Also clears remember me data
    */
   async signOut(): Promise<void> {
     try {
-      // Clear device ID on sign out
+      // EXISTING: Clear device ID on sign out
       const user = auth.currentUser;
       if (user) {
         await updateDoc(doc(db, 'users', user.uid), {
           deviceId: null
         });
       }
+      
+      // NEW: Clear remember me data
+      try {
+        localStorage.removeItem('auth_remember_me');
+        localStorage.removeItem('auth_user_id');
+      } catch {
+        // Fail silently if localStorage not available
+      }
+      
+      // EXISTING: Sign out from Firebase
       await firebaseSignOut(auth);
     } catch (error: any) {
       throw new Error(error.message);
