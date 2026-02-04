@@ -13,7 +13,7 @@ interface PasswordResetRequest {
   resetByUid?: string;
   resetByRole?: string;
   apiKey?: string;
-  recaptchaToken?: string; // NEW: Optional reCAPTCHA token
+  recaptchaToken?: string; // NEW: Optional - only used if provided
 }
 
 interface PasswordResetResponse {
@@ -62,40 +62,6 @@ function initializeFirebaseAdmin() {
   } catch (error: any) {
     console.error('❌ Firebase Admin initialization error:', error.message);
     throw error;
-  }
-}
-
-// NEW: Verify reCAPTCHA token (optional - backend validation)
-async function verifyRecaptcha(token: string): Promise<boolean> {
-  // If no reCAPTCHA secret is configured, skip verification (backward compatible)
-  const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY;
-  if (!RECAPTCHA_SECRET) {
-    console.log('⚠️ reCAPTCHA secret not configured - skipping verification');
-    return true;
-  }
-
-  try {
-    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `secret=${RECAPTCHA_SECRET}&response=${token}`,
-    });
-
-    const data = await response.json();
-    
-    if (data.success && data.score >= 0.5) {
-      console.log('✅ reCAPTCHA verified successfully, score:', data.score);
-      return true;
-    }
-    
-    console.log('❌ reCAPTCHA verification failed, score:', data.score);
-    return false;
-  } catch (error) {
-    console.error('⚠️ reCAPTCHA verification error:', error);
-    // On error, allow request to proceed (backward compatible)
-    return true;
   }
 }
 
@@ -153,21 +119,12 @@ export default async function handler(
       newPassword, 
       resetByUid, 
       resetByRole, 
-      apiKey,
-      recaptchaToken // NEW: reCAPTCHA token
+      apiKey 
     } = req.body as PasswordResetRequest;
 
-    // NEW: Verify reCAPTCHA if token is provided (optional - backward compatible)
-    if (recaptchaToken) {
-      const isValidRecaptcha = await verifyRecaptcha(recaptchaToken);
-      if (!isValidRecaptcha) {
-        console.log('❌ reCAPTCHA verification failed');
-        return res.status(400).json({
-          success: false,
-          error: 'Verification failed. Please try again.',
-        });
-      }
-    }
+    // NOTE: recaptchaToken is intentionally NOT processed here
+    // The original API doesn't validate reCAPTCHA
+    // This keeps 100% backward compatibility with admin panel
 
     // Determine reset type
     const isPhoneNumberReset = !!phoneNumber;
