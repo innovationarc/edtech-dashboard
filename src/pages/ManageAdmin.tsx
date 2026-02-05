@@ -1685,7 +1685,7 @@ const PasswordResetModal = ({ admin, currentAdmin, onClose, onSuccess, onError }
     try {
       setLoading(true);
       // resetAdminPassword(targetAdminUid, newPassword, resetByAdmin: Admin, reason?)
-      await adminService.resetAdminPassword(admin.uid, newPassword, currentAdmin, reason);
+      await adminService.resetAdminPassword(admin.uid, newPassword, reason, currentAdmin);
       onSuccess();
     } catch (error: any) {
       onError(error.message || 'Failed to reset password');
