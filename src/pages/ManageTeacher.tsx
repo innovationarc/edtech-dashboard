@@ -515,7 +515,7 @@ const ManageTeacher = () => {
           </table>
         </div>
         
-        {/* Empty State */}
+        
         {filteredTeachers.length === 0 && (
           <div className="py-16 text-center">
             <div className="inline-flex p-5 rounded-full bg-background-700/40 mb-5">
