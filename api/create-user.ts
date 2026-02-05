@@ -305,6 +305,7 @@ export default async function handler(
 
   try {
     console.log('🆕 Create user request received');
+    console.log('📦 Raw request body:', JSON.stringify(req.body, null, 2));
 
     // Initialize Firebase Admin
     try {
@@ -316,6 +317,33 @@ export default async function handler(
         error: 'Firebase Admin configuration error',
       });
     }
+
+    // Parse request body - handle multiple formats for backward compatibility
+    let requestData: any = {};
+    
+    // Format 1: adminService.ts format with nested userData
+    if (req.body.userData) {
+      console.log('📋 Detected adminService format (nested userData)');
+      requestData = {
+        ...req.body.userData,
+        role: req.body.role,
+        password: req.body.password,
+        email: req.body.email,
+        apiKey: req.body.apiKey
+      };
+    } 
+    // Format 2: Direct CreateUserRequest format
+    else {
+      console.log('📋 Detected direct format');
+      requestData = req.body;
+    }
+
+    console.log('📋 Parsed request data:', {
+      role: requestData.role,
+      surname: requestData.surname,
+      phoneNumber: requestData.phoneNumber ? '***' + requestData.phoneNumber.slice(-4) : undefined,
+      hasPassword: !!requestData.password
+    });
 
     const {
       role,
@@ -336,8 +364,19 @@ export default async function handler(
       createdBy,
       createdByUserId,
       createdByRole,
-      apiKey
-    } = req.body as CreateUserRequest;
+      apiKey,
+      userId: providedUserId // Allow pre-generated userId from adminService
+    } = requestData;
+
+    console.log('📋 Extracted fields:', {
+      role,
+      surname,
+      phoneNumber: phoneNumber ? '***' : undefined,
+      hasPassword: !!password,
+      fullName,
+      providedUserId,
+      apiKey: apiKey ? '***' : undefined
+    });
 
     // Validate API Key (optional but recommended)
     const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
@@ -351,6 +390,8 @@ export default async function handler(
 
     // Validate required fields
     if (!role) {
+      console.error('❌ Validation failed: Role is missing');
+      console.error('Request body:', req.body);
       return res.status(400).json({
         success: false,
         error: 'Role is required'
@@ -358,6 +399,9 @@ export default async function handler(
     }
 
     if (!surname || surname.trim() === '') {
+      console.error('❌ Validation failed: Surname is missing or empty');
+      console.error('Surname value:', surname);
+      console.error('Request body:', req.body);
       return res.status(400).json({
         success: false,
         error: 'Surname is required'
@@ -365,6 +409,7 @@ export default async function handler(
     }
 
     if (!phoneNumber) {
+      console.error('❌ Validation failed: Phone number is missing');
       return res.status(400).json({
         success: false,
         error: 'Phone number is required'
@@ -372,6 +417,7 @@ export default async function handler(
     }
 
     if (!password) {
+      console.error('❌ Validation failed: Password is missing');
       return res.status(400).json({
         success: false,
         error: 'Password is required'
@@ -422,26 +468,48 @@ export default async function handler(
       });
     }
 
-    // Generate User ID using generate-id API
+    // Generate User ID using generate-id API (or use provided userId)
     console.log('🔢 Generating user ID...');
     let userId: string;
-    try {
-      userId = await generateUserId(normalizedRole, apiKey);
-      console.log(`✅ Generated user ID: ${userId}`);
-    } catch (error: any) {
-      console.error('❌ Failed to generate user ID:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to generate unique user ID. Please try again.'
-      });
+    
+    if (providedUserId) {
+      // Use pre-generated userId from adminService.ts
+      console.log('✅ Using provided user ID:', providedUserId);
+      userId = providedUserId;
+    } else {
+      // Generate new userId
+      try {
+        userId = await generateUserId(normalizedRole, apiKey);
+        console.log(`✅ Generated user ID: ${userId}`);
+      } catch (error: any) {
+        console.error('❌ Failed to generate user ID:', error);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to generate unique user ID. Please try again.'
+        });
+      }
     }
 
     // Generate email in format: userid@role.local
     // Example: ST-2601-00012@student.local, AD-2601-29293@admin.local
     const roleForEmail = normalizedRole.replace(/_/g, '-'); // Convert underscores to hyphens for email
-    const generatedEmail = customEmail || `${userId.toLowerCase()}@${roleForEmail}.local`;
-
-    console.log('📧 Email:', generatedEmail);
+    let generatedEmail: string;
+    
+    // Check if customEmail is already in auth format (userid@role.local)
+    if (customEmail && customEmail.includes('@') && customEmail.includes('.local')) {
+      // Use the provided auth email directly
+      generatedEmail = customEmail;
+      console.log('📧 Using provided auth email:', generatedEmail);
+    } else if (customEmail) {
+      // Custom email provided but not in auth format - use it as custom email, generate auth email
+      generatedEmail = `${userId.toLowerCase()}@${roleForEmail}.local`;
+      console.log('📧 Generated auth email:', generatedEmail);
+      console.log('📧 Custom email stored separately:', customEmail);
+    } else {
+      // No custom email - generate auth email
+      generatedEmail = `${userId.toLowerCase()}@${roleForEmail}.local`;
+      console.log('📧 Generated auth email:', generatedEmail);
+    }
 
     // Create Firebase Auth user
     console.log('🔐 Creating Firebase Auth user...');
@@ -488,12 +556,12 @@ export default async function handler(
     // Create Firestore user document
     console.log('📝 Creating Firestore user document...');
     try {
-      const userDoc = {
+      const userDoc: any = {
         userId: userId,
         surname: surname.trim(),
         fullName: fullName?.trim() || surname.trim(),
         name: fullName?.trim() || surname.trim(), // For backward compatibility
-        email: generatedEmail,
+        email: generatedEmail, // Auth email (userid@role.local)
         phoneNumber: normalizedPhone,
         role: normalizedRole,
         status: status || 'active',
@@ -511,6 +579,11 @@ export default async function handler(
         ...(nid && { nid }),
         ...(profilePictureUrl && { profilePictureUrl })
       };
+      
+      // If customEmail was provided and it's NOT an auth email, store it separately
+      if (customEmail && !customEmail.includes('.local')) {
+        userDoc.customEmail = customEmail;
+      }
 
       await db.collection('users').doc(authUser.uid).set(userDoc);
       console.log('✅ Firestore user document created');
