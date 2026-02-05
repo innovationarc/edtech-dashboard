@@ -515,7 +515,7 @@ const ManageTeacher = () => {
           </table>
         </div>
         
-        {/* Summary Footer */}
+        
         {filteredTeachers.length > 0 && (
           <div className="bg-background-900/30 px-5 py-3.5 border-t border-background-700/50 flex flex-col sm:flex-row justify-between items-center gap-3 text-sm">
             <div className="flex items-center gap-2 text-gray-400">
@@ -538,7 +538,7 @@ const ManageTeacher = () => {
       )}
       </div>
 
-      {/* Delete Confirmation Modal */}
+      
       {showDeleteConfirm && teacherToDelete && (
         <DeleteConfirmModal
           teacher={teacherToDelete}
@@ -551,7 +551,7 @@ const ManageTeacher = () => {
         />
       )}
       
-      {/* Info Modal */}
+      
       {showInfoModal && selectedTeacher && (
         <TeacherInfoModal
           teacher={selectedTeacher}
@@ -563,7 +563,7 @@ const ManageTeacher = () => {
         />
       )}
       
-      {/* Edit Modal */}
+      
       {showEditModal && selectedTeacher && (
         <EditTeacherModal
           teacher={selectedTeacher}
@@ -588,7 +588,6 @@ const ManageTeacher = () => {
         />
       )}
 
-      {/* Add Teacher Modal */}
       {showAddTeacherModal && (
         <AddTeacherModal
           onClose={() => setShowAddTeacherModal(false)}
@@ -601,7 +600,7 @@ const ManageTeacher = () => {
         />
       )}
 
-      {/* Password Reset Modal */}
+
       {showPasswordResetModal && teacherToResetPassword && currentUser && (
         <PasswordResetModal
           teacher={teacherToResetPassword}
@@ -618,7 +617,7 @@ const ManageTeacher = () => {
         />
       )}
 
-      {/* Security Logs Modal */}
+      
       {showSecurityLogsModal && selectedTeacher && (
         <SecurityLogsModal
           teacher={selectedTeacher}
@@ -630,9 +629,9 @@ const ManageTeacher = () => {
         />
       )}
 
-      {/* All Teacher Logs Modal */}
+   
       {showAllTeacherLogsModal && (
-        <AllTeacherLogsModal
+        <Modal
           onClose={() => setShowAllTeacherLogsModal(false)}
           formatDate={formatDate}
         />
