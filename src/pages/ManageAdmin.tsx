@@ -2192,8 +2192,6 @@ const AllAdminLogsModal = ({ onClose, formatDate }: AllAdminLogsModalProps) => {
               className="bg-background-900/60 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500/50 border border-background-700/50 focus:border-primary-500/50 transition-all duration-200 text-sm"
             >
               <option value="all">All Actions ({actionCounts.all})</option>
-              <option value="login">Login ({actionCounts.login})</option>
-              <option value="logout">Logout ({actionCounts.logout})</option>
               <option value="admin_created">Created ({actionCounts.admin_created})</option>
               <option value="admin_edited">Edited ({actionCounts.admin_edited})</option>
               <option value="password_reset">Password Reset ({actionCounts.password_reset})</option>
