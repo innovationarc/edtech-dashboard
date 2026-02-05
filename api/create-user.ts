@@ -1,257 +1,557 @@
-// api/create-user.ts (or create-user.js)
-// Backend API endpoint for creating users with all 8 roles
-// Uses Firebase Admin SDK to create users WITHOUT affecting client sessions
+// api/create-user.ts
+// Universal user creation endpoint for ALL roles
+// Supports: Admin, Student, Teacher, Manager, Student Manager, Course Manager, Parent, Coordinator
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import admin from 'firebase-admin';
 
-import { Request, Response } from 'express';
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin SDK (if not already initialized)
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-    // Or use service account:
-    // credential: admin.credential.cert(serviceAccount),
-  });
+interface CreateUserRequest {
+  // Required fields
+  role: 'admin' | 'student' | 'teacher' | 'manager' | 'student_manager' | 'course_manager' | 'parent' | 'coordinator';
+  surname: string;
+  phoneNumber: string;
+  password: string;
+  
+  // Optional fields
+  fullName?: string;
+  email?: string; // Custom email (optional, will be auto-generated if not provided)
+  dob?: string;
+  gender?: 'male' | 'female' | 'other';
+  bloodGroup?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
+  religion?: string;
+  address?: string;
+  birthCertificateNumber?: string;
+  nid?: string;
+  status?: 'active' | 'inactive' | 'pending';
+  profilePictureUrl?: string;
+  
+  // Metadata
+  createdBy?: string; // UID of creator
+  createdByUserId?: string; // User ID of creator
+  createdByRole?: string; // Role of creator
+  
+  // API authentication
+  apiKey?: string;
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
+interface CreateUserResponse {
+  success: boolean;
+  userId?: string;
+  uid?: string;
+  email?: string;
+  message?: string;
+  error?: string;
+}
 
-// Role prefixes for user ID generation
-const ROLE_PREFIXES: { [key: string]: string } = {
-  'admin': 'AD',
-  'manager': 'MG',
+// Role prefix mapping (must match generate-id.ts)
+const ROLE_PREFIXES: Record<string, string> = {
+  admin: 'AD',
+  student: 'ST',
+  coordinator: 'CR',
+  parent: 'PR',
+  teacher: 'TC',
+  'course-manager': 'CM',
   'course_manager': 'CM',
+  'student-manager': 'SM',
   'student_manager': 'SM',
-  'coordinator': 'CO',
-  'teacher': 'TC',
-  'parent': 'PA',
-  'student': 'ST'
+  manager: 'MG'
 };
 
-// Valid roles
-const VALID_ROLES = [
-  'admin',
-  'manager',
-  'course_manager',
-  'student_manager',
-  'coordinator',
-  'teacher',
-  'parent',
-  'student'
-];
+// Role display names
+const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  admin: 'Admin',
+  student: 'Student',
+  coordinator: 'Coordinator',
+  parent: 'Parent',
+  teacher: 'Teacher',
+  course_manager: 'Course Manager',
+  student_manager: 'Student Manager',
+  manager: 'Manager'
+};
 
-/**
- * API Handler for creating users
- * POST /api/create-user
- * 
- * Request Body:
- * {
- *   email: string (Firebase auth email - e.g., AD-2501-00001@admin.local)
- *   password: string (user password)
- *   role: string (one of 8 roles)
- *   userData: object (user profile data)
- *   apiKey?: string (optional master API key for authentication)
- * }
- * 
- * Response:
- * {
- *   success: boolean
- *   uid: string (Firebase auth UID)
- *   message: string
- *   error?: string
- * }
- */
-export default async function handler(req: Request, res: Response) {
-  // Only allow POST requests
+// Initialize Firebase Admin SDK
+function initializeFirebaseAdmin() {
+  if (admin.apps.length > 0) {
+    return;
+  }
+
+  try {
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+    
+    if (serviceAccountJson) {
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      console.log('✅ Firebase Admin initialized');
+      return;
+    }
+
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (!projectId || !clientEmail || !privateKey) {
+      throw new Error('Missing Firebase credentials');
+    }
+
+    privateKey = privateKey.replace(/\\n/g, '\n').replace(/^["']|["']$/g, '');
+
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+
+    console.log('✅ Firebase Admin initialized');
+  } catch (error: any) {
+    console.error('❌ Firebase Admin initialization error:', error.message);
+    throw error;
+  }
+}
+
+// Normalize role to match our system (handle hyphens and underscores)
+function normalizeRole(role: string): string {
+  const normalized = role.toLowerCase().replace(/-/g, '_');
+  
+  // Validate it's a valid role
+  const validRoles = ['admin', 'student', 'teacher', 'manager', 'student_manager', 'course_manager', 'parent', 'coordinator'];
+  
+  if (!validRoles.includes(normalized)) {
+    throw new Error(`Invalid role: ${role}. Valid roles are: ${validRoles.join(', ')}`);
+  }
+  
+  return normalized;
+}
+
+// Normalize phone number to 13-digit format: 8801XXXXXXXXX
+function normalizePhoneNumber(phoneNumber: string): string {
+  if (!phoneNumber || phoneNumber.trim() === '') {
+    throw new Error('Phone number is required');
+  }
+
+  // Remove all non-digit characters
+  let cleaned = phoneNumber.replace(/\D/g, '');
+  
+  // If already 13 digits starting with 880, it's already normalized
+  if (cleaned.length === 13 && cleaned.startsWith('880')) {
+    return cleaned;
+  }
+  
+  // Remove 880 prefix if present (to reprocess)
+  if (cleaned.startsWith('880')) {
+    cleaned = cleaned.substring(3);
+  } 
+  // Remove 88 prefix if present
+  else if (cleaned.startsWith('88')) {
+    cleaned = cleaned.substring(2);
+  }
+  
+  // Case 1: 11-digit number starting with 0 (01XXXXXXXXX)
+  if (cleaned.length === 11 && cleaned.startsWith('0')) {
+    return `880${cleaned.substring(1)}`;
+  }
+  
+  // Case 2: 10-digit number starting with 1 (1XXXXXXXXX)
+  if (cleaned.length === 10 && cleaned.startsWith('1')) {
+    return `880${cleaned}`;
+  }
+  
+  // If we have 10 digits starting with 0, remove it
+  if (cleaned.length === 10 && cleaned.startsWith('0')) {
+    cleaned = cleaned.substring(1);
+  }
+  
+  // After processing, should have 10 digits starting with 1 or 9 digits
+  if (cleaned.length === 10 && cleaned.startsWith('1')) {
+    return `880${cleaned}`;
+  }
+  
+  if (cleaned.length === 9) {
+    return `8801${cleaned}`;
+  }
+  
+  throw new Error('Invalid phone number format. Please enter a valid Bangladesh phone number.');
+}
+
+// Validate password strength
+function validatePasswordStrength(password: string): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  if (password.length < 6) {
+    errors.push('Password must be at least 6 characters long');
+  }
+  
+  // For stronger passwords (recommended but not enforced for admins)
+  if (password.length < 8) {
+    errors.push('Password should be at least 8 characters for better security');
+  }
+  
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password should include at least one uppercase letter');
+  }
+  
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password should include at least one lowercase letter');
+  }
+  
+  if (!/[0-9]/.test(password)) {
+    errors.push('Password should include at least one number');
+  }
+  
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    errors.push('Password should include at least one special character');
+  }
+  
+  // Minimum requirement: at least 6 characters
+  const isValid = password.length >= 6;
+  
+  return { isValid, errors };
+}
+
+// Generate User ID by calling generate-id API
+async function generateUserId(role: string, apiKey?: string): Promise<string> {
+  try {
+    const BACKEND_URL = process.env.BACKEND_URL || 
+                       process.env.FRONTEND_URL || 
+                       'https://edtech-dashboard-alpha.vercel.app';
+    
+    const requestBody: any = {
+      role: role
+    };
+    
+    if (apiKey) {
+      requestBody.apiKey = apiKey;
+    }
+    
+    const response = await fetch(`${BACKEND_URL}/api/generate-id`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to generate user ID: ${errorText}`);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success || !result.userId) {
+      throw new Error('Failed to generate user ID');
+    }
+    
+    return result.userId;
+  } catch (error: any) {
+    console.error('❌ Error generating user ID:', error);
+    throw new Error('Failed to generate unique user ID. Please try again.');
+  }
+}
+
+// Check if phone number already exists
+async function phoneNumberExists(db: admin.firestore.Firestore, phoneNumber: string): Promise<boolean> {
+  try {
+    const query = await db.collection('users')
+      .where('phoneNumber', '==', phoneNumber)
+      .limit(1)
+      .get();
+    
+    return !query.empty;
+  } catch (error) {
+    console.error('Error checking phone number existence:', error);
+    return false;
+  }
+}
+
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse<CreateUserResponse>
+) {
+  // Set CORS headers
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    process.env.BACKEND_URL || 'https://edtech-dashboard-alpha.vercel.app',
+    'https://edtech-dashboard-alpha.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5174'
+  ];
+
+  const origin = req.headers.origin || '';
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, X-API-Key, Authorization'
+  );
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({
       success: false,
-      error: 'Method not allowed. Use POST.'
+      error: 'Method not allowed'
     });
   }
 
   try {
-    console.log('📡 Received create-user request');
-    
-    // Extract data from request body
-    const {
-      email,
-      password,
-      role,
-      userData,
-      apiKey
-    } = req.body;
+    console.log('🆕 Create user request received');
 
-    // Validate API key if provided
-    const MASTER_API_KEY = process.env.VITE_SMS_MASTER_KEY || process.env.MASTER_API_KEY;
+    // Initialize Firebase Admin
+    try {
+      initializeFirebaseAdmin();
+    } catch (initError: any) {
+      console.error('🔥 Firebase initialization failed:', initError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Firebase Admin configuration error',
+      });
+    }
+
+    const {
+      role,
+      surname,
+      phoneNumber,
+      password,
+      fullName,
+      email: customEmail,
+      dob,
+      gender,
+      bloodGroup,
+      religion,
+      address,
+      birthCertificateNumber,
+      nid,
+      status,
+      profilePictureUrl,
+      createdBy,
+      createdByUserId,
+      createdByRole,
+      apiKey
+    } = req.body as CreateUserRequest;
+
+    // Validate API Key (optional but recommended)
+    const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
     if (MASTER_API_KEY && apiKey !== MASTER_API_KEY) {
-      console.error('❌ Invalid API key');
+      console.error('❌ Unauthorized request - invalid API key');
       return res.status(401).json({
         success: false,
-        error: 'Unauthorized: Invalid API key'
+        error: 'Unauthorized request',
       });
     }
 
     // Validate required fields
-    if (!email || !password || !role || !userData) {
-      console.error('❌ Missing required fields');
+    if (!role) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: email, password, role, userData'
+        error: 'Role is required'
       });
     }
 
-    // Validate role
-    if (!VALID_ROLES.includes(role)) {
-      console.error('❌ Invalid role:', role);
+    if (!surname || surname.trim() === '') {
       return res.status(400).json({
         success: false,
-        error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`
+        error: 'Surname is required'
       });
     }
 
-    // Validate password strength
-    if (password.length < 8) {
-      console.error('❌ Weak password');
+    if (!phoneNumber) {
       return res.status(400).json({
         success: false,
-        error: 'Password must be at least 8 characters long'
+        error: 'Phone number is required'
       });
     }
 
-    console.log(`🔐 Creating ${role} user with email: ${email}`);
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password is required'
+      });
+    }
 
-    // CRITICAL: Create user with Firebase Admin SDK
-    // This does NOT affect any client sessions!
-    let userRecord;
+    // Normalize role
+    let normalizedRole: string;
     try {
-      userRecord = await auth.createUser({
-        email: email,
+      normalizedRole = normalizeRole(role);
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    console.log(`📋 Creating ${normalizedRole} account for: ${surname}`);
+
+    // Normalize phone number
+    let normalizedPhone: string;
+    try {
+      normalizedPhone = normalizePhoneNumber(phoneNumber);
+    } catch (error: any) {
+      return res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    // Validate password
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        error: passwordValidation.errors[0] || 'Password does not meet requirements'
+      });
+    }
+
+    const db = admin.firestore();
+
+    // Check if phone number already exists
+    const phoneExists = await phoneNumberExists(db, normalizedPhone);
+    if (phoneExists) {
+      return res.status(400).json({
+        success: false,
+        error: 'An account with this phone number already exists'
+      });
+    }
+
+    // Generate User ID using generate-id API
+    console.log('🔢 Generating user ID...');
+    let userId: string;
+    try {
+      userId = await generateUserId(normalizedRole, apiKey);
+      console.log(`✅ Generated user ID: ${userId}`);
+    } catch (error: any) {
+      console.error('❌ Failed to generate user ID:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to generate unique user ID. Please try again.'
+      });
+    }
+
+    // Generate email in format: userid@role.local
+    // Example: ST-2601-00012@student.local, AD-2601-29293@admin.local
+    const roleForEmail = normalizedRole.replace(/_/g, '-'); // Convert underscores to hyphens for email
+    const generatedEmail = customEmail || `${userId.toLowerCase()}@${roleForEmail}.local`;
+
+    console.log('📧 Email:', generatedEmail);
+
+    // Create Firebase Auth user
+    console.log('🔐 Creating Firebase Auth user...');
+    let authUser: admin.auth.UserRecord;
+    try {
+      authUser = await admin.auth().createUser({
+        email: generatedEmail,
         password: password,
         emailVerified: false,
         disabled: false
       });
-      console.log('✅ Firebase Auth user created with UID:', userRecord.uid);
+      console.log(`✅ Firebase Auth user created with UID: ${authUser.uid}`);
     } catch (authError: any) {
-      console.error('❌ Firebase Auth error:', authError);
+      console.error('❌ Firebase Auth creation error:', authError);
       
-      // Handle specific Firebase Auth errors
+      // Handle specific error cases
       if (authError.code === 'auth/email-already-exists') {
-        return res.status(409).json({
-          success: false,
-          error: 'Email already exists. Please use a different email.'
-        });
-      } else if (authError.code === 'auth/invalid-email') {
         return res.status(400).json({
           success: false,
-          error: 'Invalid email format.'
-        });
-      } else if (authError.code === 'auth/weak-password') {
-        return res.status(400).json({
-          success: false,
-          error: 'Password is too weak.'
+          error: 'An account with this email already exists'
         });
       }
       
-      throw authError;
+      if (authError.code === 'auth/invalid-email') {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid email format'
+        });
+      }
+      
+      if (authError.code === 'auth/weak-password') {
+        return res.status(400).json({
+          success: false,
+          error: 'Password is too weak'
+        });
+      }
+      
+      return res.status(500).json({
+        success: false,
+        error: `Failed to create authentication account: ${authError.message}`
+      });
     }
 
-    // Prepare Firestore user data
-    const firestoreData = {
-      uid: userRecord.uid,
-      role: role,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      deviceId: '',
-      ...userData
-    };
-
-    // Ensure required fields based on role
-    switch (role) {
-      case 'admin':
-      case 'manager':
-      case 'course_manager':
-      case 'student_manager':
-      case 'coordinator':
-      case 'teacher':
-        // Professional accounts - ensure required fields
-        if (!firestoreData.userId) {
-          throw new Error('userId is required for this role');
-        }
-        if (!firestoreData.surname) {
-          throw new Error('surname is required for this role');
-        }
-        if (!firestoreData.phoneNumber) {
-          throw new Error('phoneNumber is required for this role');
-        }
-        break;
-      
-      case 'student':
-        // Student accounts - ensure student-specific fields
-        if (!firestoreData.userId) {
-          throw new Error('userId is required for students');
-        }
-        if (!firestoreData.surname) {
-          throw new Error('surname is required for students');
-        }
-        if (!firestoreData.phoneNumber) {
-          throw new Error('phoneNumber is required for students');
-        }
-        break;
-      
-      case 'parent':
-        // Parent accounts - ensure parent-specific fields
-        if (!firestoreData.userId) {
-          throw new Error('userId is required for parents');
-        }
-        if (!firestoreData.surname) {
-          throw new Error('surname is required for parents');
-        }
-        if (!firestoreData.phoneNumber) {
-          throw new Error('phoneNumber is required for parents');
-        }
-        break;
-    }
-
-    // Save user data to Firestore
+    // Create Firestore user document
+    console.log('📝 Creating Firestore user document...');
     try {
-      await db.collection('users').doc(userRecord.uid).set(firestoreData);
-      console.log('✅ User data saved to Firestore');
+      const userDoc = {
+        userId: userId,
+        surname: surname.trim(),
+        fullName: fullName?.trim() || surname.trim(),
+        name: fullName?.trim() || surname.trim(), // For backward compatibility
+        email: generatedEmail,
+        phoneNumber: normalizedPhone,
+        role: normalizedRole,
+        status: status || 'active',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdBy: createdBy || 'system',
+        createdByUserId: createdByUserId || 'system',
+        createdByRole: createdByRole || 'system',
+        // Optional fields
+        ...(dob && { dob }),
+        ...(gender && { gender }),
+        ...(bloodGroup && { bloodGroup }),
+        ...(religion && { religion }),
+        ...(address && { address }),
+        ...(birthCertificateNumber && { birthCertificateNumber }),
+        ...(nid && { nid }),
+        ...(profilePictureUrl && { profilePictureUrl })
+      };
+
+      await db.collection('users').doc(authUser.uid).set(userDoc);
+      console.log('✅ Firestore user document created');
     } catch (firestoreError: any) {
-      console.error('❌ Firestore error:', firestoreError);
+      console.error('❌ Firestore creation error:', firestoreError);
       
-      // Rollback: Delete the auth user if Firestore save fails
+      // Rollback: Delete the auth user we just created
       try {
-        await auth.deleteUser(userRecord.uid);
-        console.log('⚠️ Rolled back: Auth user deleted due to Firestore failure');
-      } catch (rollbackError) {
-        console.error('❌ Rollback failed:', rollbackError);
+        await admin.auth().deleteUser(authUser.uid);
+        console.log('🔄 Rolled back Firebase Auth user');
+      } catch (deleteError) {
+        console.error('❌ Failed to rollback auth user:', deleteError);
       }
       
-      throw new Error('Failed to save user data to database');
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to create user profile. Please try again.'
+      });
     }
 
-    // Success response
-    console.log(`🎉 ${role} user created successfully: ${userRecord.uid}`);
-    return res.status(200).json({
+    // Log successful creation
+    console.log(`✅ ${ROLE_DISPLAY_NAMES[normalizedRole]} account created successfully`);
+    console.log(`   User ID: ${userId}`);
+    console.log(`   UID: ${authUser.uid}`);
+    console.log(`   Phone: ${normalizedPhone}`);
+    console.log(`   Email: ${generatedEmail}`);
+
+    return res.status(201).json({
       success: true,
-      uid: userRecord.uid,
-      message: `${role} user created successfully`,
-      userId: userData.userId || null
+      userId: userId,
+      uid: authUser.uid,
+      email: generatedEmail,
+      message: `${ROLE_DISPLAY_NAMES[normalizedRole]} account created successfully`
     });
 
   } catch (error: any) {
-    console.error('❌ Error in create-user API:', error);
-    
-    // Return appropriate error response
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
+    console.error('🔥 Create user error:', error);
+
+    return res.status(500).json({
       success: false,
-      error: error.message || 'Failed to create user',
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: error.message || 'Internal server error',
     });
   }
 }
-
-// Export for serverless functions (Vercel, Netlify, etc.)
-export { handler };
