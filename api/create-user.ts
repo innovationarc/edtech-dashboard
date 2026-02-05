@@ -1,6 +1,10 @@
 // api/create-user.ts
 // Universal user creation endpoint for ALL roles
 // Supports: Admin, Student, Teacher, Manager, Student Manager, Course Manager, Parent, Coordinator
+// 
+// IMPORTANT: Only userId must be unique (enforced by generate-id.ts)
+// Multiple accounts CAN share the same phone number, email, or other fields
+// This allows one person to have multiple role accounts (e.g., parent + teacher)
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import admin from 'firebase-admin';
 
@@ -459,14 +463,10 @@ export default async function handler(
 
     const db = admin.firestore();
 
-    // Check if phone number already exists
-    const phoneExists = await phoneNumberExists(db, normalizedPhone);
-    if (phoneExists) {
-      return res.status(400).json({
-        success: false,
-        error: 'An account with this phone number already exists'
-      });
-    }
+    // NOTE: We do NOT check for duplicate phone numbers, emails, etc.
+    // Only userId must be unique (enforced by generate-id.ts)
+    // Multiple accounts can share the same phone number or email
+    console.log('ℹ️ Skipping duplicate phone/email checks - only userId must be unique');
 
     // Generate User ID using generate-id API (or use provided userId)
     console.log('🔢 Generating user ID...');
@@ -527,9 +527,12 @@ export default async function handler(
       
       // Handle specific error cases
       if (authError.code === 'auth/email-already-exists') {
-        return res.status(400).json({
+        // This should never happen since emails are userid@role.local and userId is unique
+        // If it does happen, there's a critical issue with ID generation
+        console.error('🚨 CRITICAL: Email conflict despite unique userId!', generatedEmail);
+        return res.status(500).json({
           success: false,
-          error: 'An account with this email already exists'
+          error: 'Critical error: Email conflict. Please contact system administrator.'
         });
       }
       
