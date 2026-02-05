@@ -290,7 +290,27 @@ Ed-tech Team`;
   
   await sendSMS(phoneNumber, message);
 };
+/**
+ * Send SMS notification for admin deletion
+ */
+const sendAdminDeleteSMS = async (
+  phoneNumber: string, 
+  adminId: string, 
+  deletedByUserId: string
+): Promise<void> => {
+  const message = `Sir,
+Your Ed-tech administrator account has been permanently deleted.
 
+Admin ID: ${adminId}
+Action performed by: ${deletedByUserId}
+
+If you were not aware of this action, please contact other administrators immediately.
+
+Regards,
+Ed-tech Team`;
+  
+  await sendSMS(phoneNumber, message);
+};
 /**
  * Retry fetch with exponential backoff
  */
@@ -1275,7 +1295,23 @@ export const adminService = {
       console.log('  - Firestore:', deleteResult.details.firestoreDeleted ? 'DELETED' : 'FAILED');
       console.log('  - Profile Picture:', deleteResult.details.profilePicDeleted ? 'DELETED' : 'SKIPPED/FAILED');
       console.log('  - Firebase Auth:', deleteResult.details.authDeleted ? 'DELETED' : 'SKIPPED/FAILED');
-      
+      // Send SMS notification to deleted admin
+      if (adminData?.phoneNumber && deletedByAdmin) {
+        try {
+          console.log('📱 Sending deletion SMS notification...');
+          await sendAdminDeleteSMS(
+            adminData.phoneNumber,
+            adminData.userId || 'N/A',
+            deletedByAdmin.userId || 'N/A'
+          );
+          console.log('✅ Admin deletion SMS sent successfully');
+        } catch (smsError) {
+          console.warn('⚠️ Failed to send deletion SMS:', smsError);
+          // Don't throw error - deletion was successful, SMS is just notification
+        }
+      } else {
+        console.warn('⚠️ Skipping deletion SMS - missing phone number or deletedByAdmin info');
+      }
       // ENHANCED: Log admin deletion with COMPREHENSIVE details in security logs
       if (deletedByAdmin && adminData) {
         try {
