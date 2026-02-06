@@ -74,7 +74,12 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
       }, 2000);
     } catch (error: any) {
       console.error('Error changing password:', error);
-      setError(error.message || 'Failed to change password. Please verify your current password and try again.');
+      // Simplify error message for invalid credentials
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.message?.toLowerCase().includes('credential')) {
+        setError('Wrong Current Password');
+      } else {
+        setError('Wrong Current Password');
+      }
     } finally {
       setLoading(false);
     }
@@ -83,25 +88,25 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   // Success State
   if (success) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-3xl w-full max-w-md p-8 relative shadow-2xl animate-fadeIn">
+      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl w-full max-w-md p-8 relative shadow-2xl animate-fadeIn">
           <div className="text-center">
             <div className="flex justify-center mb-6">
-              <div className="bg-green-100 rounded-full p-4 shadow-lg animate-scaleIn">
-                <CheckCircle size={64} className="text-green-600" />
+              <div className="bg-emerald-950/50 border border-emerald-800/30 rounded-full p-4 shadow-lg animate-scaleIn">
+                <CheckCircle size={64} className="text-emerald-400" />
               </div>
             </div>
             
-            <h2 className="text-4xl font-bold text-gray-900 mb-4" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <h2 className="text-4xl font-bold text-slate-100 mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
               Password Changed!
             </h2>
             
-            <p className="text-gray-600 text-lg mb-6" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <p className="text-slate-400 text-lg mb-6" style={{ fontFamily: 'Inter, sans-serif' }}>
               Your password has been successfully updated.
             </p>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-sm text-blue-800 font-medium" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <div className="bg-blue-950/50 border border-blue-800/30 rounded-xl p-4">
+              <p className="text-sm text-blue-300 font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Please use your new password for future logins.
               </p>
             </div>
@@ -138,30 +143,30 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white rounded-t-3xl px-8 pt-8 pb-4 border-b-2 border-gray-200 z-10">
+        <div className="sticky top-0 bg-slate-900 rounded-t-2xl px-8 pt-8 pb-4 border-b border-slate-700/30 z-10">
           <button
             onClick={onClose}
             disabled={loading}
-            className="absolute top-6 right-6 p-2 hover:bg-gray-100 disabled:hover:bg-transparent disabled:opacity-50 rounded-full transition-colors"
+            className="absolute top-6 right-6 p-2 hover:bg-slate-800 disabled:hover:bg-transparent disabled:opacity-50 rounded-full transition-colors"
             aria-label="Close"
           >
-            <X size={24} className="text-gray-600" />
+            <X size={24} className="text-slate-400 hover:text-slate-300" />
           </button>
           
           <div className="flex items-center gap-3 mb-3">
-            <div className="h-12 w-12 rounded-xl bg-indigo-100 flex items-center justify-center shadow-md">
-              <Lock size={24} className="text-indigo-600" />
+            <div className="h-12 w-12 rounded-xl bg-cyan-600/10 border border-cyan-500/30 flex items-center justify-center shadow-md">
+              <Lock size={24} className="text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+              <h2 className="text-3xl font-bold text-slate-100" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Change Password
               </h2>
             </div>
           </div>
-          <p className="text-gray-600" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <p className="text-slate-400" style={{ fontFamily: 'Inter, sans-serif' }}>
             Update your account password for enhanced security
           </p>
         </div>
@@ -170,23 +175,23 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
         <form onSubmit={handleSubmit} className="px-8 py-6 space-y-6">
           {/* Error Message */}
           {error && (
-            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-red-800 text-sm font-semibold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <div className="bg-red-950/50 border border-red-800/30 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-red-300 text-sm font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
                 {error}
               </p>
             </div>
           )}
 
           {/* Password Requirements Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="bg-blue-950/50 border border-blue-800/30 rounded-xl p-4">
             <div className="flex items-start gap-3">
-              <Shield size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <Shield size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-bold text-blue-900 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                <p className="text-sm font-bold text-blue-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                   Password Requirements:
                 </p>
-                <ul className="text-xs text-blue-800 space-y-1" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                <ul className="text-xs text-blue-400 space-y-1" style={{ fontFamily: 'Inter, sans-serif' }}>
                   <li>• At least 8 characters long</li>
                   <li>• Contains uppercase and lowercase letters</li>
                   <li>• Contains at least one number</li>
@@ -197,8 +202,8 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
 
           {/* Current Password */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-              Current Password <span className="text-red-500">*</span>
+            <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Current Password <span className="text-red-400">*</span>
             </label>
             <div className="relative">
               <input
@@ -208,17 +213,17 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setCurrentPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-12 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Enter current password"
                 disabled={loading}
                 required
               />
-              <Lock size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+              <Lock size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
                 disabled={loading}
                 tabIndex={-1}
               >
@@ -229,8 +234,8 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
 
           {/* New Password */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-              New Password <span className="text-red-500">*</span>
+            <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+              New Password <span className="text-red-400">*</span>
             </label>
             <div className="relative">
               <input
@@ -240,17 +245,17 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setNewPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-12 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Enter new password"
                 disabled={loading}
                 required
               />
-              <Key size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+              <Key size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
                 disabled={loading}
                 tabIndex={-1}
               >
@@ -261,8 +266,8 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
 
           {/* Confirm Password */}
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-              Confirm New Password <span className="text-red-500">*</span>
+            <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Confirm New Password <span className="text-red-400">*</span>
             </label>
             <div className="relative">
               <input
@@ -272,17 +277,17 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setConfirmPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-12 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Confirm new password"
                 disabled={loading}
                 required
               />
-              <Key size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+              <Key size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600 transition-colors"
+                className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
                 disabled={loading}
                 tabIndex={-1}
               >
@@ -290,12 +295,12 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
               </button>
             </div>
             {confirmPassword && newPassword && confirmPassword !== newPassword && (
-              <p className="text-xs text-red-600 mt-1 font-medium" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+              <p className="text-xs text-red-400 mt-1 font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Passwords do not match
               </p>
             )}
             {confirmPassword && newPassword && confirmPassword === newPassword && (
-              <p className="text-xs text-green-600 mt-1 font-medium flex items-center gap-1" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+              <p className="text-xs text-emerald-400 mt-1 font-medium flex items-center gap-1" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <CheckCircle size={12} />
                 Passwords match
               </p>
@@ -303,21 +308,21 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t-2 border-gray-200">
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-slate-700/30">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-6 py-3 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 text-gray-900 rounded-xl transition-all duration-200 border-2 border-gray-300 font-bold"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+              className="px-6 py-3 bg-slate-800/60 hover:bg-slate-800 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 rounded-lg transition-all duration-200 border border-slate-700/50 font-medium"
+              style={{ fontFamily: 'Inter, sans-serif' }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
-              className="px-6 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-700 hover:via-purple-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-bold shadow-lg hover:shadow-xl"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+              className="px-6 py-3 bg-cyan-600/10 hover:bg-cyan-600/20 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-cyan-400 border border-cyan-500/30 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 font-medium"
+              style={{ fontFamily: 'Inter, sans-serif' }}
             >
               {loading && <Loader size={18} className="animate-spin" />}
               <Lock size={18} />
