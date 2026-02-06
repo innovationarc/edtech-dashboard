@@ -210,14 +210,7 @@ const Profile1 = () => {
                       {user.userId}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 mb-1 uppercase tracking-wide" style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '0.05em' }}>
-                      Username
-                    </p>
-                    <p className="text-sm text-slate-200 font-mono font-medium break-all" style={{ fontFamily: 'IBM Plex Mono, monospace' }}>
-                      {user.username}
-                    </p>
-                  </div>
+                  
                 </div>
               </div>
             </div>
