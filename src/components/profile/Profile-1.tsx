@@ -1,4 +1,4 @@
-// src/pages/Profile-1.tsx - Elite Admin Profile
+// src/components/profile/Profile-1.tsx
 import { useState, useEffect } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { 
