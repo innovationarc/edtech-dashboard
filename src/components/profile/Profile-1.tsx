@@ -459,6 +459,5 @@ const Profile1 = () => {
       </div>
     </div>
   );
-};
 
 export default Profile1;
