@@ -458,6 +458,7 @@ const Profile1 = () => {
         )}
       </div>
     </div>
+    </div>
   );
-
+      };
 export default Profile1;
