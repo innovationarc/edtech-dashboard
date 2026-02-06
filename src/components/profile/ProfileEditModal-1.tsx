@@ -163,20 +163,20 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
   // Success State
   if (success) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-3xl w-full max-w-md p-8 relative shadow-2xl animate-fadeIn">
+      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl w-full max-w-md p-8 relative shadow-2xl animate-fadeIn">
           <div className="text-center">
             <div className="flex justify-center mb-6">
-              <div className="bg-green-100 rounded-full p-4 shadow-lg animate-scaleIn">
-                <CheckCircle size={64} className="text-green-600" />
+              <div className="bg-emerald-950/50 border border-emerald-800/30 rounded-full p-4 shadow-lg animate-scaleIn">
+                <CheckCircle size={64} className="text-emerald-400" />
               </div>
             </div>
             
-            <h2 className="text-4xl font-bold text-gray-900 mb-4" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <h2 className="text-4xl font-bold text-slate-100 mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
               Profile Updated!
             </h2>
             
-            <p className="text-gray-600 text-lg mb-6" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+            <p className="text-slate-400 text-lg mb-6" style={{ fontFamily: 'Inter, sans-serif' }}>
               Your profile has been successfully updated.
             </p>
           </div>
@@ -212,30 +212,30 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl w-full max-w-4xl relative shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl w-full max-w-4xl relative shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-white rounded-t-3xl px-8 pt-8 pb-4 border-b-2 border-gray-200 z-10">
+        <div className="sticky top-0 bg-slate-900 rounded-t-2xl px-8 pt-8 pb-4 border-b border-slate-700/30 z-10">
           <button
             onClick={onClose}
             disabled={loading}
-            className="absolute top-6 right-6 p-2 hover:bg-gray-100 disabled:hover:bg-transparent disabled:opacity-50 rounded-full transition-colors"
+            className="absolute top-6 right-6 p-2 hover:bg-slate-800 disabled:hover:bg-transparent disabled:opacity-50 rounded-full transition-colors"
             aria-label="Close"
           >
-            <X size={24} className="text-gray-600" />
+            <X size={24} className="text-slate-400 hover:text-slate-300" />
           </button>
           
           <div className="flex items-center gap-3 mb-3">
-            <div className="h-12 w-12 rounded-xl bg-indigo-100 flex items-center justify-center shadow-md">
-              <User size={24} className="text-indigo-600" />
+            <div className="h-12 w-12 rounded-xl bg-cyan-600/10 border border-cyan-500/30 flex items-center justify-center shadow-md">
+              <User size={24} className="text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+              <h2 className="text-3xl font-bold text-slate-100" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Edit Profile
               </h2>
             </div>
           </div>
-          <p className="text-gray-600" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <p className="text-slate-400" style={{ fontFamily: 'Inter, sans-serif' }}>
             Update your personal information and profile details
           </p>
         </div>
@@ -245,9 +245,9 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-3">
-                <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-red-800 text-sm font-semibold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+              <div className="bg-red-950/50 border border-red-800/30 rounded-xl p-4 flex items-start gap-3">
+                <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-red-300 text-sm font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
                   {error}
                 </p>
               </div>
@@ -255,16 +255,16 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
 
             {/* Upload Progress */}
             {uploadProgress > 0 && uploadProgress < 100 && (
-              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+              <div className="bg-blue-950/50 border border-blue-800/30 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-2">
-                  <Loader size={20} className="text-blue-600 animate-spin" />
-                  <p className="text-blue-800 text-sm font-semibold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <Loader size={20} className="text-blue-400 animate-spin" />
+                  <p className="text-blue-300 text-sm font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Uploading profile picture... {uploadProgress}%
                   </p>
                 </div>
-                <div className="w-full bg-blue-200 rounded-full h-2">
+                <div className="w-full bg-slate-800 rounded-full h-2">
                   <div 
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
@@ -272,16 +272,16 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
             )}
 
             {/* Profile Picture Section */}
-            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                  <Camera size={18} className="text-indigo-600" />
+            <div className="bg-slate-800/40 backdrop-blur-sm rounded-xl p-6 border border-slate-700/30">
+              <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="h-8 w-8 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                  <Camera size={18} className="text-slate-400" />
                 </div>
                 Profile Picture
               </h3>
               <div className="flex flex-col sm:flex-row items-center gap-6">
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-gray-300 shadow-md bg-gray-100">
+                  <div className="w-24 h-24 rounded-xl overflow-hidden border-2 border-slate-700/50 shadow-md bg-slate-800">
                     {profilePicturePreview ? (
                       <img
                         src={profilePicturePreview}
@@ -295,8 +295,8 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                        <User size={40} className="text-gray-500" />
+                      <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center">
+                        <User size={40} className="text-slate-400" />
                       </div>
                     )}
                   </div>
@@ -310,12 +310,12 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       className="hidden"
                       disabled={loading}
                     />
-                    <div className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded-xl transition-all duration-200 inline-flex items-center gap-2 font-bold shadow-md hover:shadow-lg">
+                    <div className="px-4 py-2 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/30 text-cyan-400 rounded-lg transition-all duration-200 inline-flex items-center gap-2 font-medium shadow-md">
                       <Camera size={18} />
                       <span>Choose New Picture</span>
                     </div>
                   </label>
-                  <p className="text-sm text-gray-500 mt-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <p className="text-sm text-slate-500 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Maximum file size: 5MB. Supported formats: JPG, PNG, GIF
                   </p>
                 </div>
@@ -323,37 +323,37 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
             </div>
 
             {/* Basic Information */}
-            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <User size={18} className="text-purple-600" />
+            <div className="bg-slate-800/40 backdrop-blur-sm rounded-xl p-6 border border-slate-700/30">
+              <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="h-8 w-8 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                  <User size={18} className="text-slate-400" />
                 </div>
                 Basic Information
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Surname */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                    Surname <span className="text-red-500">*</span>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                    Surname <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <input
                       type="text"
                       value={formData.surname}
                       onChange={(e) => handleInputChange('surname', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       placeholder="Enter surname"
                       required
                       disabled={loading}
                     />
-                    <User size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <User size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
                   </div>
                 </div>
 
                 {/* Full Name */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Full Name
                   </label>
                   <div className="relative">
@@ -361,18 +361,18 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       type="text"
                       value={formData.fullName}
                       onChange={(e) => handleInputChange('fullName', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       placeholder="Enter full name"
                       disabled={loading}
                     />
-                    <User size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <User size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
                   </div>
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Email Address
                   </label>
                   <div className="relative">
@@ -380,18 +380,18 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       type="email"
                       value={formData.email}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       placeholder="Enter email address"
                       disabled={loading}
                     />
-                    <Mail size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <Mail size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
                   </div>
                 </div>
 
                 {/* Phone Number */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Phone Number
                   </label>
                   <div className="relative">
@@ -399,29 +399,29 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       type="tel"
                       value={formData.phoneNumber}
                       onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       placeholder="Enter phone number"
                       disabled={loading}
                     />
-                    <Phone size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <Phone size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Personal Details */}
-            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-pink-100 flex items-center justify-center">
-                  <Users size={18} className="text-pink-600" />
+            <div className="bg-slate-800/40 backdrop-blur-sm rounded-xl p-6 border border-slate-700/30">
+              <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="h-8 w-8 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                  <Users size={18} className="text-slate-400" />
                 </div>
                 Personal Details
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Date of Birth */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Date of Birth
                   </label>
                   <div className="relative">
@@ -429,25 +429,25 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       type="date"
                       value={formData.dob}
                       onChange={(e) => handleInputChange('dob', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold cursor-pointer"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold cursor-pointer"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       disabled={loading}
                     />
-                    <Calendar size={18} className="absolute left-3.5 top-3.5 text-gray-400 pointer-events-none" />
+                    <Calendar size={18} className="absolute left-3.5 top-3.5 text-slate-500 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* Gender */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Gender
                   </label>
                   <div className="relative">
                     <select
                       value={formData.gender}
                       onChange={(e) => handleInputChange('gender', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold cursor-pointer"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold cursor-pointer"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       disabled={loading}
                     >
                       <option value="">Select gender</option>
@@ -455,21 +455,21 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       <option value="female">Female</option>
                       <option value="other">Other</option>
                     </select>
-                    <Users size={18} className="absolute left-3.5 top-3.5 text-gray-400 pointer-events-none" />
+                    <Users size={18} className="absolute left-3.5 top-3.5 text-slate-500 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* Blood Group */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Blood Group
                   </label>
                   <div className="relative">
                     <select
                       value={formData.bloodGroup}
                       onChange={(e) => handleInputChange('bloodGroup', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold cursor-pointer"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold cursor-pointer"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       disabled={loading}
                     >
                       <option value="">Select blood group</option>
@@ -482,13 +482,13 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       <option value="O+">O+</option>
                       <option value="O-">O-</option>
                     </select>
-                    <Droplet size={18} className="absolute left-3.5 top-3.5 text-gray-400 pointer-events-none" />
+                    <Droplet size={18} className="absolute left-3.5 top-3.5 text-slate-500 pointer-events-none" />
                   </div>
                 </div>
 
                 {/* Religion */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Religion
                   </label>
                   <div className="relative">
@@ -496,29 +496,29 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       type="text"
                       value={formData.religion}
                       onChange={(e) => handleInputChange('religion', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       placeholder="Enter religion"
                       disabled={loading}
                     />
-                    <Shield size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <Shield size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Additional Information */}
-            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center">
-                  <FileText size={18} className="text-green-600" />
+            <div className="bg-slate-800/40 backdrop-blur-sm rounded-xl p-6 border border-slate-700/30">
+              <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="h-8 w-8 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                  <FileText size={18} className="text-slate-400" />
                 </div>
                 Additional Information
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Birth Certificate Number */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Birth Certificate Number
                   </label>
                   <div className="relative">
@@ -526,18 +526,18 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       type="text"
                       value={formData.birthCertificateNumber}
                       onChange={(e) => handleInputChange('birthCertificateNumber', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       placeholder="Enter birth certificate number"
                       disabled={loading}
                     />
-                    <FileText size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <FileText size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
                   </div>
                 </div>
 
                 {/* NID */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                  <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                     National ID (NID)
                   </label>
                   <div className="relative">
@@ -545,22 +545,22 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       type="text"
                       value={formData.nid}
                       onChange={(e) => handleInputChange('nid', e.target.value)}
-                      className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 font-semibold"
-                      style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                      className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                      style={{ fontFamily: 'Inter, sans-serif' }}
                       placeholder="Enter NID number"
                       disabled={loading}
                     />
-                    <FileText size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <FileText size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Address */}
-            <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <MapPin size={18} className="text-blue-600" />
+            <div className="bg-slate-800/40 backdrop-blur-sm rounded-xl p-6 border border-slate-700/30">
+              <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <div className="h-8 w-8 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                  <MapPin size={18} className="text-slate-400" />
                 </div>
                 Address
               </h3>
@@ -568,32 +568,32 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                 <textarea
                   value={formData.address}
                   onChange={(e) => handleInputChange('address', e.target.value)}
-                  className="w-full bg-white text-gray-900 rounded-xl py-3 pl-11 pr-4 border-2 border-gray-300 focus:border-indigo-500 focus:outline-none transition-all duration-200 resize-none font-semibold"
-                  style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                  className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-4 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 resize-none font-semibold"
+                  style={{ fontFamily: 'Inter, sans-serif' }}
                   placeholder="Enter your complete address"
                   rows={3}
                   disabled={loading}
                 />
-                <MapPin size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+                <MapPin size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t-2 border-gray-200">
+            <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-slate-700/30">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={loading}
-                className="px-6 py-3 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 text-gray-900 rounded-xl transition-all duration-200 border-2 border-gray-300 font-bold"
-                style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                className="px-6 py-3 bg-slate-800/60 hover:bg-slate-800 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 rounded-lg transition-all duration-200 border border-slate-700/50 font-medium"
+                style={{ fontFamily: 'Inter, sans-serif' }}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || !formData.surname.trim()}
-                className="px-6 py-3 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-700 hover:via-purple-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-bold shadow-lg hover:shadow-xl"
-                style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
+                className="px-6 py-3 bg-cyan-600/10 hover:bg-cyan-600/20 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-cyan-400 border border-cyan-500/30 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 font-medium"
+                style={{ fontFamily: 'Inter, sans-serif' }}
               >
                 {loading && <Loader size={18} className="animate-spin" />}
                 <CheckCircle size={18} />
