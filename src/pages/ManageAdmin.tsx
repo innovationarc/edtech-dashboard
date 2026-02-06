@@ -4,7 +4,7 @@ import {
   Shield, Search, Loader, CheckCircle, XCircle, Clock, RefreshCw, 
   Info, Edit, AlertTriangle, X, User as UserIcon, Plus, Phone, Mail,
   Calendar, MapPin, FileText, CreditCard, Users, ArrowLeft, Upload, 
-  Image as ImageIcon, Key, History, Eye, EyeOff, ScrollText
+  Image as ImageIcon, Key, History, Eye, EyeOff, ScrollText, Briefcase, CalendarClock
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { adminService, Admin, SecurityLog } from '../services/adminService';
@@ -765,6 +765,8 @@ const AdminInfoModal = ({ admin, onClose, formatDate }: AdminInfoModalProps) => 
 // Continue from Part 1
     { label: 'Birth Certificate No.', value: admin.birthCertificateNumber || 'N/A' },
     { label: 'NID', value: admin.nid || 'N/A' },
+    { label: 'Designation', value: admin.designation || 'N/A' },
+    { label: 'Valid Till', value: admin.validTill === 'lifetime' ? 'Lifetime' : (admin.validTill || 'N/A') },
     { label: 'Status', value: admin.status || 'N/A' },
     { label: 'Created At', value: formatDate(admin.createdAt) },
     { label: 'Created By', value: admin.createdBy || 'N/A' },
@@ -848,6 +850,8 @@ const EditAdminModal = ({ admin, onClose, onSave }: EditAdminModalProps) => {
     address: admin.address || '',
     birthCertificateNumber: admin.birthCertificateNumber || '',
     nid: admin.nid || '',
+    designation: admin.designation || '',
+    validTill: admin.validTill || 'lifetime',
     status: admin.status || 'active' as 'active' | 'inactive' | 'pending',
     profilePictureUrl: admin.profilePictureUrl || ''
   });
@@ -1118,7 +1122,56 @@ const EditAdminModal = ({ admin, onClose, onSave }: EditAdminModalProps) => {
                 placeholder="Enter NID"
               />
             </div>
-
+            <div>
+  <label className="block text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+    <Briefcase size={14} />
+    Designation
+  </label>
+  <input
+    type="text"
+    value={formData.designation}
+    onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+    className="w-full bg-background-900/60 text-white rounded-lg py-2.5 px-4 border border-background-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all duration-200"
+    placeholder="Enter designation (e.g., Senior Admin)"
+  />
+</div>
+    <div className="md:col-span-2">
+  <label className="block text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+    <CalendarClock size={14} />
+    Valid Till
+  </label>
+  <div className="space-y-2">
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="radio"
+        name="validTillTypeEdit"
+        checked={formData.validTill === 'lifetime'}
+        onChange={() => setFormData({ ...formData, validTill: 'lifetime' })}
+        className="text-primary-500"
+      />
+      <span className="text-white">Lifetime (Never expires)</span>
+    </label>
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="radio"
+        name="validTillTypeEdit"
+        checked={formData.validTill !== 'lifetime'}
+        onChange={() => setFormData({ ...formData, validTill: '' })}
+        className="text-primary-500"
+      />
+      <span className="text-white">Specific Date</span>
+    </label>
+    {formData.validTill !== 'lifetime' && (
+      <input
+        type="date"
+        value={formData.validTill === 'lifetime' ? '' : formData.validTill}
+        onChange={(e) => setFormData({ ...formData, validTill: e.target.value })}
+        min={new Date().toISOString().split('T')[0]}
+        className="w-full bg-background-900/60 text-white rounded-lg py-2.5 px-4 border border-background-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all duration-200"
+      />
+    )}
+  </div>
+</div>        
             <div>
               <label className="block text-sm font-semibold text-gray-300 mb-2">Status</label>
               <select
@@ -1184,6 +1237,8 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdmin }: AddAdminModalProps)
     address: '',
     birthCertificateNumber: '',
     nid: '',
+    designation: '',
+    validTill: 'lifetime' as string | 'lifetime',
     profilePictureUrl: ''
   });
 
@@ -1255,24 +1310,24 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdmin }: AddAdminModalProps)
       // No email or phone uniqueness check — directly create admin
       // createAdmin signature: (phoneNumber, email, password, surname, fullName, dob, phone, bloodGroup, gender, religion, address, birthCertificateNumber, nid, createdByAdminId, createdByAdminUid, createdByAdminSurname, profilePictureUrl?)
       const newAdmin = await adminService.createAdmin(
-        formData.phoneNumber,          // phoneNumber (for SMS)
-        formData.email,                // email
-        formData.password,             // password
-        formData.surname,              // surname
-        formData.fullName,             // fullName
-        formData.dob,                  // dob
-        formData.phoneNumber,          // phone (stored in profile)
-        formData.bloodGroup,           // bloodGroup
-        formData.gender,               // gender
-        formData.religion,             // religion
-        formData.address,              // address
-        formData.birthCertificateNumber, // birthCertificateNumber
-        formData.nid,                  // nid
-        currentAdmin.userId || '',    // createdByAdminId
-        currentAdmin.uid,              // createdByAdminUid
-        currentAdmin.surname || '',    // createdByAdminSurname
-        formData.profilePictureUrl || undefined // profilePictureUrl
-      );
+  {
+    surname: formData.surname,
+    fullName: formData.fullName,
+    email: formData.email,
+    phoneNumber: formData.phoneNumber,
+    dob: formData.dob,
+    gender: formData.gender,
+    bloodGroup: formData.bloodGroup,
+    religion: formData.religion,
+    address: formData.address,
+    birthCertificateNumber: formData.birthCertificateNumber,
+    nid: formData.nid,
+    designation: formData.designation,
+    validTill: formData.validTill,
+    profilePictureUrl: formData.profilePictureUrl || undefined
+  } as Partial<Admin>,
+  currentAdmin
+);
 
       setGeneratedUserId(newAdmin.userId || '');
       setShowSuccessModal(true);
@@ -1637,6 +1692,71 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdmin }: AddAdminModalProps)
               </div>
             </div>
 
+        <div className="group">
+  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+    <Briefcase size={16} />
+    Designation
+  </label>
+  <div className="relative">
+    <input
+      type="text"
+      value={formData.designation}
+      onChange={(e) => setFormData(prev => ({ ...prev, designation: e.target.value }))}
+      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200"
+      placeholder="e.g., Senior Administrator"
+      disabled={loading}
+    />
+    <Briefcase size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+  </div>
+</div>
+
+            <div className="group md:col-span-2">
+  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
+    <CalendarClock size={16} />
+    Valid Till
+  </label>
+  <div className="space-y-3">
+    <label className="flex items-center gap-3 cursor-pointer group/radio">
+      <input
+        type="radio"
+        name="validTillType"
+        checked={formData.validTill === 'lifetime'}
+        onChange={() => setFormData(prev => ({ ...prev, validTill: 'lifetime' }))}
+        disabled={loading}
+        className="w-4 h-4 text-primary-500 border-gray-600 focus:ring-primary-500 focus:ring-2"
+      />
+      <span className="text-white font-medium group-hover/radio:text-primary-400 transition-colors">
+        Lifetime (Never expires)
+      </span>
+    </label>
+    <label className="flex items-center gap-3 cursor-pointer group/radio">
+      <input
+        type="radio"
+        name="validTillType"
+        checked={formData.validTill !== 'lifetime'}
+        onChange={() => setFormData(prev => ({ ...prev, validTill: '' }))}
+        disabled={loading}
+        className="w-4 h-4 text-primary-500 border-gray-600 focus:ring-primary-500 focus:ring-2"
+      />
+      <span className="text-white font-medium group-hover/radio:text-primary-400 transition-colors">
+        Specific Date
+      </span>
+    </label>
+    {formData.validTill !== 'lifetime' && (
+      <div className="relative ml-7">
+        <input
+          type="date"
+          value={formData.validTill === 'lifetime' ? '' : formData.validTill}
+          onChange={(e) => setFormData(prev => ({ ...prev, validTill: e.target.value }))}
+          min={new Date().toISOString().split('T')[0]}
+          disabled={loading}
+          className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200"
+        />
+        <Calendar size={18} className="absolute left-3.5 top-3.5 text-gray-400" />
+      </div>
+    )}
+  </div>
+</div>
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
