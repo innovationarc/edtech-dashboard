@@ -88,25 +88,25 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   // Success State
   if (success) {
     return (
-      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl w-full max-w-md p-8 relative shadow-2xl animate-fadeIn">
+      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4 md:p-6">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-xl sm:rounded-2xl w-full max-w-[280px] xs:max-w-xs sm:max-w-md p-4 xs:p-6 sm:p-8 relative shadow-2xl animate-fadeIn">
           <div className="text-center">
-            <div className="flex justify-center mb-6">
-              <div className="bg-emerald-950/50 border border-emerald-800/30 rounded-full p-4 shadow-lg animate-scaleIn">
-                <CheckCircle size={64} className="text-emerald-400" />
+            <div className="flex justify-center mb-4 sm:mb-6">
+              <div className="bg-emerald-950/50 border border-emerald-800/30 rounded-full p-3 xs:p-3.5 sm:p-4 shadow-lg animate-scaleIn">
+                <CheckCircle className="w-12 h-12 xs:w-14 xs:h-14 sm:w-16 sm:h-16 text-emerald-400" />
               </div>
             </div>
             
-            <h2 className="text-4xl font-bold text-slate-100 mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <h2 className="text-2xl xs:text-3xl sm:text-4xl font-bold text-slate-100 mb-3 sm:mb-4 leading-tight" style={{ fontFamily: 'Inter, sans-serif' }}>
               Password Changed!
             </h2>
             
-            <p className="text-slate-400 text-lg mb-6" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <p className="text-sm xs:text-base sm:text-lg text-slate-400 mb-4 sm:mb-6 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
               Your password has been successfully updated.
             </p>
 
-            <div className="bg-blue-950/50 border border-blue-800/30 rounded-xl p-4">
-              <p className="text-sm text-blue-300 font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div className="bg-blue-950/50 border border-blue-800/30 rounded-lg sm:rounded-xl p-3 xs:p-3.5 sm:p-4">
+              <p className="text-xs xs:text-sm text-blue-300 font-medium leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Please use your new password for future logins.
               </p>
             </div>
@@ -143,55 +143,55 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl w-full max-w-md relative shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-xl sm:rounded-2xl w-full max-w-[95vw] xs:max-w-[90vw] sm:max-w-md md:max-w-lg relative shadow-2xl max-h-[95vh] xs:max-h-[92vh] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
         {/* Header */}
-        <div className="sticky top-0 bg-slate-900 rounded-t-2xl px-8 pt-8 pb-4 border-b border-slate-700/30 z-10">
+        <div className="sticky top-0 bg-slate-900/95 backdrop-blur-sm rounded-t-xl sm:rounded-t-2xl px-3 xs:px-4 sm:px-6 md:px-8 pt-4 xs:pt-5 sm:pt-6 md:pt-8 pb-3 xs:pb-3.5 sm:pb-4 border-b border-slate-700/30 z-10">
           <button
             onClick={onClose}
             disabled={loading}
-            className="absolute top-6 right-6 p-2 hover:bg-slate-800 disabled:hover:bg-transparent disabled:opacity-50 rounded-full transition-colors"
+            className="absolute top-3 right-3 xs:top-4 xs:right-4 sm:top-6 sm:right-6 p-1.5 xs:p-2 hover:bg-slate-800 disabled:hover:bg-transparent disabled:opacity-50 rounded-full transition-colors"
             aria-label="Close"
           >
-            <X size={24} className="text-slate-400 hover:text-slate-300" />
+            <X className="w-5 h-5 xs:w-6 xs:h-6 text-slate-400 hover:text-slate-300" />
           </button>
           
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-12 w-12 rounded-xl bg-cyan-600/10 border border-cyan-500/30 flex items-center justify-center shadow-md">
-              <Lock size={24} className="text-cyan-400" />
+          <div className="flex items-center gap-2 xs:gap-2.5 sm:gap-3 mb-2 xs:mb-2.5 sm:mb-3 pr-10 xs:pr-12">
+            <div className="h-9 w-9 xs:h-10 xs:w-10 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-cyan-600/10 border border-cyan-500/30 flex items-center justify-center shadow-md flex-shrink-0">
+              <Lock className="w-4 h-4 xs:w-5 xs:h-5 sm:w-6 sm:h-6 text-cyan-400" />
             </div>
-            <div>
-              <h2 className="text-3xl font-bold text-slate-100" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl xs:text-2xl sm:text-3xl font-bold text-slate-100 truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Change Password
               </h2>
             </div>
           </div>
-          <p className="text-slate-400" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <p className="text-xs xs:text-sm sm:text-base text-slate-400 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
             Update your account password for enhanced security
           </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-8 py-6 space-y-6">
+        <form onSubmit={handleSubmit} className="px-3 xs:px-4 sm:px-6 md:px-8 py-3 xs:py-4 sm:py-5 md:py-6 space-y-3 xs:space-y-4 sm:space-y-5 md:space-y-6">
           {/* Error Message */}
           {error && (
-            <div className="bg-red-950/50 border border-red-800/30 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-              <p className="text-red-300 text-sm font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div className="bg-red-950/50 border border-red-800/30 rounded-lg sm:rounded-xl p-3 xs:p-3.5 sm:p-4 flex items-start gap-2 xs:gap-2.5 sm:gap-3">
+              <AlertCircle className="w-4 h-4 xs:w-5 xs:h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-red-300 text-xs xs:text-sm font-semibold leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                 {error}
               </p>
             </div>
           )}
 
           {/* Password Requirements Info */}
-          <div className="bg-blue-950/50 border border-blue-800/30 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <Shield size={18} className="text-blue-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-bold text-blue-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <div className="bg-blue-950/50 border border-blue-800/30 rounded-lg sm:rounded-xl p-3 xs:p-3.5 sm:p-4">
+            <div className="flex items-start gap-2 xs:gap-2.5 sm:gap-3">
+              <Shield className="w-4 h-4 xs:w-[18px] xs:h-[18px] text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs xs:text-sm font-bold text-blue-300 mb-1.5 xs:mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                   Password Requirements:
                 </p>
-                <ul className="text-xs text-blue-400 space-y-1" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <ul className="text-[10px] xs:text-xs text-blue-400 space-y-0.5 xs:space-y-1 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                   <li>• At least 8 characters long</li>
                   <li>• Contains uppercase and lowercase letters</li>
                   <li>• Contains at least one number</li>
@@ -201,8 +201,8 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
           </div>
 
           {/* Current Password */}
-          <div>
-            <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <div className="min-w-0">
+            <label className="block text-xs xs:text-sm font-bold text-slate-300 mb-1.5 xs:mb-2 truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
               Current Password <span className="text-red-400">*</span>
             </label>
             <div className="relative">
@@ -213,28 +213,28 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setCurrentPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-9 xs:pr-10 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
                 style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Enter current password"
                 disabled={loading}
                 required
               />
-              <Lock size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
+              <Lock className="absolute left-2.5 xs:left-3 sm:left-3.5 top-2.5 xs:top-3 sm:top-3.5 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500" />
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
+                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-2.5 xs:top-3 sm:top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
                 disabled={loading}
                 tabIndex={-1}
               >
-                {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" /> : <Eye className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" />}
               </button>
             </div>
           </div>
 
           {/* New Password */}
-          <div>
-            <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <div className="min-w-0">
+            <label className="block text-xs xs:text-sm font-bold text-slate-300 mb-1.5 xs:mb-2 truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
               New Password <span className="text-red-400">*</span>
             </label>
             <div className="relative">
@@ -245,28 +245,28 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setNewPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-9 xs:pr-10 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
                 style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Enter new password"
                 disabled={loading}
                 required
               />
-              <Key size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
+              <Key className="absolute left-2.5 xs:left-3 sm:left-3.5 top-2.5 xs:top-3 sm:top-3.5 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500" />
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
+                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-2.5 xs:top-3 sm:top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
                 disabled={loading}
                 tabIndex={-1}
               >
-                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showNewPassword ? <EyeOff className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" /> : <Eye className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" />}
               </button>
             </div>
           </div>
 
           {/* Confirm Password */}
-          <div>
-            <label className="block text-sm font-bold text-slate-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <div className="min-w-0">
+            <label className="block text-xs xs:text-sm font-bold text-slate-300 mb-1.5 xs:mb-2 truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
               Confirm New Password <span className="text-red-400">*</span>
             </label>
             <div className="relative">
@@ -277,43 +277,43 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setConfirmPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-slate-900 text-slate-100 rounded-xl py-3 pl-11 pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold"
+                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-9 xs:pr-10 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
                 style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Confirm new password"
                 disabled={loading}
                 required
               />
-              <Key size={18} className="absolute left-3.5 top-3.5 text-slate-500" />
+              <Key className="absolute left-2.5 xs:left-3 sm:left-3.5 top-2.5 xs:top-3 sm:top-3.5 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500" />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
+                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-2.5 xs:top-3 sm:top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
                 disabled={loading}
                 tabIndex={-1}
               >
-                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" /> : <Eye className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" />}
               </button>
             </div>
             {confirmPassword && newPassword && confirmPassword !== newPassword && (
-              <p className="text-xs text-red-400 mt-1 font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>
+              <p className="text-[10px] xs:text-xs text-red-400 mt-1 xs:mt-1.5 font-medium leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Passwords do not match
               </p>
             )}
             {confirmPassword && newPassword && confirmPassword === newPassword && (
-              <p className="text-xs text-emerald-400 mt-1 font-medium flex items-center gap-1" style={{ fontFamily: 'Inter, sans-serif' }}>
-                <CheckCircle size={12} />
+              <p className="text-[10px] xs:text-xs text-emerald-400 mt-1 xs:mt-1.5 font-medium flex items-center gap-1 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <CheckCircle className="w-3 h-3 flex-shrink-0" />
                 Passwords match
               </p>
             )}
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t border-slate-700/30">
+          <div className="flex flex-col xs:flex-row justify-end gap-2 xs:gap-2.5 sm:gap-3 pt-3 xs:pt-4 sm:pt-6 border-t border-slate-700/30">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-6 py-3 bg-slate-800/60 hover:bg-slate-800 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 rounded-lg transition-all duration-200 border border-slate-700/50 font-medium"
+              className="w-full xs:w-auto px-4 xs:px-5 sm:px-6 py-2 xs:py-2.5 sm:py-3 bg-slate-800/60 hover:bg-slate-800 disabled:bg-slate-900 disabled:text-slate-600 text-slate-300 rounded-lg transition-all duration-200 border border-slate-700/50 font-medium text-xs xs:text-sm sm:text-base order-2 xs:order-1"
               style={{ fontFamily: 'Inter, sans-serif' }}
             >
               Cancel
@@ -321,11 +321,11 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
             <button
               type="submit"
               disabled={loading || !currentPassword || !newPassword || !confirmPassword || newPassword !== confirmPassword}
-              className="px-6 py-3 bg-cyan-600/10 hover:bg-cyan-600/20 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-cyan-400 border border-cyan-500/30 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 font-medium"
+              className="w-full xs:w-auto px-4 xs:px-5 sm:px-6 py-2 xs:py-2.5 sm:py-3 bg-cyan-600/10 hover:bg-cyan-600/20 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-cyan-400 border border-cyan-500/30 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 font-medium text-xs xs:text-sm sm:text-base order-1 xs:order-2"
               style={{ fontFamily: 'Inter, sans-serif' }}
             >
-              {loading && <Loader size={18} className="animate-spin" />}
-              <Lock size={18} />
+              {loading && <Loader className="w-4 h-4 xs:w-[18px] xs:h-[18px] animate-spin" />}
+              <Lock className="w-4 h-4 xs:w-[18px] xs:h-[18px]" />
               <span>{loading ? 'Updating...' : 'Change Password'}</span>
             </button>
           </div>
