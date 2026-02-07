@@ -730,7 +730,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     display: grid;
                     grid-template-columns: repeat(2, 1fr);
                     gap: 16px;
-                    margin-bottom: 12px;
+                    margin-bottom: 6px;
                 }
 
                 .info-item .label {
