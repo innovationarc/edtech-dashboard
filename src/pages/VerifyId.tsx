@@ -1,10 +1,11 @@
-// src/pages/VerifyId.tsx - Public ID Card Verification (Using user-search.ts)
+// src/pages/VerifyId.tsx - QR Code Based ID Card Verification
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Shield, AlertCircle, CheckCircle2, XCircle, Loader, 
-  User, Phone, MapPin, Calendar, CreditCard, Activity
+  User, Phone, MapPin, Calendar, CreditCard, Activity, QrCode
 } from 'lucide-react';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
 interface VerifiedUser {
   userId: string;
@@ -18,102 +19,74 @@ interface VerifiedUser {
   address: string;
   profilePictureUrl?: string;
   status: 'active' | 'inactive' | 'suspended' | 'pending';
-  createdAt: Date | string;
+  issueDate: string;
   validTill?: string | 'lifetime';
   role: string;
+  verificationHash: string;
 }
 
 const VerifyId = () => {
   const [searchParams] = useSearchParams();
-  const [loading, setLoading] = useState(false);
-  const [userId, setUserId] = useState('');
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [verifiedUser, setVerifiedUser] = useState<VerifiedUser | null>(null);
   const [error, setError] = useState('');
 
-  // Auto-load from URL params
+  // Auto-verify from URL token
   useEffect(() => {
-    const userIdParam = searchParams.get('userId');
-    if (userIdParam) {
-      setUserId(userIdParam);
-      // Auto-verify on load
-      handleVerify(userIdParam);
+    const token = searchParams.get('token');
+    if (!token) {
+      setError('Invalid verification link. Please scan the QR code on the ID card.');
+      setLoading(false);
+      return;
     }
+
+    handleVerify(token);
   }, [searchParams]);
 
-  // Verify ID card using user-search.ts API with master key
-  const handleVerify = async (userIdValue?: string) => {
+  // Verify ID card using Firestore token lookup
+  const handleVerify = async (token: string) => {
     setLoading(true);
     setError('');
     setVerifiedUser(null);
 
     try {
-      const userIdToVerify = userIdValue || userId;
+      const db = getFirestore();
+      const verificationRef = doc(db, 'id-verifications', token);
+      const verificationDoc = await getDoc(verificationRef);
 
-      if (!userIdToVerify || userIdToVerify.trim() === '') {
-        setError('Please enter a User ID');
+      if (!verificationDoc.exists()) {
+        setError('Invalid or expired ID card. This verification link is not recognized.');
         setLoading(false);
         return;
       }
 
-      // Get master key from environment variable
-      const MASTER_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+      const data = verificationDoc.data();
 
-      // Call user-search API with loginId (not userId) and master key
-      const response = await fetch('/api/user-search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          loginId: userIdToVerify,  // Changed from userId to loginId
-          purpose: 'user-lookup',
-          apiKey: MASTER_KEY // Include master key for authentication
-        })
-      });
+      // Set verified user with data from Firestore
+      const verifiedUserData: VerifiedUser = {
+        userId: data.userId || 'N/A',
+        surname: data.surname || '',
+        name: data.name || '',
+        fullName: data.fullName || 'Unknown',
+        designation: data.designation || 'Not Specified',
+        bloodGroup: data.bloodGroup || 'Not Specified',
+        phoneNumber: data.phoneNumber || 'Not Specified',
+        email: data.email || 'Not Specified',
+        address: data.address || 'Not Specified',
+        profilePictureUrl: data.profilePictureUrl || undefined,
+        status: (data.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
+        issueDate: data.issueDate || new Date().toISOString(),
+        validTill: data.validTill || 'lifetime',
+        role: data.role || 'Unknown',
+        verificationHash: data.verificationHash || token
+      };
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.error || 'User not found');
-        setLoading(false);
-        return;
-      }
-
-      if (!data.userData) {
-        setError('User data not available');
-        setLoading(false);
-        return;
-      }
-
-      // Set verified user with safe defaults
-      try {
-        const verifiedUserData: VerifiedUser = {
-          userId: data.userData.userId || 'N/A',
-          surname: data.userData.surname || '',
-          name: data.userData.name || '',
-          fullName: data.userData.fullName || `${data.userData.surname || ''} ${data.userData.name || ''}`.trim() || 'Unknown',
-          designation: data.userData.designation || 'Not Specified',
-          bloodGroup: data.userData.bloodGroup || 'Not Specified',
-          phoneNumber: data.userData.phoneNumber || 'Not Specified',
-          email: data.userData.email || 'Not Specified',
-          address: data.userData.address || 'Not Specified',
-          profilePictureUrl: data.userData.profilePictureUrl || undefined,
-          status: (data.userData.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
-          createdAt: data.userData.issueDate || data.userData.joiningDate || data.userData.createdAt || new Date().toISOString(),
-          validTill: data.userData.validTill || 'lifetime',
-          role: data.userData.role || 'Unknown'
-        };
-
-        setVerifiedUser(verifiedUserData);
-      } catch (parseError: any) {
-        setError('Failed to process user data: ' + parseError.message);
-        setLoading(false);
-        return;
-      }
+      setVerifiedUser(verifiedUserData);
+      setLoading(false);
 
     } catch (err: any) {
       setError(err.message || 'Failed to verify ID card. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -122,7 +95,6 @@ const VerifyId = () => {
     if (!date) return 'Not specified';
     try {
       const d = typeof date === 'string' ? new Date(date) : date;
-      // Check if date is valid
       if (isNaN(d.getTime())) {
         return 'Not specified';
       }
@@ -172,64 +144,53 @@ const VerifyId = () => {
           </p>
         </div>
 
-        {/* Verification Form */}
-        <div className="bg-slate-800 rounded-2xl p-6 mb-6 border border-slate-700">
-          {/* User ID Input */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Enter User ID
-            </label>
-            <input
-              type="text"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value.toUpperCase())}
-              placeholder="e.g., AD-2601-26571"
-              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            />
+        {/* Loading State */}
+        {loading && (
+          <div className="bg-slate-800 rounded-2xl p-12 border border-slate-700 text-center">
+            <Loader className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-400" />
+            <p className="text-white text-lg font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Verifying ID Card...
+            </p>
+            <p className="text-gray-400 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Please wait while we authenticate the ID card
+            </p>
           </div>
-
-          {/* Verify Button */}
-          <button
-            onClick={() => handleVerify()}
-            disabled={loading}
-            className="w-full mt-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-2"
-            style={{ fontFamily: 'Inter, sans-serif' }}
-          >
-            {loading ? (
-              <>
-                <Loader className="w-5 h-5 animate-spin" />
-                Verifying...
-              </>
-            ) : (
-              <>
-                <Shield className="w-5 h-5" />
-                Verify ID Card
-              </>
-            )}
-          </button>
-        </div>
+        )}
 
         {/* Error Message */}
-        {error && (
-          <div className="bg-red-900/30 border border-red-500 rounded-2xl p-6 mb-6">
-            <div className="flex items-center gap-3">
-              <XCircle className="w-6 h-6 text-red-400 flex-shrink-0" />
+        {error && !loading && (
+          <div className="bg-red-900/30 border border-red-500 rounded-2xl p-8 mb-6">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <XCircle className="w-16 h-16 text-red-400 flex-shrink-0" />
               <div>
-                <h3 className="text-lg font-bold text-red-400 mb-1" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <h3 className="text-2xl font-bold text-red-400 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                   Verification Failed
                 </h3>
-                <p className="text-red-300" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <p className="text-red-300 text-lg mb-4" style={{ fontFamily: 'Inter, sans-serif' }}>
                   {error}
                 </p>
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg text-gray-300 text-sm">
+                  <QrCode className="w-4 h-4" />
+                  <span style={{ fontFamily: 'Inter, sans-serif' }}>Scan the QR code on the ID card to verify</span>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Verified User Information */}
-        {verifiedUser && (
+        {verifiedUser && !loading && (
           <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700">
+            {/* Success Badge */}
+            <div className="flex justify-center mb-6">
+              <div className="inline-flex items-center gap-3 px-6 py-3 bg-green-900/30 border-2 border-green-500 rounded-full">
+                <CheckCircle2 className="w-6 h-6 text-green-400" />
+                <span className="text-green-400 font-bold text-lg" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  ID CARD VERIFIED SUCCESSFULLY
+                </span>
+              </div>
+            </div>
+
             {/* Status Badge */}
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -237,7 +198,7 @@ const VerifyId = () => {
                   Verified ID Card
                 </h2>
                 <p className="text-gray-400" style={{ fontFamily: 'Inter, sans-serif' }}>
-                  This ID card is authentic
+                  This ID card is authentic and issued by EDTECH DASHBOARD
                 </p>
               </div>
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${getStatusColor(verifiedUser.status)}`}>
@@ -256,7 +217,6 @@ const VerifyId = () => {
                   alt={verifiedUser.fullName}
                   className="w-32 h-32 rounded-lg object-cover border-2 border-slate-600"
                   onError={(e) => {
-                    // Fallback if image fails to load
                     (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(verifiedUser.fullName)}&size=300&background=3b82f6&color=ffffff`;
                   }}
                 />
@@ -281,7 +241,7 @@ const VerifyId = () => {
               <InfoField icon={<Phone />} label="Emergency Contact" value={verifiedUser.phoneNumber} />
               <InfoField icon={<User />} label="Email" value={verifiedUser.email} />
               <InfoField icon={<MapPin />} label="Address" value={verifiedUser.address} />
-              <InfoField icon={<Calendar />} label="Issue Date" value={formatDate(verifiedUser.createdAt)} />
+              <InfoField icon={<Calendar />} label="Issue Date" value={formatDate(verifiedUser.issueDate)} />
               <InfoField 
                 icon={<Calendar />} 
                 label="Valid Till" 
@@ -293,6 +253,9 @@ const VerifyId = () => {
             <div className="mt-8 pt-6 border-t border-slate-700">
               <p className="text-center text-sm text-gray-500" style={{ fontFamily: 'Inter, sans-serif' }}>
                 This verification was performed on {new Date().toLocaleString('en-GB')}
+              </p>
+              <p className="text-center text-xs text-gray-600 mt-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+                Verification Hash: {verifiedUser.verificationHash.substring(0, 16)}...
               </p>
             </div>
           </div>
