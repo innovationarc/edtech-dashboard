@@ -147,7 +147,7 @@ const handleDownloadPDF = async () => {
       logging: false,
       width: 539.8,
       height: 337.5,
-      windowWidth: 539.8,
+      windowWidth: 600,
       windowHeight: 337.5,
       foreignObjectRendering: false,
       removeContainer: false,
