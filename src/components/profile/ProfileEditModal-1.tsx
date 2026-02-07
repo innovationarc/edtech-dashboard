@@ -33,6 +33,15 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
     nid: (user as any)?.nid || ''
   });
 
+  // Force repaint on mount to prevent blank spaces
+  useEffect(() => {
+    // Trigger repaint
+    const timer = setTimeout(() => {
+      window.scrollTo(0, 0);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setError('');
@@ -163,7 +172,7 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
   // Success State
   if (success) {
     return (
-      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4 md:p-6">
+      <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4 md:p-6">
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-xl sm:rounded-2xl w-full max-w-[280px] xs:max-w-xs sm:max-w-md p-4 xs:p-6 sm:p-8 relative shadow-2xl animate-fadeIn">
           <div className="text-center">
             <div className="flex justify-center mb-4 sm:mb-6">
@@ -212,10 +221,10 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-xl sm:rounded-2xl w-full max-w-[95vw] xs:max-w-[90vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl relative shadow-2xl max-h-[95vh] xs:max-h-[92vh] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+    <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-xl sm:rounded-2xl w-full max-w-[95vw] xs:max-w-[90vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl relative shadow-2xl max-h-[95vh] xs:max-h-[92vh] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-slate-900/95 backdrop-blur-sm rounded-t-xl sm:rounded-t-2xl px-3 xs:px-4 sm:px-6 md:px-8 pt-4 xs:pt-5 sm:pt-6 md:pt-8 pb-3 xs:pb-3.5 sm:pb-4 border-b border-slate-700/30 z-10">
+        <div className="sticky top-0 bg-slate-900 rounded-t-xl sm:rounded-t-2xl px-3 xs:px-4 sm:px-6 md:px-8 pt-4 xs:pt-5 sm:pt-6 md:pt-8 pb-3 xs:pb-3.5 sm:pb-4 border-b border-slate-700/30 z-10">
           <button
             onClick={onClose}
             disabled={loading}
@@ -272,7 +281,7 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
             )}
 
             {/* Profile Picture Section */}
-            <div className="bg-slate-800/40 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
+            <div className="bg-slate-800/40 rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
               <h3 className="text-sm xs:text-base sm:text-lg font-bold text-slate-200 mb-3 xs:mb-3.5 sm:mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="h-6 w-6 xs:h-7 xs:w-7 sm:h-8 sm:w-8 rounded-lg bg-slate-700/50 flex items-center justify-center flex-shrink-0">
                   <Camera className="w-3 h-3 xs:w-3.5 xs:h-3.5 sm:w-4 sm:h-4 text-slate-400" />
@@ -323,7 +332,7 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
             </div>
 
             {/* Basic Information */}
-            <div className="bg-slate-800/40 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
+            <div className="bg-slate-800/40 rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
               <h3 className="text-sm xs:text-base sm:text-lg font-bold text-slate-200 mb-3 xs:mb-3.5 sm:mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="h-6 w-6 xs:h-7 xs:w-7 sm:h-8 sm:w-8 rounded-lg bg-slate-700/50 flex items-center justify-center flex-shrink-0">
                   <User className="w-3 h-3 xs:w-3.5 xs:h-3.5 sm:w-4 sm:h-4 text-slate-400" />
@@ -411,7 +420,7 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
             </div>
 
             {/* Personal Details */}
-            <div className="bg-slate-800/40 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
+            <div className="bg-slate-800/40 rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
               <h3 className="text-sm xs:text-base sm:text-lg font-bold text-slate-200 mb-3 xs:mb-3.5 sm:mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="h-6 w-6 xs:h-7 xs:w-7 sm:h-8 sm:w-8 rounded-lg bg-slate-700/50 flex items-center justify-center flex-shrink-0">
                   <Users className="w-3 h-3 xs:w-3.5 xs:h-3.5 sm:w-4 sm:h-4 text-slate-400" />
@@ -508,7 +517,7 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
             </div>
 
             {/* Additional Information */}
-            <div className="bg-slate-800/40 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
+            <div className="bg-slate-800/40 rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
               <h3 className="text-sm xs:text-base sm:text-lg font-bold text-slate-200 mb-3 xs:mb-3.5 sm:mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="h-6 w-6 xs:h-7 xs:w-7 sm:h-8 sm:w-8 rounded-lg bg-slate-700/50 flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3 h-3 xs:w-3.5 xs:h-3.5 sm:w-4 sm:h-4 text-slate-400" />
@@ -557,7 +566,7 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
             </div>
 
             {/* Address */}
-            <div className="bg-slate-800/40 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
+            <div className="bg-slate-800/40 rounded-lg sm:rounded-xl p-3 xs:p-4 sm:p-5 md:p-6 border border-slate-700/30">
               <h3 className="text-sm xs:text-base sm:text-lg font-bold text-slate-200 mb-3 xs:mb-3.5 sm:mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <div className="h-6 w-6 xs:h-7 xs:w-7 sm:h-8 sm:w-8 rounded-lg bg-slate-700/50 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-3 h-3 xs:w-3.5 xs:h-3.5 sm:w-4 sm:h-4 text-slate-400" />
