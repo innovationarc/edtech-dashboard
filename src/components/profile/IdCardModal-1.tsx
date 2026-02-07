@@ -175,23 +175,23 @@ const handleDownloadPDF = async () => {
           }
           
           .mrz-line-1, .mrz-line-2 {
-            font-family: 'JetBrains Mono', 'Courier New', Consolas, Monaco, 'Lucida Console', monospace !important;
-            font-weight: 900 !important;
-            color: #000000 !important;
-            font-size: 8px !important;
-            letter-spacing: 1.1px !important;
-            -webkit-font-smoothing: subpixel-antialiased !important;
-            text-rendering: geometricPrecision !important;
-            line-height: 1.2 !important;
-          }
-          
-          .caution-text {
-            color: #dc2626 !important;
-            font-weight: 900 !important;
-            font-size: 7.5px !important;
-            text-rendering: geometricPrecision !important;
-            -webkit-font-smoothing: subpixel-antialiased !important;
-          }
+  font-family: 'JetBrains Mono', 'Courier New', Consolas, Monaco, 'Lucida Console', monospace !important;
+  font-weight: 900 !important;
+  color: #000000 !important;
+  font-size: 8px !important;
+  letter-spacing: 1.1px !important;
+  -webkit-font-smoothing: subpixel-antialiased !important;
+  text-rendering: geometricPrecision !important;
+  line-height: 1.2 !important;
+}
+
+.caution-text {
+  color: #dc2626 !important;
+  font-weight: 900 !important;
+  font-size: 7.5px !important;
+  text-rendering: geometricPrecision !important;
+  -webkit-font-smoothing: subpixel-antialiased !important;
+}
           
           .brand h1 {
             color: #1e3a8a !important;
