@@ -514,11 +514,11 @@ const handleDownloadPDF = async () => {
           }
 
           .caution-text {
-              font-size: 10px;
+              font-size: 7.5px;
               color: var(--caution-red);
               font-weight: 600;
               text-align: center;
-              margin-top: 6px;
+              margin-top: 0px;
               letter-spacing: 0.2px;
               width: 100%;
               white-space: nowrap;
