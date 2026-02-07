@@ -1,8 +1,9 @@
-// src/components/profile/IdCardModal-1.tsx - ID Card Modal with Real-time Preview
+// src/components/profile/IdCardModal-1.tsx - ID Card Modal with Hashed QR Code
 import { useState, useRef, useEffect } from 'react';
 import { X, Download, Printer, Loader } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { generateMRZ, type MRZData } from '../../utils/mrz-utils';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -13,7 +14,51 @@ interface IdCardModal1Props {
 const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const { user } = useDashboard();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [verificationHash, setVerificationHash] = useState<string>('');
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Generate verification hash and store in Firestore
+  useEffect(() => {
+    const generateVerificationHash = async () => {
+      if (!user?.userId) return;
+
+      // Generate a random hash for this ID card issuance
+      const timestamp = Date.now();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const hash = btoa(`${user.userId}-${timestamp}-${randomString}`).replace(/[+/=]/g, '');
+
+      setVerificationHash(hash);
+
+      // Store verification record in Firestore
+      try {
+        const db = getFirestore();
+        const verificationRef = doc(db, 'id-verifications', hash);
+        
+        await setDoc(verificationRef, {
+          userId: user.userId,
+          fullName: user.fullName || `${user.surname || ''} ${user.name || ''}`.trim(),
+          surname: user.surname || '',
+          name: user.name || '',
+          designation: user.designation || 'Not Specified',
+          bloodGroup: user.bloodGroup || 'Not Specified',
+          phoneNumber: user.phoneNumber || 'Not Specified',
+          email: user.email || 'Not Specified',
+          address: user.address || 'Not Specified',
+          profilePictureUrl: user.profilePictureUrl || '',
+          status: user.status || 'active',
+          role: user.role || 'Unknown',
+          issueDate: new Date().toISOString(),
+          validTill: user.validTill || 'lifetime',
+          createdAt: new Date().toISOString(),
+          verificationHash: hash
+        });
+      } catch (error) {
+        console.error('Error storing verification record:', error);
+      }
+    };
+
+    generateVerificationHash();
+  }, [user]);
 
   // Generate MRZ when modal opens
   const mrzData: MRZData = {
@@ -21,9 +66,9 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
     fullName: `${user?.surname || ''} ${user?.name || ''}`.trim(),
     surname: user?.surname || 'UNKNOWN',
     name: user?.name || '',
-    middleName: '', // Add if available in user object
+    middleName: '',
     dob: user?.dob ? new Date(user.dob) : new Date(),
-    issueDate: user?.createdAt ? new Date(user.createdAt) : new Date(),
+    issueDate: new Date(),
     expiryDate: user?.validTill === 'lifetime' ? 'lifetime' : 
                 user?.validTill ? new Date(user.validTill) : 'lifetime'
   };
@@ -31,9 +76,8 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const mrz = generateMRZ(mrzData);
 
   // Format dates
-  const formatIssueDate = (date: Date | string | undefined) => {
-    if (!date) return 'Not Specified';
-    const d = typeof date === 'string' ? new Date(date) : date;
+  const formatIssueDate = () => {
+    const d = new Date();
     return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   };
 
@@ -43,13 +87,13 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
     return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   };
 
-  // Generate public verification URL
-  const verificationUrl = `${window.location.origin}/verify-id?userId=${user?.userId}`;
+  // Generate public verification URL with hash
+  const verificationUrl = `${window.location.origin}/verify-id?token=${verificationHash}`;
 
-  // Generate barcode URL (PDF-417)
-  const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(user?.userId || '')}&code=PDF417&multiplebarcodes=false&translate-esc=false&unit=Fit&dpi=96&imagetype=Gif&rotation=0&color=%23000000&bgcolor=%23ffffff&qunit=Mm&quiet=0`;
+  // Generate barcode URL (PDF-417) - now using hash
+  const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(verificationHash)}&code=PDF417&multiplebarcodes=false&translate-esc=false&unit=Fit&dpi=96&imagetype=Gif&rotation=0&color=%23000000&bgcolor=%23ffffff&qunit=Mm&quiet=0`;
 
-  // Generate QR code URL
+  // Generate QR code URL - now using hash
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
 
   // Download as PDF
@@ -67,8 +111,6 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
       const imgData = canvas.toDataURL('image/png');
       
-      // ID card dimensions: 539.8px x 337.5px (CR80 landscape)
-      // Convert to mm: 85.6mm x 53.98mm
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -149,6 +191,17 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
+  if (!verificationHash) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
+        <div className="bg-white rounded-3xl p-8 text-center">
+          <Loader size={40} className="animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-700 font-semibold">Generating ID Card...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl w-full max-w-4xl p-6 md:p-8 relative shadow-2xl my-8">
@@ -174,7 +227,6 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
         {/* ID Card Preview */}
         <div className="flex justify-center mb-6">
           <div ref={cardRef}>
-            {/* Exact HTML Template */}
             <div className="id-card" style={{
               width: '539.8px',
               height: '337.5px',
@@ -213,17 +265,19 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                 {/* Photo */}
                 <div className="photo-box" style={{
                   width: '130px',
-                  height: '130px',
-                  background: '#fff',
+                  height: '145px',
                   borderRadius: '8px',
-                  border: '1px solid #d1d5db',
                   overflow: 'hidden',
+                  border: '3px solid #1e3a8a',
                   marginBottom: '10px',
-                  marginLeft: '3px'
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#e5e7eb'
                 }}>
-                  <img 
-                    src={user?.profilePictureUrl || 'https://i.pravatar.cc/300?u=' + user?.userId} 
-                    alt="Photo"
+                  <img
+                    src={user?.profilePictureUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || user?.userId || 'User')}&size=300&background=3b82f6&color=ffffff`}
+                    alt="Profile"
                     style={{
                       width: '100%',
                       height: '100%',
@@ -232,52 +286,35 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                   />
                 </div>
 
-                {/* ID Text */}
-                <div className="id-text-container" style={{
-                  textAlign: 'center',
-                  margin: '3px 0 3px 0',
-                  width: '100%'
+                {/* User ID */}
+                <div className="user-id" style={{
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: '#1e3a8a',
+                  letterSpacing: '0.5px',
+                  marginBottom: '10px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  textAlign: 'center'
                 }}>
-                  <div style={{
-                    width: '120px',
-                    height: '1px',
-                    backgroundColor: '#e5e7eb',
-                    margin: '0 auto'
-                  }}></div>
-                  <div className="student-id-text" style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    color: '#1f2937',
-                    letterSpacing: '0.8px',
-                    textAlign: 'center',
-                    lineHeight: 1.4,
-                    margin: '6px 0'
-                  }}>
-                    {user?.userId || 'UNKNOWN'}
-                  </div>
-                  <div style={{
-                    width: '120px',
-                    height: '1px',
-                    backgroundColor: '#e5e7eb',
-                    margin: '0 auto'
-                  }}></div>
+                  {user?.userId || 'N/A'}
                 </div>
 
-                {/* Barcode */}
-                <div className="pdf417-barcode" style={{
-                  width: '140px',
-                  height: '40px',
-                  background: '#fff',
+                {/* QR Code */}
+                <div className="qr-box" style={{
+                  width: '90px',
+                  height: '90px',
+                  background: '#ffffff',
+                  borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginTop: '5px',
-                  marginLeft: '3px'
+                  border: '2px solid #e5e7eb',
+                  marginBottom: '8px',
+                  overflow: 'hidden'
                 }}>
-                  <img 
-                    src={barcodeUrl}
-                    alt="Barcode"
+                  <img
+                    src={qrCodeUrl}
+                    alt="QR Code"
                     style={{
                       width: '100%',
                       height: '100%',
@@ -285,61 +322,94 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     }}
                   />
                 </div>
+
+                {/* Scan Text */}
+                <div className="scan-text" style={{
+                  fontSize: '7px',
+                  color: '#6b7280',
+                  fontWeight: 600,
+                  textAlign: 'center',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.3px',
+                  fontFamily: 'Inter, sans-serif'
+                }}>
+                  Scan to Verify
+                </div>
               </div>
 
               {/* Right Content */}
-              <div className="main-content" style={{
-                flex: 1,
-                padding: '25px 35px 25px 35px',
+              <div className="content" style={{
+                width: '67%',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                position: 'relative'
               }}>
-                {/* Header Top */}
-                <div className="header-top" style={{
+                {/* Header */}
+                <div className="header" style={{
+                  background: 'linear-gradient(135deg, #1e3a8a 0%, #4b5563 100%)',
+                  padding: '14px 20px',
                   display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '20px'
+                  borderBottom: '2px solid #1e293b'
                 }}>
-                  <div className="brand">
-                    <h1 style={{
-                      margin: 0,
-                      fontSize: '18px',
+                  <div>
+                    <h1 className="title" style={{
+                      fontSize: '16px',
                       fontWeight: 800,
-                      color: '#1e3a8a',
-                      letterSpacing: '-0.5px',
-                      fontFamily: 'Inter, sans-serif'
-                    }}>EDTECH DASHBOARD</h1>
-                    <p style={{
+                      color: '#ffffff',
                       margin: 0,
-                      fontSize: '10px',
-                      color: '#374151',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
                       fontFamily: 'Inter, sans-serif'
-                    }}>Global Learning Network</p>
+                    }}>
+                      EDTECH DASHBOARD
+                    </h1>
+                    <div className="subtitle" style={{
+                      fontSize: '9px',
+                      color: '#cbd5e1',
+                      fontWeight: 600,
+                      letterSpacing: '0.5px',
+                      marginTop: '2px',
+                      fontFamily: 'Inter, sans-serif'
+                    }}>
+                      OFFICIAL IDENTIFICATION CARD
+                    </div>
                   </div>
-                  <div className="qr-small" style={{
-                    width: '55px',
-                    height: '55px',
-                    padding: 0,
+                  <div className="barcode-box" style={{
+                    width: '85px',
+                    height: '32px',
+                    background: '#ffffff',
+                    borderRadius: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     overflow: 'hidden'
                   }}>
-                    <img 
-                      src={qrCodeUrl}
-                      alt="QR"
+                    <img
+                      src={barcodeUrl}
+                      alt="Barcode"
                       style={{
                         width: '100%',
-                        height: '100%'
+                        height: '100%',
+                        objectFit: 'contain'
                       }}
                     />
                   </div>
                 </div>
 
-                {/* User Info */}
-                <div className="user-info" style={{ flex: 1 }}>
-                  <div className="user-name-container" style={{ margin: '0 0 14px 0' }}>
-                    <h2 className="user-name" style={{
+                {/* Main Content */}
+                <div className="main-content" style={{
+                  padding: '18px 20px 10px 20px',
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}>
+                  {/* Name and Designation */}
+                  <div className="name-section" style={{
+                    marginBottom: '10px'
+                  }}>
+                    <h2 className="name" style={{
                       fontSize: '24px',
                       fontWeight: 700,
                       color: '#1f2937',
@@ -423,7 +493,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                         color: '#1f2937',
                         fontFamily: 'Inter, sans-serif'
                       }}>
-                        {formatIssueDate(user?.createdAt)}
+                        {formatIssueDate()}
                       </div>
                     </div>
                     <div className="info-item">
