@@ -189,7 +189,7 @@ const handleDownloadPDF = async () => {
   color: #dc2626 !important;
   font-weight: 900 !important;
   font-size: 7.5px !important;
-  overflow: visible !important;
+  
   text-rendering: geometricPrecision !important;
   -webkit-font-smoothing: subpixel-antialiased !important;
 }
@@ -497,7 +497,7 @@ const handleDownloadPDF = async () => {
               white-space: pre;
               text-align: center;
               padding: 0;
-              overflow: hidden;
+              overflow: visible;
           }
 
           .mrz-line-2 {
@@ -511,7 +511,7 @@ const handleDownloadPDF = async () => {
               white-space: pre;
               text-align: center;
               padding: 0;
-              overflow: hidden;
+              overflow: visible;
           }
 
           .caution-text {
@@ -858,7 +858,7 @@ const handleDownloadPDF = async () => {
                 }
 
                 .caution-text {
-                    font-size: 2px;
+                    font-size: 7.5px;
                     color: var(--caution-red);
                     font-weight: 600;
                     text-align: center;
