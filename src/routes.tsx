@@ -27,6 +27,7 @@ import QuestionDetail from './pages/QuestionDetail';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import VerifyProfile from './pages/VerifyProfile';
+import VerifyId from './pages/VerifyId'; // NEW: ID Card Verification
 
 // Import role-specific management pages (placeholders)
 import ManageStudent from './pages/ManageStudent';
@@ -146,6 +147,9 @@ const AppRoutes = () => {
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/verify-profile" element={<VerifyProfile />} />
+      
+      {/* NEW: Public ID Card Verification - OUTSIDE DashboardLayout */}
+      <Route path="/verify-id" element={<VerifyId />} />
       
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<Navigate to={getDefaultRoute()} replace />} />
