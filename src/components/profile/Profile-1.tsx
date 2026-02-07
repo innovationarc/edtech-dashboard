@@ -19,12 +19,34 @@ const Profile1 = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showIdCardModal, setShowIdCardModal] = useState(false);
 
+  // Monitor route changes - if user navigates away from profile, this component will unmount
+  // This ensures profile closes automatically when any sidebar link is clicked
+  useEffect(() => {
+    // Cleanup function runs when component unmounts (when navigating away)
+    return () => {
+      // Close any open modals when leaving profile
+      setShowEditModal(false);
+      setShowPasswordModal(false);
+      setShowIdCardModal(false);
+    };
+  }, [location.pathname]);
+
   const handleBack = () => {
-    // Get the referrer from location state or default to dashboard
-    const from = (location.state as any)?.from || '/dashboard';
-    
-    // Navigate to the previous page with replace to avoid navigation issues
-    navigate(from, { replace: true });
+    // Try to go back in history first
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      // Fallback to role-specific dashboard if no history
+      let defaultRoute = '/dashboard';
+      
+      if (user?.role === 'student') {
+        defaultRoute = '/student-dashboard';
+      } else if (user?.role === 'teacher') {
+        defaultRoute = '/teacher-dashboard';
+      }
+      
+      navigate(defaultRoute, { replace: true });
+    }
   };
 
   const handlePrintProfile = () => {
