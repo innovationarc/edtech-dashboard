@@ -174,22 +174,20 @@ const handleDownloadPDF = async () => {
             color-adjust: exact !important;
           }
           
-          ..mrz-line-1, .mrz-line-2 {
+          .mrz-line-1, .mrz-line-2 {
   font-family: 'JetBrains Mono', 'Courier New', Consolas, Monaco, 'Lucida Console', monospace !important;
   font-weight: 900 !important;
   color: #000000 !important;
   font-size: 8px !important;
-  letter-spacing: 0.5px !important;  /* REDUCED from 1.1px */
+  letter-spacing: 0.6px !important;
   -webkit-font-smoothing: subpixel-antialiased !important;
   text-rendering: geometricPrecision !important;
   line-height: 1.2 !important;
   white-space: pre !important;
   text-align: center !important;
-  width: 100% !important;
   overflow: hidden !important;
   display: block !important;
-  transform: scaleX(0.92) !important;  /* Compress horizontally by 8% */
-  transform-origin: center !important;
+  width: 100% !important;
 }
 
 .caution-text {
@@ -201,41 +199,28 @@ const handleDownloadPDF = async () => {
   white-space: nowrap !important;
   text-align: center !important;
   overflow: hidden !important;
+  letter-spacing: -0.4px !important;
+  word-spacing: -1px !important;
   width: 100% !important;
-  letter-spacing: -0.5px !important;  /* COMPRESS letters */
-  word-spacing: -1.5px !important;  /* COMPRESS words */
-  transform: scaleX(0.88) !important;  /* Compress horizontally by 12% */
-  transform-origin: center !important;
+}
+
+.main-content {
+  padding: 16px 2px 0 2px !important;  /* CRITICAL: Reduce padding */
+  overflow: visible !important;
 }
 
 .user-info {
   overflow: visible !important;
+  width: 100% !important;
 }
 
-.main-content {
-  overflow: visible !important;
+.mrz-container {
+  width: calc(100% + 12px) !important;  /* EXTEND beyond parent */
+  margin-left: -6px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  box-sizing: border-box !important;
 }
-          
-          .brand h1 {
-            color: #1e3a8a !important;
-            font-weight: 900 !important;
-            -webkit-font-smoothing: antialiased !important;
-          }
-          
-          .student-id-text {
-            font-weight: 600 !important;
-            color: #1f2937 !important;
-          }
-          
-          .info-item .label {
-            font-weight: 700 !important;
-            color: #6b7280 !important;
-          }
-          
-          .info-item .value {
-            font-weight: 600 !important;
-            color: #1f2937 !important;
-          }
         `;
         clonedDoc.head.appendChild(style);
       }
