@@ -125,40 +125,52 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   // Full name
   const fullName = `${user?.surname || ''} ${user?.name || ''}`.trim() || 'Not Specified';
 
-  // Download as PDF
+  // Download as PDF - FIXED VERSION
   const handleDownloadPDF = async () => {
     if (!cardRef.current) return;
 
     setIsGenerating(true);
     try {
-      // Wait longer for images to fully load and render
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for images to fully load
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 4, // Higher scale for better quality
+      // Get the actual rendered dimensions of the card
+      const cardElement = cardRef.current;
+      const rect = cardElement.getBoundingClientRect();
+
+      // Use high scale for quality while maintaining exact proportions
+      const scale = 5; // Very high quality for printing
+      
+      const canvas = await html2canvas(cardElement, {
+        scale: scale,
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
-        width: 539.8,
-        height: 337.5,
-        windowWidth: 539.8,
-        windowHeight: 337.5,
-        scrollY: -window.scrollY,
-        scrollX: -window.scrollX,
-        imageTimeout: 15000, // Wait longer for images
+        imageTimeout: 15000,
         removeContainer: true,
+        // Let html2canvas use the natural dimensions
+        width: rect.width,
+        height: rect.height,
+        windowWidth: rect.width,
+        windowHeight: rect.height,
+        x: 0,
+        y: 0,
       });
 
+      // Convert to high quality image
       const imgData = canvas.toDataURL('image/png', 1.0);
       
+      // Create PDF with exact credit card dimensions (CR80 standard)
+      // 85.6mm x 53.98mm (3.375" x 2.125")
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
-        format: [85.6, 53.98],
-        compress: true
+        format: [85.6, 53.98], // Credit card size
+        compress: false // No compression for best quality
       });
 
+      // Add image to fill entire PDF page
       pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
       pdf.save(`ID-Card-${user?.userId}.pdf`);
     } catch (error) {
@@ -222,30 +234,37 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               --designation-color: #4b5563;
           }
 
+          body {
+              margin: 0;
+              padding: 0;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              background: white;
+              font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          }
+
           .id-card {
-              width: 539.8px;
-              height: 337.5px;
-              background: #ffffff;
-              border-radius: 16px;
+              width: 85.6mm;
+              height: 53.98mm;
+              background: white;
+              border-radius: 12px;
               overflow: hidden;
+              box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
               display: flex;
               position: relative;
-              box-shadow: none;
-              border: 1px solid #ddd;
-              transform-origin: top left;
-              transform: scale(0.4);
+              border: 1px solid #e5e7eb;
           }
 
           .sidebar {
-              width: 30%;
-              background-color: var(--sidebar);
+              width: 120px;
+              background: linear-gradient(135deg, var(--primary) 0%, #1e40af 50%, #1e3a8a 100%);
               display: flex;
               flex-direction: column;
               align-items: center;
-              justify-content: center;
-              padding: 15px 20px;
-              border-right: 1px solid #e5e7eb;
+              padding: 18px 10px 12px;
               position: relative;
+              box-shadow: 4px 0 12px rgba(0,0,0,0.08);
           }
 
           .sidebar::before {
@@ -253,61 +272,75 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               position: absolute;
               top: 0;
               left: 0;
-              width: 6px;
-              height: 100%;
-              background: linear-gradient(to bottom, var(--primary), #4b5563);
+              right: 0;
+              bottom: 0;
+              background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+              pointer-events: none;
           }
 
           .photo-box {
-              width: 130px;
-              height: 130px;
-              background: #fff;
+              width: 96px;
+              height: 96px;
+              background: white;
               border-radius: 8px;
-              border: 1px solid #d1d5db;
               overflow: hidden;
-              margin-bottom: 10px;
-              margin-left: 3px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1);
+              position: relative;
+              z-index: 1;
+              border: 2px solid rgba(255,255,255,0.3);
           }
 
           .photo-box img {
               width: 100%;
               height: 100%;
               object-fit: cover;
+              display: block;
           }
 
           .id-text-container {
-              text-align: center;
-              margin: 3px 0 3px 0;
-              width: 100%;
+              flex: 1;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              margin: 16px 0 12px;
+              gap: 8px;
+              position: relative;
+              z-index: 1;
           }
 
           .id-separator {
-              width: 120px;
+              width: 70%;
               height: 1px;
-              background-color: #e5e7eb;
-              margin: 0 auto;
+              background: rgba(255,255,255,0.3);
           }
 
           .student-id-text {
-              font-family: 'Inter', sans-serif;
-              font-size: 12px;
-              font-weight: 500;
-              color: var(--id-color);
-              letter-spacing: 0.8px;
+              font-size: 11px;
+              color: white;
+              font-weight: 700;
+              letter-spacing: 1px;
               text-align: center;
-              line-height: 1.4;
-              margin: 6px 0;
+              text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+              padding: 0 8px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              max-width: 100px;
           }
 
           .pdf417-barcode {
-              width: 140px;
-              height: 40px;
-              background: #fff;
+              width: 100px;
+              height: 30px;
+              background: white;
+              border-radius: 4px;
               display: flex;
               align-items: center;
               justify-content: center;
-              margin-top: 5px;
-              margin-left: 3px;
+              overflow: hidden;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+              position: relative;
+              z-index: 1;
           }
 
           .pdf417-barcode img {
@@ -318,9 +351,10 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
           .main-content {
               flex: 1;
-              padding: 25px 35px 25px 35px;
+              padding: 16px 18px 12px 16px;
               display: flex;
               flex-direction: column;
+              background: white;
           }
 
           .header-top {
@@ -328,27 +362,33 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               justify-content: space-between;
               align-items: flex-start;
               margin-bottom: 10px;
+              gap: 12px;
+          }
+
+          .brand {
+              flex: 1;
           }
 
           .brand h1 {
-              margin: 0;
-              font-size: 18px;
+              font-size: 15px;
               font-weight: 800;
               color: var(--primary);
-              letter-spacing: -0.5px;
+              margin: 0 0 2px 0;
+              line-height: 1.1;
+              letter-spacing: -0.3px;
           }
 
           .brand p {
+              font-size: 9px;
+              color: var(--text-muted);
+              font-weight: 500;
               margin: 0;
-              font-size: 10px;
-              color: var(--accent);
-              font-weight: 600;
-              text-transform: uppercase;
+              letter-spacing: 0.3px;
           }
 
           .qr-small {
-              width: 55px;
-              height: 55px;
+              width: 60px;
+              height: 60px;
               padding: 0;
               overflow: hidden;
           }
@@ -363,14 +403,14 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
           }
 
           .user-name-container {
-              margin: 0 0 14px 0;
+              margin: 0 0 5px 0;
           }
 
           .user-name {
               font-size: 24px;
               font-weight: 700;
               color: var(--text-dark);
-              margin: 0 0 3px 0;
+              margin: 0 0 2px 0;
               line-height: 1.2;
           }
 
@@ -387,7 +427,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               display: grid;
               grid-template-columns: repeat(2, 1fr);
               gap: 16px;
-              margin-bottom: 5px;
+              margin-bottom: 3px;
           }
 
           .info-item .label {
@@ -406,10 +446,10 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
           }
 
           .mrz-container {
-              margin-top: 25px;
+              margin-top: 16px;
               width: 100%;
               background: #f9fafb;
-              padding: 6px 0;
+              padding: 3px 0;
               border-top: 1px solid #e5e7eb;
               font-family: 'JetBrains Mono', monospace;
               text-align: center;
@@ -421,7 +461,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               color: #1f2937;
               line-height: 1.2;
               width: 100%;
-              margin: 1px 0 0 0;
+              margin: 2px 0 0 0;
               display: block;
               white-space: pre;
               text-align: center;
@@ -454,6 +494,13 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               white-space: nowrap;
               overflow: hidden;
           }
+
+          @media print {
+              body { background: transparent; }
+              .id-card { box-shadow: none; border: 1px solid #ddd; }
+              .sidebar::before { background: var(--primary); }
+              .photo-box { box-shadow: none; }
+          }
         </style>
       </head>
       <body>
@@ -461,97 +508,53 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
       </body>
       </html>
     `);
-
-    printWindow.document.close();
-    printWindow.focus();
     
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 1000);
+    printWindow.document.close();
+    
+    // Wait for resources to load before printing
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 500);
+    };
   };
 
-  // Close on Escape
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
-
-  // Preload images to ensure proper rendering
-  useEffect(() => {
-    if (!verificationHash || !barcodeDataUrl) return;
-
-    const imagesToLoad = [
-      userPhotoUrl,
-      qrCodeUrl
-    ];
-
-    let loadedCount = 0;
-    const totalImages = imagesToLoad.length;
-
-    imagesToLoad.forEach(src => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        loadedCount++;
-        if (loadedCount === totalImages) {
-          setImagesLoaded(true);
-        }
-      };
-      img.onerror = () => {
-        loadedCount++;
-        if (loadedCount === totalImages) {
-          setImagesLoaded(true);
-        }
-      };
-      img.src = src;
-    });
-  }, [verificationHash, userPhotoUrl, qrCodeUrl, barcodeDataUrl]);
-
-  if (!verificationHash || !barcodeDataUrl || !imagesLoaded) {
-    return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
-        <div className="bg-white rounded-3xl p-8 text-center">
-          <Loader size={40} className="animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-700 font-semibold">
-            {!verificationHash ? 'Generating ID Card...' : !barcodeDataUrl ? 'Generating barcode...' : 'Loading images...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl w-full max-w-4xl p-6 md:p-8 relative shadow-2xl my-8">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-10"
-          aria-label="Close"
-        >
-          <X size={24} className="text-gray-600" />
-        </button>
-
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
         {/* Header */}
-        <div className="text-center mb-6">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
-            Professional ID Card
-          </h2>
-          <p className="text-gray-600 text-sm md:text-base">
-            Official identification document
-          </p>
+        <div className="sticky top-0 bg-gradient-to-r from-blue-900 via-blue-800 to-blue-900 text-white px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
+          <div>
+            <h2 className="text-2xl font-bold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+              Digital ID Card
+            </h2>
+            <p className="text-blue-200 text-sm mt-1" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+              Official Identity Credential
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            aria-label="Close modal"
+          >
+            <X size={24} />
+          </button>
         </div>
 
-        {/* ID Card Preview - Exact Template Rendering */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-block bg-gray-100 p-6 rounded-2xl">
-            {/* EXACT HTML TEMPLATE - DO NOT MODIFY STRUCTURE OR STYLES */}
-            <div ref={cardRef}>
-              <style dangerouslySetInnerHTML={{ __html: `
+        {/* Card Preview */}
+        <div className="p-8">
+          <div className="flex justify-center mb-6">
+            <div 
+              ref={cardRef}
+              style={{
+                width: '539.8px', // 85.6mm * 6.3 (conversion factor for screen display)
+                height: '337.5px', // 53.98mm * 6.25 (maintains aspect ratio)
+                fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
+              }}
+            >
+              <style dangerouslySetInnerHTML={{
+                __html: `
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
 
                 :root {
@@ -565,30 +568,27 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     --designation-color: #4b5563;
                 }
 
-                * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
-
                 .id-card {
-                    width: 539.8px;
-                    height: 337.5px;
-                    background: #ffffff;
-                    border-radius: 16px;
+                    width: 100%;
+                    height: 100%;
+                    background: white;
+                    border-radius: 12px;
                     overflow: hidden;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
                     display: flex;
                     position: relative;
-                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
                     border: 1px solid #e5e7eb;
                 }
 
                 .sidebar {
-                    width: 31.5%;
-                    background-color: var(--sidebar);
+                    width: 120px;
+                    background: linear-gradient(135deg, var(--primary) 0%, #1e40af 50%, #1e3a8a 100%);
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    justify-content: center;
-                    padding: 15px 20px;
-                    border-right: 1px solid #e5e7eb;
+                    padding: 18px 10px 12px;
                     position: relative;
+                    box-shadow: 4px 0 12px rgba(0,0,0,0.08);
                 }
 
                 .sidebar::before {
@@ -596,61 +596,75 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     position: absolute;
                     top: 0;
                     left: 0;
-                    width: 6px;
-                    height: 100%;
-                    background: linear-gradient(to bottom, var(--primary), #4b5563);
+                    right: 0;
+                    bottom: 0;
+                    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+                    pointer-events: none;
                 }
 
                 .photo-box {
-                    width: 130px;
-                    height: 130px;
-                    background: #fff;
+                    width: 96px;
+                    height: 96px;
+                    background: white;
                     border-radius: 8px;
-                    border: 1px solid #d1d5db;
                     overflow: hidden;
-                    margin-bottom: 10px;
-                    margin-left: 3px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1);
+                    position: relative;
+                    z-index: 1;
+                    border: 2px solid rgba(255,255,255,0.3);
                 }
 
                 .photo-box img {
                     width: 100%;
                     height: 100%;
                     object-fit: cover;
+                    display: block;
                 }
 
                 .id-text-container {
-                    text-align: center;
-                    margin: 3px 0 3px 0;
-                    width: 100%;
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    margin: 16px 0 12px;
+                    gap: 8px;
+                    position: relative;
+                    z-index: 1;
                 }
 
                 .id-separator {
-                    width: 120px;
+                    width: 70%;
                     height: 1px;
-                    background-color: #e5e7eb;
-                    margin: 0 auto;
+                    background: rgba(255,255,255,0.3);
                 }
 
                 .student-id-text {
-                    font-family: 'Inter', sans-serif;
-                    font-size: 12px;
-                    font-weight: 500;
-                    color: var(--id-color);
-                    letter-spacing: 0.8px;
+                    font-size: 11px;
+                    color: white;
+                    font-weight: 700;
+                    letter-spacing: 1px;
                     text-align: center;
-                    line-height: 1.4;
-                    margin: 6px 0;
+                    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    padding: 0 8px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 100px;
                 }
 
                 .pdf417-barcode {
-                    width: 140px;
-                    height: 40px;
-                    background: #fff;
+                    width: 100px;
+                    height: 30px;
+                    background: white;
+                    border-radius: 4px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    margin-top: 5px;
-                    margin-left: 3px;
+                    overflow: hidden;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+                    position: relative;
+                    z-index: 1;
                 }
 
                 .pdf417-barcode img {
@@ -661,9 +675,10 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
                 .main-content {
                     flex: 1;
-                    padding: 25px 35px 0px 35px;
+                    padding: 16px 18px 12px 16px;
                     display: flex;
                     flex-direction: column;
+                    background: white;
                 }
 
                 .header-top {
@@ -671,22 +686,28 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     justify-content: space-between;
                     align-items: flex-start;
                     margin-bottom: 10px;
+                    gap: 12px;
+                }
+
+                .brand {
+                    flex: 1;
                 }
 
                 .brand h1 {
-                    margin: 0;
-                    font-size: 18px;
+                    font-size: 15px;
                     font-weight: 800;
                     color: var(--primary);
-                    letter-spacing: -0.5px;
+                    margin: 0 0 2px 0;
+                    line-height: 1.1;
+                    letter-spacing: -0.3px;
                 }
 
                 .brand p {
+                    font-size: 9px;
+                    color: var(--text-muted);
+                    font-weight: 500;
                     margin: 0;
-                    font-size: 10px;
-                    color: var(--accent);
-                    font-weight: 600;
-                    text-transform: uppercase;
+                    letter-spacing: 0.3px;
                 }
 
                 .qr-small {
@@ -872,7 +893,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center gap-3 mt-6">
+        <div className="flex flex-col sm:flex-row justify-center gap-3 mt-6 pb-8">
           <button
             onClick={handleDownloadPDF}
             disabled={isGenerating}
