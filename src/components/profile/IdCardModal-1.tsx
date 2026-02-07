@@ -6,6 +6,7 @@ import { generateMRZ, type MRZData } from '../../utils/mrz-utils';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import bwipjs from 'bwip-js';
 
 interface IdCardModal1Props {
   onClose: () => void;
@@ -16,6 +17,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [verificationHash, setVerificationHash] = useState<string>('');
   const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [barcodeDataUrl, setBarcodeDataUrl] = useState<string>('');
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Generate verification hash and store in Firestore
@@ -76,6 +78,29 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
   const mrz = generateMRZ(mrzData);
 
+  // Generate barcode locally using bwip-js
+  useEffect(() => {
+    if (!user?.userId) return;
+
+    try {
+      const canvas = document.createElement('canvas');
+      bwipjs.toCanvas(canvas, {
+        bcid: 'pdf417',
+        text: user.userId,
+        scale: 3,
+        height: 10,
+        width: 50,
+        padding: 2,
+        backgroundcolor: 'ffffff',
+      });
+      setBarcodeDataUrl(canvas.toDataURL('image/png'));
+    } catch (error) {
+      console.error('Barcode generation error:', error);
+      // Fallback to external API if local generation fails
+      setBarcodeDataUrl(`https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(user?.userId || 'ST-2601-00001')}&code=PDF417&multiplebarcodes=false&translate-esc=false&unit=Fit&dpi=150&imagetype=Png&rotation=0&color=%23000000&bgcolor=%23ffffff&qunit=Mm&quiet=0&eclevel=5`);
+    }
+  }, [user?.userId]);
+
   // Format dates
   const formatIssueDate = () => {
     const d = new Date();
@@ -90,9 +115,6 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
   // Generate public verification URL with hash
   const verificationUrl = `${window.location.origin}/verify-id?token=${verificationHash}`;
-
-  // Generate barcode URL (PDF-417) - using userId as content with optimized parameters
-  const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(user?.userId || 'ST-2601-00001')}&code=PDF417&multiplebarcodes=false&translate-esc=false&unit=Fit&dpi=150&imagetype=Png&rotation=0&color=%23000000&bgcolor=%23ffffff&qunit=Mm&quiet=0&eclevel=5`;
 
   // Generate QR code URL - now using hash
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
@@ -460,11 +482,10 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
   // Preload images to ensure proper rendering
   useEffect(() => {
-    if (!verificationHash) return;
+    if (!verificationHash || !barcodeDataUrl) return;
 
     const imagesToLoad = [
       userPhotoUrl,
-      barcodeUrl,
       qrCodeUrl
     ];
 
@@ -488,15 +509,15 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
       };
       img.src = src;
     });
-  }, [verificationHash, userPhotoUrl, barcodeUrl, qrCodeUrl]);
+  }, [verificationHash, userPhotoUrl, qrCodeUrl, barcodeDataUrl]);
 
-  if (!verificationHash || !imagesLoaded) {
+  if (!verificationHash || !barcodeDataUrl || !imagesLoaded) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
         <div className="bg-white rounded-3xl p-8 text-center">
           <Loader size={40} className="animate-spin mx-auto mb-4 text-blue-600" />
           <p className="text-gray-700 font-semibold">
-            {!verificationHash ? 'Generating ID Card...' : 'Loading images...'}
+            {!verificationHash ? 'Generating ID Card...' : !barcodeDataUrl ? 'Generating barcode...' : 'Loading images...'}
           </p>
         </div>
       </div>
@@ -798,7 +819,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                   </div>
                   
                   <div className="pdf417-barcode">
-                    <img src={barcodeUrl} alt="PDF-417 Barcode" crossOrigin="anonymous" />
+                    <img src={barcodeDataUrl} alt="PDF-417 Barcode" />
                   </div>
                 </div>
 
