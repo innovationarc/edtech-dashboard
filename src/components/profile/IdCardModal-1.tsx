@@ -179,7 +179,7 @@ const handleDownloadPDF = async () => {
   font-weight: 900 !important;
   color: #000000 !important;
   font-size: 8px !important;
-  letter-spacing: 0.6px !important;
+  letter-spacing: 1.1px !important;
   -webkit-font-smoothing: subpixel-antialiased !important;
   text-rendering: geometricPrecision !important;
   line-height: 1.2 !important;
@@ -188,6 +188,8 @@ const handleDownloadPDF = async () => {
   overflow: hidden !important;
   display: block !important;
   width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .caution-text {
@@ -199,27 +201,46 @@ const handleDownloadPDF = async () => {
   white-space: nowrap !important;
   text-align: center !important;
   overflow: hidden !important;
-  letter-spacing: -0.4px !important;
-  word-spacing: -1px !important;
+  letter-spacing: 0.2px !important;
   width: 100% !important;
+  margin-top: 3px !important;
+  line-height: 1.1 !important;
 }
 
 .main-content {
-  padding: 16px 2px 0 2px !important;  /* CRITICAL: Reduce padding */
-  overflow: visible !important;
+  padding: 16px 35px 0px 35px !important;
 }
 
-.user-info {
-  overflow: visible !important;
-  width: 100% !important;
+.header-top {
+  margin-bottom: 6px !important;
+}
+
+.user-name-container {
+  margin: 0 0 3px 0 !important;
+}
+
+.user-name {
+  margin: 0 0 1px 0 !important;
+}
+
+.designation {
+  margin: 0 0 6px 0 !important;
+}
+
+.info-grid {
+  margin-bottom: 0px !important;
+  gap: 12px !important;
 }
 
 .mrz-container {
-  width: calc(100% + 12px) !important;  /* EXTEND beyond parent */
-  margin-left: -6px !important;
-  padding-left: 6px !important;
-  padding-right: 6px !important;
-  box-sizing: border-box !important;
+  margin-top: 8px !important;
+  padding: 2px 0 !important;
+}
+
+.user-info {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
 }
         `;
         clonedDoc.head.appendChild(style);
