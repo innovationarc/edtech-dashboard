@@ -221,21 +221,21 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setCurrentPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-9 xs:pr-10 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
+                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-10 xs:pr-11 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
                 style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Enter current password"
                 disabled={loading}
                 required
               />
-              <Lock className="absolute left-2.5 xs:left-3 sm:left-3.5 top-2.5 xs:top-3 sm:top-3.5 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500" />
+              <Lock className="absolute left-2.5 xs:left-3 sm:left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500 pointer-events-none" />
               <button
                 type="button"
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-2.5 xs:top-3 sm:top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
+                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400 transition-colors p-1"
                 disabled={loading}
                 tabIndex={-1}
               >
-                {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" /> : <Eye className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" />}
+                {showCurrentPassword ? <EyeOff className="w-4 h-4 xs:w-[18px] xs:h-[18px] sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 xs:w-[18px] xs:h-[18px] sm:w-5 sm:h-5" />}
               </button>
             </div>
           </div>
@@ -253,21 +253,21 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setNewPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-9 xs:pr-10 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
+                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-10 xs:pr-11 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
                 style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Enter new password"
                 disabled={loading}
                 required
               />
-              <Key className="absolute left-2.5 xs:left-3 sm:left-3.5 top-2.5 xs:top-3 sm:top-3.5 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500" />
+              <Key className="absolute left-2.5 xs:left-3 sm:left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500 pointer-events-none" />
               <button
                 type="button"
                 onClick={() => setShowNewPassword(!showNewPassword)}
-                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-2.5 xs:top-3 sm:top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
+                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400 transition-colors p-1"
                 disabled={loading}
                 tabIndex={-1}
               >
-                {showNewPassword ? <EyeOff className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" /> : <Eye className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" />}
+                {showNewPassword ? <EyeOff className="w-4 h-4 xs:w-[18px] xs:h-[18px] sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 xs:w-[18px] xs:h-[18px] sm:w-5 sm:h-5" />}
               </button>
             </div>
           </div>
@@ -285,21 +285,21 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                   setConfirmPassword(e.target.value);
                   setError('');
                 }}
-                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-9 xs:pr-10 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
+                className="w-full bg-slate-900 text-slate-100 rounded-lg sm:rounded-xl py-2 xs:py-2.5 sm:py-3 pl-8 xs:pl-9 sm:pl-11 pr-10 xs:pr-11 sm:pr-12 border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none transition-all duration-200 font-semibold text-xs xs:text-sm sm:text-base"
                 style={{ fontFamily: 'Inter, sans-serif' }}
                 placeholder="Confirm new password"
                 disabled={loading}
                 required
               />
-              <Key className="absolute left-2.5 xs:left-3 sm:left-3.5 top-2.5 xs:top-3 sm:top-3.5 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500" />
+              <Key className="absolute left-2.5 xs:left-3 sm:left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px] text-slate-500 pointer-events-none" />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-2.5 xs:top-3 sm:top-3.5 text-slate-500 hover:text-slate-400 transition-colors"
+                className="absolute right-2.5 xs:right-3 sm:right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-400 transition-colors p-1"
                 disabled={loading}
                 tabIndex={-1}
               >
-                {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" /> : <Eye className="w-3.5 h-3.5 xs:w-4 xs:h-4 sm:w-[18px] sm:h-[18px]" />}
+                {showConfirmPassword ? <EyeOff className="w-4 h-4 xs:w-[18px] xs:h-[18px] sm:w-5 sm:h-5" /> : <Eye className="w-4 h-4 xs:w-[18px] xs:h-[18px] sm:w-5 sm:h-5" />}
               </button>
             </div>
             {confirmPassword && newPassword && confirmPassword !== newPassword && (
