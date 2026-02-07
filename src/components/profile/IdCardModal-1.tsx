@@ -237,7 +237,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
           }
 
           .sidebar {
-              width: 33%;
+              width: 30%;
               background-color: var(--sidebar);
               display: flex;
               flex-direction: column;
@@ -670,7 +670,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     display: flex;
                     justify-content: space-between;
                     align-items: flex-start;
-                    margin-bottom: 20px;
+                    margin-bottom: 55px;
                 }
 
                 .brand h1 {
@@ -690,8 +690,8 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                 }
 
                 .qr-small {
-                    width: 55px;
-                    height: 55px;
+                    width: 60px;
+                    height: 60px;
                     padding: 0;
                     overflow: hidden;
                 }
@@ -706,14 +706,14 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                 }
 
                 .user-name-container {
-                    margin: 0 0 14px 0;
+                    margin: 0 0 10px 0;
                 }
 
                 .user-name {
                     font-size: 24px;
                     font-weight: 700;
                     color: var(--text-dark);
-                    margin: 0 0 3px 0;
+                    margin: 0 0 2px 0;
                     line-height: 1.2;
                 }
 
@@ -730,7 +730,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     display: grid;
                     grid-template-columns: repeat(2, 1fr);
                     gap: 16px;
-                    margin-bottom: 16px;
+                    margin-bottom: 12px;
                 }
 
                 .info-item .label {
@@ -739,7 +739,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     text-transform: uppercase;
                     font-weight: 600;
                     letter-spacing: 0.5px;
-                    margin-bottom: 3px;
+                    margin-bottom: 2px;
                 }
 
                 .info-item .value {
