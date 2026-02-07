@@ -188,7 +188,7 @@ const handleDownloadPDF = async () => {
 .caution-text {
   color: #dc2626 !important;
   font-weight: 900 !important;
-  font-size: 7.5px !important;
+  font-size: 2px !important;
   text-rendering: geometricPrecision !important;
   -webkit-font-smoothing: subpixel-antialiased !important;
 }
@@ -514,7 +514,7 @@ const handleDownloadPDF = async () => {
           }
 
           .caution-text {
-              font-size: 7.5px;
+              font-size: 2px;
               color: var(--caution-red);
               font-weight: 600;
               text-align: center;
@@ -857,7 +857,7 @@ const handleDownloadPDF = async () => {
                 }
 
                 .caution-text {
-                    font-size: 7.5px;
+                    font-size: 2px;
                     color: var(--caution-red);
                     font-weight: 600;
                     text-align: center;
