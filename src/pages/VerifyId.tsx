@@ -121,30 +121,42 @@ const VerifyId = () => {
       }
 
       if (!data.userData) {
+        console.error('❌ No userData in response');
         setError('User data not available');
         setLoading(false);
         return;
       }
 
-      // Set verified user
-      setVerifiedUser({
-        userId: data.userData.userId,
-        surname: data.userData.surname || '',
-        name: data.userData.name || '',
-        fullName: data.userData.fullName || `${data.userData.surname || ''} ${data.userData.name || ''}`.trim(),
-        designation: data.userData.designation || 'Not Specified',
-        bloodGroup: data.userData.bloodGroup || 'Not Specified',
-        phoneNumber: data.userData.phoneNumber || 'Not Specified',
-        email: data.userData.email || 'Not Specified',
-        address: data.userData.address || 'Not Specified',
-        profilePictureUrl: data.userData.profilePictureUrl,
-        status: data.userData.status || 'unknown',
-        createdAt: data.userData.createdAt,
-        validTill: data.userData.validTill,
-        role: data.userData.role || 'Unknown'
-      });
+      console.log('📦 User data received:', data.userData);
 
-      console.log('✅ Verification successful');
+      // Set verified user with safe defaults
+      try {
+        const verifiedUserData: VerifiedUser = {
+          userId: data.userData.userId || 'N/A',
+          surname: data.userData.surname || '',
+          name: data.userData.name || '',
+          fullName: data.userData.fullName || `${data.userData.surname || ''} ${data.userData.name || ''}`.trim() || 'Unknown',
+          designation: data.userData.designation || 'Not Specified',
+          bloodGroup: data.userData.bloodGroup || 'Not Specified',
+          phoneNumber: data.userData.phoneNumber || 'Not Specified',
+          email: data.userData.email || 'Not Specified',
+          address: data.userData.address || 'Not Specified',
+          profilePictureUrl: data.userData.profilePictureUrl || undefined,
+          status: (data.userData.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
+          createdAt: data.userData.createdAt || new Date().toISOString(),
+          validTill: data.userData.validTill || 'lifetime',
+          role: data.userData.role || 'Unknown'
+        };
+
+        console.log('✅ Verified user data prepared:', verifiedUserData);
+        setVerifiedUser(verifiedUserData);
+        console.log('✅ Verification successful');
+      } catch (parseError: any) {
+        console.error('❌ Error setting verified user:', parseError);
+        setError('Failed to process user data: ' + parseError.message);
+        setLoading(false);
+        return;
+      }
 
     } catch (err: any) {
       console.error('❌ Verification error:', err);
@@ -156,16 +168,26 @@ const VerifyId = () => {
 
   const formatDate = (date: Date | string | undefined) => {
     if (!date) return 'Not specified';
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return d.toLocaleDateString('en-GB', { 
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    try {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      // Check if date is valid
+      if (isNaN(d.getTime())) {
+        return 'Not specified';
+      }
+      return d.toLocaleDateString('en-GB', { 
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Not specified';
+    }
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    const normalizedStatus = (status || 'unknown').toLowerCase();
+    switch (normalizedStatus) {
       case 'active': return 'bg-green-100 text-green-800 border-green-300';
       case 'suspended': return 'bg-red-100 text-red-800 border-red-300';
       case 'inactive': return 'bg-gray-100 text-gray-800 border-gray-300';
@@ -175,7 +197,8 @@ const VerifyId = () => {
   };
 
   const getStatusIcon = (status: string) => {
-    switch (status) {
+    const normalizedStatus = (status || 'unknown').toLowerCase();
+    switch (normalizedStatus) {
       case 'active': return <CheckCircle2 className="w-5 h-5" />;
       case 'suspended': return <XCircle className="w-5 h-5" />;
       default: return <AlertCircle className="w-5 h-5" />;
@@ -358,7 +381,7 @@ const VerifyId = () => {
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${getStatusColor(verifiedUser.status)}`}>
                 {getStatusIcon(verifiedUser.status)}
                 <span className="font-semibold capitalize" style={{ fontFamily: 'Inter, sans-serif' }}>
-                  {verifiedUser.status}
+                  {verifiedUser.status || 'Unknown'}
                 </span>
               </div>
             </div>
@@ -367,9 +390,13 @@ const VerifyId = () => {
             <div className="flex flex-col md:flex-row gap-6 mb-8 pb-8 border-b border-slate-700">
               <div className="flex-shrink-0">
                 <img
-                  src={verifiedUser.profilePictureUrl || `https://i.pravatar.cc/300?u=${verifiedUser.userId}`}
+                  src={verifiedUser.profilePictureUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(verifiedUser.fullName)}&size=300&background=3b82f6&color=ffffff`}
                   alt={verifiedUser.fullName}
                   className="w-32 h-32 rounded-lg object-cover border-2 border-slate-600"
+                  onError={(e) => {
+                    // Fallback if image fails to load
+                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(verifiedUser.fullName)}&size=300&background=3b82f6&color=ffffff`;
+                  }}
                 />
               </div>
               <div className="flex-1">
