@@ -514,7 +514,7 @@ const handleDownloadPDF = async () => {
           }
 
           .caution-text {
-              font-size: 2px;
+              font-size: 10px;
               color: var(--caution-red);
               font-weight: 600;
               text-align: center;
