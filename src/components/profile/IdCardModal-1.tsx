@@ -174,25 +174,46 @@ const handleDownloadPDF = async () => {
             color-adjust: exact !important;
           }
           
-          .mrz-line-1, .mrz-line-2 {
+          ..mrz-line-1, .mrz-line-2 {
   font-family: 'JetBrains Mono', 'Courier New', Consolas, Monaco, 'Lucida Console', monospace !important;
   font-weight: 900 !important;
   color: #000000 !important;
   font-size: 8px !important;
-  letter-spacing: 1.1px !important;
+  letter-spacing: 0.5px !important;  /* REDUCED from 1.1px */
   -webkit-font-smoothing: subpixel-antialiased !important;
   text-rendering: geometricPrecision !important;
   line-height: 1.2 !important;
+  white-space: pre !important;
+  text-align: center !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  display: block !important;
+  transform: scaleX(0.92) !important;  /* Compress horizontally by 8% */
+  transform-origin: center !important;
 }
 
 .caution-text {
   color: #dc2626 !important;
   font-weight: 900 !important;
   font-size: 7.5px !important;
-  min-width: max-content !important;
-  text-overflow: clip !important; 
   text-rendering: geometricPrecision !important;
   -webkit-font-smoothing: subpixel-antialiased !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  letter-spacing: -0.5px !important;  /* COMPRESS letters */
+  word-spacing: -1.5px !important;  /* COMPRESS words */
+  transform: scaleX(0.88) !important;  /* Compress horizontally by 12% */
+  transform-origin: center !important;
+}
+
+.user-info {
+  overflow: visible !important;
+}
+
+.main-content {
+  overflow: visible !important;
 }
           
           .brand h1 {
