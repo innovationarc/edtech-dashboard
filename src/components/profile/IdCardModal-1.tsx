@@ -506,7 +506,7 @@ const handleDownloadPDF = async () => {
               box-shadow: none;
               border: 1px solid #ddd;
               transform-origin: top left;
-              transform: scale(0.4);
+              transform: none;
           }
 
           .sidebar {
