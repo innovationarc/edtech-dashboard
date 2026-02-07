@@ -125,37 +125,29 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   // Full name
   const fullName = `${user?.surname || ''} ${user?.name || ''}`.trim() || 'Not Specified';
 
-  // Download as PDF - FIXED VERSION
+  // Download as PDF
   const handleDownloadPDF = async () => {
     if (!cardRef.current) return;
 
     setIsGenerating(true);
     try {
-      // Wait for images to fully load
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Wait longer for images to fully load and render
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Get the actual rendered size of the card
-      const cardElement = cardRef.current;
-      const rect = cardElement.getBoundingClientRect();
-      
-      const canvas = await html2canvas(cardElement, {
-        scale: 5, // Ultra high quality for printing
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 4, // Higher scale for better quality
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
-        imageTimeout: 15000,
-        onclone: (clonedDoc) => {
-          const clonedCard = clonedDoc.querySelector('.id-card') as HTMLElement;
-          if (clonedCard) {
-            // Force exact dimensions in the clone
-            clonedCard.style.width = '539.84px';
-            clonedCard.style.height = '337.5px';
-            clonedCard.style.transform = 'none';
-            clonedCard.style.margin = '0';
-            clonedCard.style.padding = '0';
-          }
-        }
+        width: 539.8,
+        height: 337.5,
+        windowWidth: 539.8,
+        windowHeight: 337.5,
+        scrollY: -window.scrollY,
+        scrollX: -window.scrollX,
+        imageTimeout: 15000, // Wait longer for images
+        removeContainer: true,
       });
 
       const imgData = canvas.toDataURL('image/png', 1.0);
@@ -164,7 +156,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
         orientation: 'landscape',
         unit: 'mm',
         format: [85.6, 53.98],
-        compress: false // No compression for maximum quality
+        compress: true
       });
 
       pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
@@ -230,43 +222,29 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               --designation-color: #4b5563;
           }
 
-          * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-          }
-
-          body {
-              font-family: 'Inter', system-ui, -apple-system, sans-serif;
-              -webkit-font-smoothing: antialiased;
-              -moz-osx-font-smoothing: grayscale;
-              background: white;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              margin: 0;
-              padding: 0;
-          }
-
           .id-card {
-              width: 85.6mm;
-              height: 53.98mm;
-              background: white;
+              width: 539.8px;
+              height: 337.5px;
+              background: #ffffff;
+              border-radius: 16px;
+              overflow: hidden;
               display: flex;
               position: relative;
-              border-radius: 8px;
-              overflow: hidden;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              box-shadow: none;
+              border: 1px solid #ddd;
+              transform-origin: top left;
+              transform: scale(0.4);
           }
 
           .sidebar {
               width: 30%;
-              background: linear-gradient(180deg, var(--primary) 0%, #1e40af 100%);
+              background-color: var(--sidebar);
               display: flex;
               flex-direction: column;
               align-items: center;
-              justify-content: flex-start;
-              padding: 16px 10px;
+              justify-content: center;
+              padding: 15px 20px;
+              border-right: 1px solid #e5e7eb;
               position: relative;
           }
 
@@ -275,22 +253,20 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               position: absolute;
               top: 0;
               left: 0;
-              right: 0;
-              bottom: 0;
-              background: var(--primary);
-              opacity: 0.95;
+              width: 6px;
+              height: 100%;
+              background: linear-gradient(to bottom, var(--primary), #4b5563);
           }
 
           .photo-box {
-              width: 80px;
-              height: 95px;
-              border-radius: 6px;
+              width: 130px;
+              height: 130px;
+              background: #fff;
+              border-radius: 8px;
+              border: 1px solid #d1d5db;
               overflow: hidden;
-              background: white;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-              position: relative;
-              z-index: 1;
-              flex-shrink: 0;
+              margin-bottom: 10px;
+              margin-left: 3px;
           }
 
           .photo-box img {
@@ -300,84 +276,79 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
           }
 
           .id-text-container {
-              margin-top: 10px;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              position: relative;
-              z-index: 1;
+              text-align: center;
+              margin: 3px 0 3px 0;
+              width: 100%;
           }
 
           .id-separator {
-              width: 50px;
+              width: 120px;
               height: 1px;
-              background: rgba(255, 255, 255, 0.3);
+              background-color: #e5e7eb;
+              margin: 0 auto;
           }
 
           .student-id-text {
-              padding: 4px 0;
-              font-size: 10px;
-              font-weight: 700;
-              color: white;
-              letter-spacing: 0.5px;
+              font-family: 'Inter', sans-serif;
+              font-size: 12px;
+              font-weight: 500;
+              color: var(--id-color);
+              letter-spacing: 0.8px;
               text-align: center;
+              line-height: 1.4;
+              margin: 6px 0;
           }
 
           .pdf417-barcode {
-              margin-top: auto;
-              width: 100%;
+              width: 140px;
+              height: 40px;
+              background: #fff;
               display: flex;
+              align-items: center;
               justify-content: center;
-              position: relative;
-              z-index: 1;
-              padding: 0 5px;
+              margin-top: 5px;
+              margin-left: 3px;
           }
 
           .pdf417-barcode img {
               width: 100%;
-              height: auto;
-              max-width: 90px;
-              filter: brightness(1.1);
+              height: 100%;
+              object-fit: contain;
           }
 
           .main-content {
               flex: 1;
-              padding: 14px 18px 8px 18px;
+              padding: 25px 35px 25px 35px;
               display: flex;
               flex-direction: column;
-              background: white;
           }
 
           .header-top {
               display: flex;
               justify-content: space-between;
               align-items: flex-start;
-              margin-bottom: 12px;
-              padding-bottom: 8px;
-              border-bottom: 2px solid #e5e7eb;
+              margin-bottom: 10px;
           }
 
           .brand h1 {
-              font-size: 16px;
+              margin: 0;
+              font-size: 18px;
               font-weight: 800;
               color: var(--primary);
-              line-height: 1.1;
-              margin: 0 0 2px 0;
-              letter-spacing: -0.3px;
+              letter-spacing: -0.5px;
           }
 
           .brand p {
-              font-size: 8px;
-              color: var(--text-muted);
-              font-weight: 500;
               margin: 0;
-              letter-spacing: 0.3px;
+              font-size: 10px;
+              color: var(--accent);
+              font-weight: 600;
+              text-transform: uppercase;
           }
 
           .qr-small {
-              flex-shrink: 0;
-              width: 60px;
-              height: 60px;
+              width: 55px;
+              height: 55px;
               padding: 0;
               overflow: hidden;
           }
@@ -392,14 +363,14 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
           }
 
           .user-name-container {
-              margin: 0 0 5px 0;
+              margin: 0 0 14px 0;
           }
 
           .user-name {
               font-size: 24px;
               font-weight: 700;
               color: var(--text-dark);
-              margin: 0 0 2px 0;
+              margin: 0 0 3px 0;
               line-height: 1.2;
           }
 
@@ -416,7 +387,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               display: grid;
               grid-template-columns: repeat(2, 1fr);
               gap: 16px;
-              margin-bottom: 3px;
+              margin-bottom: 5px;
           }
 
           .info-item .label {
@@ -435,10 +406,10 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
           }
 
           .mrz-container {
-              margin-top: 16px;
+              margin-top: 25px;
               width: 100%;
               background: #f9fafb;
-              padding: 3px 0;
+              padding: 6px 0;
               border-top: 1px solid #e5e7eb;
               font-family: 'JetBrains Mono', monospace;
               text-align: center;
@@ -450,7 +421,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               color: #1f2937;
               line-height: 1.2;
               width: 100%;
-              margin: 2px 0 0 0;
+              margin: 1px 0 0 0;
               display: block;
               white-space: pre;
               text-align: center;
@@ -483,13 +454,6 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               white-space: nowrap;
               overflow: hidden;
           }
-
-          @media print {
-              body { background: transparent; }
-              .id-card { box-shadow: none; border: 1px solid #ddd; }
-              .sidebar::before { background: var(--primary); }
-              .photo-box { box-shadow: none; }
-          }
         </style>
       </head>
       <body>
@@ -500,366 +464,406 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
     printWindow.document.close();
     printWindow.focus();
+    
     setTimeout(() => {
       printWindow.print();
-    }, 500);
+      printWindow.close();
+    }, 1000);
   };
 
+  // Close on Escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose]);
+
+  // Preload images to ensure proper rendering
+  useEffect(() => {
+    if (!verificationHash || !barcodeDataUrl) return;
+
+    const imagesToLoad = [
+      userPhotoUrl,
+      qrCodeUrl
+    ];
+
+    let loadedCount = 0;
+    const totalImages = imagesToLoad.length;
+
+    imagesToLoad.forEach(src => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          setImagesLoaded(true);
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          setImagesLoaded(true);
+        }
+      };
+      img.src = src;
+    });
+  }, [verificationHash, userPhotoUrl, qrCodeUrl, barcodeDataUrl]);
+
+  if (!verificationHash || !barcodeDataUrl || !imagesLoaded) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
+        <div className="bg-white rounded-3xl p-8 text-center">
+          <Loader size={40} className="animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-700 font-semibold">
+            {!verificationHash ? 'Generating ID Card...' : !barcodeDataUrl ? 'Generating barcode...' : 'Loading images...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl w-full max-w-4xl p-6 md:p-8 relative shadow-2xl my-8">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-10"
+          aria-label="Close"
+        >
+          <X size={24} className="text-gray-600" />
+        </button>
+
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl z-10">
-          <h2 className="text-xl font-bold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Your Digital ID Card</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-            aria-label="Close"
-          >
-            <X size={24} />
-          </button>
+        <div className="text-center mb-6">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+            Professional ID Card
+          </h2>
+          <p className="text-gray-600 text-sm md:text-base">
+            Official identification document
+          </p>
         </div>
 
-        {/* Card Preview */}
-        <div className="p-8">
-          <div className="flex justify-center mb-4">
-            <div className="inline-block bg-gradient-to-br from-gray-50 to-gray-100 p-8 rounded-2xl shadow-inner">
-              <div ref={cardRef} style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <style>{`
-                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
+        {/* ID Card Preview - Exact Template Rendering */}
+        <div className="flex justify-center mb-6">
+          <div className="inline-block bg-gray-100 p-6 rounded-2xl">
+            {/* EXACT HTML TEMPLATE - DO NOT MODIFY STRUCTURE OR STYLES */}
+            <div ref={cardRef}>
+              <style dangerouslySetInnerHTML={{ __html: `
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
 
-                  :root {
-                      --primary: #1e3a8a;
-                      --accent: #374151;
-                      --sidebar: #f9fafb;
-                      --text-dark: #1f2937;
-                      --text-muted: #6b7280;
-                      --caution-red: #dc2626;
-                      --id-color: #1f2937;
-                      --designation-color: #4b5563;
-                  }
+                :root {
+                    --primary: #1e3a8a;
+                    --accent: #374151;
+                    --sidebar: #f9fafb;
+                    --text-dark: #1f2937;
+                    --text-muted: #6b7280;
+                    --caution-red: #dc2626;
+                    --id-color: #1f2937;
+                    --designation-color: #4b5563;
+                }
 
-                  * {
-                      margin: 0;
-                      padding: 0;
-                      box-sizing: border-box;
-                  }
+                * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
 
-                  body {
-                      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-                      -webkit-font-smoothing: antialiased;
-                      -moz-osx-font-smoothing: grayscale;
-                      background: white;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      margin: 0;
-                      padding: 0;
-                  }
+                .id-card {
+                    width: 539.8px;
+                    height: 337.5px;
+                    background: #ffffff;
+                    border-radius: 16px;
+                    overflow: hidden;
+                    display: flex;
+                    position: relative;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
+                    border: 1px solid #e5e7eb;
+                }
 
-                  .id-card {
-                      width: 539.84px;
-                      height: 337.5px;
-                      background: white;
-                      display: flex;
-                      position: relative;
-                      border-radius: 12px;
-                      overflow: hidden;
-                      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-                  }
+                .sidebar {
+                    width: 31.5%;
+                    background-color: var(--sidebar);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 15px 20px;
+                    border-right: 1px solid #e5e7eb;
+                    position: relative;
+                }
 
-                  .sidebar {
-                      width: 30%;
-                      background: linear-gradient(180deg, var(--primary) 0%, #1e40af 100%);
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      justify-content: flex-start;
-                      padding: 24px 16px;
-                      position: relative;
-                  }
+                .sidebar::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 6px;
+                    height: 100%;
+                    background: linear-gradient(to bottom, var(--primary), #4b5563);
+                }
 
-                  .sidebar::before {
-                      content: '';
-                      position: absolute;
-                      top: 0;
-                      left: 0;
-                      right: 0;
-                      bottom: 0;
-                      background: var(--primary);
-                      opacity: 0.95;
-                  }
+                .photo-box {
+                    width: 130px;
+                    height: 130px;
+                    background: #fff;
+                    border-radius: 8px;
+                    border: 1px solid #d1d5db;
+                    overflow: hidden;
+                    margin-bottom: 10px;
+                    margin-left: 3px;
+                }
 
-                  .photo-box {
-                      width: 120px;
-                      height: 140px;
-                      border-radius: 8px;
-                      overflow: hidden;
-                      background: white;
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                      position: relative;
-                      z-index: 1;
-                      flex-shrink: 0;
-                  }
+                .photo-box img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
 
-                  .photo-box img {
-                      width: 100%;
-                      height: 100%;
-                      object-fit: cover;
-                  }
+                .id-text-container {
+                    text-align: center;
+                    margin: 3px 0 3px 0;
+                    width: 100%;
+                }
 
-                  .id-text-container {
-                      margin-top: 16px;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      position: relative;
-                      z-index: 1;
-                  }
+                .id-separator {
+                    width: 120px;
+                    height: 1px;
+                    background-color: #e5e7eb;
+                    margin: 0 auto;
+                }
 
-                  .id-separator {
-                      width: 80px;
-                      height: 2px;
-                      background: rgba(255, 255, 255, 0.3);
-                  }
+                .student-id-text {
+                    font-family: 'Inter', sans-serif;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: var(--id-color);
+                    letter-spacing: 0.8px;
+                    text-align: center;
+                    line-height: 1.4;
+                    margin: 6px 0;
+                }
 
-                  .student-id-text {
-                      padding: 8px 0;
-                      font-size: 14px;
-                      font-weight: 700;
-                      color: white;
-                      letter-spacing: 1px;
-                      text-align: center;
-                  }
+                .pdf417-barcode {
+                    width: 140px;
+                    height: 40px;
+                    background: #fff;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-top: 5px;
+                    margin-left: 3px;
+                }
 
-                  .pdf417-barcode {
-                      margin-top: auto;
-                      width: 100%;
-                      display: flex;
-                      justify-content: center;
-                      position: relative;
-                      z-index: 1;
-                      padding: 0 8px;
-                  }
+                .pdf417-barcode img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                }
 
-                  .pdf417-barcode img {
-                      width: 100%;
-                      height: auto;
-                      max-width: 130px;
-                      filter: brightness(1.1);
-                  }
+                .main-content {
+                    flex: 1;
+                    padding: 25px 35px 0px 35px;
+                    display: flex;
+                    flex-direction: column;
+                }
 
-                  .main-content {
-                      flex: 1;
-                      padding: 24px 28px 16px 28px;
-                      display: flex;
-                      flex-direction: column;
-                      background: white;
-                  }
+                .header-top {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 10px;
+                }
 
-                  .header-top {
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: flex-start;
-                      margin-bottom: 18px;
-                      padding-bottom: 12px;
-                      border-bottom: 3px solid #e5e7eb;
-                  }
+                .brand h1 {
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: 800;
+                    color: var(--primary);
+                    letter-spacing: -0.5px;
+                }
 
-                  .brand h1 {
-                      font-size: 22px;
-                      font-weight: 800;
-                      color: var(--primary);
-                      line-height: 1.1;
-                      margin: 0 0 4px 0;
-                      letter-spacing: -0.5px;
-                  }
+                .brand p {
+                    margin: 0;
+                    font-size: 10px;
+                    color: var(--accent);
+                    font-weight: 600;
+                    text-transform: uppercase;
+                }
 
-                  .brand p {
-                      font-size: 11px;
-                      color: var(--text-muted);
-                      font-weight: 500;
-                      margin: 0;
-                      letter-spacing: 0.5px;
-                  }
+                .qr-small {
+                    width: 60px;
+                    height: 60px;
+                    padding: 0;
+                    overflow: hidden;
+                }
 
-                  .qr-small {
-                      flex-shrink: 0;
-                      width: 75px;
-                      height: 75px;
-                      padding: 0;
-                      overflow: hidden;
-                  }
+                .qr-small img {
+                    width: 100%;
+                    height: 100%;
+                }
 
-                  .qr-small img {
-                      width: 100%;
-                      height: 100%;
-                  }
+                .user-info {
+                    flex: 1;
+                }
 
-                  .user-info {
-                      flex: 1;
-                  }
+                .user-name-container {
+                    margin: 0 0 5px 0;
+                }
 
-                  .user-name-container {
-                      margin: 0 0 8px 0;
-                  }
+                .user-name {
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: var(--text-dark);
+                    margin: 0 0 2px 0;
+                    line-height: 1.2;
+                }
 
-                  .user-name {
-                      font-size: 32px;
-                      font-weight: 700;
-                      color: var(--text-dark);
-                      margin: 0 0 4px 0;
-                      line-height: 1.2;
-                  }
+                .designation {
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: var(--designation-color);
+                    letter-spacing: 0.2px;
+                    font-style: italic;
+                    margin: 0 0 10px 0;
+                }
 
-                  .designation {
-                      font-size: 16px;
-                      font-weight: 500;
-                      color: var(--designation-color);
-                      letter-spacing: 0.3px;
-                      font-style: italic;
-                      margin: 0 0 16px 0;
-                  }
+                .info-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 16px;
+                    margin-bottom: 3px;
+                }
 
-                  .info-grid {
-                      display: grid;
-                      grid-template-columns: repeat(2, 1fr);
-                      gap: 20px;
-                      margin-bottom: 6px;
-                  }
+                .info-item .label {
+                    font-size: 9px;
+                    color: var(--text-muted);
+                    text-transform: uppercase;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 2px;
+                }
 
-                  .info-item .label {
-                      font-size: 11px;
-                      color: var(--text-muted);
-                      text-transform: uppercase;
-                      font-weight: 600;
-                      letter-spacing: 0.8px;
-                      margin-bottom: 4px;
-                  }
+                .info-item .value {
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: var(--text-dark);
+                }
 
-                  .info-item .value {
-                      font-size: 15px;
-                      font-weight: 500;
-                      color: var(--text-dark);
-                  }
+                .mrz-container {
+                    margin-top: 16px;
+                    width: 100%;
+                    background: #f9fafb;
+                    padding: 3px 0;
+                    border-top: 1px solid #e5e7eb;
+                    font-family: 'JetBrains Mono', monospace;
+                    text-align: center;
+                }
 
-                  .mrz-container {
-                      margin-top: 20px;
-                      width: 100%;
-                      background: #f9fafb;
-                      padding: 6px 0;
-                      border-top: 2px solid #e5e7eb;
-                      font-family: 'JetBrains Mono', monospace;
-                      text-align: center;
-                  }
+                .mrz-line-1 {
+                    font-size: 8px;
+                    letter-spacing: 1.1px;
+                    color: #1f2937;
+                    line-height: 1.2;
+                    width: 100%;
+                    margin: 2px 0 0 0;
+                    display: block;
+                    white-space: pre;
+                    text-align: center;
+                    padding: 0;
+                    overflow: hidden;
+                }
 
-                  .mrz-line-1 {
-                      font-size: 10px;
-                      letter-spacing: 1.5px;
-                      color: #1f2937;
-                      line-height: 1.4;
-                      width: 100%;
-                      margin: 2px 0 0 0;
-                      display: block;
-                      white-space: pre;
-                      text-align: center;
-                      padding: 0;
-                      overflow: hidden;
-                  }
+                .mrz-line-2 {
+                    font-size: 8px;
+                    letter-spacing: 1.1px;
+                    color: #1f2937;
+                    line-height: 1.2;
+                    width: 100%;
+                    margin: 0 0 1px 0;
+                    display: block;
+                    white-space: pre;
+                    text-align: center;
+                    padding: 0;
+                    overflow: hidden;
+                }
 
-                  .mrz-line-2 {
-                      font-size: 10px;
-                      letter-spacing: 1.5px;
-                      color: #1f2937;
-                      line-height: 1.4;
-                      width: 100%;
-                      margin: 0 0 2px 0;
-                      display: block;
-                      white-space: pre;
-                      text-align: center;
-                      padding: 0;
-                      overflow: hidden;
-                  }
+                .caution-text {
+                    font-size: 7.5px;
+                    color: var(--caution-red);
+                    font-weight: 600;
+                    text-align: center;
+                    margin-top: 6px;
+                    letter-spacing: 0.2px;
+                    width: 100%;
+                    white-space: nowrap;
+                    overflow: hidden;
+                }
 
-                  .caution-text {
-                      font-size: 9px;
-                      color: var(--caution-red);
-                      font-weight: 600;
-                      text-align: center;
-                      margin-top: 8px;
-                      letter-spacing: 0.3px;
-                      width: 100%;
-                      white-space: nowrap;
-                      overflow: hidden;
-                  }
+                @media print {
+                    body { background: transparent; }
+                    .id-card { box-shadow: none; border: 1px solid #ddd; }
+                    .sidebar::before { background: var(--primary); }
+                    .photo-box { box-shadow: none; }
+                }
+              `}} />
 
-                  @media print {
-                      body { background: transparent; }
-                      .id-card { box-shadow: none; border: 1px solid #ddd; }
-                      .sidebar::before { background: var(--primary); }
-                      .photo-box { box-shadow: none; }
-                  }
-                `}</style>
+              <div className="id-card">
+                <div className="sidebar">
+                  <div className="photo-box">
+                    <img src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
+                  </div>
+                  
+                  <div className="id-text-container">
+                    <div className="id-separator"></div>
+                    <div className="student-id-text">{user?.userId || 'ST-2601-00001'}</div>
+                    <div className="id-separator"></div>
+                  </div>
+                  
+                  <div className="pdf417-barcode">
+                    <img src={barcodeDataUrl} alt="PDF-417 Barcode" />
+                  </div>
+                </div>
 
-                <div className="id-card">
-                  <div className="sidebar">
-                    <div className="photo-box">
-                      <img src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
+                <div className="main-content">
+                  <div className="header-top">
+                    <div className="brand">
+                      <h1>EDTECH DASHBOARD</h1>
+                      <p>Global Learning Network</p>
                     </div>
-                    
-                    <div className="id-text-container">
-                      <div className="id-separator"></div>
-                      <div className="student-id-text">{user?.userId || 'ST-2601-00001'}</div>
-                      <div className="id-separator"></div>
-                    </div>
-                    
-                    <div className="pdf417-barcode">
-                      <img src={barcodeDataUrl} alt="PDF-417 Barcode" />
+                    <div className="qr-small">
+                      <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
                     </div>
                   </div>
 
-                  <div className="main-content">
-                    <div className="header-top">
-                      <div className="brand">
-                        <h1>EDTECH DASHBOARD</h1>
-                        <p>Global Learning Network</p>
+                  <div className="user-info">
+                    <div className="user-name-container">
+                      <h2 className="user-name">{fullName}</h2>
+                      <div className="designation">{user?.designation || 'Security Analyst'}</div>
+                    </div>
+                    
+                    <div className="info-grid">
+                      <div className="info-item">
+                        <div className="label">Blood Group</div>
+                        <div className="value">{user?.bloodGroup || 'Not Specified'}</div>
                       </div>
-                      <div className="qr-small">
-                        <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
+                      <div className="info-item">
+                        <div className="label">Emergency Contact</div>
+                        <div className="value">{user?.phoneNumber || 'Not Specified'}</div>
+                      </div>
+                      <div className="info-item">
+                        <div className="label">Issue Date</div>
+                        <div className="value">{formatIssueDate()}</div>
+                      </div>
+                      <div className="info-item">
+                        <div className="label">Valid Till</div>
+                        <div className="value">{formatValidTill(user?.validTill)}</div>
                       </div>
                     </div>
 
-                    <div className="user-info">
-                      <div className="user-name-container">
-                        <h2 className="user-name">{fullName}</h2>
-                        <div className="designation">{user?.designation || 'Security Analyst'}</div>
-                      </div>
-                      
-                      <div className="info-grid">
-                        <div className="info-item">
-                          <div className="label">Blood Group</div>
-                          <div className="value">{user?.bloodGroup || 'Not Specified'}</div>
-                        </div>
-                        <div className="info-item">
-                          <div className="label">Emergency Contact</div>
-                          <div className="value">{user?.phoneNumber || 'Not Specified'}</div>
-                        </div>
-                        <div className="info-item">
-                          <div className="label">Issue Date</div>
-                          <div className="value">{formatIssueDate()}</div>
-                        </div>
-                        <div className="info-item">
-                          <div className="label">Valid Till</div>
-                          <div className="value">{formatValidTill(user?.validTill)}</div>
-                        </div>
-                      </div>
-
-                      <div className="mrz-container">
-                        <div className="mrz-line-1">{mrz.line1}</div>
-                        <div className="mrz-line-2">{mrz.line2}</div>
-                      </div>
-                      <div className="caution-text">If this card found unattended, please return it to Edtech-dashboard.</div>
+                    <div className="mrz-container">
+                      <div className="mrz-line-1">{mrz.line1}</div>
+                      <div className="mrz-line-2">{mrz.line2}</div>
                     </div>
+                    <div className="caution-text">If this card found unattended, please return it to Edtech-dashboard.</div>
                   </div>
                 </div>
               </div>
