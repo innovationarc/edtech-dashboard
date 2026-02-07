@@ -525,6 +525,8 @@ const handleDownloadPDF = async () => {
               width: 100%;
               white-space: nowrap;
               overflow: hidden;
+              min-width: max-content !important;
+              text-overflow: clip !important; 
           }
         </style>
       </head>
