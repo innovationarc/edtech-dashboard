@@ -19,6 +19,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [barcodeDataUrl, setBarcodeDataUrl] = useState<string>('');
   const cardRef = useRef<HTMLDivElement>(null);
+  const printCardRef = useRef<HTMLDivElement>(null);
 
   // Generate verification hash and store in Firestore
   useEffect(() => {
@@ -117,7 +118,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const verificationUrl = `${window.location.origin}/verify-id?token=${verificationHash}`;
 
   // Generate QR code URL - now using hash
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
 
   // User photo URL with fallback
   const userPhotoUrl = user?.profilePictureUrl || 'https://i.pravatar.cc/300?u=default';
@@ -125,52 +126,38 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   // Full name
   const fullName = `${user?.surname || ''} ${user?.name || ''}`.trim() || 'Not Specified';
 
-  // Download as PDF - FIXED VERSION
+  // Download as PDF - Using hidden print-optimized card
   const handleDownloadPDF = async () => {
-    if (!cardRef.current) return;
+    if (!printCardRef.current) return;
 
     setIsGenerating(true);
     try {
       // Wait for images to fully load
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Get the actual rendered dimensions of the card
-      const cardElement = cardRef.current;
-      const rect = cardElement.getBoundingClientRect();
-
-      // Use high scale for quality while maintaining exact proportions
-      const scale = 5; // Very high quality for printing
-      
-      const canvas = await html2canvas(cardElement, {
-        scale: scale,
+      // Capture at exact credit card dimensions: 85.6mm × 53.98mm at 300 DPI = 1011px × 637px
+      const canvas = await html2canvas(printCardRef.current, {
+        scale: 3,
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
+        width: 1011,
+        height: 637,
+        windowWidth: 1011,
+        windowHeight: 637,
         imageTimeout: 15000,
-        removeContainer: true,
-        // Let html2canvas use the natural dimensions
-        width: rect.width,
-        height: rect.height,
-        windowWidth: rect.width,
-        windowHeight: rect.height,
-        x: 0,
-        y: 0,
       });
 
-      // Convert to high quality image
       const imgData = canvas.toDataURL('image/png', 1.0);
       
-      // Create PDF with exact credit card dimensions (CR80 standard)
-      // 85.6mm x 53.98mm (3.375" x 2.125")
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
-        format: [85.6, 53.98], // Credit card size
-        compress: false // No compression for best quality
+        format: [85.6, 53.98],
+        compress: false
       });
 
-      // Add image to fill entire PDF page
       pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
       pdf.save(`ID-Card-${user?.userId}.pdf`);
     } catch (error) {
@@ -234,37 +221,44 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               --designation-color: #4b5563;
           }
 
-          body {
+          * {
               margin: 0;
               padding: 0;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              background: white;
+              box-sizing: border-box;
+          }
+
+          body {
               font-family: 'Inter', system-ui, -apple-system, sans-serif;
+              -webkit-font-smoothing: antialiased;
+              -moz-osx-font-smoothing: grayscale;
+              background: white;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin: 0;
+              padding: 0;
           }
 
           .id-card {
               width: 85.6mm;
               height: 53.98mm;
               background: white;
-              border-radius: 12px;
-              overflow: hidden;
-              box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
               display: flex;
               position: relative;
-              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
           }
 
           .sidebar {
-              width: 120px;
-              background: linear-gradient(135deg, var(--primary) 0%, #1e40af 50%, #1e3a8a 100%);
+              width: 30%;
+              background: linear-gradient(180deg, var(--primary) 0%, #1e40af 100%);
               display: flex;
               flex-direction: column;
               align-items: center;
-              padding: 18px 10px 12px;
+              justify-content: flex-start;
+              padding: 16px 10px;
               position: relative;
-              box-shadow: 4px 0 12px rgba(0,0,0,0.08);
           }
 
           .sidebar::before {
@@ -274,84 +268,72 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               left: 0;
               right: 0;
               bottom: 0;
-              background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-              pointer-events: none;
+              background: var(--primary);
+              opacity: 0.95;
           }
 
           .photo-box {
-              width: 96px;
-              height: 96px;
-              background: white;
-              border-radius: 8px;
+              width: 80px;
+              height: 95px;
+              border-radius: 6px;
               overflow: hidden;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1);
+              background: white;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.2);
               position: relative;
               z-index: 1;
-              border: 2px solid rgba(255,255,255,0.3);
+              flex-shrink: 0;
           }
 
           .photo-box img {
               width: 100%;
               height: 100%;
               object-fit: cover;
-              display: block;
           }
 
           .id-text-container {
-              flex: 1;
+              margin-top: 10px;
               display: flex;
               flex-direction: column;
-              justify-content: center;
               align-items: center;
-              margin: 16px 0 12px;
-              gap: 8px;
               position: relative;
               z-index: 1;
           }
 
           .id-separator {
-              width: 70%;
+              width: 50px;
               height: 1px;
-              background: rgba(255,255,255,0.3);
+              background: rgba(255, 255, 255, 0.3);
           }
 
           .student-id-text {
-              font-size: 11px;
-              color: white;
+              padding: 4px 0;
+              font-size: 10px;
               font-weight: 700;
-              letter-spacing: 1px;
+              color: white;
+              letter-spacing: 0.5px;
               text-align: center;
-              text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-              padding: 0 8px;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              max-width: 100px;
           }
 
           .pdf417-barcode {
-              width: 100px;
-              height: 30px;
-              background: white;
-              border-radius: 4px;
+              margin-top: auto;
+              width: 100%;
               display: flex;
-              align-items: center;
               justify-content: center;
-              overflow: hidden;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.15);
               position: relative;
               z-index: 1;
+              padding: 0 5px;
           }
 
           .pdf417-barcode img {
               width: 100%;
-              height: 100%;
-              object-fit: contain;
+              height: auto;
+              max-width: 90px;
+              filter: brightness(1.1);
           }
 
           .main-content {
               flex: 1;
-              padding: 16px 18px 12px 16px;
+              padding: 14px 18px 8px 18px;
               display: flex;
               flex-direction: column;
               background: white;
@@ -361,25 +343,22 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               display: flex;
               justify-content: space-between;
               align-items: flex-start;
-              margin-bottom: 10px;
-              gap: 12px;
-          }
-
-          .brand {
-              flex: 1;
+              margin-bottom: 12px;
+              padding-bottom: 8px;
+              border-bottom: 2px solid #e5e7eb;
           }
 
           .brand h1 {
-              font-size: 15px;
+              font-size: 16px;
               font-weight: 800;
               color: var(--primary);
-              margin: 0 0 2px 0;
               line-height: 1.1;
+              margin: 0 0 2px 0;
               letter-spacing: -0.3px;
           }
 
           .brand p {
-              font-size: 9px;
+              font-size: 8px;
               color: var(--text-muted);
               font-weight: 500;
               margin: 0;
@@ -387,6 +366,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
           }
 
           .qr-small {
+              flex-shrink: 0;
               width: 60px;
               height: 60px;
               padding: 0;
@@ -508,35 +488,24 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
       </body>
       </html>
     `);
-    
+
     printWindow.document.close();
-    
-    // Wait for resources to load before printing
-    printWindow.onload = () => {
-      setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-      }, 500);
-    };
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-blue-900 via-blue-800 to-blue-900 text-white px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
-          <div>
-            <h2 className="text-2xl font-bold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-              Digital ID Card
-            </h2>
-            <p className="text-blue-200 text-sm mt-1" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-              Official Identity Credential
-            </p>
-          </div>
+        <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 flex justify-between items-center rounded-t-2xl z-10">
+          <h2 className="text-xl font-bold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Your Digital ID Card</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-            aria-label="Close modal"
+            aria-label="Close"
           >
             <X size={24} />
           </button>
@@ -544,248 +513,559 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
         {/* Card Preview */}
         <div className="p-8">
-          <div className="flex justify-center mb-6">
-            <div 
-              ref={cardRef}
-              style={{
-                width: '539.8px', // 85.6mm * 6.3 (conversion factor for screen display)
-                height: '337.5px', // 53.98mm * 6.25 (maintains aspect ratio)
-                fontFamily: 'Inter, system-ui, -apple-system, sans-serif'
-              }}
-            >
-              <style dangerouslySetInnerHTML={{
-                __html: `
+          <div className="flex justify-center mb-4">
+            <div className="inline-block bg-gradient-to-br from-gray-50 to-gray-100 p-8 rounded-2xl shadow-inner">
+              {/* ORIGINAL PREVIEW CARD - UNTOUCHED */}
+              <div ref={cardRef} style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                <style>{`
+                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
+
+                  :root {
+                      --primary: #1e3a8a;
+                      --accent: #374151;
+                      --sidebar: #f9fafb;
+                      --text-dark: #1f2937;
+                      --text-muted: #6b7280;
+                      --caution-red: #dc2626;
+                      --id-color: #1f2937;
+                      --designation-color: #4b5563;
+                  }
+
+                  * {
+                      margin: 0;
+                      padding: 0;
+                      box-sizing: border-box;
+                  }
+
+                  body {
+                      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+                      -webkit-font-smoothing: antialiased;
+                      -moz-osx-font-smoothing: grayscale;
+                      background: white;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      margin: 0;
+                      padding: 0;
+                  }
+
+                  .id-card {
+                      width: 539.84px;
+                      height: 337.5px;
+                      background: white;
+                      display: flex;
+                      position: relative;
+                      border-radius: 12px;
+                      overflow: hidden;
+                      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+                  }
+
+                  .sidebar {
+                      width: 30%;
+                      background: linear-gradient(180deg, var(--primary) 0%, #1e40af 100%);
+                      display: flex;
+                      flex-direction: column;
+                      align-items: center;
+                      justify-content: flex-start;
+                      padding: 24px 16px;
+                      position: relative;
+                  }
+
+                  .sidebar::before {
+                      content: '';
+                      position: absolute;
+                      top: 0;
+                      left: 0;
+                      right: 0;
+                      bottom: 0;
+                      background: var(--primary);
+                      opacity: 0.95;
+                  }
+
+                  .photo-box {
+                      width: 120px;
+                      height: 140px;
+                      border-radius: 8px;
+                      overflow: hidden;
+                      background: white;
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                      position: relative;
+                      z-index: 1;
+                      flex-shrink: 0;
+                  }
+
+                  .photo-box img {
+                      width: 100%;
+                      height: 100%;
+                      object-fit: cover;
+                  }
+
+                  .id-text-container {
+                      margin-top: 16px;
+                      display: flex;
+                      flex-direction: column;
+                      align-items: center;
+                      position: relative;
+                      z-index: 1;
+                  }
+
+                  .id-separator {
+                      width: 80px;
+                      height: 2px;
+                      background: rgba(255, 255, 255, 0.3);
+                  }
+
+                  .student-id-text {
+                      padding: 8px 0;
+                      font-size: 14px;
+                      font-weight: 700;
+                      color: white;
+                      letter-spacing: 1px;
+                      text-align: center;
+                  }
+
+                  .pdf417-barcode {
+                      margin-top: auto;
+                      width: 100%;
+                      display: flex;
+                      justify-content: center;
+                      position: relative;
+                      z-index: 1;
+                      padding: 0 8px;
+                  }
+
+                  .pdf417-barcode img {
+                      width: 100%;
+                      height: auto;
+                      max-width: 130px;
+                      filter: brightness(1.1);
+                  }
+
+                  .main-content {
+                      flex: 1;
+                      padding: 24px 28px 16px 28px;
+                      display: flex;
+                      flex-direction: column;
+                      background: white;
+                  }
+
+                  .header-top {
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: flex-start;
+                      margin-bottom: 18px;
+                      padding-bottom: 12px;
+                      border-bottom: 3px solid #e5e7eb;
+                  }
+
+                  .brand h1 {
+                      font-size: 22px;
+                      font-weight: 800;
+                      color: var(--primary);
+                      line-height: 1.1;
+                      margin: 0 0 4px 0;
+                      letter-spacing: -0.5px;
+                  }
+
+                  .brand p {
+                      font-size: 11px;
+                      color: var(--text-muted);
+                      font-weight: 500;
+                      margin: 0;
+                      letter-spacing: 0.5px;
+                  }
+
+                  .qr-small {
+                      flex-shrink: 0;
+                      width: 75px;
+                      height: 75px;
+                      padding: 0;
+                      overflow: hidden;
+                  }
+
+                  .qr-small img {
+                      width: 100%;
+                      height: 100%;
+                  }
+
+                  .user-info {
+                      flex: 1;
+                  }
+
+                  .user-name-container {
+                      margin: 0 0 8px 0;
+                  }
+
+                  .user-name {
+                      font-size: 32px;
+                      font-weight: 700;
+                      color: var(--text-dark);
+                      margin: 0 0 4px 0;
+                      line-height: 1.2;
+                  }
+
+                  .designation {
+                      font-size: 16px;
+                      font-weight: 500;
+                      color: var(--designation-color);
+                      letter-spacing: 0.3px;
+                      font-style: italic;
+                      margin: 0 0 16px 0;
+                  }
+
+                  .info-grid {
+                      display: grid;
+                      grid-template-columns: repeat(2, 1fr);
+                      gap: 20px;
+                      margin-bottom: 6px;
+                  }
+
+                  .info-item .label {
+                      font-size: 11px;
+                      color: var(--text-muted);
+                      text-transform: uppercase;
+                      font-weight: 600;
+                      letter-spacing: 0.8px;
+                      margin-bottom: 4px;
+                  }
+
+                  .info-item .value {
+                      font-size: 15px;
+                      font-weight: 500;
+                      color: var(--text-dark);
+                  }
+
+                  .mrz-container {
+                      margin-top: 20px;
+                      width: 100%;
+                      background: #f9fafb;
+                      padding: 6px 0;
+                      border-top: 2px solid #e5e7eb;
+                      font-family: 'JetBrains Mono', monospace;
+                      text-align: center;
+                  }
+
+                  .mrz-line-1 {
+                      font-size: 10px;
+                      letter-spacing: 1.5px;
+                      color: #1f2937;
+                      line-height: 1.4;
+                      width: 100%;
+                      margin: 2px 0 0 0;
+                      display: block;
+                      white-space: pre;
+                      text-align: center;
+                      padding: 0;
+                      overflow: hidden;
+                  }
+
+                  .mrz-line-2 {
+                      font-size: 10px;
+                      letter-spacing: 1.5px;
+                      color: #1f2937;
+                      line-height: 1.4;
+                      width: 100%;
+                      margin: 0 0 2px 0;
+                      display: block;
+                      white-space: pre;
+                      text-align: center;
+                      padding: 0;
+                      overflow: hidden;
+                  }
+
+                  .caution-text {
+                      font-size: 9px;
+                      color: var(--caution-red);
+                      font-weight: 600;
+                      text-align: center;
+                      margin-top: 8px;
+                      letter-spacing: 0.3px;
+                      width: 100%;
+                      white-space: nowrap;
+                      overflow: hidden;
+                  }
+
+                  @media print {
+                      body { background: transparent; }
+                      .id-card { box-shadow: none; border: 1px solid #ddd; }
+                      .sidebar::before { background: var(--primary); }
+                      .photo-box { box-shadow: none; }
+                  }
+                `}</style>
+
+                <div className="id-card">
+                  <div className="sidebar">
+                    <div className="photo-box">
+                      <img src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
+                    </div>
+                    
+                    <div className="id-text-container">
+                      <div className="id-separator"></div>
+                      <div className="student-id-text">{user?.userId || 'ST-2601-00001'}</div>
+                      <div className="id-separator"></div>
+                    </div>
+                    
+                    <div className="pdf417-barcode">
+                      <img src={barcodeDataUrl} alt="PDF-417 Barcode" />
+                    </div>
+                  </div>
+
+                  <div className="main-content">
+                    <div className="header-top">
+                      <div className="brand">
+                        <h1>EDTECH DASHBOARD</h1>
+                        <p>Global Learning Network</p>
+                      </div>
+                      <div className="qr-small">
+                        <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
+                      </div>
+                    </div>
+
+                    <div className="user-info">
+                      <div className="user-name-container">
+                        <h2 className="user-name">{fullName}</h2>
+                        <div className="designation">{user?.designation || 'Security Analyst'}</div>
+                      </div>
+                      
+                      <div className="info-grid">
+                        <div className="info-item">
+                          <div className="label">Blood Group</div>
+                          <div className="value">{user?.bloodGroup || 'Not Specified'}</div>
+                        </div>
+                        <div className="info-item">
+                          <div className="label">Emergency Contact</div>
+                          <div className="value">{user?.phoneNumber || 'Not Specified'}</div>
+                        </div>
+                        <div className="info-item">
+                          <div className="label">Issue Date</div>
+                          <div className="value">{formatIssueDate()}</div>
+                        </div>
+                        <div className="info-item">
+                          <div className="label">Valid Till</div>
+                          <div className="value">{formatValidTill(user?.validTill)}</div>
+                        </div>
+                      </div>
+
+                      <div className="mrz-container">
+                        <div className="mrz-line-1">{mrz.line1}</div>
+                        <div className="mrz-line-2">{mrz.line2}</div>
+                      </div>
+                      <div className="caution-text">If this card found unattended, please return it to Edtech-dashboard.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* HIDDEN PRINT-OPTIMIZED CARD - For PDF generation only */}
+          <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+            <div ref={printCardRef}>
+              <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
 
-                :root {
-                    --primary: #1e3a8a;
-                    --accent: #374151;
-                    --sidebar: #f9fafb;
-                    --text-dark: #1f2937;
-                    --text-muted: #6b7280;
-                    --caution-red: #dc2626;
-                    --id-color: #1f2937;
-                    --designation-color: #4b5563;
-                }
-
-                .id-card {
-                    width: 100%;
-                    height: 100%;
+                .print-id-card {
+                    width: 1011px;
+                    height: 637px;
                     background: white;
-                    border-radius: 12px;
-                    overflow: hidden;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
                     display: flex;
                     position: relative;
-                    border: 1px solid #e5e7eb;
+                    overflow: hidden;
+                    font-family: 'Inter', system-ui, sans-serif;
                 }
 
-                .sidebar {
-                    width: 120px;
-                    background: linear-gradient(135deg, var(--primary) 0%, #1e40af 50%, #1e3a8a 100%);
+                .print-sidebar {
+                    width: 30%;
+                    background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%);
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    padding: 18px 10px 12px;
+                    justify-content: flex-start;
+                    padding: 45px 30px;
                     position: relative;
-                    box-shadow: 4px 0 12px rgba(0,0,0,0.08);
                 }
 
-                .sidebar::before {
+                .print-sidebar::before {
                     content: '';
                     position: absolute;
                     top: 0;
                     left: 0;
                     right: 0;
                     bottom: 0;
-                    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-                    pointer-events: none;
+                    background: #1e3a8a;
+                    opacity: 0.95;
                 }
 
-                .photo-box {
-                    width: 96px;
-                    height: 96px;
-                    background: white;
-                    border-radius: 8px;
+                .print-photo-box {
+                    width: 225px;
+                    height: 264px;
+                    border-radius: 15px;
                     overflow: hidden;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.1);
+                    background: white;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
                     position: relative;
                     z-index: 1;
-                    border: 2px solid rgba(255,255,255,0.3);
+                    flex-shrink: 0;
                 }
 
-                .photo-box img {
+                .print-photo-box img {
                     width: 100%;
                     height: 100%;
                     object-fit: cover;
-                    display: block;
                 }
 
-                .id-text-container {
-                    flex: 1;
+                .print-id-text-container {
+                    margin-top: 30px;
                     display: flex;
                     flex-direction: column;
-                    justify-content: center;
                     align-items: center;
-                    margin: 16px 0 12px;
-                    gap: 8px;
                     position: relative;
                     z-index: 1;
                 }
 
-                .id-separator {
-                    width: 70%;
-                    height: 1px;
-                    background: rgba(255,255,255,0.3);
+                .print-id-separator {
+                    width: 150px;
+                    height: 3px;
+                    background: rgba(255, 255, 255, 0.3);
                 }
 
-                .student-id-text {
-                    font-size: 11px;
-                    color: white;
+                .print-student-id-text {
+                    padding: 15px 0;
+                    font-size: 26px;
                     font-weight: 700;
-                    letter-spacing: 1px;
+                    color: white;
+                    letter-spacing: 1.8px;
                     text-align: center;
-                    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                    padding: 0 8px;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    text-overflow: ellipsis;
-                    max-width: 100px;
                 }
 
-                .pdf417-barcode {
-                    width: 100px;
-                    height: 30px;
-                    background: white;
-                    border-radius: 4px;
+                .print-pdf417-barcode {
+                    margin-top: auto;
+                    width: 100%;
                     display: flex;
-                    align-items: center;
                     justify-content: center;
-                    overflow: hidden;
-                    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
                     position: relative;
                     z-index: 1;
+                    padding: 0 15px;
                 }
 
-                .pdf417-barcode img {
+                .print-pdf417-barcode img {
                     width: 100%;
-                    height: 100%;
-                    object-fit: contain;
+                    height: auto;
+                    max-width: 245px;
+                    filter: brightness(1.1);
                 }
 
-                .main-content {
+                .print-main-content {
                     flex: 1;
-                    padding: 16px 18px 12px 16px;
+                    padding: 45px 53px 30px 53px;
                     display: flex;
                     flex-direction: column;
                     background: white;
                 }
 
-                .header-top {
+                .print-header-top {
                     display: flex;
                     justify-content: space-between;
                     align-items: flex-start;
-                    margin-bottom: 10px;
-                    gap: 12px;
+                    margin-bottom: 34px;
+                    padding-bottom: 23px;
+                    border-bottom: 5px solid #e5e7eb;
                 }
 
-                .brand {
-                    flex: 1;
-                }
-
-                .brand h1 {
-                    font-size: 15px;
+                .print-brand h1 {
+                    font-size: 41px;
                     font-weight: 800;
-                    color: var(--primary);
-                    margin: 0 0 2px 0;
+                    color: #1e3a8a;
                     line-height: 1.1;
-                    letter-spacing: -0.3px;
+                    margin: 0 0 8px 0;
+                    letter-spacing: -0.9px;
                 }
 
-                .brand p {
-                    font-size: 9px;
-                    color: var(--text-muted);
+                .print-brand p {
+                    font-size: 21px;
+                    color: #6b7280;
                     font-weight: 500;
                     margin: 0;
-                    letter-spacing: 0.3px;
+                    letter-spacing: 0.9px;
                 }
 
-                .qr-small {
-                    width: 60px;
-                    height: 60px;
+                .print-qr-small {
+                    flex-shrink: 0;
+                    width: 141px;
+                    height: 141px;
                     padding: 0;
                     overflow: hidden;
                 }
 
-                .qr-small img {
+                .print-qr-small img {
                     width: 100%;
                     height: 100%;
                 }
 
-                .user-info {
+                .print-user-info {
                     flex: 1;
                 }
 
-                .user-name-container {
-                    margin: 0 0 5px 0;
+                .print-user-name-container {
+                    margin: 0 0 15px 0;
                 }
 
-                .user-name {
-                    font-size: 24px;
+                .print-user-name {
+                    font-size: 60px;
                     font-weight: 700;
-                    color: var(--text-dark);
-                    margin: 0 0 2px 0;
+                    color: #1f2937;
+                    margin: 0 0 8px 0;
                     line-height: 1.2;
                 }
 
-                .designation {
-                    font-size: 13px;
+                .print-designation {
+                    font-size: 30px;
                     font-weight: 500;
-                    color: var(--designation-color);
-                    letter-spacing: 0.2px;
+                    color: #4b5563;
+                    letter-spacing: 0.6px;
                     font-style: italic;
-                    margin: 0 0 10px 0;
+                    margin: 0 0 30px 0;
                 }
 
-                .info-grid {
+                .print-info-grid {
                     display: grid;
                     grid-template-columns: repeat(2, 1fr);
-                    gap: 16px;
-                    margin-bottom: 3px;
+                    gap: 38px;
+                    margin-bottom: 11px;
                 }
 
-                .info-item .label {
-                    font-size: 9px;
-                    color: var(--text-muted);
+                .print-info-item .print-label {
+                    font-size: 21px;
+                    color: #6b7280;
                     text-transform: uppercase;
                     font-weight: 600;
-                    letter-spacing: 0.5px;
-                    margin-bottom: 2px;
+                    letter-spacing: 1.5px;
+                    margin-bottom: 8px;
                 }
 
-                .info-item .value {
-                    font-size: 13px;
+                .print-info-item .print-value {
+                    font-size: 28px;
                     font-weight: 500;
-                    color: var(--text-dark);
+                    color: #1f2937;
                 }
 
-                .mrz-container {
-                    margin-top: 16px;
+                .print-mrz-container {
+                    margin-top: 38px;
                     width: 100%;
                     background: #f9fafb;
-                    padding: 3px 0;
-                    border-top: 1px solid #e5e7eb;
+                    padding: 11px 0;
+                    border-top: 3px solid #e5e7eb;
                     font-family: 'JetBrains Mono', monospace;
                     text-align: center;
                 }
 
-                .mrz-line-1 {
-                    font-size: 8px;
-                    letter-spacing: 1.1px;
+                .print-mrz-line-1 {
+                    font-size: 19px;
+                    letter-spacing: 2.8px;
                     color: #1f2937;
-                    line-height: 1.2;
+                    line-height: 1.4;
                     width: 100%;
-                    margin: 2px 0 0 0;
+                    margin: 4px 0 0 0;
                     display: block;
                     white-space: pre;
                     text-align: center;
@@ -793,13 +1073,13 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     overflow: hidden;
                 }
 
-                .mrz-line-2 {
-                    font-size: 8px;
-                    letter-spacing: 1.1px;
+                .print-mrz-line-2 {
+                    font-size: 19px;
+                    letter-spacing: 2.8px;
                     color: #1f2937;
-                    line-height: 1.2;
+                    line-height: 1.4;
                     width: 100%;
-                    margin: 0 0 1px 0;
+                    margin: 0 0 4px 0;
                     display: block;
                     white-space: pre;
                     text-align: center;
@@ -807,84 +1087,77 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     overflow: hidden;
                 }
 
-                .caution-text {
-                    font-size: 7.5px;
-                    color: var(--caution-red);
+                .print-caution-text {
+                    font-size: 17px;
+                    color: #dc2626;
                     font-weight: 600;
                     text-align: center;
-                    margin-top: 6px;
-                    letter-spacing: 0.2px;
+                    margin-top: 15px;
+                    letter-spacing: 0.6px;
                     width: 100%;
                     white-space: nowrap;
                     overflow: hidden;
                 }
+              `}</style>
 
-                @media print {
-                    body { background: transparent; }
-                    .id-card { box-shadow: none; border: 1px solid #ddd; }
-                    .sidebar::before { background: var(--primary); }
-                    .photo-box { box-shadow: none; }
-                }
-              `}} />
-
-              <div className="id-card">
-                <div className="sidebar">
-                  <div className="photo-box">
+              <div className="print-id-card">
+                <div className="print-sidebar">
+                  <div className="print-photo-box">
                     <img src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
                   </div>
                   
-                  <div className="id-text-container">
-                    <div className="id-separator"></div>
-                    <div className="student-id-text">{user?.userId || 'ST-2601-00001'}</div>
-                    <div className="id-separator"></div>
+                  <div className="print-id-text-container">
+                    <div className="print-id-separator"></div>
+                    <div className="print-student-id-text">{user?.userId || 'ST-2601-00001'}</div>
+                    <div className="print-id-separator"></div>
                   </div>
                   
-                  <div className="pdf417-barcode">
+                  <div className="print-pdf417-barcode">
                     <img src={barcodeDataUrl} alt="PDF-417 Barcode" />
                   </div>
                 </div>
 
-                <div className="main-content">
-                  <div className="header-top">
-                    <div className="brand">
+                <div className="print-main-content">
+                  <div className="print-header-top">
+                    <div className="print-brand">
                       <h1>EDTECH DASHBOARD</h1>
                       <p>Global Learning Network</p>
                     </div>
-                    <div className="qr-small">
+                    <div className="print-qr-small">
                       <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
                     </div>
                   </div>
 
-                  <div className="user-info">
-                    <div className="user-name-container">
-                      <h2 className="user-name">{fullName}</h2>
-                      <div className="designation">{user?.designation || 'Security Analyst'}</div>
+                  <div className="print-user-info">
+                    <div className="print-user-name-container">
+                      <h2 className="print-user-name">{fullName}</h2>
+                      <div className="print-designation">{user?.designation || 'Security Analyst'}</div>
                     </div>
                     
-                    <div className="info-grid">
-                      <div className="info-item">
-                        <div className="label">Blood Group</div>
-                        <div className="value">{user?.bloodGroup || 'Not Specified'}</div>
+                    <div className="print-info-grid">
+                      <div className="print-info-item">
+                        <div className="print-label">Blood Group</div>
+                        <div className="print-value">{user?.bloodGroup || 'Not Specified'}</div>
                       </div>
-                      <div className="info-item">
-                        <div className="label">Emergency Contact</div>
-                        <div className="value">{user?.phoneNumber || 'Not Specified'}</div>
+                      <div className="print-info-item">
+                        <div className="print-label">Emergency Contact</div>
+                        <div className="print-value">{user?.phoneNumber || 'Not Specified'}</div>
                       </div>
-                      <div className="info-item">
-                        <div className="label">Issue Date</div>
-                        <div className="value">{formatIssueDate()}</div>
+                      <div className="print-info-item">
+                        <div className="print-label">Issue Date</div>
+                        <div className="print-value">{formatIssueDate()}</div>
                       </div>
-                      <div className="info-item">
-                        <div className="label">Valid Till</div>
-                        <div className="value">{formatValidTill(user?.validTill)}</div>
+                      <div className="print-info-item">
+                        <div className="print-label">Valid Till</div>
+                        <div className="print-value">{formatValidTill(user?.validTill)}</div>
                       </div>
                     </div>
 
-                    <div className="mrz-container">
-                      <div className="mrz-line-1">{mrz.line1}</div>
-                      <div className="mrz-line-2">{mrz.line2}</div>
+                    <div className="print-mrz-container">
+                      <div className="print-mrz-line-1">{mrz.line1}</div>
+                      <div className="print-mrz-line-2">{mrz.line2}</div>
                     </div>
-                    <div className="caution-text">If this card found unattended, please return it to Edtech-dashboard.</div>
+                    <div className="print-caution-text">If this card found unattended, please return it to Edtech-dashboard.</div>
                   </div>
                 </div>
               </div>
