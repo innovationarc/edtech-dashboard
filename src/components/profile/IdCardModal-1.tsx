@@ -380,14 +380,14 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               color: var(--designation-color);
               letter-spacing: 0.2px;
               font-style: italic;
-              margin: 0 0 15px 0;
+              margin: 0 0 10px 0;
           }
 
           .info-grid {
               display: grid;
               grid-template-columns: repeat(2, 1fr);
               gap: 16px;
-              margin-bottom: 16px;
+              margin-bottom: 5px;
           }
 
           .info-item .label {
@@ -396,7 +396,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               text-transform: uppercase;
               font-weight: 600;
               letter-spacing: 0.5px;
-              margin-bottom: 3px;
+              margin-bottom: 2px;
           }
 
           .info-item .value {
@@ -723,14 +723,14 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     color: var(--designation-color);
                     letter-spacing: 0.2px;
                     font-style: italic;
-                    margin: 0 0 15px 0;
+                    margin: 0 0 10px 0;
                 }
 
                 .info-grid {
                     display: grid;
                     grid-template-columns: repeat(2, 1fr);
                     gap: 16px;
-                    margin-bottom: 6px;
+                    margin-bottom: 3px;
                 }
 
                 .info-item .label {
@@ -749,10 +749,10 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                 }
 
                 .mrz-container {
-                    margin-top: 25px;
+                    margin-top: 15px;
                     width: 100%;
                     background: #f9fafb;
-                    padding: 6px 0;
+                    padding: 3px 0;
                     border-top: 1px solid #e5e7eb;
                     font-family: 'JetBrains Mono', monospace;
                     text-align: center;
