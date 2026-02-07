@@ -580,7 +580,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                 }
 
                 .sidebar {
-                    width: 30%;
+                    width: 31.5%;
                     background-color: var(--sidebar);
                     display: flex;
                     flex-direction: column;
@@ -670,7 +670,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     display: flex;
                     justify-content: space-between;
                     align-items: flex-start;
-                    margin-bottom: 15px;
+                    margin-bottom: 10px;
                 }
 
                 .brand h1 {
@@ -706,7 +706,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                 }
 
                 .user-name-container {
-                    margin: 0 0 10px 0;
+                    margin: 0 0 5px 0;
                 }
 
                 .user-name {
