@@ -5,7 +5,6 @@ import {
   Shield, AlertCircle, CheckCircle2, XCircle, Loader, 
   User, Phone, MapPin, Calendar, CreditCard, Activity
 } from 'lucide-react';
-import { validateMRZ, extractUserIdFromMRZ, type MRZValidationResult } from '../utils/mrz-utils';
 
 interface VerifiedUser {
   userId: string;
@@ -27,72 +26,34 @@ interface VerifiedUser {
 const VerifyId = () => {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<'userId' | 'mrz'>('userId');
   const [userId, setUserId] = useState('');
-  const [mrzLine1, setMrzLine1] = useState('');
-  const [mrzLine2, setMrzLine2] = useState('');
   const [verifiedUser, setVerifiedUser] = useState<VerifiedUser | null>(null);
   const [error, setError] = useState('');
-  const [mrzValidation, setMrzValidation] = useState<MRZValidationResult | null>(null);
 
   // Auto-load from URL params
   useEffect(() => {
     const userIdParam = searchParams.get('userId');
     if (userIdParam) {
       setUserId(userIdParam);
-      setVerificationMethod('userId');
       // Auto-verify on load
-      handleVerify(userIdParam, null, null);
+      handleVerify(userIdParam);
     }
   }, [searchParams]);
 
   // Verify ID card using user-search.ts API with master key
-  const handleVerify = async (userIdValue?: string, line1?: string, line2?: string) => {
+  const handleVerify = async (userIdValue?: string) => {
     setLoading(true);
     setError('');
     setVerifiedUser(null);
-    setMrzValidation(null);
 
     try {
-      let userIdToVerify = userIdValue || userId;
-
-      // If using MRZ, validate first
-      if (verificationMethod === 'mrz' || (line1 && line2)) {
-        const l1 = line1 || mrzLine1;
-        const l2 = line2 || mrzLine2;
-
-        if (!l1 || !l2) {
-          setError('Please enter both MRZ lines');
-          setLoading(false);
-          return;
-        }
-
-        const validation = validateMRZ(l1.toUpperCase(), l2.toUpperCase());
-        setMrzValidation(validation);
-
-        if (!validation.isValid) {
-          setError('Invalid MRZ: ' + validation.errors.join(', '));
-          setLoading(false);
-          return;
-        }
-
-        // Extract userId from MRZ
-        userIdToVerify = extractUserIdFromMRZ(l2.toUpperCase()) || '';
-        
-        if (!userIdToVerify) {
-          setError('Could not extract user ID from MRZ');
-          setLoading(false);
-          return;
-        }
-      }
+      const userIdToVerify = userIdValue || userId;
 
       if (!userIdToVerify || userIdToVerify.trim() === '') {
         setError('Please enter a User ID');
         setLoading(false);
         return;
       }
-
-      console.log('🔍 Verifying ID:', userIdToVerify);
 
       // Get master key from environment variable
       const MASTER_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
@@ -112,8 +73,6 @@ const VerifyId = () => {
 
       const data = await response.json();
 
-      console.log('📡 API Response:', response.status, data);
-
       if (!response.ok || !data.success) {
         setError(data.error || 'User not found');
         setLoading(false);
@@ -121,13 +80,10 @@ const VerifyId = () => {
       }
 
       if (!data.userData) {
-        console.error('❌ No userData in response');
         setError('User data not available');
         setLoading(false);
         return;
       }
-
-      console.log('📦 User data received:', data.userData);
 
       // Set verified user with safe defaults
       try {
@@ -143,23 +99,19 @@ const VerifyId = () => {
           address: data.userData.address || 'Not Specified',
           profilePictureUrl: data.userData.profilePictureUrl || undefined,
           status: (data.userData.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
-          createdAt: data.userData.createdAt || new Date().toISOString(),
+          createdAt: data.userData.issueDate || data.userData.joiningDate || data.userData.createdAt || new Date().toISOString(),
           validTill: data.userData.validTill || 'lifetime',
           role: data.userData.role || 'Unknown'
         };
 
-        console.log('✅ Verified user data prepared:', verifiedUserData);
         setVerifiedUser(verifiedUserData);
-        console.log('✅ Verification successful');
       } catch (parseError: any) {
-        console.error('❌ Error setting verified user:', parseError);
         setError('Failed to process user data: ' + parseError.message);
         setLoading(false);
         return;
       }
 
     } catch (err: any) {
-      console.error('❌ Verification error:', err);
       setError(err.message || 'Failed to verify ID card. Please try again.');
     } finally {
       setLoading(false);
@@ -180,7 +132,6 @@ const VerifyId = () => {
         year: 'numeric'
       });
     } catch (error) {
-      console.error('Error formatting date:', error);
       return 'Not specified';
     }
   };
@@ -221,85 +172,22 @@ const VerifyId = () => {
           </p>
         </div>
 
-        {/* Verification Method Tabs */}
+        {/* Verification Form */}
         <div className="bg-slate-800 rounded-2xl p-6 mb-6 border border-slate-700">
-          <div className="flex gap-4 mb-6">
-            <button
-              onClick={() => setVerificationMethod('userId')}
-              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                verificationMethod === 'userId'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
-              }`}
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            >
-              User ID
-            </button>
-            <button
-              onClick={() => setVerificationMethod('mrz')}
-              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                verificationMethod === 'mrz'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
-              }`}
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            >
-              MRZ Code
-            </button>
-          </div>
-
           {/* User ID Input */}
-          {verificationMethod === 'userId' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
-                Enter User ID
-              </label>
-              <input
-                type="text"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value.toUpperCase())}
-                placeholder="e.g., AD-2601-26571"
-                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              />
-            </div>
-          )}
-
-          {/* MRZ Input */}
-          {verificationMethod === 'mrz' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
-                  MRZ Line 1 (44 characters)
-                </label>
-                <input
-                  type="text"
-                  value={mrzLine1}
-                  onChange={(e) => setMrzLine1(e.target.value.toUpperCase())}
-                  placeholder="Enter first MRZ line from ID card"
-                  maxLength={44}
-                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                />
-                <p className="text-xs text-gray-500 mt-1">{mrzLine1.length}/44 characters</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
-                  MRZ Line 2 (44 characters)
-                </label>
-                <input
-                  type="text"
-                  value={mrzLine2}
-                  onChange={(e) => setMrzLine2(e.target.value.toUpperCase())}
-                  placeholder="Enter second MRZ line from ID card"
-                  maxLength={44}
-                  className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-                  style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                />
-                <p className="text-xs text-gray-500 mt-1">{mrzLine2.length}/44 characters</p>
-              </div>
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
+              Enter User ID
+            </label>
+            <input
+              type="text"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value.toUpperCase())}
+              placeholder="e.g., AD-2601-26571"
+              className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              style={{ fontFamily: 'Inter, sans-serif' }}
+            />
+          </div>
 
           {/* Verify Button */}
           <button
@@ -336,32 +224,6 @@ const VerifyId = () => {
                 </p>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* MRZ Validation Result */}
-        {mrzValidation && mrzValidation.isValid && (
-          <div className="bg-green-900/30 border border-green-500 rounded-2xl p-6 mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <CheckCircle2 className="w-6 h-6 text-green-400" />
-              <h3 className="text-lg font-bold text-green-400" style={{ fontFamily: 'Inter, sans-serif' }}>
-                MRZ Validated Successfully
-              </h3>
-            </div>
-            {mrzValidation.extractedData && (
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-gray-400">Name:</p>
-                  <p className="text-white font-semibold">
-                    {mrzValidation.extractedData.surname} {mrzValidation.extractedData.firstName}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-gray-400">User ID:</p>
-                  <p className="text-white font-semibold">{mrzValidation.extractedData.userId}</p>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
