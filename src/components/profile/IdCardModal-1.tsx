@@ -661,7 +661,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
                 .main-content {
                     flex: 1;
-                    padding: 25px 35px 10px 35px;
+                    padding: 25px 35px 0px 35px;
                     display: flex;
                     flex-direction: column;
                 }
