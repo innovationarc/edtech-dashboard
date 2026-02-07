@@ -126,49 +126,45 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const fullName = `${user?.surname || ''} ${user?.name || ''}`.trim() || 'Not Specified';
 
   // Download as PDF
-  const handleDownloadPDF = async () => {
-    if (!cardRef.current) return;
+const handleDownloadPDF = async () => {
+  if (!cardRef.current) return;
 
-    setIsGenerating(true);
-    try {
-      // Wait longer for images to fully load and render
-      await new Promise(resolve => setTimeout(resolve, 1000));
+  setIsGenerating(true);
+  try {
+    // Wait for images to fully load
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 4, // Higher scale for better quality
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: '#ffffff',
-        logging: false,
-        width: 539.8,
-        height: 337.5,
-        windowWidth: 539.8,
-        windowHeight: 337.5,
-        scrollY: -window.scrollY,
-        scrollX: -window.scrollX,
-        imageTimeout: 15000, // Wait longer for images
-        removeContainer: true,
-      });
+    // Capture with actual DOM dimensions
+    const canvas = await html2canvas(cardRef.current, {
+      scale: 4, // High quality (300 DPI equivalent)
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#ffffff',
+      logging: false,
+      scrollY: -window.scrollY,
+      scrollX: -window.scrollX,
+      imageTimeout: 15000,
+      removeContainer: false,
+    });
 
-      const imgData = canvas.toDataURL('image/png', 1.0);
-      
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: [85.6, 53.98],
-        compress: true
-      });
+    const imgData = canvas.toDataURL('image/png', 1.0);
+    
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: [85.6, 53.98], // Standard credit card size
+      compress: false // ✅ Changed to false for higher quality
+    });
 
-      pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
-      pdf.save(`ID-Card-${user?.userId}.pdf`);
-    } catch (error) {
-      console.error('PDF generation error:', error);
-      alert('Failed to generate PDF. Please try again.');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
+    pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
+    pdf.save(`ID-Card-${user?.userId}.pdf`);
+  } catch (error) {
+    console.error('PDF generation error:', error);
+    alert('Failed to generate PDF. Please try again.');
+  } finally {
+    setIsGenerating(false);
+  }
+};
   // Print ID card
   const handlePrint = () => {
     if (!cardRef.current) return;
