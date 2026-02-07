@@ -189,6 +189,7 @@ const handleDownloadPDF = async () => {
   color: #dc2626 !important;
   font-weight: 900 !important;
   font-size: 7.5px !important;
+  overflow: visible !important;
   text-rendering: geometricPrecision !important;
   -webkit-font-smoothing: subpixel-antialiased !important;
 }
@@ -522,7 +523,7 @@ const handleDownloadPDF = async () => {
               letter-spacing: 0.2px;
               width: 100%;
               white-space: nowrap;
-              overflow: hidden;
+              overflow: visible;
           }
         </style>
       </head>
