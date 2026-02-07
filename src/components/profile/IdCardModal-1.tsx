@@ -125,35 +125,312 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   // Full name
   const fullName = `${user?.surname || ''} ${user?.name || ''}`.trim() || 'Not Specified';
 
-  // Download as PDF
+// Download as PDF
 const handleDownloadPDF = async () => {
   if (!cardRef.current) return;
 
   setIsGenerating(true);
   try {
-    // Wait for images to fully load
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Create a temporary container for clean capture
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.top = '0';
+    document.body.appendChild(tempContainer);
 
-    // Capture with actual DOM dimensions
-    const canvas = await html2canvas(cardRef.current, {
-      scale: 4, // High quality (300 DPI equivalent)
+    // Clone the card HTML
+    const cardClone = cardRef.current.cloneNode(true) as HTMLElement;
+    
+    // Apply EXACT preview styles (matching your current preview CSS)
+    const styleElement = document.createElement('style');
+    styleElement.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
+
+      :root {
+          --primary: #1e3a8a;
+          --accent: #374151;
+          --sidebar: #f9fafb;
+          --text-dark: #1f2937;
+          --text-muted: #6b7280;
+          --caution-red: #dc2626;
+          --id-color: #1f2937;
+          --designation-color: #4b5563;
+      }
+
+      * { 
+        box-sizing: border-box; 
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .id-card {
+          width: 539.8px !important;
+          height: 337.5px !important;
+          background: #ffffff;
+          border-radius: 16px;
+          overflow: hidden;
+          display: flex;
+          position: relative;
+          box-shadow: none !important;
+          border: 1px solid #e5e7eb;
+          transform: none !important;
+      }
+
+      .sidebar {
+          width: 31.5% !important;
+          background-color: var(--sidebar);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 15px 20px;
+          border-right: 1px solid #e5e7eb;
+          position: relative;
+      }
+
+      .sidebar::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 6px;
+          height: 100%;
+          background: linear-gradient(to bottom, var(--primary), #4b5563);
+      }
+
+      .photo-box {
+          width: 130px;
+          height: 130px;
+          background: #fff;
+          border-radius: 8px;
+          border: 1px solid #d1d5db;
+          overflow: hidden;
+          margin-bottom: 10px;
+          margin-left: 3px;
+      }
+
+      .photo-box img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+      }
+
+      .id-text-container {
+          text-align: center;
+          margin: 3px 0 3px 0;
+          width: 100%;
+      }
+
+      .id-separator {
+          width: 120px;
+          height: 1px;
+          background-color: #e5e7eb;
+          margin: 0 auto;
+      }
+
+      .student-id-text {
+          font-family: 'Inter', sans-serif;
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--id-color);
+          letter-spacing: 0.8px;
+          text-align: center;
+          line-height: 1.4;
+          margin: 6px 0;
+      }
+
+      .pdf417-barcode {
+          width: 140px;
+          height: 40px;
+          background: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 5px;
+          margin-left: 3px;
+      }
+
+      .pdf417-barcode img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+      }
+
+      .main-content {
+          flex: 1;
+          padding: 25px 35px 0px 35px !important;
+          display: flex;
+          flex-direction: column;
+      }
+
+      .header-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 10px;
+      }
+
+      .brand h1 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 800;
+          color: var(--primary);
+          letter-spacing: -0.5px;
+      }
+
+      .brand p {
+          margin: 0;
+          font-size: 10px;
+          color: var(--accent);
+          font-weight: 600;
+          text-transform: uppercase;
+      }
+
+      .qr-small {
+          width: 55px;
+          height: 55px;
+          padding: 0;
+          overflow: hidden;
+      }
+
+      .qr-small img {
+          width: 100%;
+          height: 100%;
+      }
+
+      .user-info {
+          flex: 1;
+      }
+
+      .user-name-container {
+          margin: 0 0 14px 0;
+      }
+
+      .user-name {
+          font-size: 24px;
+          font-weight: 700;
+          color: var(--text-dark);
+          margin: 0 0 3px 0;
+          line-height: 1.2;
+      }
+
+      .designation {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--designation-color);
+          letter-spacing: 0.2px;
+          font-style: italic;
+          margin: 0 0 10px 0;
+      }
+
+      .info-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 16px;
+          margin-bottom: 5px;
+      }
+
+      .info-item .label {
+          font-size: 9px;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          margin-bottom: 2px;
+      }
+
+      .info-item .value {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-dark);
+      }
+
+      .mrz-container {
+          margin-top: 25px;
+          width: 100%;
+          background: #f9fafb;
+          padding: 6px 0;
+          border-top: 1px solid #e5e7eb;
+          font-family: 'JetBrains Mono', monospace;
+          text-align: center;
+      }
+
+      .mrz-line-1 {
+          font-size: 8px;
+          letter-spacing: 1.1px;
+          color: #1f2937;
+          line-height: 1.2;
+          width: 100%;
+          margin: 1px 0 0 0;
+          display: block;
+          white-space: pre;
+          text-align: center;
+          padding: 0;
+          overflow: hidden;
+      }
+
+      .mrz-line-2 {
+          font-size: 8px;
+          letter-spacing: 1.1px;
+          color: #1f2937;
+          line-height: 1.2;
+          width: 100%;
+          margin: 0 0 1px 0;
+          display: block;
+          white-space: pre;
+          text-align: center;
+          padding: 0;
+          overflow: hidden;
+      }
+
+      .caution-text {
+          font-size: 7.5px;
+          color: var(--caution-red);
+          font-weight: 600;
+          text-align: center;
+          margin-top: 6px;
+          letter-spacing: 0.2px;
+          width: 100%;
+          white-space: nowrap;
+          overflow: hidden;
+      }
+    `;
+    
+    tempContainer.appendChild(styleElement);
+    tempContainer.appendChild(cardClone);
+
+    // Wait for fonts and images to load
+    await document.fonts.ready;
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Capture the clean version
+    const canvas = await html2canvas(cardClone, {
+      scale: 4,
       useCORS: true,
       allowTaint: false,
       backgroundColor: '#ffffff',
       logging: false,
-      scrollY: -window.scrollY,
-      scrollX: -window.scrollX,
-      imageTimeout: 15000,
-      removeContainer: false,
+      width: 539.8,
+      height: 337.5,
+      onclone: (clonedDoc) => {
+        const clonedCard = clonedDoc.querySelector('.id-card') as HTMLElement;
+        if (clonedCard) {
+          clonedCard.style.transform = 'none';
+          clonedCard.style.boxShadow = 'none';
+        }
+      }
     });
+
+    // Clean up
+    document.body.removeChild(tempContainer);
 
     const imgData = canvas.toDataURL('image/png', 1.0);
     
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
-      format: [85.6, 53.98], // Standard credit card size
-      compress: false // ✅ Changed to false for higher quality
+      format: [85.6, 53.98],
+      compress: false
     });
 
     pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
@@ -164,7 +441,7 @@ const handleDownloadPDF = async () => {
   } finally {
     setIsGenerating(false);
   }
-};
+};  
   // Print ID card
   const handlePrint = () => {
     if (!cardRef.current) return;
