@@ -15,6 +15,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const { user } = useDashboard();
   const [isGenerating, setIsGenerating] = useState(false);
   const [verificationHash, setVerificationHash] = useState<string>('');
+  const [imagesLoaded, setImagesLoaded] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Generate verification hash and store in Firestore
@@ -90,8 +91,8 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   // Generate public verification URL with hash
   const verificationUrl = `${window.location.origin}/verify-id?token=${verificationHash}`;
 
-  // Generate barcode URL (PDF-417) - now using hash
-  const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(verificationHash)}&code=PDF417&multiplebarcodes=false&translate-esc=false&unit=Fit&dpi=96&imagetype=Gif&rotation=0&color=%23000000&bgcolor=%23ffffff&qunit=Mm&quiet=0`;
+  // Generate barcode URL (PDF-417) - using userId as content with optimized parameters
+  const barcodeUrl = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(user?.userId || 'ST-2601-00001')}&code=PDF417&multiplebarcodes=false&translate-esc=false&unit=Fit&dpi=150&imagetype=Png&rotation=0&color=%23000000&bgcolor=%23ffffff&qunit=Mm&quiet=0&eclevel=5`;
 
   // Generate QR code URL - now using hash
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
@@ -108,22 +109,35 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
     setIsGenerating(true);
     try {
+      // Wait longer for images to fully load and render
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       const canvas = await html2canvas(cardRef.current, {
-        scale: 3,
+        scale: 4, // Higher scale for better quality
         useCORS: true,
-        allowTaint: true,
+        allowTaint: false,
         backgroundColor: '#ffffff',
+        logging: false,
+        width: 539.8,
+        height: 337.5,
+        windowWidth: 539.8,
+        windowHeight: 337.5,
+        scrollY: -window.scrollY,
+        scrollX: -window.scrollX,
+        imageTimeout: 15000, // Wait longer for images
+        removeContainer: true,
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/png', 1.0);
       
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
-        format: [85.6, 53.98]
+        format: [85.6, 53.98],
+        compress: true
       });
 
-      pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98);
+      pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
       pdf.save(`ID-Card-${user?.userId}.pdf`);
     } catch (error) {
       console.error('PDF generation error:', error);
@@ -143,7 +157,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
       return;
     }
 
-    const cardHTML = cardRef.current.outerHTML;
+    const cardHTML = cardRef.current.innerHTML;
     
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -154,22 +168,269 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
         <style>
           @page {
-            size: 85.6mm 53.98mm;
+            size: 85.6mm 53.98mm landscape;
             margin: 0;
           }
+          
           * { 
             box-sizing: border-box; 
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
           }
-          body {
+          
+          html, body {
             margin: 0;
             padding: 0;
             background: white;
+            width: 85.6mm;
+            height: 53.98mm;
           }
+          
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
+
+          :root {
+              --primary: #1e3a8a;
+              --accent: #374151;
+              --sidebar: #f9fafb;
+              --text-dark: #1f2937;
+              --text-muted: #6b7280;
+              --caution-red: #dc2626;
+              --id-color: #1f2937;
+              --designation-color: #4b5563;
+          }
+
           .id-card {
-            page-break-after: avoid;
-            page-break-inside: avoid;
+              width: 539.8px;
+              height: 337.5px;
+              background: #ffffff;
+              border-radius: 16px;
+              overflow: hidden;
+              display: flex;
+              position: relative;
+              box-shadow: none;
+              border: 1px solid #ddd;
+              transform-origin: top left;
+              transform: scale(0.4);
+          }
+
+          .sidebar {
+              width: 33%;
+              background-color: var(--sidebar);
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 15px 20px;
+              border-right: 1px solid #e5e7eb;
+              position: relative;
+          }
+
+          .sidebar::before {
+              content: '';
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 6px;
+              height: 100%;
+              background: linear-gradient(to bottom, var(--primary), #4b5563);
+          }
+
+          .photo-box {
+              width: 130px;
+              height: 130px;
+              background: #fff;
+              border-radius: 8px;
+              border: 1px solid #d1d5db;
+              overflow: hidden;
+              margin-bottom: 10px;
+              margin-left: 3px;
+          }
+
+          .photo-box img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+          }
+
+          .id-text-container {
+              text-align: center;
+              margin: 3px 0 3px 0;
+              width: 100%;
+          }
+
+          .id-separator {
+              width: 120px;
+              height: 1px;
+              background-color: #e5e7eb;
+              margin: 0 auto;
+          }
+
+          .student-id-text {
+              font-family: 'Inter', sans-serif;
+              font-size: 12px;
+              font-weight: 500;
+              color: var(--id-color);
+              letter-spacing: 0.8px;
+              text-align: center;
+              line-height: 1.4;
+              margin: 6px 0;
+          }
+
+          .pdf417-barcode {
+              width: 140px;
+              height: 40px;
+              background: #fff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin-top: 5px;
+              margin-left: 3px;
+          }
+
+          .pdf417-barcode img {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+          }
+
+          .main-content {
+              flex: 1;
+              padding: 25px 35px 25px 35px;
+              display: flex;
+              flex-direction: column;
+          }
+
+          .header-top {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              margin-bottom: 20px;
+          }
+
+          .brand h1 {
+              margin: 0;
+              font-size: 18px;
+              font-weight: 800;
+              color: var(--primary);
+              letter-spacing: -0.5px;
+          }
+
+          .brand p {
+              margin: 0;
+              font-size: 10px;
+              color: var(--accent);
+              font-weight: 600;
+              text-transform: uppercase;
+          }
+
+          .qr-small {
+              width: 55px;
+              height: 55px;
+              padding: 0;
+              overflow: hidden;
+          }
+
+          .qr-small img {
+              width: 100%;
+              height: 100%;
+          }
+
+          .user-info {
+              flex: 1;
+          }
+
+          .user-name-container {
+              margin: 0 0 14px 0;
+          }
+
+          .user-name {
+              font-size: 24px;
+              font-weight: 700;
+              color: var(--text-dark);
+              margin: 0 0 3px 0;
+              line-height: 1.2;
+          }
+
+          .designation {
+              font-size: 13px;
+              font-weight: 500;
+              color: var(--designation-color);
+              letter-spacing: 0.2px;
+              font-style: italic;
+              margin: 0 0 15px 0;
+          }
+
+          .info-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 16px;
+              margin-bottom: 16px;
+          }
+
+          .info-item .label {
+              font-size: 9px;
+              color: var(--text-muted);
+              text-transform: uppercase;
+              font-weight: 600;
+              letter-spacing: 0.5px;
+              margin-bottom: 3px;
+          }
+
+          .info-item .value {
+              font-size: 13px;
+              font-weight: 500;
+              color: var(--text-dark);
+          }
+
+          .mrz-container {
+              margin-top: 25px;
+              width: 100%;
+              background: #f9fafb;
+              padding: 6px 0;
+              border-top: 1px solid #e5e7eb;
+              font-family: 'JetBrains Mono', monospace;
+              text-align: center;
+          }
+
+          .mrz-line-1 {
+              font-size: 8px;
+              letter-spacing: 1.1px;
+              color: #1f2937;
+              line-height: 1.2;
+              width: 100%;
+              margin: 1px 0 0 0;
+              display: block;
+              white-space: pre;
+              text-align: center;
+              padding: 0;
+              overflow: hidden;
+          }
+
+          .mrz-line-2 {
+              font-size: 8px;
+              letter-spacing: 1.1px;
+              color: #1f2937;
+              line-height: 1.2;
+              width: 100%;
+              margin: 0 0 1px 0;
+              display: block;
+              white-space: pre;
+              text-align: center;
+              padding: 0;
+              overflow: hidden;
+          }
+
+          .caution-text {
+              font-size: 7.5px;
+              color: var(--caution-red);
+              font-weight: 600;
+              text-align: center;
+              margin-top: 6px;
+              letter-spacing: 0.2px;
+              width: 100%;
+              white-space: nowrap;
+              overflow: hidden;
           }
         </style>
       </head>
@@ -185,7 +446,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
-    }, 500);
+    }, 1000);
   };
 
   // Close on Escape
@@ -197,12 +458,46 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
-  if (!verificationHash) {
+  // Preload images to ensure proper rendering
+  useEffect(() => {
+    if (!verificationHash) return;
+
+    const imagesToLoad = [
+      userPhotoUrl,
+      barcodeUrl,
+      qrCodeUrl
+    ];
+
+    let loadedCount = 0;
+    const totalImages = imagesToLoad.length;
+
+    imagesToLoad.forEach(src => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          setImagesLoaded(true);
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          setImagesLoaded(true);
+        }
+      };
+      img.src = src;
+    });
+  }, [verificationHash, userPhotoUrl, barcodeUrl, qrCodeUrl]);
+
+  if (!verificationHash || !imagesLoaded) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50">
         <div className="bg-white rounded-3xl p-8 text-center">
           <Loader size={40} className="animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-700 font-semibold">Generating ID Card...</p>
+          <p className="text-gray-700 font-semibold">
+            {!verificationHash ? 'Generating ID Card...' : 'Loading images...'}
+          </p>
         </div>
       </div>
     );
