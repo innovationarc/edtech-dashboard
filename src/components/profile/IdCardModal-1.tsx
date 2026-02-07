@@ -749,7 +749,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                 }
 
                 .mrz-container {
-                    margin-top: 15px;
+                    margin-top: 16px;
                     width: 100%;
                     background: #f9fafb;
                     padding: 3px 0;
@@ -764,7 +764,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
                     color: #1f2937;
                     line-height: 1.2;
                     width: 100%;
-                    margin: 1px 0 0 0;
+                    margin: 2px 0 0 0;
                     display: block;
                     white-space: pre;
                     text-align: center;
