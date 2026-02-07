@@ -405,21 +405,56 @@ const handleDownloadPDF = async () => {
 
     // Capture the clean version
     const canvas = await html2canvas(cardClone, {
-      scale: 4,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: '#ffffff',
-      logging: false,
-      width: 539.8,
-      height: 337.5,
-      onclone: (clonedDoc) => {
-        const clonedCard = clonedDoc.querySelector('.id-card') as HTMLElement;
-        if (clonedCard) {
-          clonedCard.style.transform = 'none';
-          clonedCard.style.boxShadow = 'none';
-        }
+  scale: 6,
+  useCORS: true,
+  allowTaint: false,
+  backgroundColor: '#ffffff',
+  logging: false,
+  width: 539.8,
+  height: 337.5,
+  foreignObjectRendering: false,
+  letterRendering: true,
+  onclone: (clonedDoc) => {
+    const clonedCard = clonedDoc.querySelector('.id-card') as HTMLElement;
+    if (clonedCard) {
+      clonedCard.style.transform = 'none';
+      clonedCard.style.boxShadow = 'none';
+      clonedCard.style.fontSmooth = 'always';
+      clonedCard.style.webkitFontSmoothing = 'antialiased';
+      clonedCard.style.mozOsxFontSmoothing = 'grayscale';
+      
+      // Force color accuracy on all elements
+      const allElements = clonedCard.querySelectorAll('*');
+      allElements.forEach((el: any) => {
+        el.style.webkitPrintColorAdjust = 'exact';
+        el.style.printColorAdjust = 'exact';
+        el.style.colorAdjust = 'exact';
+      });
+
+      // Enhance MRZ text
+      const mrzLines = clonedCard.querySelectorAll('.mrz-line-1, .mrz-line-2');
+      mrzLines.forEach((line: any) => {
+        line.style.fontFamily = "'JetBrains Mono', 'Courier New', monospace";
+        line.style.fontWeight = '700';
+        line.style.color = '#000000';
+      });
+
+      // Enhance caution text
+      const cautionText = clonedCard.querySelector('.caution-text') as HTMLElement;
+      if (cautionText) {
+        cautionText.style.color = '#dc2626';
+        cautionText.style.fontWeight = '800';
       }
-    });
+
+      // Enhance brand title
+      const brandTitle = clonedCard.querySelector('.brand h1') as HTMLElement;
+      if (brandTitle) {
+        brandTitle.style.color = '#1e3a8a';
+        brandTitle.style.fontWeight = '900';
+      }
+    }
+  }
+});
 
     // Clean up
     document.body.removeChild(tempContainer);
@@ -427,13 +462,15 @@ const handleDownloadPDF = async () => {
     const imgData = canvas.toDataURL('image/png', 1.0);
     
     const pdf = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: [85.6, 53.98],
-      compress: false
-    });
+  orientation: 'landscape',
+  unit: 'mm',
+  format: [85.6, 53.98],
+  compress: false,
+  precision: 16,
+  userUnit: 1.0
+});
 
-    pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
+    pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'SLOW');
     pdf.save(`ID-Card-${user?.userId}.pdf`);
   } catch (error) {
     console.error('PDF generation error:', error);
