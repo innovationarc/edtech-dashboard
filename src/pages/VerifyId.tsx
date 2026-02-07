@@ -1,4 +1,4 @@
-// src/pages/VerifyId.tsx - Public ID Card Verification Page
+// src/pages/VerifyId.tsx - Public ID Card Verification (Using user-search.ts)
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
@@ -46,7 +46,7 @@ const VerifyId = () => {
     }
   }, [searchParams]);
 
-  // Verify ID card
+  // Verify ID card using user-search.ts API with master key
   const handleVerify = async (userIdValue?: string, line1?: string, line2?: string) => {
     setLoading(true);
     setError('');
@@ -86,7 +86,18 @@ const VerifyId = () => {
         }
       }
 
-      // Call user-search API
+      if (!userIdToVerify || userIdToVerify.trim() === '') {
+        setError('Please enter a User ID');
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔍 Verifying ID:', userIdToVerify);
+
+      // Get master key from environment variable
+      const MASTER_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      // Call user-search API with userId and master key
       const response = await fetch('/api/user-search', {
         method: 'POST',
         headers: {
@@ -94,11 +105,14 @@ const VerifyId = () => {
         },
         body: JSON.stringify({
           userId: userIdToVerify,
-          purpose: 'user-lookup'
+          purpose: 'user-lookup',
+          apiKey: MASTER_KEY // Include master key for authentication
         })
       });
 
       const data = await response.json();
+
+      console.log('📡 API Response:', response.status, data);
 
       if (!response.ok || !data.success) {
         setError(data.error || 'User not found');
@@ -130,9 +144,11 @@ const VerifyId = () => {
         role: data.userData.role || 'Unknown'
       });
 
+      console.log('✅ Verification successful');
+
     } catch (err: any) {
-      console.error('Verification error:', err);
-      setError(err.message || 'Failed to verify ID card');
+      console.error('❌ Verification error:', err);
+      setError(err.message || 'Failed to verify ID card. Please try again.');
     } finally {
       setLoading(false);
     }
