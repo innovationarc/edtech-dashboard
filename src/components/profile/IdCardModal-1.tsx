@@ -1,4 +1,4 @@
-// src/components/profile/IdCardModal-1.tsx - ID Card Modal with Hashed QR Code
+// src/components/profile/IdCardModal-1.tsx - ID Card Modal with Exact Template Preservation
 import { useState, useRef, useEffect } from 'react';
 import { X, Download, Printer, Loader } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
@@ -95,6 +95,12 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
   // Generate QR code URL - now using hash
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
+
+  // User photo URL with fallback
+  const userPhotoUrl = user?.profilePictureUrl || 'https://i.pravatar.cc/300?u=default';
+
+  // Full name
+  const fullName = `${user?.surname || ''} ${user?.name || ''}`.trim() || 'Not Specified';
 
   // Download as PDF
   const handleDownloadPDF = async () => {
@@ -216,365 +222,332 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
 
         {/* Header */}
         <div className="text-center mb-6">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-            ID Card Preview
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+            Professional ID Card
           </h2>
-          <p className="text-gray-600" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-            Download or print your official identification card
+          <p className="text-gray-600 text-sm md:text-base">
+            Official identification document
           </p>
         </div>
 
-        {/* ID Card Preview */}
+        {/* ID Card Preview - Exact Template Rendering */}
         <div className="flex justify-center mb-6">
-          <div ref={cardRef}>
-            <div className="id-card" style={{
-              width: '539.8px',
-              height: '337.5px',
-              background: '#ffffff',
-              borderRadius: '16px',
-              overflow: 'hidden',
-              display: 'flex',
-              position: 'relative',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.2)',
-              border: '1px solid #e5e7eb',
-              fontFamily: 'Inter, sans-serif'
-            }}>
-              {/* Left Sidebar */}
-              <div className="sidebar" style={{
-                width: '33%',
-                backgroundColor: '#f9fafb',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '15px 20px',
-                borderRight: '1px solid #e5e7eb',
-                position: 'relative'
-              }}>
-                {/* Colored Left Border */}
-                <div style={{
-                  content: '',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '6px',
-                  height: '100%',
-                  background: 'linear-gradient(to bottom, #1e3a8a, #4b5563)'
-                }}></div>
+          <div className="inline-block bg-gray-100 p-6 rounded-2xl">
+            {/* EXACT HTML TEMPLATE - DO NOT MODIFY STRUCTURE OR STYLES */}
+            <div ref={cardRef}>
+              <style dangerouslySetInnerHTML={{ __html: `
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
 
-                {/* Photo */}
-                <div className="photo-box" style={{
-                  width: '130px',
-                  height: '145px',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  border: '3px solid #1e3a8a',
-                  marginBottom: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#e5e7eb'
-                }}>
-                  <img
-                    src={user?.profilePictureUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || user?.userId || 'User')}&size=300&background=3b82f6&color=ffffff`}
-                    alt="Profile"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover'
-                    }}
-                  />
+                :root {
+                    --primary: #1e3a8a;
+                    --accent: #374151;
+                    --sidebar: #f9fafb;
+                    --text-dark: #1f2937;
+                    --text-muted: #6b7280;
+                    --caution-red: #dc2626;
+                    --id-color: #1f2937;
+                    --designation-color: #4b5563;
+                }
+
+                * { box-sizing: border-box; -webkit-print-color-adjust: exact; }
+
+                .id-card {
+                    width: 539.8px;
+                    height: 337.5px;
+                    background: #ffffff;
+                    border-radius: 16px;
+                    overflow: hidden;
+                    display: flex;
+                    position: relative;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
+                    border: 1px solid #e5e7eb;
+                }
+
+                .sidebar {
+                    width: 33%;
+                    background-color: var(--sidebar);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 15px 20px;
+                    border-right: 1px solid #e5e7eb;
+                    position: relative;
+                }
+
+                .sidebar::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 6px;
+                    height: 100%;
+                    background: linear-gradient(to bottom, var(--primary), #4b5563);
+                }
+
+                .photo-box {
+                    width: 130px;
+                    height: 130px;
+                    background: #fff;
+                    border-radius: 8px;
+                    border: 1px solid #d1d5db;
+                    overflow: hidden;
+                    margin-bottom: 10px;
+                    margin-left: 3px;
+                }
+
+                .photo-box img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+
+                .id-text-container {
+                    text-align: center;
+                    margin: 3px 0 3px 0;
+                    width: 100%;
+                }
+
+                .id-separator {
+                    width: 120px;
+                    height: 1px;
+                    background-color: #e5e7eb;
+                    margin: 0 auto;
+                }
+
+                .student-id-text {
+                    font-family: 'Inter', sans-serif;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: var(--id-color);
+                    letter-spacing: 0.8px;
+                    text-align: center;
+                    line-height: 1.4;
+                    margin: 6px 0;
+                }
+
+                .pdf417-barcode {
+                    width: 140px;
+                    height: 40px;
+                    background: #fff;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-top: 5px;
+                    margin-left: 3px;
+                }
+
+                .pdf417-barcode img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                }
+
+                .main-content {
+                    flex: 1;
+                    padding: 25px 35px 25px 35px;
+                    display: flex;
+                    flex-direction: column;
+                }
+
+                .header-top {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 20px;
+                }
+
+                .brand h1 {
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: 800;
+                    color: var(--primary);
+                    letter-spacing: -0.5px;
+                }
+
+                .brand p {
+                    margin: 0;
+                    font-size: 10px;
+                    color: var(--accent);
+                    font-weight: 600;
+                    text-transform: uppercase;
+                }
+
+                .qr-small {
+                    width: 55px;
+                    height: 55px;
+                    padding: 0;
+                    overflow: hidden;
+                }
+
+                .qr-small img {
+                    width: 100%;
+                    height: 100%;
+                }
+
+                .user-info {
+                    flex: 1;
+                }
+
+                .user-name-container {
+                    margin: 0 0 14px 0;
+                }
+
+                .user-name {
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: var(--text-dark);
+                    margin: 0 0 3px 0;
+                    line-height: 1.2;
+                }
+
+                .designation {
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: var(--designation-color);
+                    letter-spacing: 0.2px;
+                    font-style: italic;
+                    margin: 0 0 15px 0;
+                }
+
+                .info-grid {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 16px;
+                    margin-bottom: 16px;
+                }
+
+                .info-item .label {
+                    font-size: 9px;
+                    color: var(--text-muted);
+                    text-transform: uppercase;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 3px;
+                }
+
+                .info-item .value {
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: var(--text-dark);
+                }
+
+                .mrz-container {
+                    margin-top: 25px;
+                    width: 100%;
+                    background: #f9fafb;
+                    padding: 6px 0;
+                    border-top: 1px solid #e5e7eb;
+                    font-family: 'JetBrains Mono', monospace;
+                    text-align: center;
+                }
+
+                .mrz-line-1 {
+                    font-size: 8px;
+                    letter-spacing: 1.1px;
+                    color: #1f2937;
+                    line-height: 1.2;
+                    width: 100%;
+                    margin: 1px 0 0 0;
+                    display: block;
+                    white-space: pre;
+                    text-align: center;
+                    padding: 0;
+                    overflow: hidden;
+                }
+
+                .mrz-line-2 {
+                    font-size: 8px;
+                    letter-spacing: 1.1px;
+                    color: #1f2937;
+                    line-height: 1.2;
+                    width: 100%;
+                    margin: 0 0 1px 0;
+                    display: block;
+                    white-space: pre;
+                    text-align: center;
+                    padding: 0;
+                    overflow: hidden;
+                }
+
+                .caution-text {
+                    font-size: 7.5px;
+                    color: var(--caution-red);
+                    font-weight: 600;
+                    text-align: center;
+                    margin-top: 6px;
+                    letter-spacing: 0.2px;
+                    width: 100%;
+                    white-space: nowrap;
+                    overflow: hidden;
+                }
+
+                @media print {
+                    body { background: transparent; }
+                    .id-card { box-shadow: none; border: 1px solid #ddd; }
+                    .sidebar::before { background: var(--primary); }
+                    .photo-box { box-shadow: none; }
+                }
+              `}} />
+
+              <div className="id-card">
+                <div className="sidebar">
+                  <div className="photo-box">
+                    <img src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
+                  </div>
+                  
+                  <div className="id-text-container">
+                    <div className="id-separator"></div>
+                    <div className="student-id-text">{user?.userId || 'ST-2601-00001'}</div>
+                    <div className="id-separator"></div>
+                  </div>
+                  
+                  <div className="pdf417-barcode">
+                    <img src={barcodeUrl} alt="PDF-417 Barcode" crossOrigin="anonymous" />
+                  </div>
                 </div>
 
-                {/* User ID */}
-                <div className="user-id" style={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#1e3a8a',
-                  letterSpacing: '0.5px',
-                  marginBottom: '10px',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  textAlign: 'center'
-                }}>
-                  {user?.userId || 'N/A'}
-                </div>
-
-                {/* QR Code */}
-                <div className="qr-box" style={{
-                  width: '90px',
-                  height: '90px',
-                  background: '#ffffff',
-                  borderRadius: '6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '2px solid #e5e7eb',
-                  marginBottom: '8px',
-                  overflow: 'hidden'
-                }}>
-                  <img
-                    src={qrCodeUrl}
-                    alt="QR Code"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'contain'
-                    }}
-                  />
-                </div>
-
-                {/* Scan Text */}
-                <div className="scan-text" style={{
-                  fontSize: '7px',
-                  color: '#6b7280',
-                  fontWeight: 600,
-                  textAlign: 'center',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.3px',
-                  fontFamily: 'Inter, sans-serif'
-                }}>
-                  Scan to Verify
-                </div>
-              </div>
-
-              {/* Right Content */}
-              <div className="content" style={{
-                width: '67%',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                position: 'relative'
-              }}>
-                {/* Header */}
-                <div className="header" style={{
-                  background: 'linear-gradient(135deg, #1e3a8a 0%, #4b5563 100%)',
-                  padding: '14px 20px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  borderBottom: '2px solid #1e293b'
-                }}>
-                  <div>
-                    <h1 className="title" style={{
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#ffffff',
-                      margin: 0,
-                      letterSpacing: '0.5px',
-                      fontFamily: 'Inter, sans-serif'
-                    }}>
-                      EDTECH DASHBOARD
-                    </h1>
-                    <div className="subtitle" style={{
-                      fontSize: '9px',
-                      color: '#cbd5e1',
-                      fontWeight: 600,
-                      letterSpacing: '0.5px',
-                      marginTop: '2px',
-                      fontFamily: 'Inter, sans-serif'
-                    }}>
-                      OFFICIAL IDENTIFICATION CARD
+                <div className="main-content">
+                  <div className="header-top">
+                    <div className="brand">
+                      <h1>EDTECH DASHBOARD</h1>
+                      <p>Global Learning Network</p>
+                    </div>
+                    <div className="qr-small">
+                      <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
                     </div>
                   </div>
-                  <div className="barcode-box" style={{
-                    width: '85px',
-                    height: '32px',
-                    background: '#ffffff',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    overflow: 'hidden'
-                  }}>
-                    <img
-                      src={barcodeUrl}
-                      alt="Barcode"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain'
-                      }}
-                    />
-                  </div>
-                </div>
 
-                {/* Main Content */}
-                <div className="main-content" style={{
-                  padding: '18px 20px 10px 20px',
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}>
-                  {/* Name and Designation */}
-                  <div className="name-section" style={{
-                    marginBottom: '10px'
-                  }}>
-                    <h2 className="name" style={{
-                      fontSize: '24px',
-                      fontWeight: 700,
-                      color: '#1f2937',
-                      margin: '0 0 3px 0',
-                      lineHeight: 1.2,
-                      fontFamily: 'Inter, sans-serif'
-                    }}>
-                      {user?.surname || ''} {user?.name || ''}
-                    </h2>
-                    <div className="designation" style={{
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      color: '#4b5563',
-                      letterSpacing: '0.2px',
-                      fontStyle: 'italic',
-                      margin: '0 0 15px 0',
-                      fontFamily: 'Inter, sans-serif'
-                    }}>
-                      {user?.designation || 'Administrator'}
+                  <div className="user-info">
+                    <div className="user-name-container">
+                      <h2 className="user-name">{fullName}</h2>
+                      <div className="designation">{user?.designation || 'Security Analyst'}</div>
                     </div>
-                  </div>
-
-                  {/* Info Grid */}
-                  <div className="info-grid" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: '16px',
-                    marginBottom: '16px'
-                  }}>
-                    <div className="info-item">
-                      <div className="label" style={{
-                        fontSize: '9px',
-                        color: '#6b7280',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        letterSpacing: '0.5px',
-                        marginBottom: '3px',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>Blood Group</div>
-                      <div className="value" style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: '#1f2937',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>
-                        {user?.bloodGroup || 'Not Specified'}
+                    
+                    <div className="info-grid">
+                      <div className="info-item">
+                        <div className="label">Blood Group</div>
+                        <div className="value">{user?.bloodGroup || 'Not Specified'}</div>
+                      </div>
+                      <div className="info-item">
+                        <div className="label">Emergency Contact</div>
+                        <div className="value">{user?.phoneNumber || 'Not Specified'}</div>
+                      </div>
+                      <div className="info-item">
+                        <div className="label">Issue Date</div>
+                        <div className="value">{formatIssueDate()}</div>
+                      </div>
+                      <div className="info-item">
+                        <div className="label">Valid Till</div>
+                        <div className="value">{formatValidTill(user?.validTill)}</div>
                       </div>
                     </div>
-                    <div className="info-item">
-                      <div className="label" style={{
-                        fontSize: '9px',
-                        color: '#6b7280',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        letterSpacing: '0.5px',
-                        marginBottom: '3px',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>Emergency Contact</div>
-                      <div className="value" style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: '#1f2937',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>
-                        {user?.phoneNumber || 'Not Specified'}
-                      </div>
-                    </div>
-                    <div className="info-item">
-                      <div className="label" style={{
-                        fontSize: '9px',
-                        color: '#6b7280',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        letterSpacing: '0.5px',
-                        marginBottom: '3px',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>Issue Date</div>
-                      <div className="value" style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: '#1f2937',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>
-                        {formatIssueDate()}
-                      </div>
-                    </div>
-                    <div className="info-item">
-                      <div className="label" style={{
-                        fontSize: '9px',
-                        color: '#6b7280',
-                        textTransform: 'uppercase',
-                        fontWeight: 600,
-                        letterSpacing: '0.5px',
-                        marginBottom: '3px',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>Valid Till</div>
-                      <div className="value" style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: '#1f2937',
-                        fontFamily: 'Inter, sans-serif'
-                      }}>
-                        {formatValidTill(user?.validTill)}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* MRZ Container */}
-                  <div className="mrz-container" style={{
-                    marginTop: '25px',
-                    width: '100%',
-                    background: '#f9fafb',
-                    padding: '6px 0',
-                    borderTop: '1px solid #e5e7eb',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    textAlign: 'center'
-                  }}>
-                    <div className="mrz-line-1" style={{
-                      fontSize: '8px',
-                      letterSpacing: '1.1px',
-                      color: '#1f2937',
-                      lineHeight: 1.2,
-                      width: '100%',
-                      margin: '1px 0 0 0',
-                      display: 'block',
-                      whiteSpace: 'pre',
-                      textAlign: 'center',
-                      padding: 0,
-                      overflow: 'hidden',
-                      fontFamily: 'JetBrains Mono, monospace'
-                    }}>
-                      {mrz.line1}
+                    <div className="mrz-container">
+                      <div className="mrz-line-1">{mrz.line1}</div>
+                      <div className="mrz-line-2">{mrz.line2}</div>
                     </div>
-                    <div className="mrz-line-2" style={{
-                      fontSize: '8px',
-                      letterSpacing: '1.1px',
-                      color: '#1f2937',
-                      lineHeight: 1.2,
-                      width: '100%',
-                      margin: '0 0 1px 0',
-                      display: 'block',
-                      whiteSpace: 'pre',
-                      textAlign: 'center',
-                      padding: 0,
-                      overflow: 'hidden',
-                      fontFamily: 'JetBrains Mono, monospace'
-                    }}>
-                      {mrz.line2}
-                    </div>
-                  </div>
-
-                  {/* Caution Text */}
-                  <div className="caution-text" style={{
-                    fontSize: '7.5px',
-                    color: '#dc2626',
-                    fontWeight: 600,
-                    textAlign: 'center',
-                    marginTop: '6px',
-                    letterSpacing: '0.2px',
-                    width: '100%',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    fontFamily: 'Inter, sans-serif'
-                  }}>
-                    If this card found unattended, please return it to Edtech-dashboard.
+                    <div className="caution-text">If this card found unattended, please return it to Edtech-dashboard.</div>
                   </div>
                 </div>
               </div>
