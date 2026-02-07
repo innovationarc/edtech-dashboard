@@ -97,14 +97,14 @@ const VerifyId = () => {
       // Get master key from environment variable
       const MASTER_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
 
-      // Call user-search API with userId and master key
+      // Call user-search API with loginId (not userId) and master key
       const response = await fetch('/api/user-search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: userIdToVerify,
+          loginId: userIdToVerify,  // Changed from userId to loginId
           purpose: 'user-lookup',
           apiKey: MASTER_KEY // Include master key for authentication
         })
@@ -200,28 +200,28 @@ const VerifyId = () => {
 
         {/* Verification Method Tabs */}
         <div className="bg-slate-800 rounded-2xl p-6 mb-6 border border-slate-700">
-          <div className="flex gap-3 mb-6">
+          <div className="flex gap-4 mb-6">
             <button
               onClick={() => setVerificationMethod('userId')}
-              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
                 verificationMethod === 'userId'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                  : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
               }`}
               style={{ fontFamily: 'Inter, sans-serif' }}
             >
-              Verify by User ID
+              User ID
             </button>
             <button
               onClick={() => setVerificationMethod('mrz')}
-              className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${
+              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
                 verificationMethod === 'mrz'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                  : 'bg-slate-700 text-gray-400 hover:bg-slate-600'
               }`}
               style={{ fontFamily: 'Inter, sans-serif' }}
             >
-              Verify by MRZ
+              MRZ Code
             </button>
           </div>
 
