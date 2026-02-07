@@ -19,7 +19,6 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [barcodeDataUrl, setBarcodeDataUrl] = useState<string>('');
   const cardRef = useRef<HTMLDivElement>(null);
-  const printCardRef = useRef<HTMLDivElement>(null);
 
   // Generate verification hash and store in Firestore
   useEffect(() => {
@@ -118,7 +117,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   const verificationUrl = `${window.location.origin}/verify-id?token=${verificationHash}`;
 
   // Generate QR code URL - now using hash
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(verificationUrl)}&format=svg&color=0f172a&bgcolor=ffffff&margin=0`;
 
   // User photo URL with fallback
   const userPhotoUrl = user?.profilePictureUrl || 'https://i.pravatar.cc/300?u=default';
@@ -126,27 +125,37 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
   // Full name
   const fullName = `${user?.surname || ''} ${user?.name || ''}`.trim() || 'Not Specified';
 
-  // Download as PDF - Using hidden print-optimized card
+  // Download as PDF - FIXED VERSION
   const handleDownloadPDF = async () => {
-    if (!printCardRef.current) return;
+    if (!cardRef.current) return;
 
     setIsGenerating(true);
     try {
       // Wait for images to fully load
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Capture at exact credit card dimensions: 85.6mm × 53.98mm at 300 DPI = 1011px × 637px
-      const canvas = await html2canvas(printCardRef.current, {
-        scale: 3,
+      // Get the actual rendered size of the card
+      const cardElement = cardRef.current;
+      const rect = cardElement.getBoundingClientRect();
+      
+      const canvas = await html2canvas(cardElement, {
+        scale: 5, // Ultra high quality for printing
         useCORS: true,
         allowTaint: false,
         backgroundColor: '#ffffff',
         logging: false,
-        width: 1011,
-        height: 637,
-        windowWidth: 1011,
-        windowHeight: 637,
         imageTimeout: 15000,
+        onclone: (clonedDoc) => {
+          const clonedCard = clonedDoc.querySelector('.id-card') as HTMLElement;
+          if (clonedCard) {
+            // Force exact dimensions in the clone
+            clonedCard.style.width = '539.84px';
+            clonedCard.style.height = '337.5px';
+            clonedCard.style.transform = 'none';
+            clonedCard.style.margin = '0';
+            clonedCard.style.padding = '0';
+          }
+        }
       });
 
       const imgData = canvas.toDataURL('image/png', 1.0);
@@ -155,7 +164,7 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
         orientation: 'landscape',
         unit: 'mm',
         format: [85.6, 53.98],
-        compress: false
+        compress: false // No compression for maximum quality
       });
 
       pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 53.98, undefined, 'FAST');
@@ -515,7 +524,6 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
         <div className="p-8">
           <div className="flex justify-center mb-4">
             <div className="inline-block bg-gradient-to-br from-gray-50 to-gray-100 p-8 rounded-2xl shadow-inner">
-              {/* ORIGINAL PREVIEW CARD - UNTOUCHED */}
               <div ref={cardRef} style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                 <style>{`
                   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
@@ -857,316 +865,10 @@ const IdCardModal1 = ({ onClose }: IdCardModal1Props) => {
               </div>
             </div>
           </div>
-
-          {/* HIDDEN PRINT-OPTIMIZED CARD - For PDF generation only */}
-          <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
-            <div ref={printCardRef}>
-              <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono&display=swap');
-
-                .print-id-card {
-                    width: 1011px;
-                    height: 637px;
-                    background: white;
-                    display: flex;
-                    position: relative;
-                    overflow: hidden;
-                    font-family: 'Inter', system-ui, sans-serif;
-                }
-
-                .print-sidebar {
-                    width: 30%;
-                    background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 100%);
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: flex-start;
-                    padding: 45px 30px;
-                    position: relative;
-                }
-
-                .print-sidebar::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: #1e3a8a;
-                    opacity: 0.95;
-                }
-
-                .print-photo-box {
-                    width: 225px;
-                    height: 264px;
-                    border-radius: 15px;
-                    overflow: hidden;
-                    background: white;
-                    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-                    position: relative;
-                    z-index: 1;
-                    flex-shrink: 0;
-                }
-
-                .print-photo-box img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                }
-
-                .print-id-text-container {
-                    margin-top: 30px;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    position: relative;
-                    z-index: 1;
-                }
-
-                .print-id-separator {
-                    width: 150px;
-                    height: 3px;
-                    background: rgba(255, 255, 255, 0.3);
-                }
-
-                .print-student-id-text {
-                    padding: 15px 0;
-                    font-size: 26px;
-                    font-weight: 700;
-                    color: white;
-                    letter-spacing: 1.8px;
-                    text-align: center;
-                }
-
-                .print-pdf417-barcode {
-                    margin-top: auto;
-                    width: 100%;
-                    display: flex;
-                    justify-content: center;
-                    position: relative;
-                    z-index: 1;
-                    padding: 0 15px;
-                }
-
-                .print-pdf417-barcode img {
-                    width: 100%;
-                    height: auto;
-                    max-width: 245px;
-                    filter: brightness(1.1);
-                }
-
-                .print-main-content {
-                    flex: 1;
-                    padding: 45px 53px 30px 53px;
-                    display: flex;
-                    flex-direction: column;
-                    background: white;
-                }
-
-                .print-header-top {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                    margin-bottom: 34px;
-                    padding-bottom: 23px;
-                    border-bottom: 5px solid #e5e7eb;
-                }
-
-                .print-brand h1 {
-                    font-size: 41px;
-                    font-weight: 800;
-                    color: #1e3a8a;
-                    line-height: 1.1;
-                    margin: 0 0 8px 0;
-                    letter-spacing: -0.9px;
-                }
-
-                .print-brand p {
-                    font-size: 21px;
-                    color: #6b7280;
-                    font-weight: 500;
-                    margin: 0;
-                    letter-spacing: 0.9px;
-                }
-
-                .print-qr-small {
-                    flex-shrink: 0;
-                    width: 141px;
-                    height: 141px;
-                    padding: 0;
-                    overflow: hidden;
-                }
-
-                .print-qr-small img {
-                    width: 100%;
-                    height: 100%;
-                }
-
-                .print-user-info {
-                    flex: 1;
-                }
-
-                .print-user-name-container {
-                    margin: 0 0 15px 0;
-                }
-
-                .print-user-name {
-                    font-size: 60px;
-                    font-weight: 700;
-                    color: #1f2937;
-                    margin: 0 0 8px 0;
-                    line-height: 1.2;
-                }
-
-                .print-designation {
-                    font-size: 30px;
-                    font-weight: 500;
-                    color: #4b5563;
-                    letter-spacing: 0.6px;
-                    font-style: italic;
-                    margin: 0 0 30px 0;
-                }
-
-                .print-info-grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 38px;
-                    margin-bottom: 11px;
-                }
-
-                .print-info-item .print-label {
-                    font-size: 21px;
-                    color: #6b7280;
-                    text-transform: uppercase;
-                    font-weight: 600;
-                    letter-spacing: 1.5px;
-                    margin-bottom: 8px;
-                }
-
-                .print-info-item .print-value {
-                    font-size: 28px;
-                    font-weight: 500;
-                    color: #1f2937;
-                }
-
-                .print-mrz-container {
-                    margin-top: 38px;
-                    width: 100%;
-                    background: #f9fafb;
-                    padding: 11px 0;
-                    border-top: 3px solid #e5e7eb;
-                    font-family: 'JetBrains Mono', monospace;
-                    text-align: center;
-                }
-
-                .print-mrz-line-1 {
-                    font-size: 19px;
-                    letter-spacing: 2.8px;
-                    color: #1f2937;
-                    line-height: 1.4;
-                    width: 100%;
-                    margin: 4px 0 0 0;
-                    display: block;
-                    white-space: pre;
-                    text-align: center;
-                    padding: 0;
-                    overflow: hidden;
-                }
-
-                .print-mrz-line-2 {
-                    font-size: 19px;
-                    letter-spacing: 2.8px;
-                    color: #1f2937;
-                    line-height: 1.4;
-                    width: 100%;
-                    margin: 0 0 4px 0;
-                    display: block;
-                    white-space: pre;
-                    text-align: center;
-                    padding: 0;
-                    overflow: hidden;
-                }
-
-                .print-caution-text {
-                    font-size: 17px;
-                    color: #dc2626;
-                    font-weight: 600;
-                    text-align: center;
-                    margin-top: 15px;
-                    letter-spacing: 0.6px;
-                    width: 100%;
-                    white-space: nowrap;
-                    overflow: hidden;
-                }
-              `}</style>
-
-              <div className="print-id-card">
-                <div className="print-sidebar">
-                  <div className="print-photo-box">
-                    <img src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
-                  </div>
-                  
-                  <div className="print-id-text-container">
-                    <div className="print-id-separator"></div>
-                    <div className="print-student-id-text">{user?.userId || 'ST-2601-00001'}</div>
-                    <div className="print-id-separator"></div>
-                  </div>
-                  
-                  <div className="print-pdf417-barcode">
-                    <img src={barcodeDataUrl} alt="PDF-417 Barcode" />
-                  </div>
-                </div>
-
-                <div className="print-main-content">
-                  <div className="print-header-top">
-                    <div className="print-brand">
-                      <h1>EDTECH DASHBOARD</h1>
-                      <p>Global Learning Network</p>
-                    </div>
-                    <div className="print-qr-small">
-                      <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
-                    </div>
-                  </div>
-
-                  <div className="print-user-info">
-                    <div className="print-user-name-container">
-                      <h2 className="print-user-name">{fullName}</h2>
-                      <div className="print-designation">{user?.designation || 'Security Analyst'}</div>
-                    </div>
-                    
-                    <div className="print-info-grid">
-                      <div className="print-info-item">
-                        <div className="print-label">Blood Group</div>
-                        <div className="print-value">{user?.bloodGroup || 'Not Specified'}</div>
-                      </div>
-                      <div className="print-info-item">
-                        <div className="print-label">Emergency Contact</div>
-                        <div className="print-value">{user?.phoneNumber || 'Not Specified'}</div>
-                      </div>
-                      <div className="print-info-item">
-                        <div className="print-label">Issue Date</div>
-                        <div className="print-value">{formatIssueDate()}</div>
-                      </div>
-                      <div className="print-info-item">
-                        <div className="print-label">Valid Till</div>
-                        <div className="print-value">{formatValidTill(user?.validTill)}</div>
-                      </div>
-                    </div>
-
-                    <div className="print-mrz-container">
-                      <div className="print-mrz-line-1">{mrz.line1}</div>
-                      <div className="print-mrz-line-2">{mrz.line2}</div>
-                    </div>
-                    <div className="print-caution-text">If this card found unattended, please return it to Edtech-dashboard.</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center gap-3 mt-6 pb-8">
+        <div className="flex flex-col sm:flex-row justify-center gap-3 mt-6">
           <button
             onClick={handleDownloadPDF}
             disabled={isGenerating}
