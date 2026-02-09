@@ -201,13 +201,13 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
         }
         @media (max-width: 640px) {
           .modal-scale-container {
-            transform: scale(0.75);
+            transform: scale(0.68);
             transform-origin: center center;
           }
         }
         @media (min-width: 641px) and (max-width: 768px) {
           .modal-scale-container {
-            transform: scale(0.85);
+            transform: scale(0.8);
             transform-origin: center center;
           }
         }
