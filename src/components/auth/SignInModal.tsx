@@ -201,14 +201,18 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
         }
         @media (max-width: 640px) {
           .modal-scale-container {
-            transform: scale(0.68);
+            transform: scale(0.72);
             transform-origin: center center;
+            width: 138.89% !important;
+            max-width: 138.89% !important;
           }
         }
         @media (min-width: 641px) and (max-width: 768px) {
           .modal-scale-container {
-            transform: scale(0.8);
+            transform: scale(0.82);
             transform-origin: center center;
+            width: 121.95% !important;
+            max-width: 121.95% !important;
           }
         }
       `}</style>
