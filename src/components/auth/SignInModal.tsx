@@ -63,7 +63,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       if (savedRememberMe === 'true' && savedUserId) {
         setRememberMe(true);
         setUserId(savedUserId);
-        setDisplayUserId(savedUserId); // Set display value as well
+        setDisplayUserId(savedUserId);
       }
     } catch {
       // Fail silently if localStorage not available
@@ -180,136 +180,90 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
     }
   };
 
-  // EXISTING: Handle key press
+  // EXISTING: Handle enter key press
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !loading && captchaLoaded) {
-      e.preventDefault();
+    if (e.key === 'Enter' && !loading) {
       handleSubmit();
     }
   };
 
-  // EXISTING: Handle register success
-  const handleRegisterSuccess = () => {
-    setShowRegister(false);
-  };
+  // EXISTING: Show nested modals
+  if (showRegister) {
+    return <RegisterModal onClose={() => setShowRegister(false)} />;
+  }
 
-  // EXISTING: Handle forgot password success
-  const handleForgotPasswordSuccess = () => {
-    setShowForgotPassword(false);
-  };
+  if (showForgotPassword) {
+    return <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />;
+  }
 
-  // EXISTING: Handle account status close
-  const handleAccountStatusClose = () => {
-    setShowAccountStatusModal(false);
-    setAccountStatus(null);
-    setAccountUserId(undefined);
-  };
+  if (showForgotUserId) {
+    return <ForgotUserIdModal onClose={() => setShowForgotUserId(false)} />;
+  }
 
-  // EXISTING: Handle sign in another account
-  const handleSignInAnotherAccount = () => {
-    setShowAccountStatusModal(false);
-    setAccountStatus(null);
-    setAccountUserId(undefined);
-    setUserId('');
-    setDisplayUserId(''); // NEW: Clear display value too
-    setPassword('');
-    setError('');
-  };
-
-  // EXISTING: Show AccountStatusModal if account is not active
   if (showAccountStatusModal && accountStatus) {
     return (
       <AccountStatusModal
         status={accountStatus}
         userId={accountUserId}
-        onClose={handleAccountStatusClose}
-        onSignInAnotherAccount={handleSignInAnotherAccount}
+        onClose={() => {
+          setShowAccountStatusModal(false);
+          setAccountStatus(null);
+          setAccountUserId(undefined);
+        }}
       />
     );
   }
 
-  // EXISTING: Show forgot password modal
-  if (showForgotPassword) {
-    return (
-      <ForgotPasswordModal
-        onClose={() => setShowForgotPassword(false)}
-        onSuccess={handleForgotPasswordSuccess}
-      />
-    );
-  }
-
-  // EXISTING: Show forgot user ID modal
-  if (showForgotUserId) {
-    return (
-      <ForgotUserIdModal
-        onClose={() => setShowForgotUserId(false)}
-        onSignInClick={() => setShowForgotUserId(false)}
-      />
-    );
-  }
-
-  // EXISTING: Show register modal
-  if (showRegister) {
-    return (
-      <RegisterModal 
-        onClose={() => setShowRegister(false)} 
-        onSuccess={handleRegisterSuccess}
-      />
-    );
-  }
-
-  // EXISTING: Main sign in modal UI
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 rounded-3xl w-full max-w-md relative shadow-2xl border border-gray-700/50 my-8 animate-in fade-in duration-300">
-        {/* EXISTING: Decorative gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 via-purple-500/10 to-blue-500/10 rounded-3xl pointer-events-none"></div>
-        
-        {/* EXISTING: Animated background pattern */}
-        <div className="absolute inset-0 opacity-5 rounded-3xl overflow-hidden pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500 via-purple-500 to-blue-500 animate-pulse"></div>
-        </div>
-        
-        {/* EXISTING: Close button */}
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 sm:p-6 md:p-8">
+      <div 
+        className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl w-full border border-gray-700/50 overflow-y-auto relative"
+        style={{
+          maxWidth: 'min(580px, 100vw)',
+          maxHeight: 'min(95vh, 1000px)',
+        }}
+      >
+        {/* EXISTING: Close Button */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+          className="absolute top-5 right-5 text-gray-400 hover:text-white transition-all duration-300 hover:rotate-90 hover:scale-110 z-10 p-2 rounded-xl hover:bg-white/5 backdrop-blur-sm"
+          disabled={loading}
+          aria-label="Close modal"
         >
           <X size={24} />
         </button>
 
-        <div className="relative p-8">
-          {/* EXISTING: Header with logo and title */}
+        <div className="p-8 sm:p-10">
+          {/* EXISTING: Header */}
           <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary-500/30 blur-2xl"></div>
-                <div className="relative bg-gradient-to-br from-primary-500 to-purple-600 rounded-full p-4 shadow-2xl shadow-primary-500/50">
-                  <Lock size={48} className="text-white" />
-                </div>
-              </div>
+            <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 shadow-2xl shadow-primary-500/50 mb-5 hover:scale-110 transition-all duration-500 hover:rotate-12">
+              <Lock size={32} className="text-white" />
             </div>
-            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-blue-500 mb-2">
+            <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">
               Welcome Back
             </h2>
             <p className="text-gray-400 text-sm">
-              Sign in to access your dashboard
+              Sign in to access your account
             </p>
           </div>
 
-          {/* EXISTING: Error message display */}
+          {/* EXISTING: Error Message */}
           {error && (
-            <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
-              <p className="text-sm flex items-center gap-2">
-                <AlertCircle size={16} />
-                {error}
-              </p>
+            <div className="mb-6 bg-red-500/10 border-2 border-red-500/50 text-red-200 rounded-xl p-4 flex items-start gap-3 backdrop-blur-sm animate-shake shadow-lg shadow-red-500/20">
+              <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+              <p className="text-sm font-medium flex-1">{error}</p>
             </div>
           )}
 
-          {/* EXISTING: Sign in form */}
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-6">
-            {/* ENHANCED: User ID Input with auto-formatting */}
+          {/* EXISTING: Sign In Form */}
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            className="space-y-6"
+          >
+            {/* NEW: User ID Input with auto-formatting */}
             <div className="group">
               <label className="block text-sm font-semibold text-gray-300 mb-2.5 flex items-center gap-2">
                 <CreditCard size={16} className="text-primary-400" />
