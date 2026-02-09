@@ -69,18 +69,23 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       
-      // Modal natural dimensions
+      // Modal fixed width
       const modalWidth = 480;
       const modalHeight = 900;
       
-      // Calculate scale factors with padding
-      const widthScale = (viewportWidth - 40) / modalWidth;
-      const heightScale = (viewportHeight - 40) / modalHeight;
+      // Calculate how much of viewport the modal should use
+      const maxWidth = viewportWidth * 0.95; // Use 95% of viewport width
+      const maxHeight = viewportHeight * 0.95; // Use 95% of viewport height
       
-      // Use the smaller scale to ensure it fits, but cap at 1 for desktop
+      // Calculate scale factors
+      const widthScale = maxWidth / modalWidth;
+      const heightScale = maxHeight / modalHeight;
+      
+      // Use the smaller scale to ensure it fits, cap at 1
       const newScale = Math.min(widthScale, heightScale, 1);
       
-      setScale(Math.max(newScale, 0.4)); // Minimum scale of 0.4
+      // Set minimum scale of 0.5 for very small screens
+      setScale(Math.max(newScale, 0.5));
     };
 
     calculateScale();
@@ -214,10 +219,11 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/70 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn">
       <div 
-        className="relative w-full max-w-[480px] animate-slideUp"
+        className="relative animate-slideUp"
         style={{
+          width: '480px',
           transform: `scale(${scale})`,
           transformOrigin: 'center center'
         }}
