@@ -190,7 +190,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/70 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md animate-fadeIn">
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
@@ -199,26 +199,32 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out;
         }
+        .modal-viewport-wrapper {
+          width: 100%;
+          max-width: 28rem;
+          padding: 1rem 1.5rem;
+        }
         @media (max-width: 640px) {
+          .modal-viewport-wrapper {
+            padding: 0;
+            max-width: 100%;
+          }
           .modal-scale-container {
-            transform: scale(0.72);
+            transform: scale(0.75);
             transform-origin: center center;
-            width: 138.89% !important;
-            max-width: 138.89% !important;
           }
         }
         @media (min-width: 641px) and (max-width: 768px) {
           .modal-scale-container {
-            transform: scale(0.82);
+            transform: scale(0.85);
             transform-origin: center center;
-            width: 121.95% !important;
-            max-width: 121.95% !important;
           }
         }
       `}</style>
       
-      <div className="modal-scale-container relative w-full max-w-md">
-        <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800/95 backdrop-blur-xl rounded-3xl shadow-[0_25px_80px_-15px_rgba(0,0,0,0.5)] border-2 border-gray-700/50 overflow-hidden">
+      <div className="modal-viewport-wrapper">
+        <div className="modal-scale-container relative w-full max-w-md mx-auto">
+          <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800/95 backdrop-blur-xl rounded-3xl shadow-[0_25px_80px_-15px_rgba(0,0,0,0.5)] border-2 border-gray-700/50 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-purple-500/5 to-blue-500/5 pointer-events-none"></div>
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-full blur-3xl pointer-events-none"></div>
           <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-blue-500/20 to-purple-500/20 rounded-full blur-3xl pointer-events-none"></div>
@@ -423,6 +429,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </p>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
