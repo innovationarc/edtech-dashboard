@@ -76,8 +76,8 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       // Detect if mobile portrait (narrow screen)
       const isMobilePortrait = viewportWidth < 768 && viewportHeight > viewportWidth;
       
-      // On mobile portrait, prioritize width and be more aggressive
-      const widthMultiplier = isMobilePortrait ? 0.92 : 0.98;
+      // On mobile portrait, use almost full width to minimize margins
+      const widthMultiplier = isMobilePortrait ? 0.96 : 0.98;
       const heightMultiplier = 0.98;
       
       // Calculate scale factors
@@ -85,15 +85,10 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       const heightScale = (viewportHeight * heightMultiplier) / modalHeight;
       
       // Use the smaller scale to ensure it fits, cap at 1
-      let newScale = Math.min(widthScale, heightScale, 1);
-      
-      // On very narrow screens, be even more aggressive with width
-      if (viewportWidth < 400) {
-        newScale = Math.min(widthScale, heightScale, 1);
-      }
+      const newScale = Math.min(widthScale, heightScale, 1);
       
       // Set minimum scale
-      setScale(Math.max(newScale, 0.65));
+      setScale(Math.max(newScale, 0.7));
     };
 
     calculateScale();
