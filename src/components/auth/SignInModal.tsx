@@ -215,13 +215,15 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 overflow-auto">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
       <div 
-        className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 relative my-8 mx-4"
         style={{
           width: '580px',
-          maxWidth: 'calc(100vw - 32px)',
+          transform: `scale(${Math.min(1, (window.innerWidth - 32) / 580, (window.innerHeight - 32) / 900)})`,
+          transformOrigin: 'center center',
         }}
+      >
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 relative"
       >
         {/* EXISTING: Close Button */}
         <button
