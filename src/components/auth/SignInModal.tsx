@@ -29,6 +29,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   const [showAccountStatusModal, setShowAccountStatusModal] = useState(false);
   const [accountStatus, setAccountStatus] = useState<'inactive' | 'pending' | null>(null);
   const [accountUserId, setAccountUserId] = useState<string | undefined>(undefined);
+  const [scale, setScale] = useState(1);
 
   useEffect(() => {
     const loadRecaptcha = () => {
@@ -61,6 +62,30 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
     } catch {
       // Fail silently if localStorage not available
     }
+  }, []);
+
+  useEffect(() => {
+    const calculateScale = () => {
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      
+      // Modal natural dimensions
+      const modalWidth = 480;
+      const modalHeight = 900;
+      
+      // Calculate scale factors with padding
+      const widthScale = (viewportWidth - 40) / modalWidth;
+      const heightScale = (viewportHeight - 40) / modalHeight;
+      
+      // Use the smaller scale to ensure it fits, but cap at 1 for desktop
+      const newScale = Math.min(widthScale, heightScale, 1);
+      
+      setScale(Math.max(newScale, 0.4)); // Minimum scale of 0.4
+    };
+
+    calculateScale();
+    window.addEventListener('resize', calculateScale);
+    return () => window.removeEventListener('resize', calculateScale);
   }, []);
 
   const getCaptchaToken = async (): Promise<string> => {
@@ -182,76 +207,48 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
         userId={accountUserId}
         onClose={() => {
           setShowAccountStatusModal(false);
-          setAccountStatus(null);
-          setAccountUserId(undefined);
+          onClose();
         }}
       />
     );
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md animate-fadeIn">
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-        .modal-viewport-wrapper {
-          width: 100%;
-          max-width: 28rem;
-          padding: 1rem 1.5rem;
-        }
-        @media (max-width: 640px) {
-          .modal-viewport-wrapper {
-            padding: 0;
-            max-width: 100%;
-          }
-          .modal-scale-container {
-            transform: scale(0.75);
-            transform-origin: center center;
-          }
-        }
-        @media (min-width: 641px) and (max-width: 768px) {
-          .modal-scale-container {
-            transform: scale(0.85);
-            transform-origin: center center;
-          }
-        }
-      `}</style>
-      
-      <div className="modal-viewport-wrapper">
-        <div className="modal-scale-container relative w-full max-w-md mx-auto">
-          <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800/95 backdrop-blur-xl rounded-3xl shadow-[0_25px_80px_-15px_rgba(0,0,0,0.5)] border-2 border-gray-700/50 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-purple-500/5 to-blue-500/5 pointer-events-none"></div>
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-blue-500/20 to-purple-500/20 rounded-full blur-3xl pointer-events-none"></div>
-          
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-5 bg-black/70 backdrop-blur-sm animate-fadeIn">
+      <div 
+        className="relative w-full max-w-[480px] animate-slideUp"
+        style={{
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center'
+        }}
+      >
+        <div className="absolute -inset-1 bg-gradient-to-r from-primary-600 via-purple-600 to-blue-600 rounded-2xl blur-xl opacity-30 animate-pulse"></div>
+        
+        <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl shadow-2xl border border-gray-800/50 backdrop-blur-xl overflow-hidden">
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 text-gray-400 hover:text-white transition-colors z-10 bg-gray-800/50 hover:bg-gray-700/50 backdrop-blur-sm p-2.5 rounded-xl border border-gray-700/50 hover:border-gray-600/50 hover:rotate-90 duration-300 group"
-            disabled={loading}
+            className="absolute top-5 right-5 z-10 text-gray-400 hover:text-white transition-all duration-200 p-2 hover:bg-white/10 rounded-xl backdrop-blur-sm group"
+            aria-label="Close modal"
           >
-            <X size={20} className="group-hover:scale-110 transition-transform" />
+            <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
           </button>
 
-          <div className="relative p-10">
-            <div className="text-center mb-9">
-              <div className="mb-5 flex justify-center">
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-600 to-blue-600 flex items-center justify-center shadow-2xl shadow-primary-500/50 hover:scale-110 hover:rotate-6 transition-all duration-300">
-                  <Lock size={32} className="text-white" />
-                </div>
+          <div className="p-8">
+            <div className="flex flex-col items-center mb-8 pt-2">
+              <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-primary-500/50 mb-5 animate-float">
+                <Lock size={36} className="text-white" strokeWidth={2.5} />
               </div>
-              <h2 className="text-3xl font-bold text-white mb-2.5 tracking-tight">Welcome Back</h2>
-              <p className="text-gray-400 text-sm font-medium">Sign in to access your account</p>
+              
+              <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-100 to-white mb-2 tracking-tight">
+                Welcome Back
+              </h2>
+              <p className="text-gray-400 text-base font-medium">Sign in to access your account</p>
             </div>
 
             {error && (
-              <div className="mb-6 bg-red-900/30 border-2 border-red-500/50 text-red-200 px-5 py-4 rounded-xl flex items-center gap-3 shadow-lg animate-shake backdrop-blur-sm">
-                <AlertCircle size={20} className="flex-shrink-0 text-red-400" />
-                <p className="text-sm font-medium">{error}</p>
+              <div className="mb-6 p-4 bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 backdrop-blur-sm animate-shake shadow-lg">
+                <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-300 leading-relaxed font-medium">{error}</p>
               </div>
             )}
 
@@ -429,7 +426,6 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </p>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
