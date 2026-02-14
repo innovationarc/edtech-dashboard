@@ -29,7 +29,6 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   const [showAccountStatusModal, setShowAccountStatusModal] = useState(false);
   const [accountStatus, setAccountStatus] = useState<'inactive' | 'pending' | null>(null);
   const [accountUserId, setAccountUserId] = useState<string | undefined>(undefined);
-  const [scale, setScale] = useState(1);
 
   useEffect(() => {
     const loadRecaptcha = () => {
@@ -62,35 +61,6 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
     } catch {
       // Fail silently if localStorage not available
     }
-  }, []);
-
-  useEffect(() => {
-    const calculateScale = () => {
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      
-      // Modal base width
-      const modalWidth = 480;
-      
-      // Detect mobile
-      const isMobile = viewportWidth < 768;
-      
-      if (isMobile) {
-        // On mobile: scale to fill almost entire width (4px margin each side)
-        const targetWidth = viewportWidth - 8;
-        const scale = targetWidth / modalWidth;
-        setScale(scale);
-      } else {
-        // On desktop: no scaling (or scale down if needed)
-        const maxWidth = viewportWidth * 0.9;
-        const scale = Math.min(maxWidth / modalWidth, 1);
-        setScale(scale);
-      }
-    };
-
-    calculateScale();
-    window.addEventListener('resize', calculateScale);
-    return () => window.removeEventListener('resize', calculateScale);
   }, []);
 
   const getCaptchaToken = async (): Promise<string> => {
@@ -219,49 +189,42 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn">
-      <div 
-        className="relative animate-slideUp"
-        style={{
-          width: '480px',
-          transform: `scale(${scale})`,
-          transformOrigin: 'center center'
-        }}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fadeIn p-4">
+      <div className="relative w-full max-w-md md:max-w-lg lg:max-w-xl animate-slideUp">
         <div className="absolute -inset-1 bg-gradient-to-r from-primary-600 via-purple-600 to-blue-600 rounded-2xl blur-xl opacity-30 animate-pulse"></div>
         
         <div className="relative bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl shadow-2xl border border-gray-800/50 backdrop-blur-xl overflow-hidden">
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 z-10 text-gray-400 hover:text-white transition-all duration-200 p-2 hover:bg-white/10 rounded-xl backdrop-blur-sm group"
+            className="absolute top-4 right-4 md:top-5 md:right-5 z-10 text-gray-400 hover:text-white transition-all duration-200 p-2 hover:bg-white/10 rounded-xl backdrop-blur-sm group"
             aria-label="Close modal"
           >
-            <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
+            <X size={20} className="md:size-6 group-hover:rotate-90 transition-transform duration-300" />
           </button>
 
-          <div className="p-8">
-            <div className="flex flex-col items-center mb-8 pt-2">
-              <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-primary-500/50 mb-5 animate-float">
-                <Lock size={36} className="text-white" strokeWidth={2.5} />
+          <div className="p-6 md:p-8">
+            <div className="flex flex-col items-center mb-6 md:mb-8 pt-2">
+              <div className="h-14 w-14 md:h-20 md:w-20 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-primary-500/50 mb-4 md:mb-5 animate-float">
+                <Lock size={24} className="md:size-9 text-white" strokeWidth={2.5} />
               </div>
               
-              <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-100 to-white mb-2 tracking-tight">
+              <h2 className="text-2xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-100 to-white mb-2 tracking-tight">
                 Welcome Back
               </h2>
-              <p className="text-gray-400 text-base font-medium">Sign in to access your account</p>
+              <p className="text-gray-400 text-sm md:text-base font-medium text-center">Sign in to access your account</p>
             </div>
 
             {error && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 backdrop-blur-sm animate-shake shadow-lg">
-                <AlertCircle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-300 leading-relaxed font-medium">{error}</p>
+              <div className="mb-4 md:mb-6 p-3 md:p-4 bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/30 rounded-xl flex items-start gap-3 backdrop-blur-sm animate-shake shadow-lg">
+                <AlertCircle size={16} className="md:size-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs md:text-sm text-red-300 leading-relaxed font-medium">{error}</p>
               </div>
             )}
 
-            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-6">
+            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4 md:space-y-6">
               <div className="group">
-                <label className="block text-sm font-semibold text-gray-300 mb-2.5 flex items-center gap-2">
-                  <CreditCard size={16} className="text-primary-400" />
+                <label className="block text-xs md:text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+                  <CreditCard size={14} className="md:size-4 text-primary-400" />
                   User ID
                 </label>
                 <div className="relative">
@@ -270,15 +233,15 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                     value={displayUserId}
                     onChange={(e) => handleUserIdChange(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-4 pl-12 pr-4 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide"
+                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 md:py-4 pl-10 md:pl-12 pr-4 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide text-sm md:text-base"
                     placeholder="ST-2601-00001"
                     disabled={loading}
                     autoComplete="username"
                     maxLength={13}
                   />
-                  <CreditCard size={20} className="absolute left-4 top-4 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
+                  <CreditCard size={16} className="md:size-5 absolute left-3 md:left-4 top-3 md:top-4 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
                 </div>
-                <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center justify-between mt-1 md:mt-2">
                   <p className="text-xs text-gray-500">Format: XX-YYMM-XXXXX</p>
                   <button 
                     type="button"
@@ -292,8 +255,8 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               </div>
 
               <div className="group">
-                <label className="block text-sm font-semibold text-gray-300 mb-2.5 flex items-center gap-2">
-                  <Lock size={16} className="text-primary-400" />
+                <label className="block text-xs md:text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+                  <Lock size={14} className="md:size-4 text-primary-400" />
                   Password
                 </label>
                 <div className="relative">
@@ -302,23 +265,23 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-4 pl-12 pr-12 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-3 md:py-4 pl-10 md:pl-12 pr-10 md:pr-12 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                     placeholder="Enter your password"
                     disabled={loading}
                     autoComplete="current-password"
                   />
-                  <Lock size={20} className="absolute left-4 top-4 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
+                  <Lock size={16} className="md:size-5 absolute left-3 md:left-4 top-3 md:top-4 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-4 text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
+                    className="absolute right-3 md:right-4 top-3 md:top-4 text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
                     disabled={loading}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    {showPassword ? <EyeOff size={16} className="md:size-5" /> : <Eye size={16} className="md:size-5" />}
                   </button>
                 </div>
-                <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center justify-between mt-1 md:mt-2">
                   <p className="text-xs text-gray-500">Use a strong password</p>
                   <button 
                     type="button"
@@ -338,12 +301,12 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="peer w-5 h-5 rounded-md border-2 border-gray-600 bg-gray-800/50 text-primary-600 focus:ring-2 focus:ring-primary-500/30 transition-all cursor-pointer checked:bg-primary-600 checked:border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="peer w-4 h-4 md:w-5 md:h-5 rounded-md border-2 border-gray-600 bg-gray-800/50 text-primary-600 focus:ring-2 focus:ring-primary-500/30 transition-all cursor-pointer checked:bg-primary-600 checked:border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={loading}
                     />
                     <div className="absolute inset-0 rounded-md bg-primary-500/20 scale-0 peer-checked:scale-100 transition-transform pointer-events-none"></div>
                   </div>
-                  <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium">
+                  <span className="text-xs md:text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium">
                     Keep me signed in
                   </span>
                 </label>
@@ -352,46 +315,46 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               <button
                 type="submit"
                 disabled={loading || !captchaLoaded}
-                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-blue-600 hover:from-primary-700 hover:via-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:via-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 font-bold text-base shadow-2xl hover:shadow-primary-500/50 disabled:shadow-none group relative overflow-hidden"
+                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-blue-600 hover:from-primary-700 hover:via-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:via-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-3 md:py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 font-bold text-sm md:text-base shadow-2xl hover:shadow-primary-500/50 disabled:shadow-none group relative overflow-hidden"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
                 
-                <span className="relative flex items-center gap-3">
-                  {loading && <Loader size={20} className="animate-spin" />}
+                <span className="relative flex items-center gap-2 md:gap-3">
+                  {loading && <Loader size={16} className="md:size-5 animate-spin" />}
                   <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
-                  {!loading && captchaLoaded && <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />}
+                  {!loading && captchaLoaded && <ArrowRight size={16} className="md:size-5 group-hover:translate-x-1 transition-transform" />}
                 </span>
               </button>
             </form>
 
-            <div className="relative my-8">
+            <div className="relative my-6 md:my-8">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-700/50"></div>
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="px-4 bg-gray-900 text-gray-500 font-medium">New to our platform?</span>
+                <span className="px-3 md:px-4 bg-gray-900 text-gray-500 font-medium">New to our platform?</span>
               </div>
             </div>
 
             <button 
               type="button"
               onClick={() => setShowRegister(true)}
-              className="w-full bg-gray-800/50 hover:bg-gray-800/80 backdrop-blur-sm border-2 border-gray-700/50 hover:border-primary-500/50 text-white py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 font-bold text-base shadow-lg group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gray-800/50 hover:bg-gray-800/80 backdrop-blur-sm border-2 border-gray-700/50 hover:border-primary-500/50 text-white py-3 md:py-4 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 md:gap-3 font-bold text-sm md:text-base shadow-lg group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
-              <span className="relative flex items-center gap-3">
-                <UserCircle size={20} className="group-hover:rotate-12 transition-transform" />
+              <span className="relative flex items-center gap-2 md:gap-3">
+                <UserCircle size={16} className="md:size-5 group-hover:rotate-12 transition-transform" />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-400 group-hover:from-primary-300 group-hover:to-purple-300">
                   Create New Account
                 </span>
-                <ArrowRight size={20} className="text-primary-400 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={16} className="md:size-5 text-primary-400 group-hover:translate-x-1 transition-transform" />
               </span>
             </button>
 
-            <div className="mt-7 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/20 rounded-xl p-5 backdrop-blur-sm hover:scale-[1.02] transition-all duration-300 shadow-lg">
+            <div className="mt-5 md:mt-7 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/20 rounded-xl p-4 md:p-5 backdrop-blur-sm hover:scale-[1.02] transition-all duration-300 shadow-lg">
               <div className="flex items-start gap-3">
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg">
-                  <span className="text-sm text-white font-bold">i</span>
+                <div className="h-6 w-6 md:h-7 md:w-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+                  <span className="text-xs text-white font-bold">i</span>
                 </div>
                 <div className="flex-1">
                   <p className="text-xs text-blue-100/90 leading-relaxed">
@@ -403,13 +366,13 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
             </div>
 
             {captchaLoaded && (
-              <div className="mt-5 flex items-center justify-center gap-2 text-xs text-gray-500">
-                <Shield size={14} className="text-green-500" />
+              <div className="mt-4 md:mt-5 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <Shield size={12} className="md:size-3 text-green-500" />
                 <span>Protected by reCAPTCHA</span>
               </div>
             )}
 
-            <div className="mt-6 text-center">
+            <div className="mt-5 md:mt-6 text-center">
               <p className="text-xs text-gray-500 leading-relaxed">
                 By continuing, you agree to our{' '}
                 <a 
