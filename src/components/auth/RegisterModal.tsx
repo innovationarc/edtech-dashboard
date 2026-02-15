@@ -1,5 +1,5 @@
 // src/components/auth/RegisterModal.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Mail, Lock, User, Loader, CheckCircle, Phone, Calendar, Users, Shield, AlertCircle, Eye, EyeOff, Droplet, MapPin } from 'lucide-react';
 import { authService, validatePasswordStrength } from '../../services/authService';
 import { otpService } from '../../services/otpService';
@@ -7,9 +7,10 @@ import { otpService } from '../../services/otpService';
 interface RegisterModalProps {
   onClose: () => void;
   onSuccess?: () => void;
+  onSwitchToSignIn?: () => void;
 }
 
-const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
+const RegisterModal = ({ onClose, onSuccess, onSwitchToSignIn }: RegisterModalProps) => {
   // Form data state
   const [formData, setFormData] = useState({
     surname: '',
@@ -61,6 +62,35 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
 
   // reCAPTCHA v3 state
   const [captchaLoaded, setCaptchaLoaded] = useState(false);
+
+  // Scroll detection for close button visibility
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Floating notification state for mobile
+  const [floatingNotification, setFloatingNotification] = useState('');
+  const floatingNotificationTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Show floating notification (mobile only)
+  const showFloatingNotification = (message: string) => {
+    setFloatingNotification(message);
+    
+    if (floatingNotificationTimeoutRef.current) {
+      clearTimeout(floatingNotificationTimeoutRef.current);
+    }
+    
+    floatingNotificationTimeoutRef.current = setTimeout(() => {
+      setFloatingNotification('');
+    }, 3000);
+  };
+
+  // Update error setter to also show floating notification
+  const setErrorWithNotification = (message: string) => {
+    setError(message);
+    if (message) {
+      showFloatingNotification(message);
+    }
+  };
 
   // Load reCAPTCHA v3
   useEffect(() => {
@@ -242,6 +272,7 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
   // Handle form submission (before OTP)
   const handleFormSubmit = async () => {
     setError('');
+    setFloatingNotification('');
     setLoading(true);
 
     try {
@@ -309,7 +340,9 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
       await sendOTP();
 
     } catch (error: any) {
-      setError(error.message || 'Registration failed. Please try again.');
+      const errorMessage = error.message || 'Registration failed. Please try again.';
+      setError(errorMessage);
+      showFloatingNotification(errorMessage);
       setLoading(false);
       setDuplicateCheckLoading(false);
     }
@@ -512,50 +545,50 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
   // Render OTP step
   if (currentStep === 'otp') {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="relative w-full max-w-md">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4">
+        <div className="relative w-full max-w-[95%] sm:max-w-md">
           <button
             onClick={onClose}
-            className="absolute -top-12 right-0 text-gray-400 hover:text-white transition-colors"
+            className="absolute -top-10 sm:-top-12 right-0 text-gray-400 hover:text-white transition-colors"
           >
-            <X size={24} />
+            <X size={20} className="sm:w-6 sm:h-6" />
           </button>
 
-          <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-primary-900/30 rounded-2xl shadow-2xl border border-gray-800/50 overflow-hidden backdrop-blur-xl">
-            <div className="p-8">
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full mb-4 shadow-lg">
-                  <Phone className="text-white" size={28} />
+          <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-primary-900/30 rounded-xl sm:rounded-2xl shadow-2xl border border-gray-800/50 overflow-hidden backdrop-blur-xl">
+            <div className="p-4 sm:p-6 md:p-8">
+              <div className="text-center mb-6 sm:mb-8">
+                <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full mb-3 sm:mb-4 shadow-lg">
+                  <Phone className="text-white" size={24} />
                 </div>
-                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-400 mb-2">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-400 mb-2 px-2">
                   Verify Phone Number
                 </h2>
-                <p className="text-gray-400 text-sm">
+                <p className="text-gray-400 text-xs sm:text-sm px-2">
                   Enter the 6-digit code sent to<br />
                   <span className="text-primary-400 font-medium">+{normalizePhoneNumber(formData.phoneNumber)}</span>
                 </p>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {otpError && (
-                  <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-4 backdrop-blur-xl">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
-                      <p className="text-red-300 text-sm">{otpError}</p>
+                  <div className="bg-red-500/10 border border-red-500/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-xl">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <AlertCircle className="text-red-400 flex-shrink-0 mt-0.5" size={16} />
+                      <p className="text-red-300 text-xs sm:text-sm">{otpError}</p>
                     </div>
                   </div>
                 )}
 
                 {otpSuccess && (
-                  <div className="bg-green-500/10 border border-green-500/50 rounded-xl p-4 backdrop-blur-xl">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle className="text-green-400 flex-shrink-0 mt-0.5" size={18} />
-                      <p className="text-green-300 text-sm">{otpSuccess}</p>
+                  <div className="bg-green-500/10 border border-green-500/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-xl">
+                    <div className="flex items-start gap-2 sm:gap-3">
+                      <CheckCircle className="text-green-400 flex-shrink-0 mt-0.5" size={16} />
+                      <p className="text-green-300 text-xs sm:text-sm">{otpSuccess}</p>
                     </div>
                   </div>
                 )}
 
-                <div className="flex gap-2 justify-center">
+                <div className="flex gap-1.5 sm:gap-2 justify-center">
                   {otp.map((digit, index) => (
                     <input
                       key={index}
@@ -566,7 +599,7 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                       value={digit}
                       onChange={(e) => handleOTPChange(index, e.target.value)}
                       onKeyDown={(e) => handleOTPKeyDown(index, e)}
-                      className="w-12 h-14 text-center text-2xl font-bold bg-gray-800/60 backdrop-blur-xl text-white rounded-xl border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200"
+                      className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200"
                       disabled={otpLoading}
                     />
                   ))}
@@ -575,9 +608,9 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                 <button
                   onClick={handleOTPVerification}
                   disabled={otpLoading || otp.join('').length !== 6}
-                  className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+                  className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50 text-sm sm:text-base"
                 >
-                  {otpLoading && <Loader size={20} className="animate-spin" />}
+                  {otpLoading && <Loader size={18} className="sm:w-5 sm:h-5 animate-spin" />}
                   <span>{otpLoading ? 'Verifying...' : 'Verify & Register'}</span>
                 </button>
 
@@ -585,12 +618,12 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                   {canResendOTP ? (
                     <button
                       onClick={handleResendOTP}
-                      className="text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors"
+                      className="text-primary-400 hover:text-primary-300 text-xs sm:text-sm font-medium transition-colors"
                     >
                       Resend OTP
                     </button>
                   ) : (
-                    <p className="text-gray-400 text-sm">
+                    <p className="text-gray-400 text-xs sm:text-sm">
                       Resend OTP in <span className="text-primary-400 font-medium">{resendTimer}s</span>
                     </p>
                   )}
@@ -598,7 +631,7 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
 
                 <button
                   onClick={() => setCurrentStep('form')}
-                  className="w-full text-gray-400 hover:text-white text-sm transition-colors"
+                  className="w-full text-gray-400 hover:text-white text-xs sm:text-sm transition-colors"
                 >
                   ← Back to registration form
                 </button>
@@ -613,44 +646,44 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
   // Render duplicate check step
   if (currentStep === 'duplicate-check') {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="relative w-full max-w-md">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4">
+        <div className="relative w-full max-w-[95%] sm:max-w-md">
           <button
             onClick={onClose}
-            className="absolute -top-12 right-0 text-gray-400 hover:text-white transition-colors"
+            className="absolute -top-10 sm:-top-12 right-0 text-gray-400 hover:text-white transition-colors"
           >
-            <X size={24} />
+            <X size={20} className="sm:w-6 sm:h-6" />
           </button>
 
-          <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-yellow-900/30 rounded-2xl shadow-2xl border border-gray-800/50 overflow-hidden backdrop-blur-xl">
-            <div className="p-8">
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-full mb-4 shadow-lg">
-                  <AlertCircle className="text-white" size={28} />
+          <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-yellow-900/30 rounded-xl sm:rounded-2xl shadow-2xl border border-gray-800/50 overflow-hidden backdrop-blur-xl">
+            <div className="p-4 sm:p-6 md:p-8">
+              <div className="text-center mb-6 sm:mb-8">
+                <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-full mb-3 sm:mb-4 shadow-lg">
+                  <AlertCircle className="text-white" size={24} className="sm:w-7 sm:h-7" />
                 </div>
-                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-400 mb-2">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-yellow-400 mb-2 px-2">
                   Existing Accounts Found
                 </h2>
-                <p className="text-gray-400 text-sm">
+                <p className="text-gray-400 text-xs sm:text-sm px-2">
                   {existingAccountsCount} student account{existingAccountsCount > 1 ? 's' : ''} already exist{existingAccountsCount === 1 ? 's' : ''} with this mobile number
                 </p>
-                <p className="text-primary-400 font-medium mt-2">
+                <p className="text-primary-400 font-medium mt-2 text-sm sm:text-base">
                   +{normalizePhoneNumber(formData.phoneNumber)}
                 </p>
               </div>
 
-              <div className="space-y-4">
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 backdrop-blur-xl">
-                  <p className="text-yellow-200 text-sm text-center">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-xl">
+                  <p className="text-yellow-200 text-xs sm:text-sm text-center">
                     You can sign in to an existing account or create a new one with the same phone number
                   </p>
                 </div>
 
                 <button
                   onClick={onClose}
-                  className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-700 text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl"
+                  className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-700 text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl text-sm sm:text-base"
                 >
-                  <Shield size={20} />
+                  <Shield size={18} className="sm:w-5 sm:h-5" />
                   <span>Sign In to Existing Account</span>
                 </button>
 
@@ -659,15 +692,15 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                     await sendOTP();
                   }}
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl"
+                  className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl text-sm sm:text-base"
                 >
-                  {loading && <Loader size={20} className="animate-spin" />}
+                  {loading && <Loader size={18} className="sm:w-5 sm:h-5 animate-spin" />}
                   <span>{loading ? 'Sending OTP...' : 'Create New Account'}</span>
                 </button>
 
                 <button
                   onClick={() => setCurrentStep('form')}
-                  className="w-full text-gray-400 hover:text-white text-sm transition-colors"
+                  className="w-full text-gray-400 hover:text-white text-xs sm:text-sm transition-colors"
                 >
                   ← Back to registration form
                 </button>
@@ -682,32 +715,32 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
   // Render success step
   if (currentStep === 'success') {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="relative w-full max-w-md">
-          <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-green-900/30 rounded-2xl shadow-2xl border border-gray-800/50 overflow-hidden backdrop-blur-xl">
-            <div className="p-8">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4">
+        <div className="relative w-full max-w-[95%] sm:max-w-md">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-green-900/30 rounded-xl sm:rounded-2xl shadow-2xl border border-gray-800/50 overflow-hidden backdrop-blur-xl">
+            <div className="p-4 sm:p-6 md:p-8">
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full mb-6 shadow-lg animate-bounce">
-                  <CheckCircle className="text-white" size={40} />
+                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full mb-4 sm:mb-6 shadow-lg animate-bounce">
+                  <CheckCircle className="text-white" size={32} className="sm:w-10 sm:h-10" />
                 </div>
-                <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-400 to-green-400 mb-4">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-400 to-green-400 mb-3 sm:mb-4 px-2">
                   Registration Successful!
                 </h2>
                 {generatedUserId && (
-                  <div className="bg-gray-800/60 backdrop-blur-xl rounded-xl p-4 mb-6 border border-gray-700/50">
-                    <p className="text-sm text-gray-400 mb-2">Your Student ID</p>
-                    <p className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-500">
+                  <div className="bg-gray-800/60 backdrop-blur-xl rounded-lg sm:rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 border border-gray-700/50">
+                    <p className="text-xs sm:text-sm text-gray-400 mb-1.5 sm:mb-2">Your Student ID</p>
+                    <p className="text-lg sm:text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-500 break-all">
                       {generatedUserId}
                     </p>
                   </div>
                 )}
-                <p className="text-gray-300 mb-6">
+                <p className="text-xs sm:text-sm text-gray-300 mb-4 sm:mb-6 px-2">
                   Your account has been created successfully. You can now sign in and start learning!
                 </p>
                 <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-green-500 to-emerald-500 animate-pulse"></div>
                 </div>
-                <p className="text-sm text-gray-400 mt-4">Redirecting to sign in...</p>
+                <p className="text-xs sm:text-sm text-gray-400 mt-3 sm:mt-4">Redirecting to sign in...</p>
               </div>
             </div>
           </div>
@@ -716,93 +749,109 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
     );
   }
 
+  // Handle scroll to hide/show close button
+  const handleScroll = () => {
+    setIsScrolling(true);
+    
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsScrolling(false);
+    }, 150);
+  };
+
   // Render form step
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="relative w-full max-w-2xl my-8">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-0 sm:p-4">
+      <div className="relative w-full h-full sm:h-auto sm:max-w-2xl sm:my-8 flex flex-col">
         <button
           onClick={onClose}
-          className="absolute -top-12 right-0 text-gray-400 hover:text-white transition-colors"
+          className={`absolute top-3 right-3 sm:-top-12 sm:right-0 text-gray-400 hover:text-white transition-all duration-300 z-20 ${
+            isScrolling || floatingNotification ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          } sm:opacity-100 sm:pointer-events-auto`}
+          aria-label="Close"
         >
-          <X size={24} />
+          <X size={20} className="sm:w-6 sm:h-6" strokeWidth={2.5} />
         </button>
 
-        <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-primary-900/30 rounded-2xl shadow-2xl border border-gray-800/50 overflow-hidden backdrop-blur-xl">
-          <div className="p-6 sm:p-8">
-            <div className="text-center mb-6 sm:mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full mb-4 shadow-lg">
-                <User className="text-white" size={28} />
+        <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-primary-900/30 sm:rounded-2xl shadow-2xl border-0 sm:border border-gray-800/50 overflow-hidden backdrop-blur-xl h-full sm:h-auto flex flex-col">
+          <div className="p-4 sm:p-6 md:p-8 flex-1 overflow-y-auto" onScroll={handleScroll}>
+            <div className="text-center mb-4 sm:mb-6 md:mb-8 pt-8 sm:pt-0">
+              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full mb-3 sm:mb-4 shadow-lg">
+                <User className="text-white" size={20} className="sm:w-6 sm:h-6 md:w-7 md:h-7" />
               </div>
-              <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-400 mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-400 mb-2 px-2">
                 Create Account
               </h2>
-              <p className="text-gray-400 text-sm">Join us and start your learning journey</p>
+              <p className="text-gray-400 text-xs sm:text-sm px-2">Join us and start your learning journey</p>
             </div>
 
             {error && (
-              <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-xl p-4 backdrop-blur-xl">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
-                  <p className="text-red-300 text-sm">{error}</p>
+              <div className="mb-4 sm:mb-6 bg-red-500/10 border border-red-500/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-xl">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <AlertCircle className="text-red-400 flex-shrink-0 mt-0.5" size={16} className="sm:w-[18px] sm:h-[18px]" />
+                  <p className="text-red-300 text-xs sm:text-sm">{error}</p>
                 </div>
               </div>
             )}
 
-            <div className="space-y-4 sm:space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            <div className="space-y-3 sm:space-y-4 md:space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Surname *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Surname *</label>
                   <div className="relative">
                     <input
                       type="text"
                       value={formData.surname}
                       onChange={(e) => setFormData(prev => ({ ...prev, surname: e.target.value }))}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 text-sm sm:text-base"
                       placeholder="Your surname"
                       disabled={loading || duplicateCheckLoading}
                     />
-                    <User size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                    <User size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
                   </div>
                 </div>
 
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Full Name *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Full Name *</label>
                   <div className="relative">
                     <input
                       type="text"
                       value={formData.fullName}
                       onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 text-sm sm:text-base"
                       placeholder="Your full name"
                       disabled={loading || duplicateCheckLoading}
                     />
-                    <User size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                    <User size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Date of Birth *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Date of Birth *</label>
                   <div className="relative">
                     <input
                       type="date"
                       value={formData.dob}
                       onChange={(e) => setFormData(prev => ({ ...prev, dob: e.target.value }))}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 text-sm sm:text-base"
                       disabled={loading || duplicateCheckLoading}
                     />
-                    <Calendar size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                    <Calendar size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
                   </div>
                 </div>
 
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Gender *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Gender *</label>
                   <div className="relative">
                     <select
                       value={formData.gender}
                       onChange={(e) => setFormData(prev => ({ ...prev, gender: e.target.value as any }))}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 appearance-none cursor-pointer"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 appearance-none cursor-pointer"
                       disabled={loading || duplicateCheckLoading}
                     >
                       <option value="">Select gender</option>
@@ -810,52 +859,52 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                       <option value="female">Female</option>
                       <option value="other">Other</option>
                     </select>
-                    <Users size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors pointer-events-none" />
+                    <Users size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors pointer-events-none" />
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Phone Number *</label>
                   <div className="relative">
                     <input
                       type="tel"
                       value={formData.phoneNumber}
                       onChange={(e) => handlePhoneNumberChange(e.target.value, 'phoneNumber')}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
                       placeholder="01XXXXXXXXX"
                       disabled={loading || duplicateCheckLoading}
                     />
-                    <Phone size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                    <Phone size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Bangladesh phone number</p>
                 </div>
 
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Guardian Phone <span className="text-gray-500">(Optional)</span></label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Guardian Phone <span className="text-gray-500">(Optional)</span></label>
                   <div className="relative">
                     <input
                       type="tel"
                       value={formData.guardianPhone}
                       onChange={(e) => handlePhoneNumberChange(e.target.value, 'guardianPhone')}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
                       placeholder="01XXXXXXXXX"
                       disabled={loading || duplicateCheckLoading}
                     />
-                    <Phone size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                    <Phone size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Blood Group <span className="text-gray-500">(Optional)</span></label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Blood Group <span className="text-gray-500">(Optional)</span></label>
                   <div className="relative">
                     <select
                       value={formData.bloodGroup}
                       onChange={(e) => setFormData(prev => ({ ...prev, bloodGroup: e.target.value as any }))}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 appearance-none cursor-pointer"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 appearance-none cursor-pointer"
                       disabled={loading || duplicateCheckLoading}
                     >
                       <option value="">Select blood group</option>
@@ -868,12 +917,12 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                       <option value="O+">O+</option>
                       <option value="O-">O-</option>
                     </select>
-                    <Droplet size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors pointer-events-none" />
+                    <Droplet size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Class/Grade *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Class/Grade *</label>
                   <div className="relative">
                     <select
                       value={formData.classGrade}
@@ -900,7 +949,7 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Religion <span className="text-gray-500">(Optional)</span></label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Religion <span className="text-gray-500">(Optional)</span></label>
                 <input
                   type="text"
                   value={formData.religion}
@@ -912,66 +961,67 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Address <span className="text-gray-500">(Optional)</span></label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Address <span className="text-gray-500">(Optional)</span></label>
                 <div className="relative">
                   <textarea
                     value={formData.address}
                     onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                    className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 min-h-[80px] resize-none"
+                    className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 min-h-[80px] resize-none"
                     placeholder="Enter your address"
                     disabled={loading || duplicateCheckLoading}
                     rows={3}
                   />
-                  <MapPin size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                  <MapPin size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
                 </div>
               </div>
 
               <div className="group">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Email <span className="text-gray-500">(Optional)</span></label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Email <span className="text-gray-500">(Optional)</span></label>
                 <div className="relative">
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                    className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
                     placeholder="Enter your email"
                     disabled={loading || duplicateCheckLoading}
                   />
-                  <Mail size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                  <Mail size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Password *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Password *</label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={formData.password}
                       onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-11 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-9 sm:pr-11 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 text-sm sm:text-base"
                       placeholder="Min. 8 characters"
                       disabled={loading || duplicateCheckLoading}
                     />
-                    <Lock size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                    <Lock size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors pointer-events-none" />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 top-3.5 text-gray-400 hover:text-white transition-colors"
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showPassword ? <EyeOff size={16} className="sm:w-[18px] sm:h-[18px]" /> : <Eye size={16} className="sm:w-[18px] sm:h-[18px]" />}
                     </button>
                   </div>
                   {formData.password && (
-                    <div className="mt-2">
-                      <div className="flex items-center gap-2 mb-1">
+                    <div className="mt-1.5 sm:mt-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
                         <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                           <div className={`h-full transition-all duration-300 ${getStrengthColor()} ${getStrengthWidth()}`}></div>
                         </div>
-                        <span className="text-xs text-gray-400 capitalize">{passwordStrength.strength.replace('-', ' ')}</span>
+                        <span className="text-[10px] sm:text-xs text-gray-400 capitalize whitespace-nowrap">{passwordStrength.strength.replace('-', ' ')}</span>
                       </div>
                       {passwordStrength.issues.length > 0 && (
-                        <div className="text-xs text-red-300 space-y-0.5">
+                        <div className="text-[10px] sm:text-xs text-red-300 space-y-0.5">
                           {passwordStrength.issues.map((issue, idx) => (
                             <div key={idx} className="flex items-center gap-1">
                               <span className="text-red-400">•</span> {issue}
@@ -984,45 +1034,61 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                 </div>
 
                 <div className="group">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password *</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Confirm Password *</label>
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-11 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                      className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-9 sm:pr-11 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 text-sm sm:text-base"
                       placeholder="Re-enter password"
                       disabled={loading || duplicateCheckLoading}
                     />
-                    <Lock size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                    <Lock size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors pointer-events-none" />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3.5 top-3.5 text-gray-400 hover:text-white transition-colors"
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors duration-200"
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showConfirmPassword ? <EyeOff size={16} className="sm:w-[18px] sm:h-[18px]" /> : <Eye size={16} className="sm:w-[18px] sm:h-[18px]" />}
                     </button>
                   </div>
                 </div>
               </div>
 
               {/* Agreement Checkboxes */}
-              <div className="space-y-3 bg-gray-800/40 backdrop-blur-xl rounded-xl p-4 border border-gray-700/30">
-                <label className="flex items-start gap-3 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={agreedToTerms}
-                    onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    className="w-5 h-5 rounded border-gray-600 bg-gray-800 text-primary-600 focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer mt-0.5 flex-shrink-0"
-                    disabled={loading || duplicateCheckLoading}
-                  />
-                  <span className="text-sm text-gray-300 group-hover:text-gray-200 transition-colors select-none">
+              <div className="space-y-2.5 sm:space-y-3 bg-gray-800/40 backdrop-blur-xl rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/30">
+                <label className="flex items-start gap-2 sm:gap-3 cursor-pointer group select-none">
+                  <div className="relative flex-shrink-0 mt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      className="peer sr-only"
+                      disabled={loading || duplicateCheckLoading}
+                    />
+                    <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-gray-600 rounded bg-gray-800/50 peer-checked:bg-gradient-to-br peer-checked:from-primary-500 peer-checked:to-purple-600 peer-checked:border-primary-500 transition-all duration-300 flex items-center justify-center group-hover:border-primary-500/50 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed">
+                      <svg 
+                        className={`w-2.5 h-2.5 sm:w-3 sm:h-3 text-white transition-all duration-300 ${agreedToTerms ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`}
+                        fill="none" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth="3" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                  </div>
+                  <span className="text-xs sm:text-sm text-gray-300 group-hover:text-gray-200 transition-colors">
                     I agree to the{' '}
                     <a 
                       href="/terms-of-service" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-primary-400 hover:text-primary-300 underline"
+                      className="text-primary-400 hover:text-primary-300 underline underline-offset-2 transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       Terms of Service
@@ -1030,21 +1096,36 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                   </span>
                 </label>
 
-                <label className="flex items-start gap-3 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={agreedToPrivacy}
-                    onChange={(e) => setAgreedToPrivacy(e.target.checked)}
-                    className="w-5 h-5 rounded border-gray-600 bg-gray-800 text-primary-600 focus:ring-2 focus:ring-primary-500/20 transition-all cursor-pointer mt-0.5 flex-shrink-0"
-                    disabled={loading || duplicateCheckLoading}
-                  />
-                  <span className="text-sm text-gray-300 group-hover:text-gray-200 transition-colors select-none">
+                <label className="flex items-start gap-2 sm:gap-3 cursor-pointer group select-none">
+                  <div className="relative flex-shrink-0 mt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={agreedToPrivacy}
+                      onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                      className="peer sr-only"
+                      disabled={loading || duplicateCheckLoading}
+                    />
+                    <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-gray-600 rounded bg-gray-800/50 peer-checked:bg-gradient-to-br peer-checked:from-primary-500 peer-checked:to-purple-600 peer-checked:border-primary-500 transition-all duration-300 flex items-center justify-center group-hover:border-primary-500/50 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed">
+                      <svg 
+                        className={`w-2.5 h-2.5 sm:w-3 sm:h-3 text-white transition-all duration-300 ${agreedToPrivacy ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`}
+                        fill="none" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth="3" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                  </div>
+                  <span className="text-xs sm:text-sm text-gray-300 group-hover:text-gray-200 transition-colors">
                     I agree to the{' '}
                     <a 
                       href="/privacy-policy" 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-primary-400 hover:text-primary-300 underline"
+                      className="text-primary-400 hover:text-primary-300 underline underline-offset-2 transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       Privacy Policy
@@ -1053,14 +1134,14 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
                 </label>
               </div>
 
-              <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-700/30 rounded-xl p-4 backdrop-blur-xl">
-                <div className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg">
-                    <CheckCircle size={14} className="text-white" />
+              <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-700/30 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-xl">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <div className="h-5 w-5 sm:h-6 sm:w-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg">
+                    <CheckCircle size={12} className="sm:w-[14px] sm:h-[14px] text-white" />
                   </div>
                   <div>
-                    <p className="text-sm text-green-100 font-semibold">Instant Account Activation</p>
-                    <p className="text-xs text-green-200/80 mt-1">
+                    <p className="text-xs sm:text-sm text-green-100 font-semibold">Instant Account Activation</p>
+                    <p className="text-[10px] sm:text-xs text-green-200/80 mt-0.5 sm:mt-1">
                       Student accounts are automatically approved. Sign in immediately after verification!
                     </p>
                   </div>
@@ -1070,20 +1151,25 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               <button
                 onClick={handleFormSubmit}
                 disabled={loading || duplicateCheckLoading || !captchaLoaded || !agreedToTerms || !agreedToPrivacy}
-                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50 text-sm sm:text-base"
               >
-                {(loading || duplicateCheckLoading) && <Loader size={20} className="animate-spin" />}
+                {(loading || duplicateCheckLoading) && <Loader size={18} className="sm:w-5 sm:h-5 animate-spin" />}
                 <span>
                   {duplicateCheckLoading ? 'Checking...' : loading ? 'Validating...' : !captchaLoaded ? 'Loading Security...' : 'Continue to Verification'}
                 </span>
               </button>
             </div>
 
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-400">
+            <div className="mt-4 sm:mt-6 text-center pb-safe">
+              <p className="text-xs sm:text-sm text-gray-400">
                 Already have an account?{' '}
                 <button 
-                  onClick={onClose}
+                  onClick={() => {
+                    onClose();
+                    if (onSwitchToSignIn) {
+                      onSwitchToSignIn();
+                    }
+                  }}
                   className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-500 hover:from-primary-300 hover:to-purple-400 transition-all duration-200 font-medium"
                 >
                   Sign in instead
@@ -1091,6 +1177,18 @@ const RegisterModal = ({ onClose, onSuccess }: RegisterModalProps) => {
               </p>
             </div>
           </div>
+
+          {/* Floating Notification for Mobile */}
+          {floatingNotification && (
+            <div className="fixed top-4 left-4 right-4 z-50 sm:hidden animate-pulse">
+              <div className="bg-red-500/95 backdrop-blur-md border border-red-400/50 text-white px-4 py-3 rounded-xl shadow-2xl transform transition-all duration-300 animate-bounce">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="flex-shrink-0 mt-0.5" size={18} />
+                  <p className="text-sm font-medium flex-1">{floatingNotification}</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
