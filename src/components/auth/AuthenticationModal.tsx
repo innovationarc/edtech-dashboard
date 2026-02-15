@@ -16,12 +16,23 @@ const AuthenticationModal: React.FC<AuthenticationModalProps> = ({ onClose }) =>
     setShowRegister(false);
   };
 
+  const handleSwitchToSignIn = () => {
+    setShowRegister(false);
+    setShowSignIn(true);
+  };
+
   if (showSignIn) {
     return <SignInModal onClose={() => setShowSignIn(false)} />;
   }
 
   if (showRegister) {
-    return <RegisterModal onClose={() => setShowRegister(false)} onSuccess={handleRegisterSuccess} />;
+    return (
+      <RegisterModal 
+        onClose={() => setShowRegister(false)} 
+        onSuccess={handleRegisterSuccess}
+        onSwitchToSignIn={handleSwitchToSignIn}
+      />
+    );
   }
 
   return (
