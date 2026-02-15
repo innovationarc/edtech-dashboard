@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { X, Lock, Loader, Shield, AlertCircle, CheckCircle, Eye, EyeOff, CreditCard } from 'lucide-react';
 import { authService, validatePasswordStrength } from '../../services/authService';
 import { otpService } from '../../services/otpService';
+import ForgotUserIdModal from './ForgotUserIdModal';
 
 interface ForgotPasswordModalProps {
   onClose: () => void;
@@ -25,6 +26,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
   const [canResendOTP, setCanResendOTP] = useState(false);
   const [resendTimer, setResendTimer] = useState(60);
   const [captchaLoaded, setCaptchaLoaded] = useState(false);
+  const [showForgotUserId, setShowForgotUserId] = useState(false);
 
   // Password strength state
   const [passwordStrength, setPasswordStrength] = useState<{
@@ -188,76 +190,26 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
       return;
     }
 
-    // Get reCAPTCHA token
     try {
       const captchaToken = await getCaptchaToken();
       if (!captchaToken) {
-        setError('Verification failed. Please try again.');
-        setLoading(false);
-        return;
-      }
-    } catch (err) {
-      setError('Verification failed. Please try again.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // Step 1: Identify user and get phone number using user-search API
-      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 
-                         import.meta.env.VITE_API_URL ||
-                         'https://edtech-dashboard-alpha.vercel.app';
-      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
-
-      const requestBody: any = {
-        loginId: userId,
-        purpose: 'password-reset'
-      };
-
-      if (MASTER_API_KEY) {
-        requestBody.apiKey = MASTER_API_KEY;
-      }
-
-      const response = await fetch(`${BACKEND_URL}/api/user-search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Server error' }));
-        
-        if (response.status === 404) {
-          setError('No account found with this User ID.');
-        } else {
-          setError(errorData.error || 'Something went wrong. Please try again.');
-        }
+        setError('Security verification failed. Please try again.');
         setLoading(false);
         return;
       }
 
-      const result = await response.json();
+      const response = await authService.initiatePasswordReset(userId, captchaToken);
       
-      if (result.success && result.phoneNumber) {
-        setPhoneNumber(result.phoneNumber);
-        
-        // Step 2: Send OTP using otpService with 'password-reset' purpose
-        const otpResult = await otpService.sendOTP(result.phoneNumber, 'password-reset');
-        
-        if (otpResult.success) {
-          setSuccess(otpResult.message);
-          setCurrentStep('otp');
-          startResendTimer();
-        } else {
-          setError(otpResult.message);
-        }
+      if (response.success) {
+        setPhoneNumber(response.phoneNumber || '');
+        startResendTimer();
+        setCurrentStep('otp');
+        setSuccess('OTP sent successfully!');
       } else {
-        setError(result.message || 'No account found with this User ID.');
+        setError(response.message || 'Failed to send OTP. Please try again.');
       }
     } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
+      setError(err.message || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -265,20 +217,21 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
 
   // Handle OTP input
   const handleOTPChange = (index: number, value: string) => {
-    if (value.length > 1) value = value[0];
     if (!/^\d*$/.test(value)) return;
 
-    const newOTP = [...otp];
-    newOTP[index] = value;
-    setOtp(newOTP);
+    const newOtp = [...otp];
+    newOtp[index] = value;
+    setOtp(newOtp);
 
     if (value && index < 5) {
       const nextInput = document.getElementById(`reset-otp-${index + 1}`);
       nextInput?.focus();
     }
+
+    if (error) setError('');
   };
 
-  const handleOTPKeyDown = (index: number, e: React.KeyboardEvent) => {
+  const handleOTPKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       const prevInput = document.getElementById(`reset-otp-${index - 1}`);
       prevInput?.focus();
@@ -288,18 +241,12 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
   const handleOTPPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    const newOTP = [...otp];
-    
-    for (let i = 0; i < pastedData.length; i++) {
-      newOTP[i] = pastedData[i];
-    }
-    
-    setOtp(newOTP);
-    
-    if (pastedData.length === 6) {
-      const lastInput = document.getElementById(`reset-otp-5`);
-      lastInput?.focus();
-    }
+    const newOtp = pastedData.split('').concat(Array(6).fill('')).slice(0, 6);
+    setOtp(newOtp);
+
+    const lastFilledIndex = Math.min(pastedData.length, 5);
+    const nextInput = document.getElementById(`reset-otp-${lastFilledIndex}`);
+    nextInput?.focus();
   };
 
   // Step 2: Verify OTP
@@ -310,22 +257,25 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
 
     const otpCode = otp.join('');
     if (otpCode.length !== 6) {
-      setError('Please enter the complete 6-digit OTP');
+      setError('Please enter a valid 6-digit OTP');
       setLoading(false);
       return;
     }
 
     try {
-      const result = await otpService.verifyOTP(phoneNumber, otpCode, 'password-reset');
+      const response = await otpService.verifyOTP(userId, otpCode, 'password_reset');
       
-      if (result.success) {
-        setSuccess('Phone verified! Set your new password');
-        setCurrentStep('reset');
+      if (response.success) {
+        setSuccess('OTP verified successfully!');
+        setTimeout(() => {
+          setCurrentStep('reset');
+          setSuccess('');
+        }, 500);
       } else {
-        setError(result.message);
+        setError(response.message || 'Invalid OTP. Please try again.');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to verify OTP');
+      setError(err.message || 'Failed to verify OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -338,16 +288,26 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
     setLoading(true);
 
     try {
-      const result = await otpService.sendOTP(phoneNumber, 'password-reset');
+      const captchaToken = await getCaptchaToken();
+      if (!captchaToken) {
+        setError('Security verification failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      const response = await authService.initiatePasswordReset(userId, captchaToken);
       
-      if (result.success) {
-        setSuccess(result.message);
+      if (response.success) {
+        setSuccess('OTP resent successfully!');
         startResendTimer();
+        setOtp(['', '', '', '', '', '']);
+        const firstInput = document.getElementById('reset-otp-0');
+        firstInput?.focus();
       } else {
-        setError(result.message);
+        setError(response.message || 'Failed to resend OTP. Please try again.');
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to resend OTP');
+      setError(err.message || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -359,6 +319,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
     setSuccess('');
     setLoading(true);
 
+    // Validate passwords
     if (!newPassword || !confirmPassword) {
       setError('Please fill in all fields');
       setLoading(false);
@@ -371,40 +332,51 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
       return;
     }
 
-    const validation = validatePasswordStrength(newPassword);
-    if (!validation.isStrong) {
-      setError('Password must include uppercase, lowercase, number, and special character (min 8 chars)');
+    if (passwordStrength.strength === 'weak') {
+      setError('Password is too weak. Please use a stronger password.');
       setLoading(false);
       return;
     }
 
     try {
-      await authService.resetPassword(phoneNumber, newPassword);
-      setSuccess('Password reset successfully!');
-      setCurrentStep('success');
+      const response = await authService.resetPassword(userId, newPassword);
       
-      setTimeout(() => {
-        onSuccess?.();
-        onClose();
-      }, 2000);
+      if (response.success) {
+        setSuccess('Password reset successfully!');
+        setCurrentStep('success');
+      } else {
+        setError(response.message || 'Failed to reset password. Please try again.');
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to reset password');
+      setError(err.message || 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  // If ForgotUserIdModal should be shown
+  if (showForgotUserId) {
+    return <ForgotUserIdModal onClose={() => setShowForgotUserId(false)} />;
+  }
 
   // Success Screen
   if (currentStep === 'success') {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-md p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-green-500/10 rounded-2xl md:rounded-3xl"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-2xl md:rounded-3xl"></div>
           
+          <button
+            onClick={onClose}
+            className="absolute right-3 top-3 md:right-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+          >
+            <X size={20} className="md:w-6 md:h-6" />
+          </button>
+
           <div className="relative text-center">
             <div className="flex justify-center mb-4 md:mb-6">
               <div className="relative">
-                <div className="absolute inset-0 bg-green-500/30 blur-2xl"></div>
+                <div className="absolute inset-0 bg-green-500/30 blur-2xl animate-pulse"></div>
                 <div className="relative bg-gradient-to-br from-green-500 to-emerald-600 rounded-full p-3 md:p-4 shadow-2xl shadow-green-500/50">
                   <CheckCircle size={32} className="md:w-12 md:h-12 text-white" />
                 </div>
@@ -412,19 +384,27 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
             </div>
 
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-emerald-400 to-green-500 mb-2 px-2">
-              Password Reset!
+              Password Reset Successful!
             </h2>
             <p className="text-gray-400 text-xs sm:text-sm mb-4 md:mb-6 px-2">
-              Your password has been successfully reset.<br />
-              You can now sign in with your new password.
+              Your password has been reset successfully. You can now sign in with your new password.
             </p>
 
-            <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl backdrop-blur-sm">
-              <p className="text-xs sm:text-sm flex items-center justify-center gap-2">
-                <CheckCircle size={14} className="sm:w-4 sm:h-4" />
-                {success}
+            <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-3 sm:p-4 mb-4 md:mb-6">
+              <p className="text-xs sm:text-sm text-green-200">
+                Please remember your new password and keep it secure.
               </p>
             </div>
+
+            <button
+              onClick={() => {
+                if (onSuccess) onSuccess();
+                onClose();
+              }}
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-green-500/50 text-sm sm:text-base"
+            >
+              <span>Back to Sign In</span>
+            </button>
           </div>
         </div>
       </div>
@@ -434,27 +414,34 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
   // Reset Password Screen
   if (currentStep === 'reset') {
     const strengthColors = {
-      weak: 'bg-red-500',
-      medium: 'bg-yellow-500',
-      strong: 'bg-blue-500',
+      'weak': 'bg-red-500',
+      'medium': 'bg-yellow-500',
+      'strong': 'bg-blue-500',
       'very-strong': 'bg-green-500'
     };
 
-    const strengthWidths = {
-      weak: 'w-1/4',
-      medium: 'w-1/2',
-      strong: 'w-3/4',
+    const strengthLabels = {
+      'weak': 'Weak',
+      'medium': 'Medium',
+      'strong': 'Strong',
+      'very-strong': 'Very Strong'
+    };
+
+    const strengthWidth = {
+      'weak': 'w-1/4',
+      'medium': 'w-2/4',
+      'strong': 'w-3/4',
       'very-strong': 'w-full'
     };
 
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-md p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50 max-h-[90vh] overflow-y-auto">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/10 via-purple-500/5 to-primary-500/10 rounded-2xl md:rounded-3xl"></div>
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-md p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50 max-h-[95vh] overflow-y-auto">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-2xl md:rounded-3xl pointer-events-none"></div>
           
           <button
-            onClick={() => setCurrentStep('otp')}
-            className="absolute left-3 top-3 md:left-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 z-10"
+            onClick={onClose}
+            className="absolute right-3 top-3 md:right-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
           >
             <X size={20} className="md:w-6 md:h-6" />
           </button>
@@ -470,10 +457,10 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
             </div>
 
             <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2 text-center px-2">
-              Set New Password
+              Create New Password
             </h2>
             <p className="text-gray-400 text-xs sm:text-sm mb-4 md:mb-6 text-center px-2">
-              Create a strong, secure password
+              Enter your new password below
             </p>
 
             {error && (
@@ -485,7 +472,8 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
               </div>
             )}
 
-            <div className="space-y-3 sm:space-y-4 md:space-y-5">
+            <div className="space-y-3 sm:space-y-4">
+              {/* New Password */}
               <div className="group">
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">New Password</label>
                 <div className="relative">
@@ -501,45 +489,45 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
                   <button
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-2.5 sm:right-3 top-2.5 sm:top-3 text-gray-400 hover:text-white transition-colors"
+                    className="absolute right-2.5 sm:right-3.5 top-2.5 sm:top-3.5 text-gray-400 hover:text-white transition-colors"
                     disabled={loading}
                   >
                     {showNewPassword ? <EyeOff size={16} className="sm:w-[18px] sm:h-[18px]" /> : <Eye size={16} className="sm:w-[18px] sm:h-[18px]" />}
                   </button>
                 </div>
 
+                {/* Password Strength Indicator */}
                 {newPassword && (
-                  <div className="mt-2 sm:mt-3">
-                    <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] sm:text-xs text-gray-400">Password Strength</span>
                       <span className={`text-[10px] sm:text-xs font-medium ${
-                        passwordStrength.strength === 'very-strong' ? 'text-green-400' :
-                        passwordStrength.strength === 'strong' ? 'text-blue-400' :
+                        passwordStrength.strength === 'weak' ? 'text-red-400' :
                         passwordStrength.strength === 'medium' ? 'text-yellow-400' :
-                        'text-red-400'
+                        passwordStrength.strength === 'strong' ? 'text-blue-400' :
+                        'text-green-400'
                       }`}>
-                        {passwordStrength.strength === 'very-strong' ? 'Very Strong' :
-                         passwordStrength.strength === 'strong' ? 'Strong' :
-                         passwordStrength.strength === 'medium' ? 'Medium' : 'Weak'}
+                        {strengthLabels[passwordStrength.strength]}
                       </span>
                     </div>
-                    <div className="h-1.5 sm:h-2 bg-gray-700/50 rounded-full overflow-hidden">
-                      <div className={`h-full ${strengthColors[passwordStrength.strength]} ${strengthWidths[passwordStrength.strength]} transition-all duration-300`}></div>
+                    <div className="w-full bg-gray-700/50 rounded-full h-1.5 sm:h-2 overflow-hidden">
+                      <div className={`h-full ${strengthColors[passwordStrength.strength]} ${strengthWidth[passwordStrength.strength]} transition-all duration-300`}></div>
                     </div>
                     {passwordStrength.issues.length > 0 && (
-                      <ul className="mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-400 space-y-0.5 sm:space-y-1">
-                        {passwordStrength.issues.map((issue, idx) => (
-                          <li key={idx} className="flex items-center gap-1">
-                            <span className="text-red-400">•</span>
+                      <div className="mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
+                        {passwordStrength.issues.map((issue, index) => (
+                          <p key={index} className="text-[10px] sm:text-xs text-red-400 flex items-center gap-1">
+                            <span className="w-1 h-1 bg-red-400 rounded-full"></span>
                             {issue}
-                          </li>
+                          </p>
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </div>
                 )}
               </div>
 
+              {/* Confirm Password */}
               <div className="group">
                 <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Confirm Password</label>
                 <div className="relative">
@@ -551,7 +539,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
                     placeholder="Confirm new password"
                     disabled={loading}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !loading) {
+                      if (e.key === 'Enter' && newPassword && confirmPassword) {
                         handleResetPassword();
                       }
                     }}
@@ -560,22 +548,35 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-2.5 sm:right-3 top-2.5 sm:top-3 text-gray-400 hover:text-white transition-colors"
+                    className="absolute right-2.5 sm:right-3.5 top-2.5 sm:top-3.5 text-gray-400 hover:text-white transition-colors"
                     disabled={loading}
                   >
                     {showConfirmPassword ? <EyeOff size={16} className="sm:w-[18px] sm:h-[18px]" /> : <Eye size={16} className="sm:w-[18px] sm:h-[18px]" />}
                   </button>
                 </div>
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-[10px] sm:text-xs text-red-400 mt-1 sm:mt-1.5">Passwords do not match</p>
+                )}
               </div>
 
               <button
                 onClick={handleResetPassword}
-                disabled={loading}
+                disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword || passwordStrength.strength === 'weak'}
                 className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50 text-sm sm:text-base"
               >
                 {loading && <Loader size={18} className="sm:w-5 sm:h-5 animate-spin" />}
-                <span>{loading ? 'Resetting...' : 'Reset Password'}</span>
+                <span>{loading ? 'Resetting Password...' : 'Reset Password'}</span>
               </button>
+            </div>
+
+            <div className="mt-4 sm:mt-6 bg-gray-800/40 backdrop-blur-xl rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/30">
+              <p className="text-[10px] sm:text-xs text-gray-400">
+                <strong className="text-white">Password Requirements:</strong><br />
+                • At least 8 characters long<br />
+                • Include uppercase and lowercase letters<br />
+                • Include at least one number<br />
+                • Include at least one special character
+              </p>
             </div>
           </div>
         </div>
@@ -588,11 +589,11 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
         <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-md p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-blue-500/10 rounded-2xl md:rounded-3xl"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-2xl md:rounded-3xl"></div>
           
           <button
-            onClick={() => setCurrentStep('identify')}
-            className="absolute left-3 top-3 md:left-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:scale-110 z-10"
+            onClick={onClose}
+            className="absolute right-3 top-3 md:right-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
           >
             <X size={20} className="md:w-6 md:h-6" />
           </button>
@@ -748,7 +749,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
                 <p className="text-[10px] sm:text-xs text-gray-500">Format: XX-YYMM-XXXXX</p>
                 <button 
                   type="button"
-                  onClick={onClose}
+                  onClick={() => setShowForgotUserId(true)}
                   className="text-[10px] sm:text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
                   disabled={loading}
                 >
