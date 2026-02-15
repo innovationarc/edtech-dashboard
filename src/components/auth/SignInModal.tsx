@@ -175,7 +175,15 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   if (showForgotPassword) {
-    return <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />;
+    return (
+      <ForgotPasswordModal 
+        onClose={() => setShowForgotPassword(false)}
+        onSwitchToForgotUserId={() => {
+          setShowForgotPassword(false);
+          setShowForgotUserId(true);
+        }}
+      />
+    );
   }
 
   if (showForgotUserId) {
