@@ -302,7 +302,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/5"
+                    className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors duration-200"
                     disabled={loading}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
