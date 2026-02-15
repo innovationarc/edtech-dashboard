@@ -293,16 +293,16 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   // Get role-specific icon (8 specific roles)
   const getRoleIcon = (role: string) => {
     const roleIcons: { [key: string]: JSX.Element } = {
-      'admin': <ShieldCheck size={22} className="text-white" />,
-      'manager': <Briefcase size={22} className="text-white" />,
-      'course manager': <BookOpen size={22} className="text-white" />,
-      'student manager': <UserCog size={22} className="text-white" />,
-      'coordinator': <Award size={22} className="text-white" />,
-      'student': <GraduationCap size={22} className="text-white" />,
-      'teacher': <Users size={22} className="text-white" />,
-      'parent': <Crown size={22} className="text-white" />,
+      'admin': <ShieldCheck className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
+      'manager': <Briefcase className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
+      'course manager': <BookOpen className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
+      'student manager': <UserCog className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
+      'coordinator': <Award className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
+      'student': <GraduationCap className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
+      'teacher': <Users className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
+      'parent': <Crown className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />,
     };
-    return roleIcons[role.toLowerCase()] || <CreditCard size={22} className="text-white" />;
+    return roleIcons[role.toLowerCase()] || <CreditCard className="w-[18px] h-[18px] sm:w-5 sm:h-5 md:w-[22px] md:h-[22px] text-white" />;
   };
 
   // Get role badge color with icon background (8 specific roles)
@@ -373,84 +373,84 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   // Results Screen
   if (currentStep === 'results') {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-blue-500/5 rounded-3xl pointer-events-none"></div>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-lg md:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-blue-500/5 rounded-2xl md:rounded-3xl pointer-events-none"></div>
           
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+            className="absolute right-3 top-3 md:right-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
           >
-            <X size={24} />
+            <X size={20} className="md:w-6 md:h-6" />
           </button>
 
           <div className="relative">
-            <div className="flex justify-center mb-6">
+            <div className="flex justify-center mb-4 md:mb-6">
               <div className="relative">
                 <div className="absolute inset-0 bg-green-500/30 blur-2xl"></div>
-                <div className="relative bg-gradient-to-br from-green-500 to-blue-600 rounded-full p-4 shadow-2xl shadow-green-500/50">
-                  <CheckCircle size={48} className="text-white" />
+                <div className="relative bg-gradient-to-br from-green-500 to-blue-600 rounded-full p-3 md:p-4 shadow-2xl shadow-green-500/50">
+                  <CheckCircle size={32} className="md:w-12 md:h-12 text-white" />
                 </div>
               </div>
             </div>
 
-            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-blue-400 to-green-500 mb-2 text-center">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-400 via-blue-400 to-green-500 mb-2 text-center px-2">
               User ID{users.length > 1 ? 's' : ''} Found!
             </h2>
-            <p className="text-gray-400 text-sm mb-6 text-center">
+            <p className="text-gray-400 text-xs sm:text-sm mb-4 md:mb-6 text-center px-2">
               {users.length} account{users.length > 1 ? 's' : ''} found with phone number:<br />
               <span className="text-white font-semibold">{getDisplayPhoneNumber()}</span>
             </p>
 
             {success && (
-              <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
-                <p className="text-sm flex items-center justify-center gap-2">
-                  <CheckCircle size={16} />
+              <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl mb-4 md:mb-6 backdrop-blur-sm">
+                <p className="text-xs sm:text-sm flex items-center justify-center gap-2">
+                  <CheckCircle size={14} className="sm:w-4 sm:h-4" />
                   {success}
                 </p>
               </div>
             )}
 
-            <div className="space-y-4 mb-6">
+            <div className="space-y-3 sm:space-y-4 mb-4 md:mb-6">
               {users.map((user, index) => {
                 const roleStyle = getRoleStyle(user.role);
                 return (
                   <div 
                     key={user.uid || index}
-                    className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-xl rounded-2xl border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 overflow-hidden group shadow-lg hover:shadow-xl hover:shadow-primary-500/10"
+                    className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 overflow-hidden group shadow-lg hover:shadow-xl hover:shadow-primary-500/10"
                   >
                     {/* Header Section with Role Icon */}
-                    <div className="bg-gradient-to-r from-gray-800/60 to-gray-900/60 border-b border-gray-700/30 px-5 py-4">
-                      <div className="flex items-center gap-4">
-                        <div className={`${roleStyle.iconBg} rounded-xl p-3 shadow-lg`}>
+                    <div className="bg-gradient-to-r from-gray-800/60 to-gray-900/60 border-b border-gray-700/30 px-3 sm:px-4 md:px-5 py-3 sm:py-4">
+                      <div className="flex items-center gap-2.5 sm:gap-3 md:gap-4">
+                        <div className={`${roleStyle.iconBg} rounded-lg sm:rounded-xl p-2 sm:p-2.5 md:p-3 shadow-lg flex-shrink-0`}>
                           {getRoleIcon(user.role)}
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className={`px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-sm ${roleStyle.badge}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                            <span className={`px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold backdrop-blur-sm ${roleStyle.badge}`}>
                               {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                             </span>
-                            <span className={`px-3 py-1 rounded-lg text-xs font-bold backdrop-blur-sm ${getStatusBadgeColor(user.status)}`}>
+                            <span className={`px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold backdrop-blur-sm ${getStatusBadgeColor(user.status)}`}>
                               {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                             </span>
                           </div>
-                          <p className="text-xs text-gray-400 font-medium">Account #{index + 1}</p>
+                          <p className="text-[10px] sm:text-xs text-gray-400 font-medium">Account #{index + 1}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Content Section */}
-                    <div className="p-5 space-y-4">
+                    <div className="p-3 sm:p-4 md:p-5 space-y-3 sm:space-y-4">
                       {/* User ID Display */}
-                      <div className="bg-gray-900/50 rounded-xl p-4 border border-gray-700/30">
+                      <div className="bg-gray-900/50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/30">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-lg p-2">
-                              <CreditCard size={20} className="text-primary-400" />
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="bg-gradient-to-br from-primary-500/20 to-purple-500/20 rounded-lg p-1.5 sm:p-2 flex-shrink-0">
+                              <CreditCard size={16} className="sm:w-5 sm:h-5 text-primary-400" />
                             </div>
-                            <div>
-                              <p className="text-xs text-gray-400 font-medium mb-0.5">User ID</p>
-                              <p className="text-xl font-bold text-white tracking-wide">{user.userId}</p>
+                            <div className="min-w-0">
+                              <p className="text-[10px] sm:text-xs text-gray-400 font-medium mb-0.5">User ID</p>
+                              <p className="text-base sm:text-lg md:text-xl font-bold text-white tracking-wide truncate">{user.userId}</p>
                             </div>
                           </div>
                         </div>
@@ -458,47 +458,49 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
                       {/* User Details */}
                       {((user.fullName || user.name) || user.surname) && (
-                        <div className="space-y-2">
+                        <div className="space-y-1.5 sm:space-y-2">
                           {(user.fullName || user.name) && (
                             <div className="flex items-start gap-2">
-                              <p className="text-xs text-gray-500 font-semibold min-w-[70px]">Name:</p>
-                              <p className="text-sm text-gray-200 font-medium">{user.fullName || user.name}</p>
+                              <p className="text-[10px] sm:text-xs text-gray-500 font-semibold min-w-[60px] sm:min-w-[70px]">Name:</p>
+                              <p className="text-xs sm:text-sm text-gray-200 font-medium break-words">{user.fullName || user.name}</p>
                             </div>
                           )}
                           
                           {user.surname && (
                             <div className="flex items-start gap-2">
-                              <p className="text-xs text-gray-500 font-semibold min-w-[70px]">Surname:</p>
-                              <p className="text-sm text-gray-200 font-medium">{user.surname}</p>
+                              <p className="text-[10px] sm:text-xs text-gray-500 font-semibold min-w-[60px] sm:min-w-[70px]">Surname:</p>
+                              <p className="text-xs sm:text-sm text-gray-200 font-medium break-words">{user.surname}</p>
                             </div>
                           )}
                         </div>
                       )}
 
                       {/* Action Buttons */}
-                      <div className="flex gap-3 pt-2">
+                      <div className="flex gap-2 sm:gap-3 pt-1 sm:pt-2">
                         <button
                           onClick={() => handleCopyUserId(user.userId)}
-                          className="flex-1 bg-gray-700/50 hover:bg-gray-700 text-white py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-semibold border border-gray-600/30 hover:border-gray-500/50"
+                          className="flex-1 bg-gray-700/50 hover:bg-gray-700 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold border border-gray-600/30 hover:border-gray-500/50"
                         >
                           {copiedUserId === user.userId ? (
                             <>
-                              <CheckCircle size={18} />
-                              <span>Copied!</span>
+                              <CheckCircle size={16} className="sm:w-[18px] sm:h-[18px]" />
+                              <span className="hidden xs:inline">Copied!</span>
+                              <span className="xs:hidden">✓</span>
                             </>
                           ) : (
                             <>
-                              <Copy size={18} />
-                              <span>Copy ID</span>
+                              <Copy size={16} className="sm:w-[18px] sm:h-[18px]" />
+                              <span className="hidden xs:inline">Copy ID</span>
+                              <span className="xs:hidden">Copy</span>
                             </>
                           )}
                         </button>
                         
                         <button
                           onClick={() => handleSignInWithUserId(user.userId)}
-                          className="flex-1 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 text-white py-3 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 text-sm font-semibold shadow-lg hover:shadow-primary-500/50 active:scale-95"
+                          className="flex-1 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-semibold shadow-lg hover:shadow-primary-500/50 active:scale-95"
                         >
-                          <LogIn size={18} />
+                          <LogIn size={16} className="sm:w-[18px] sm:h-[18px]" />
                           <span>Sign In</span>
                         </button>
                       </div>
@@ -508,16 +510,16 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               })}
             </div>
 
-            <div className="bg-blue-900/40 border border-blue-700/50 rounded-xl p-4 backdrop-blur-sm mb-4">
-              <p className="text-xs text-blue-200 flex items-center justify-center gap-2">
-                <Shield size={14} />
+            <div className="bg-blue-900/40 border border-blue-700/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-sm mb-3 sm:mb-4">
+              <p className="text-[10px] sm:text-xs text-blue-200 flex items-center justify-center gap-1.5 sm:gap-2">
+                <Shield size={12} className="sm:w-[14px] sm:h-[14px]" />
                 Keep your User ID safe and secure
               </p>
             </div>
 
             <button
               onClick={onClose}
-              className="w-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white py-3 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold"
+              className="w-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold text-sm sm:text-base"
             >
               Close
             </button>
@@ -530,54 +532,54 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   // OTP Verification Screen
   if (currentStep === 'otp') {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-md p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-2xl md:rounded-3xl pointer-events-none"></div>
           
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+            className="absolute right-3 top-3 md:right-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
           >
-            <X size={24} />
+            <X size={20} className="md:w-6 md:h-6" />
           </button>
 
           <div className="relative">
-            <div className="flex justify-center mb-6">
+            <div className="flex justify-center mb-4 md:mb-6">
               <div className="relative">
                 <div className="absolute inset-0 bg-blue-500/30 blur-2xl"></div>
-                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 rounded-full p-4 shadow-2xl shadow-blue-500/50">
-                  <Shield size={48} className="text-white" />
+                <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 rounded-full p-3 md:p-4 shadow-2xl shadow-blue-500/50">
+                  <Shield size={32} className="md:w-12 md:h-12 text-white" />
                 </div>
               </div>
             </div>
 
-            <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-blue-500 mb-2">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-blue-500 mb-2 text-center px-2">
               Verify Your Phone
             </h2>
-            <p className="text-gray-400 text-sm mb-6">
+            <p className="text-gray-400 text-xs sm:text-sm mb-4 md:mb-6 text-center px-2">
               Enter the 6-digit code sent to<br />
               <span className="text-white font-semibold">{getDisplayPhoneNumber()}</span>
             </p>
 
             {error && (
-              <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
-                <p className="text-sm flex items-center justify-center gap-2">
-                  <AlertCircle size={16} />
+              <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl mb-4 md:mb-6 backdrop-blur-sm">
+                <p className="text-xs sm:text-sm flex items-center justify-center gap-2">
+                  <AlertCircle size={14} className="sm:w-4 sm:h-4" />
                   {error}
                 </p>
               </div>
             )}
 
             {success && (
-              <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
-                <p className="text-sm flex items-center justify-center gap-2">
-                  <CheckCircle size={16} />
+              <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl mb-4 md:mb-6 backdrop-blur-sm">
+                <p className="text-xs sm:text-sm flex items-center justify-center gap-2">
+                  <CheckCircle size={14} className="sm:w-4 sm:h-4" />
                   {success}
                 </p>
               </div>
             )}
 
-            <div className="flex gap-3 justify-center mb-6" onPaste={handleOTPPaste}>
+            <div className="flex gap-2 sm:gap-3 justify-center mb-4 md:mb-6" onPaste={handleOTPPaste}>
               {otp.map((digit, index) => (
                 <input
                   key={index}
@@ -588,7 +590,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
                   value={digit}
                   onChange={(e) => handleOTPChange(index, e.target.value)}
                   onKeyDown={(e) => handleOTPKeyDown(index, e)}
-                  className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-800/60 backdrop-blur-xl text-white text-2xl font-bold text-center rounded-xl border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all duration-200"
+                  className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 bg-gray-800/60 backdrop-blur-xl text-white text-xl sm:text-2xl font-bold text-center rounded-lg sm:rounded-xl border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all duration-200"
                   disabled={loading}
                 />
               ))}
@@ -597,13 +599,13 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             <button
               onClick={handleVerifyOTP}
               disabled={loading || otp.join('').length !== 6}
-              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50 mb-4"
+              className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50 mb-3 sm:mb-4 text-sm sm:text-base"
             >
-              {loading && <Loader size={20} className="animate-spin" />}
+              {loading && <Loader size={18} className="sm:w-5 sm:h-5 animate-spin" />}
               <span>{loading ? 'Verifying...' : 'Verify OTP'}</span>
             </button>
 
-            <div className="text-sm text-gray-400">
+            <div className="text-xs sm:text-sm text-gray-400 text-center">
               {canResendOTP ? (
                 <button
                   onClick={handleResendOTP}
@@ -616,9 +618,9 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               )}
             </div>
 
-            <div className="mt-6 bg-gray-800/40 backdrop-blur-xl rounded-xl p-4 border border-gray-700/30">
-              <p className="text-xs text-gray-400 flex items-center justify-center gap-2">
-                <Shield size={14} />
+            <div className="mt-4 sm:mt-6 bg-gray-800/40 backdrop-blur-xl rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/30">
+              <p className="text-[10px] sm:text-xs text-gray-400 flex items-center justify-center gap-1.5 sm:gap-2">
+                <Shield size={12} className="sm:w-[14px] sm:h-[14px]" />
                 OTP expires in 2 minutes
               </p>
             </div>
@@ -630,81 +632,81 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
   // Phone Number Entry Screen
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl w-full max-w-md p-8 relative shadow-2xl border border-gray-700/50">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-3xl pointer-events-none"></div>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
+      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-md p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 rounded-2xl md:rounded-3xl pointer-events-none"></div>
         
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
+          className="absolute right-3 top-3 md:right-4 md:top-4 text-gray-400 hover:text-white transition-all duration-200 hover:rotate-90 hover:scale-110 z-10"
         >
-          <X size={24} />
+          <X size={20} className="md:w-6 md:h-6" />
         </button>
 
         <div className="relative">
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4 md:mb-6">
             <div className="relative">
               <div className="absolute inset-0 bg-primary-500/30 blur-2xl"></div>
-              <div className="relative bg-gradient-to-br from-primary-500 to-purple-600 rounded-full p-4 shadow-2xl shadow-primary-500/50">
-                <UserSearch size={48} className="text-white" />
+              <div className="relative bg-gradient-to-br from-primary-500 to-purple-600 rounded-full p-3 md:p-4 shadow-2xl shadow-primary-500/50">
+                <UserSearch size={32} className="md:w-12 md:h-12 text-white" />
               </div>
             </div>
           </div>
 
-          <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2 text-center">
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 via-purple-400 to-primary-500 mb-2 text-center px-2">
             Find Your User ID
           </h2>
-          <p className="text-gray-400 text-sm mb-6 text-center">
+          <p className="text-gray-400 text-xs sm:text-sm mb-4 md:mb-6 text-center px-2">
             Enter your registered phone number to find your User ID
           </p>
 
           {error && (
-            <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
-              <p className="text-sm flex items-center gap-2">
-                <AlertCircle size={16} />
+            <div className="bg-red-900/40 border border-red-700/50 text-red-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl mb-4 md:mb-6 backdrop-blur-sm">
+              <p className="text-xs sm:text-sm flex items-center gap-2">
+                <AlertCircle size={14} className="sm:w-4 sm:h-4" />
                 {error}
               </p>
             </div>
           )}
 
           {success && (
-            <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-4 py-3 rounded-xl mb-6 backdrop-blur-sm">
-              <p className="text-sm flex items-center gap-2">
-                <CheckCircle size={16} />
+            <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl mb-4 md:mb-6 backdrop-blur-sm">
+              <p className="text-xs sm:text-sm flex items-center gap-2">
+                <CheckCircle size={14} className="sm:w-4 sm:h-4" />
                 {success}
               </p>
             </div>
           )}
 
-          <div className="space-y-5">
+          <div className="space-y-3 sm:space-y-4 md:space-y-5">
             <div className="group">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number *</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-300 mb-1.5 sm:mb-2">Phone Number *</label>
               <div className="relative">
                 <input
                   type="tel"
                   value={phoneNumber}
                   onChange={(e) => handlePhoneNumberChange(e.target.value)}
-                  className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-xl py-3 pl-11 pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600"
+                  className="w-full bg-gray-800/60 backdrop-blur-xl text-white rounded-lg sm:rounded-xl py-2.5 sm:py-3 pl-9 sm:pl-11 pr-3 sm:pr-4 border border-gray-700/50 focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-all duration-200 group-hover:border-gray-600 text-sm sm:text-base"
                   placeholder="01XXXXXXXXX or 1XXXXXXXXX"
                   disabled={loading}
                 />
-                <Phone size={18} className="absolute left-3.5 top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                <Phone size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
-              <p className="text-xs text-gray-500 mt-1.5">
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-1.5">
                 Enter 11 digits starting with 0 (e.g., 01712345678) or 10 digits starting with 1 (e.g., 1712345678)
               </p>
             </div>
 
             {userCount === 0 && error && error.includes('No user found') && (
-              <div className="bg-yellow-900/40 border border-yellow-700/50 rounded-xl p-4 backdrop-blur-sm">
-                <p className="text-sm text-yellow-200 mb-3">
+              <div className="bg-yellow-900/40 border border-yellow-700/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-sm">
+                <p className="text-xs sm:text-sm text-yellow-200 mb-2 sm:mb-3">
                   No account found with this phone number
                 </p>
                 <button
                   onClick={() => {
                     onClose();
                   }}
-                  className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white py-3 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold"
+                  className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold text-sm sm:text-base"
                 >
                   Create New Account
                 </button>
@@ -715,9 +717,9 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               <button
                 onClick={handleSendOTP}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-green-600 via-blue-600 to-green-600 hover:from-green-700 hover:via-blue-700 hover:to-green-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-green-500/50"
+                className="w-full bg-gradient-to-r from-green-600 via-blue-600 to-green-600 hover:from-green-700 hover:via-blue-700 hover:to-green-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-green-500/50 text-sm sm:text-base"
               >
-                {loading && <Loader size={20} className="animate-spin" />}
+                {loading && <Loader size={18} className="sm:w-5 sm:h-5 animate-spin" />}
                 <span>{loading ? 'Processing...' : `See User${userCount > 1 ? 's' : ''}`}</span>
               </button>
             )}
@@ -726,18 +728,18 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
               <button
                 onClick={handleSearchUsers}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50"
+                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 hover:from-primary-700 hover:via-purple-700 hover:to-primary-700 disabled:from-gray-700 disabled:to-gray-800 disabled:cursor-not-allowed text-white py-3 sm:py-4 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold shadow-2xl hover:shadow-primary-500/50 text-sm sm:text-base"
               >
-                {loading && <Loader size={20} className="animate-spin" />}
+                {loading && <Loader size={18} className="sm:w-5 sm:h-5 animate-spin" />}
                 <span>{loading ? 'Searching...' : 'Search User'}</span>
               </button>
             )}
           </div>
 
-          <div className="mt-6 text-center">
+          <div className="mt-4 sm:mt-6 text-center">
             <button 
               onClick={onClose}
-              className="text-sm text-gray-400 hover:text-white transition-colors"
+              className="text-xs sm:text-sm text-gray-400 hover:text-white transition-colors"
             >
               Back to Sign In
             </button>
