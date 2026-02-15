@@ -1,5 +1,5 @@
 // src/components/layout/DashboardLayout.tsx
-// Updated to use combined Navigation component
+// Updated to use combined Navigation component - FIXED VERSION
 import { Outlet } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
@@ -38,14 +38,15 @@ const DashboardLayout = () => {
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
-      {/* Navigation Component (Combined Sidebar + Header) */}
+      {/* Navigation Component (Combined Sidebar + Header) - Both are now fixed positioned */}
       <Navigation />
       
+      {/* Main content wrapper - Add margin for sidebar and padding for header */}
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
         !isMobile && sidebarOpen ? 'ml-64' : !isMobile ? 'ml-20' : 'ml-0'
       }`}>
-        {/* Main content area - Header is now part of Navigation component */}
-        <main className="flex-1 overflow-auto" style={{ marginTop: '72px' }}>
+        {/* Main content area - Add top padding for fixed header */}
+        <main className="flex-1 overflow-auto pt-16 sm:pt-[68px] lg:pt-[72px]">
           <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
             <Outlet />
           </div>
