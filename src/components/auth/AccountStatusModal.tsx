@@ -1,5 +1,7 @@
 // src/components/auth/AccountStatusModal.tsx
+import { useState } from 'react';
 import { X, AlertCircle, ShieldAlert } from 'lucide-react';
+import SignInModal from './SignInModal';
 
 interface AccountStatusModalProps {
   status: 'inactive' | 'pending';
@@ -9,6 +11,8 @@ interface AccountStatusModalProps {
 }
 
 const AccountStatusModal = ({ status, userId, onClose, onSignInAnotherAccount }: AccountStatusModalProps) => {
+  const [showSignIn, setShowSignIn] = useState(false);
+
   const statusConfig = {
     pending: {
       icon: AlertCircle,
@@ -34,6 +38,11 @@ const AccountStatusModal = ({ status, userId, onClose, onSignInAnotherAccount }:
 
   const config = statusConfig[status];
   const Icon = config.icon;
+
+  // Show SignInModal if user clicked "Sign In to Another Account"
+  if (showSignIn) {
+    return <SignInModal onClose={() => setShowSignIn(false)} />;
+  }
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
@@ -91,7 +100,7 @@ const AccountStatusModal = ({ status, userId, onClose, onSignInAnotherAccount }:
           {/* Action Buttons */}
           <div className="space-y-2.5 sm:space-y-3">
             <button
-              onClick={onSignInAnotherAccount}
+              onClick={() => setShowSignIn(true)}
               className="w-full px-4 sm:px-6 py-2.5 sm:py-3 md:py-3.5 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-lg sm:rounded-xl font-semibold hover:from-primary-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-primary-500/50 transform hover:scale-[1.02] text-sm sm:text-base"
             >
               Sign In to Another Account
