@@ -1,8 +1,7 @@
 // src/components/layout/DashboardLayout.tsx
-// READY TO COPY-PASTE - No changes needed from original
+// Updated to use combined Navigation component
 import { Outlet } from 'react-router-dom';
-import Sidebar from './Sidebar';
-import Header from './Header';
+import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useEffect, useState } from 'react';
@@ -39,14 +38,14 @@ const DashboardLayout = () => {
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
-      {/* Sidebar - Always render, visibility controlled inside Sidebar component */}
-      <Sidebar />
+      {/* Navigation Component (Combined Sidebar + Header) */}
+      <Navigation />
       
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
         !isMobile && sidebarOpen ? 'ml-64' : !isMobile ? 'ml-20' : 'ml-0'
       }`}>
-        <Header />
-        <main className="flex-1 overflow-auto">
+        {/* Main content area - Header is now part of Navigation component */}
+        <main className="flex-1 overflow-auto" style={{ marginTop: '72px' }}>
           <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
             <Outlet />
           </div>
