@@ -374,7 +374,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
   if (currentStep === 'results') {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-3 md:p-4">
-        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-lg md:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 md:p-8 relative shadow-2xl border border-gray-700/50">
+        <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl md:rounded-3xl w-full max-w-[95%] sm:max-w-lg md:max-w-2xl max-h-[90vh] flex flex-col relative shadow-2xl border border-gray-700/50">
           <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-blue-500/5 rounded-2xl md:rounded-3xl pointer-events-none"></div>
           
           <button
@@ -384,7 +384,8 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             <X size={20} className="md:w-6 md:h-6" />
           </button>
 
-          <div className="relative">
+          {/* Header Section - Fixed */}
+          <div className="relative p-4 sm:p-6 md:p-8 pb-3 sm:pb-4 md:pb-5 flex-shrink-0">
             <div className="flex justify-center mb-4 md:mb-6">
               <div className="relative">
                 <div className="absolute inset-0 bg-green-500/30 blur-2xl"></div>
@@ -403,21 +404,25 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             </p>
 
             {success && (
-              <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl mb-4 md:mb-6 backdrop-blur-sm">
+              <div className="bg-green-900/40 border border-green-700/50 text-green-200 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl backdrop-blur-sm">
                 <p className="text-xs sm:text-sm flex items-center justify-center gap-2">
                   <CheckCircle size={14} className="sm:w-4 sm:h-4" />
                   {success}
                 </p>
               </div>
             )}
+          </div>
 
-            <div className="space-y-3 sm:space-y-4 mb-4 md:mb-6">
+          {/* Scrollable Content Section */}
+          <div className="relative overflow-y-auto flex-1 px-4 sm:px-6 md:px-8" style={{ WebkitOverflowScrolling: 'touch', transform: 'translateZ(0)', willChange: 'transform' }}>
+            <div className="space-y-3 sm:space-y-4 pb-4 sm:pb-6 md:pb-8">
               {users.map((user, index) => {
                 const roleStyle = getRoleStyle(user.role);
                 return (
                   <div 
                     key={user.uid || index}
                     className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-gray-700/50 hover:border-primary-500/50 transition-all duration-300 overflow-hidden group shadow-lg hover:shadow-xl hover:shadow-primary-500/10"
+                    style={{ transform: 'translateZ(0)' }}
                   >
                     {/* Header Section with Role Icon */}
                     <div className="bg-gradient-to-r from-gray-800/60 to-gray-900/60 border-b border-gray-700/30 px-3 sm:px-4 md:px-5 py-3 sm:py-4">
@@ -508,21 +513,23 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
                   </div>
                 );
               })}
-            </div>
 
-            <div className="bg-blue-900/40 border border-blue-700/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-sm mb-3 sm:mb-4">
-              <p className="text-[10px] sm:text-xs text-blue-200 flex items-center justify-center gap-1.5 sm:gap-2">
-                <Shield size={12} className="sm:w-[14px] sm:h-[14px]" />
-                Keep your User ID safe and secure
-              </p>
-            </div>
+              {/* Info Box */}
+              <div className="bg-blue-900/40 border border-blue-700/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-sm">
+                <p className="text-[10px] sm:text-xs text-blue-200 flex items-center justify-center gap-1.5 sm:gap-2">
+                  <Shield size={12} className="sm:w-[14px] sm:h-[14px]" />
+                  Keep your User ID safe and secure
+                </p>
+              </div>
 
-            <button
-              onClick={onClose}
-              className="w-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold text-sm sm:text-base"
-            >
-              Close
-            </button>
+              {/* Close Button */}
+              <button
+                onClick={onClose}
+                className="w-full bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 text-white py-2.5 sm:py-3 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 font-semibold text-sm sm:text-base"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>
