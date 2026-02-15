@@ -469,7 +469,17 @@ export const authService = {
         deviceId: currentDeviceId,
         lastLoginIp: clientIp
       });
-
+      
+      // AUTO-EXPIRE CHECK: Run expired admin check in background (non-blocking)
+      // Import adminService at the top of the file if not already imported
+      import('./adminService').then(({ adminService }) => {
+        adminService.autoCheckExpiredAdmins().catch(error => {
+          console.warn('⚠️ Auto-expire check failed:', error);
+        });
+      }).catch(() => {
+        console.warn('⚠️ Could not load adminService for auto-expire check');
+      });
+      
       // NEW: Store remember me preference if enabled (ADDITIONAL, not replacing)
       if (rememberMe) {
         try {
