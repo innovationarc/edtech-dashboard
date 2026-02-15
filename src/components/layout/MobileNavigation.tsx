@@ -71,22 +71,22 @@ const MobileNavigation = () => {
 
   return (
     <nav className="mobile-nav fixed bottom-0 left-0 right-0 bg-background-900 border-t border-background-800 z-30 lg:hidden safe-area-bottom">
-      <div className="flex justify-around items-center py-2 px-2">
+      <div className="flex justify-around items-center py-1.5 sm:py-2 px-1 sm:px-2">
         {navItems.slice(0, 5).map((item) => (
           <Link
             key={item.path}
             to={item.path}
             className={clsx(
-              "flex flex-col items-center justify-center p-2 rounded-lg transition-colors min-w-0 flex-1",
+              "flex flex-col items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-200 min-w-0 flex-1 touch-manipulation active:scale-95",
               location.pathname === item.path 
-                ? "text-primary-400 bg-background-800" 
+                ? "text-primary-400 bg-background-800 scale-105" 
                 : "text-gray-400 hover:text-white hover:bg-background-800"
             )}
           >
-            <div className="mb-1 flex-shrink-0">
+            <div className="mb-0.5 sm:mb-1 flex-shrink-0 scale-90 sm:scale-100">
               {item.icon}
             </div>
-            <span className="text-xs font-medium truncate w-full text-center px-1">
+            <span className="text-[10px] xs:text-xs font-medium truncate w-full text-center px-0.5 sm:px-1 leading-tight">
               {item.name}
             </span>
           </Link>
