@@ -7,9 +7,10 @@ import { otpService } from '../../services/otpService';
 interface ForgotPasswordModalProps {
   onClose: () => void;
   onSuccess?: () => void;
+  onSwitchToForgotUserId?: () => void;
 }
 
-const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) => {
+const ForgotPasswordModal = ({ onClose, onSuccess, onSwitchToForgotUserId }: ForgotPasswordModalProps) => {
   const [currentStep, setCurrentStep] = useState<'identify' | 'otp' | 'reset' | 'success'>('identify');
   const [userId, setUserId] = useState('');
   const [displayUserId, setDisplayUserId] = useState('');
@@ -748,7 +749,13 @@ const ForgotPasswordModal = ({ onClose, onSuccess }: ForgotPasswordModalProps) =
                 <p className="text-[10px] sm:text-xs text-gray-500">Format: XX-YYMM-XXXXX</p>
                 <button 
                   type="button"
-                  onClick={onClose}
+                  onClick={() => {
+                    if (onSwitchToForgotUserId) {
+                      onSwitchToForgotUserId();
+                    } else {
+                      onClose();
+                    }
+                  }}
                   className="text-[10px] sm:text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
                   disabled={loading}
                 >
