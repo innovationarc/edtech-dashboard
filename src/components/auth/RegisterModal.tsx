@@ -1165,9 +1165,10 @@ const RegisterModal = ({ onClose, onSuccess, onSwitchToSignIn }: RegisterModalPr
                 Already have an account?{' '}
                 <button 
                   onClick={() => {
-                    onClose();
                     if (onSwitchToSignIn) {
                       onSwitchToSignIn();
+                    } else {
+                      onClose();
                     }
                   }}
                   className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-500 hover:from-primary-300 hover:to-purple-400 transition-all duration-200 font-medium"
