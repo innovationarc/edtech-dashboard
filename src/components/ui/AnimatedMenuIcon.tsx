@@ -1,5 +1,5 @@
 // /src/components/ui/AnimatedMenuIcon.tsx
-// 10000% IDENTICAL to p1.html hamburger menu
+// COMPLETE - Ready to copy-paste
 import React from 'react';
 
 interface AnimatedMenuIconProps {
@@ -10,65 +10,128 @@ interface AnimatedMenuIconProps {
 
 const AnimatedMenuIcon: React.FC<AnimatedMenuIconProps> = ({ 
   state, 
-  size = 24,
+  size = 20,
   className = ''
 }) => {
-  const isActive = state === 'open' || state === 'opening';
+  const barHeight = size * 0.1;
+  const barRadius = barHeight / 2;
+  const barSpacing = size * 0.3;
+
+  const getBarTransforms = () => {
+    switch (state) {
+      case 'closed':
+        return {
+          top: { translateY: 0, rotate: 0, scaleX: 1 },
+          middle: { translateY: 0, rotate: 0, scaleX: 1, opacity: 1 },
+          bottom: { translateY: 0, rotate: 0, scaleX: 1 }
+        };
+      
+      case 'opening':
+      case 'closing':
+        return {
+          top: { 
+            translateY: barSpacing * 0.7,
+            rotate: -42,
+            scaleX: 0.6
+          },
+          middle: { 
+            translateY: 0,
+            rotate: 0,
+            scaleX: 0.95,
+            opacity: 1
+          },
+          bottom: { 
+            translateY: -barSpacing * 0.7,
+            rotate: 42,
+            scaleX: 0.6
+          }
+        };
+      
+      case 'open':
+        return {
+          top: { 
+            translateY: 0,
+            rotate: 45,
+            scaleX: 1.1
+          },
+          middle: { 
+            translateY: 0,
+            rotate: 0,
+            scaleX: 0,
+            opacity: 0
+          },
+          bottom: { 
+            translateY: 0,
+            rotate: -45,
+            scaleX: 1.1
+          }
+        };
+      
+      default:
+        return {
+          top: { translateY: 0, rotate: 0, scaleX: 1 },
+          middle: { translateY: 0, rotate: 0, scaleX: 1, opacity: 1 },
+          bottom: { translateY: 0, rotate: 0, scaleX: 1 }
+        };
+    }
+  };
+
+  const transforms = getBarTransforms();
+  const barStyle = {
+    width: `${size}px`,
+    height: `${barHeight}px`,
+    borderRadius: `${barRadius}px`,
+  };
+
+  const createTransform = (t: any) => 
+    `translateY(${t.translateY}px) rotate(${t.rotate}deg) scaleX(${t.scaleX})`;
 
   return (
-    <svg 
-      viewBox="0 0 100 100"
-      width={size}
-      height={size}
-      className={className}
-      style={{
-        pointerEvents: 'none',
-        transition: 'transform 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6)',
-        transform: isActive ? 'rotate(45deg)' : 'rotate(0deg)',
+    <div 
+      className={`inline-flex flex-col justify-center items-center gap-0 ${className}`}
+      style={{ 
+        width: `${size}px`, 
+        height: `${size}px`,
+        position: 'relative'
       }}
     >
-      {/* Top Line */}
-      <path 
-        d="m 30,33 h 40 c 3.72,0 7.5,3.12 7.5,8.57 0,5.45 -2.72,8.42 -7.5,8.42 h -20 v -20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinecap="round"
+      <div
+        className="bg-current transition-all duration-[400ms] ease-in-out"
         style={{
-          transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
-          strokeDasharray: '40 160',
-          strokeDashoffset: isActive ? '-64px' : '0',
+          ...barStyle,
+          position: 'absolute',
+          top: `${(size - barHeight) / 2 - barSpacing}px`,
+          transformOrigin: 'center center',
+          transform: createTransform(transforms.top),
+          willChange: 'transform'
         }}
       />
       
-      {/* Middle Line */}
-      <path 
-        d="m 30,50 h 40"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinecap="round"
+      <div
+        className="bg-current transition-all duration-[400ms] ease-in-out"
         style={{
-          transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
-          strokeDasharray: isActive ? '0 142' : '40 142',
-          strokeDashoffset: isActive ? '-20px' : '0',
+          ...barStyle,
+          position: 'absolute',
+          top: `${(size - barHeight) / 2}px`,
+          transformOrigin: 'center center',
+          transform: createTransform(transforms.middle),
+          opacity: transforms.middle.opacity,
+          willChange: 'transform, opacity'
         }}
       />
       
-      {/* Bottom Line */}
-      <path 
-        d="m 70,67 h -40 c 0,0 -7.5,-0.8 -7.5,-8.36 0,-7.56 7.5,-8.63 7.5,-8.63 h 20 v 20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinecap="round"
+      <div
+        className="bg-current transition-all duration-[400ms] ease-in-out"
         style={{
-          transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
-          strokeDasharray: '40 85',
-          strokeDashoffset: isActive ? '-64px' : '0',
+          ...barStyle,
+          position: 'absolute',
+          top: `${(size - barHeight) / 2 + barSpacing}px`,
+          transformOrigin: 'center center',
+          transform: createTransform(transforms.bottom),
+          willChange: 'transform'
         }}
       />
-    </svg>
+    </div>
   );
 };
 
