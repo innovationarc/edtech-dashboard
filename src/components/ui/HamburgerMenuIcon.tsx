@@ -1,72 +1,75 @@
-// src/components/ui/HamburgerMenuIcon.tsx
-// EXTREME TEST VERSION - Huge visual differences to verify state changes
+// /src/components/ui/AnimatedMenuIcon.tsx
+// 10000% IDENTICAL to p1.html hamburger menu
 import React from 'react';
 
-interface HamburgerMenuIconProps {
+interface AnimatedMenuIconProps {
   state: 'closed' | 'opening' | 'open' | 'closing';
   size?: number;
   className?: string;
 }
 
-const HamburgerMenuIcon: React.FC<HamburgerMenuIconProps> = ({ 
+const AnimatedMenuIcon: React.FC<AnimatedMenuIconProps> = ({ 
   state, 
-  size = 44,
+  size = 24,
   className = ''
 }) => {
   const isActive = state === 'open' || state === 'opening';
 
-  if (isActive) {
-    // OPEN STATE: Giant spinning green star
-    return (
-      <div
-        style={{
-          width: size,
-          height: size,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          animation: 'spin 2s linear infinite',
-        }}
-      >
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-          <path
-            d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-            fill="#10b981"
-            stroke="#34d399"
-            strokeWidth="2"
-          />
-        </svg>
-        <style>{`
-          @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
-  }
-
-  // CLOSED STATE: Giant red square with "MENU" text
   return (
-    <div
+    <svg 
+      viewBox="0 0 100 100"
+      width={size}
+      height={size}
+      className={className}
       style={{
-        width: size,
-        height: size,
-        backgroundColor: '#ef4444',
-        border: '3px solid #dc2626',
-        borderRadius: '8px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: size * 0.3,
-        boxShadow: '0 4px 12px rgba(239, 68, 68, 0.5)',
+        pointerEvents: 'none',
+        transition: 'transform 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6)',
+        transform: isActive ? 'rotate(45deg)' : 'rotate(0deg)',
       }}
     >
-      MENU
-    </div>
+      {/* Top Line */}
+      <path 
+        d="m 30,33 h 40 c 3.72,0 7.5,3.12 7.5,8.57 0,5.45 -2.72,8.42 -7.5,8.42 h -20 v -20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="5"
+        strokeLinecap="round"
+        style={{
+          transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
+          strokeDasharray: '40 160',
+          strokeDashoffset: isActive ? '-64px' : '0',
+        }}
+      />
+      
+      {/* Middle Line */}
+      <path 
+        d="m 30,50 h 40"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="5"
+        strokeLinecap="round"
+        style={{
+          transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
+          strokeDasharray: isActive ? '0 142' : '40 142',
+          strokeDashoffset: isActive ? '-20px' : '0',
+        }}
+      />
+      
+      {/* Bottom Line */}
+      <path 
+        d="m 70,67 h -40 c 0,0 -7.5,-0.8 -7.5,-8.36 0,-7.56 7.5,-8.63 7.5,-8.63 h 20 v 20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="5"
+        strokeLinecap="round"
+        style={{
+          transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
+          strokeDasharray: '40 85',
+          strokeDashoffset: isActive ? '-64px' : '0',
+        }}
+      />
+    </svg>
   );
 };
 
-export default HamburgerMenuIcon;
+export default AnimatedMenuIcon;
