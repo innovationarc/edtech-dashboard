@@ -1,5 +1,5 @@
 // /src/components/ui/AnimatedMenuIcon.tsx
-// 10000% IDENTICAL to p1.html - Every CSS rule converted
+// 10000% IDENTICAL to p1.html hamburger menu
 import React from 'react';
 
 interface AnimatedMenuIconProps {
@@ -13,7 +13,6 @@ const AnimatedMenuIcon: React.FC<AnimatedMenuIconProps> = ({
   size = 24,
   className = ''
 }) => {
-  // Determine active state (same as HTML's .active class)
   const isActive = state === 'open' || state === 'opening';
 
   return (
@@ -23,10 +22,8 @@ const AnimatedMenuIcon: React.FC<AnimatedMenuIconProps> = ({
       height={size}
       className={className}
       style={{
-        // From .ham-svg
         pointerEvents: 'none',
         transition: 'transform 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6)',
-        // From .active .ham-svg
         transform: isActive ? 'rotate(45deg)' : 'rotate(0deg)',
       }}
     >
@@ -38,11 +35,8 @@ const AnimatedMenuIcon: React.FC<AnimatedMenuIconProps> = ({
         strokeWidth="5"
         strokeLinecap="round"
         style={{
-          // From .line
           transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
-          // From .top
           strokeDasharray: '40 160',
-          // From .active .top
           strokeDashoffset: isActive ? '-64px' : '0',
         }}
       />
@@ -55,15 +49,9 @@ const AnimatedMenuIcon: React.FC<AnimatedMenuIconProps> = ({
         strokeWidth="5"
         strokeLinecap="round"
         style={{
-          // From .line
           transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
-          // From .middle
-          strokeDasharray: '40 142',
-          // From .active .middle
-          ...(isActive && {
-            strokeDasharray: '0 142',
-            strokeDashoffset: '-20px',
-          }),
+          strokeDasharray: isActive ? '0 142' : '40 142',
+          strokeDashoffset: isActive ? '-20px' : '0',
         }}
       />
       
@@ -75,11 +63,8 @@ const AnimatedMenuIcon: React.FC<AnimatedMenuIconProps> = ({
         strokeWidth="5"
         strokeLinecap="round"
         style={{
-          // From .line
           transition: 'stroke-dasharray 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke-dashoffset 0.6s cubic-bezier(0.68, -0.6, 0.32, 1.6), stroke 0.3s ease',
-          // From .bottom
           strokeDasharray: '40 85',
-          // From .active .bottom
           strokeDashoffset: isActive ? '-64px' : '0',
         }}
       />
