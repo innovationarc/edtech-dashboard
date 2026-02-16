@@ -1,5 +1,5 @@
 // src/components/ui/HamburgerMenuIcon.tsx
-// FIXED VERSION - Proper SVG rendering with correct React syntax
+// EXTREME TEST VERSION - Huge visual differences to verify state changes
 import React from 'react';
 
 interface HamburgerMenuIconProps {
@@ -15,61 +15,57 @@ const HamburgerMenuIcon: React.FC<HamburgerMenuIconProps> = ({
 }) => {
   const isActive = state === 'open' || state === 'opening';
 
-  const PRIMARY = '#6366f1';
-  const UI_ICON = '#f8fafc';
-  const TRANSITION_SPEED = '0.6s';
-  const TIMING_FUNCTION = 'cubic-bezier(0.68, -0.6, 0.32, 1.6)';
+  if (isActive) {
+    // OPEN STATE: Giant spinning green star
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          animation: 'spin 2s linear infinite',
+        }}
+      >
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+            fill="#10b981"
+            stroke="#34d399"
+            strokeWidth="2"
+          />
+        </svg>
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
-  // Common path styles
-  const pathStyle = {
-    fill: 'none',
-    strokeWidth: 5,
-    strokeLinecap: 'round' as const,
-    transition: `stroke-dasharray ${TRANSITION_SPEED} ${TIMING_FUNCTION}, stroke-dashoffset ${TRANSITION_SPEED} ${TIMING_FUNCTION}, stroke 0.3s ease`,
-  };
-
+  // CLOSED STATE: Giant red square with "MENU" text
   return (
-    <svg 
-      viewBox="0 0 100 100"
-      width={size}
-      height={size}
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
+    <div
       style={{
-        display: 'block',
-        pointerEvents: 'none',
-        transition: `transform ${TRANSITION_SPEED} ${TIMING_FUNCTION}`,
-        transform: isActive ? 'rotate(45deg)' : 'rotate(0deg)',
-        willChange: 'transform',
+        width: size,
+        height: size,
+        backgroundColor: '#ef4444',
+        border: '3px solid #dc2626',
+        borderRadius: '8px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: size * 0.3,
+        boxShadow: '0 4px 12px rgba(239, 68, 68, 0.5)',
       }}
     >
-      {/* Top Line */}
-      <path 
-        d="m 30,33 h 40 c 3.72,0 7.5,3.12 7.5,8.57 0,5.45 -2.72,8.42 -7.5,8.42 h -20 v -20"
-        stroke={isActive ? PRIMARY : UI_ICON}
-        strokeDasharray="40 160"
-        strokeDashoffset={isActive ? -64 : 0}
-        {...pathStyle}
-      />
-      
-      {/* Middle Line */}
-      <path 
-        d="m 30,50 h 40"
-        stroke={isActive ? PRIMARY : UI_ICON}
-        strokeDasharray={isActive ? '0 142' : '40 142'}
-        strokeDashoffset={isActive ? -20 : 0}
-        {...pathStyle}
-      />
-      
-      {/* Bottom Line */}
-      <path 
-        d="m 70,67 h -40 c 0,0 -7.5,-0.8 -7.5,-8.36 0,-7.56 7.5,-8.63 7.5,-8.63 h 20 v 20"
-        stroke={isActive ? PRIMARY : UI_ICON}
-        strokeDasharray="40 85"
-        strokeDashoffset={isActive ? -64 : 0}
-        {...pathStyle}
-      />
-    </svg>
+      MENU
+    </div>
   );
 };
 
