@@ -685,7 +685,9 @@ const Navigation = () => {
                   onMouseEnter={handleMouseEnterSidebarArea}
                   onMouseLeave={handleMouseLeaveSidebarArea}
                   className="group flex items-center justify-center w-11 h-11 rounded-xl hover:bg-white/[0.06] active:bg-white/[0.04] transition-all duration-200 ease-out active:scale-95"
+                  
                   aria-label="Toggle menu"
+style={{ WebkitTapHighlightColor: 'transparent', outline: 'none' }}
                 >
                   <HamburgerMenuIcon 
                     state={sidebarOpen ? 'open' : 'closed'}
