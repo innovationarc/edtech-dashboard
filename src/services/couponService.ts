@@ -375,28 +375,30 @@ export const couponService = {
   // ── READ ───────────────────────────────────────────────────────────────
 
   async getAllSingleCoupons(): Promise<Coupon[]> {
-    const q = query(
-      collection(db, 'coupons'),
-      where('bulkGroupId', '==', null),
-      orderBy('createdAt', 'desc')
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => fromFirestore(d.data(), d.id));
+    // NOTE: Firestore does not support where('field', '==', null) combined with orderBy
+    // without a composite index. Fetch all and filter client-side to avoid index errors.
+    const snap = await getDocs(query(collection(db, 'coupons'), orderBy('createdAt', 'desc')));
+    return snap.docs
+      .map(d => fromFirestore(d.data(), d.id))
+      .filter(c => !c.bulkGroupId);
   },
 
   async getAllBulkGroups(): Promise<BulkGroup[]> {
-    const snap = await getDocs(query(collection(db, 'bulkCouponGroups'), orderBy('createdAt', 'desc')));
-    return snap.docs.map(d => fromFirestoreBulkGroup(d.data(), d.id));
+    const snap = await getDocs(collection(db, 'bulkCouponGroups'));
+    return snap.docs
+      .map(d => fromFirestoreBulkGroup(d.data(), d.id))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
 
   async getCouponsByGroupId(groupId: string): Promise<Coupon[]> {
     const q = query(
       collection(db, 'coupons'),
-      where('bulkGroupId', '==', groupId),
-      orderBy('createdAt', 'asc')
+      where('bulkGroupId', '==', groupId)
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => fromFirestore(d.data(), d.id));
+    return snap.docs
+      .map(d => fromFirestore(d.data(), d.id))
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   },
 
   async getCouponByCode(code: string): Promise<Coupon | null> {
@@ -414,9 +416,11 @@ export const couponService = {
   },
 
   async getAuditLogs(limit = 100): Promise<AuditLog[]> {
-    const q = query(collection(db, 'couponAuditLogs'), orderBy('timestamp', 'desc'));
-    const snap = await getDocs(q);
-    return snap.docs.slice(0, limit).map(d => fromFirestoreLog(d.data(), d.id));
+    const snap = await getDocs(collection(db, 'couponAuditLogs'));
+    return snap.docs
+      .map(d => fromFirestoreLog(d.data(), d.id))
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, limit);
   },
 
   // ── UPDATE ─────────────────────────────────────────────────────────────
