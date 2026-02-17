@@ -37,6 +37,9 @@ import ManageCoordinator from './pages/ManageCoordinator';
 import ManageManager from './pages/ManageManager';
 import ManageAdmin from './pages/ManageAdmin';
 
+// NEW: Coupon Management
+import CouponManagement from './pages/CouponManagement';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Protected Route Component for Admin-only pages
@@ -225,6 +228,13 @@ const AppRoutes = () => {
           <AdminRoute>
             <AllAnnouncements />
           </AdminRoute>
+        } />
+        
+        {/* Coupon Management - Admin and Manager */}
+        <Route path="coupons" element={
+          <AdminManagerRoute>
+            <CouponManagement />
+          </AdminManagerRoute>
         } />
         
         {/* User Management - Admin, Manager, Coordinator */}
