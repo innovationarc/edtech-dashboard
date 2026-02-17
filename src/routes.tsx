@@ -231,7 +231,7 @@ const AppRoutes = () => {
         } />
         
         {/* Coupon Management - Admin and Manager */}
-        <Route path="coupons" element={
+        <Route path="manage-coupon" element={
           <AdminManagerRoute>
             <CouponManagement />
           </AdminManagerRoute>
