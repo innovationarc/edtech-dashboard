@@ -11,7 +11,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
   writeBatch,
   increment
@@ -26,7 +25,6 @@ export type CouponStatus = 'active' | 'inactive' | 'expired' | 'scheduled';
 export interface CourseFilter {
   type: 'all' | 'specific';
   courseIds?: string[];
-  courseNames?: string[];
 }
 
 export interface UserFilter {
@@ -43,7 +41,6 @@ export interface CategoryFilter {
 export interface NextPurchaseEligibility {
   enabled: boolean;
   requiredCourseIds: string[];
-  requiredCourseNames?: string[];
 }
 
 export interface Coupon {
@@ -51,31 +48,23 @@ export interface Coupon {
   couponCode: string;
   discountType: DiscountType;
   discountValue: number;
-  maxDiscount?: number; // for percentage only
+  maxDiscount?: number;
   minimumPurchase: number;
-
   courseFilter: CourseFilter;
   userFilter: UserFilter;
   categoryFilter: CategoryFilter;
-
   startDate: Date;
   endDate: Date;
   activationDate?: Date;
-
   usageLimit: number | 'unlimited';
   perUserLimit: number;
   usageCount: number;
-
   status: CouponStatus;
   adminComments?: string;
-
   nextPurchaseEligibility: NextPurchaseEligibility;
-
-  // Bulk group info (null for single coupons)
-  bulkGroupId?: string;
-  bulkGroupName?: string;
-  trackingId?: string; // GroupID_SerialNumber
-
+  bulkGroupId?: string | null;
+  bulkGroupName?: string | null;
+  trackingId?: string | null;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -86,7 +75,6 @@ export interface BulkGroup {
   groupName: string;
   groupId: string;
   couponCount: number;
-  template: Omit<Coupon, 'id' | 'couponCode' | 'bulkGroupId' | 'bulkGroupName' | 'trackingId' | 'createdAt' | 'updatedAt'>;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -94,7 +82,7 @@ export interface BulkGroup {
 
 export interface AuditLog {
   id: string;
-  actionType: 'create_single' | 'create_bulk' | 'update' | 'activate' | 'deactivate' | 'delete' | 'create_bulk_group';
+  actionType: 'create_single' | 'create_bulk_group' | 'update' | 'activate' | 'deactivate' | 'delete';
   actorUserId: string;
   actorName?: string;
   couponId?: string;
@@ -144,68 +132,92 @@ export interface CreateBulkCouponInput extends Omit<CreateSingleCouponInput, 'co
 
 const generateCouponCode = (prefix?: string): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const random = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return prefix ? `${prefix.toUpperCase()}-${random}` : random;
+  const random = Array.from({ length: 8 }, () =>
+    chars[Math.floor(Math.random() * chars.length)]
+  ).join('');
+  return prefix ? `${prefix.toUpperCase().slice(0, 6)}-${random}` : random;
 };
 
-const toTimestamp = (date: Date) => Timestamp.fromDate(date);
+const toTs = (d: Date) => Timestamp.fromDate(d);
 
-const fromFirestore = (docData: any, id: string): Coupon => ({
-  ...docData,
-  id,
-  startDate: docData.startDate?.toDate?.() || new Date(docData.startDate),
-  endDate: docData.endDate?.toDate?.() || new Date(docData.endDate),
-  activationDate: docData.activationDate?.toDate?.(),
-  createdAt: docData.createdAt?.toDate?.() || new Date(),
-  updatedAt: docData.updatedAt?.toDate?.() || new Date(),
-});
-
-const fromFirestoreBulkGroup = (docData: any, id: string): BulkGroup => ({
-  ...docData,
-  id,
-  createdAt: docData.createdAt?.toDate?.() || new Date(),
-  updatedAt: docData.updatedAt?.toDate?.() || new Date(),
-});
-
-const fromFirestoreLog = (docData: any, id: string): AuditLog => ({
-  ...docData,
-  id,
-  timestamp: docData.timestamp?.toDate?.() || new Date(),
-});
-
-const computeStatus = (coupon: Omit<Coupon, 'id'>): CouponStatus => {
-  const now = new Date();
-  if (coupon.status === 'inactive') return 'inactive';
-  if (coupon.endDate < now) return 'expired';
-  if (coupon.startDate > now) return 'scheduled';
-  return 'active';
+// Safely convert Firestore Timestamp or string or Date → JS Date
+const toDate = (v: any): Date => {
+  if (!v) return new Date();
+  if (typeof v.toDate === 'function') return v.toDate();
+  if (v instanceof Date) return v;
+  return new Date(v);
 };
 
-// ==================== AUDIT LOGGING ====================
+const fromFirestore = (data: any, id: string): Coupon => ({
+  id,
+  couponCode: data.couponCode || '',
+  discountType: data.discountType || 'amount',
+  discountValue: data.discountValue || 0,
+  maxDiscount: data.maxDiscount ?? undefined,
+  minimumPurchase: data.minimumPurchase || 0,
+  courseFilter: data.courseFilter || { type: 'all' },
+  userFilter: data.userFilter || { type: 'all' },
+  categoryFilter: data.categoryFilter || { type: 'all' },
+  startDate: toDate(data.startDate),
+  endDate: toDate(data.endDate),
+  activationDate: data.activationDate ? toDate(data.activationDate) : undefined,
+  usageLimit: data.usageLimit ?? 'unlimited',
+  perUserLimit: data.perUserLimit || 1,
+  usageCount: data.usageCount || 0,
+  status: data.status || 'active',
+  adminComments: data.adminComments || '',
+  nextPurchaseEligibility: data.nextPurchaseEligibility || { enabled: false, requiredCourseIds: [] },
+  bulkGroupId: data.bulkGroupId ?? null,
+  bulkGroupName: data.bulkGroupName ?? null,
+  trackingId: data.trackingId ?? null,
+  createdBy: data.createdBy || '',
+  createdAt: toDate(data.createdAt),
+  updatedAt: toDate(data.updatedAt),
+});
 
-const writeAuditLog = async (log: Omit<AuditLog, 'id'>): Promise<void> => {
+const fromFirestoreGroup = (data: any, id: string): BulkGroup => ({
+  id,
+  groupName: data.groupName || '',
+  groupId: data.groupId || '',
+  couponCount: data.couponCount || 0,
+  createdBy: data.createdBy || '',
+  createdAt: toDate(data.createdAt),
+  updatedAt: toDate(data.updatedAt),
+});
+
+const fromFirestoreLog = (data: any, id: string): AuditLog => ({
+  id,
+  actionType: data.actionType,
+  actorUserId: data.actorUserId || '',
+  actorName: data.actorName,
+  couponId: data.couponId,
+  couponCode: data.couponCode,
+  groupId: data.groupId,
+  groupName: data.groupName,
+  adminComments: data.adminComments,
+  metadata: data.metadata,
+  timestamp: toDate(data.timestamp),
+});
+
+const auditLog = async (log: Omit<AuditLog, 'id'>): Promise<void> => {
   try {
     await addDoc(collection(db, 'couponAuditLogs'), {
       ...log,
-      timestamp: toTimestamp(log.timestamp),
+      timestamp: toTs(log.timestamp),
     });
   } catch {
-    // Silent fail for audit — don't break main operation
+    // silent — audit must not break main operation
   }
 };
 
-// ==================== COUPON SERVICE ====================
+// ==================== SERVICE ====================
 
 export const couponService = {
 
-  // ── SINGLE COUPON ──────────────────────────────────────────────────────
+  // ── CREATE SINGLE ────────────────────────────────────────────────────
 
   async createSingleCoupon(input: CreateSingleCouponInput): Promise<Coupon> {
-    // Validate unique code
-    const existing = await this.getCouponByCode(input.couponCode);
-    if (existing) throw new Error(`Coupon code "${input.couponCode}" already exists.`);
-
-    // Validate dates
+    if (!input.couponCode?.trim()) throw new Error('Coupon code is required.');
     if (input.startDate >= input.endDate) throw new Error('Start date must be before end date.');
     if (input.discountType === 'percentage' && !input.maxDiscount) {
       throw new Error('Percentage discounts require a maximum discount cap.');
@@ -215,45 +227,49 @@ export const couponService = {
     }
     if (input.minimumPurchase < 0) throw new Error('Minimum purchase must be >= 0.');
     if (input.nextPurchaseEligibility.enabled && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
-      throw new Error('Next-purchase eligibility requires at least one course selection.');
+      throw new Error('Next-purchase eligibility requires at least one course.');
     }
 
+    // Check code uniqueness
+    const existing = await this.getCouponByCode(input.couponCode);
+    if (existing) throw new Error(`Coupon code "${input.couponCode.toUpperCase()}" already exists.`);
+
     const now = new Date();
-    const data = {
+    const docData = {
       couponCode: input.couponCode.toUpperCase().trim(),
       discountType: input.discountType,
       discountValue: input.discountValue,
-      maxDiscount: input.maxDiscount,
+      maxDiscount: input.maxDiscount || null,
       minimumPurchase: input.minimumPurchase,
       courseFilter: input.courseFilter,
       userFilter: input.userFilter,
       categoryFilter: input.categoryFilter,
-      startDate: toTimestamp(input.startDate),
-      endDate: toTimestamp(input.endDate),
-      activationDate: input.activationDate ? toTimestamp(input.activationDate) : null,
+      startDate: toTs(input.startDate),
+      endDate: toTs(input.endDate),
+      activationDate: input.activationDate ? toTs(input.activationDate) : null,
       usageLimit: input.usageLimit,
       perUserLimit: input.perUserLimit,
       usageCount: 0,
-      status: 'active' as CouponStatus,
+      status: 'active',
       adminComments: input.adminComments || '',
       nextPurchaseEligibility: input.nextPurchaseEligibility,
       bulkGroupId: null,
       bulkGroupName: null,
       trackingId: null,
       createdBy: input.actorUserId,
-      createdAt: toTimestamp(now),
-      updatedAt: toTimestamp(now),
+      createdAt: toTs(now),
+      updatedAt: toTs(now),
     };
 
-    const ref = await addDoc(collection(db, 'coupons'), data);
-    const coupon = fromFirestore({ ...data, status: computeStatus(data as any) }, ref.id);
+    const ref = await addDoc(collection(db, 'coupons'), docData);
+    const coupon = fromFirestore(docData, ref.id);
 
-    await writeAuditLog({
+    await auditLog({
       actionType: 'create_single',
       actorUserId: input.actorUserId,
       actorName: input.actorName,
       couponId: ref.id,
-      couponCode: input.couponCode.toUpperCase(),
+      couponCode: docData.couponCode,
       adminComments: input.adminComments,
       timestamp: now,
     });
@@ -261,7 +277,7 @@ export const couponService = {
     return coupon;
   },
 
-  // ── BULK COUPONS ───────────────────────────────────────────────────────
+  // ── CREATE BULK ──────────────────────────────────────────────────────
 
   async createBulkCoupons(input: CreateBulkCouponInput): Promise<{ group: BulkGroup; coupons: Coupon[] }> {
     if (!input.groupName?.trim()) throw new Error('Group name is required.');
@@ -272,56 +288,37 @@ export const couponService = {
       throw new Error('Percentage discounts require a maximum discount cap.');
     }
     if (input.nextPurchaseEligibility.enabled && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
-      throw new Error('Next-purchase eligibility requires at least one course selection.');
+      throw new Error('Next-purchase eligibility requires at least one course.');
     }
 
     const now = new Date();
+    const gid = input.groupId.toUpperCase().trim();
+    const gname = input.groupName.trim();
 
-    // Create group document
-    const groupData = {
-      groupName: input.groupName.trim(),
-      groupId: input.groupId.toUpperCase().trim(),
+    // Create group doc
+    const groupDocData = {
+      groupName: gname,
+      groupId: gid,
       couponCount: input.quantity,
-      template: {
-        couponCode: '',
-        discountType: input.discountType,
-        discountValue: input.discountValue,
-        maxDiscount: input.maxDiscount,
-        minimumPurchase: input.minimumPurchase,
-        courseFilter: input.courseFilter,
-        userFilter: input.userFilter,
-        categoryFilter: input.categoryFilter,
-        startDate: input.startDate,
-        endDate: input.endDate,
-        activationDate: input.activationDate,
-        usageLimit: input.usageLimit,
-        perUserLimit: input.perUserLimit,
-        usageCount: 0,
-        status: 'active' as CouponStatus,
-        adminComments: input.adminComments || '',
-        nextPurchaseEligibility: input.nextPurchaseEligibility,
-        createdBy: input.actorUserId,
-      },
       createdBy: input.actorUserId,
-      createdAt: toTimestamp(now),
-      updatedAt: toTimestamp(now),
+      createdAt: toTs(now),
+      updatedAt: toTs(now),
     };
+    const groupRef = await addDoc(collection(db, 'bulkCouponGroups'), groupDocData);
+    const group = fromFirestoreGroup(groupDocData, groupRef.id);
 
-    const groupRef = await addDoc(collection(db, 'bulkCouponGroups'), groupData);
-    const group = fromFirestoreBulkGroup(groupData, groupRef.id) as BulkGroup;
-
-    // Generate coupons in batches of 500 (Firestore batch limit)
+    // Generate coupons in batches of 499 (Firestore max is 500 per batch)
     const coupons: Coupon[] = [];
-    const batchSize = 499;
+    const BATCH_SIZE = 499;
     let serial = 1;
 
     while (serial <= input.quantity) {
       const batch = writeBatch(db);
-      const end = Math.min(serial + batchSize - 1, input.quantity);
+      const batchEnd = Math.min(serial + BATCH_SIZE - 1, input.quantity);
 
-      for (let i = serial; i <= end; i++) {
-        const code = generateCouponCode(input.codePrefix || input.groupId);
-        const trackingId = `${input.groupId.toUpperCase()}_${String(i).padStart(5, '0')}`;
+      for (let i = serial; i <= batchEnd; i++) {
+        const code = generateCouponCode(input.codePrefix || gid);
+        const trackingId = `${gid}_${String(i).padStart(5, '0')}`;
         const couponRef = doc(collection(db, 'coupons'));
 
         const couponData = {
@@ -333,21 +330,21 @@ export const couponService = {
           courseFilter: input.courseFilter,
           userFilter: input.userFilter,
           categoryFilter: input.categoryFilter,
-          startDate: toTimestamp(input.startDate),
-          endDate: toTimestamp(input.endDate),
-          activationDate: input.activationDate ? toTimestamp(input.activationDate) : null,
+          startDate: toTs(input.startDate),
+          endDate: toTs(input.endDate),
+          activationDate: input.activationDate ? toTs(input.activationDate) : null,
           usageLimit: input.usageLimit,
           perUserLimit: input.perUserLimit,
           usageCount: 0,
-          status: 'active' as CouponStatus,
+          status: 'active',
           adminComments: input.adminComments || '',
           nextPurchaseEligibility: input.nextPurchaseEligibility,
           bulkGroupId: groupRef.id,
-          bulkGroupName: input.groupName.trim(),
+          bulkGroupName: gname,
           trackingId,
           createdBy: input.actorUserId,
-          createdAt: toTimestamp(now),
-          updatedAt: toTimestamp(now),
+          createdAt: toTs(now),
+          updatedAt: toTs(now),
         };
 
         batch.set(couponRef, couponData);
@@ -355,15 +352,15 @@ export const couponService = {
       }
 
       await batch.commit();
-      serial = end + 1;
+      serial = batchEnd + 1;
     }
 
-    await writeAuditLog({
+    await auditLog({
       actionType: 'create_bulk_group',
       actorUserId: input.actorUserId,
       actorName: input.actorName,
-      groupId: input.groupId,
-      groupName: input.groupName,
+      groupId: gid,
+      groupName: gname,
       adminComments: input.adminComments,
       metadata: { quantity: input.quantity },
       timestamp: now,
@@ -372,41 +369,41 @@ export const couponService = {
     return { group, coupons };
   },
 
-  // ── READ ───────────────────────────────────────────────────────────────
+  // ── READ ─────────────────────────────────────────────────────────────
 
   async getAllSingleCoupons(): Promise<Coupon[]> {
-    // NOTE: Firestore does not support where('field', '==', null) combined with orderBy
-    // without a composite index. Fetch all and filter client-side to avoid index errors.
-    const snap = await getDocs(query(collection(db, 'coupons'), orderBy('createdAt', 'desc')));
+    // Fetch entire collection then filter client-side.
+    // Avoids composite index requirement for (where bulkGroupId==null + orderBy).
+    const snap = await getDocs(collection(db, 'coupons'));
     return snap.docs
       .map(d => fromFirestore(d.data(), d.id))
-      .filter(c => !c.bulkGroupId);
+      .filter(c => !c.bulkGroupId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
 
   async getAllBulkGroups(): Promise<BulkGroup[]> {
     const snap = await getDocs(collection(db, 'bulkCouponGroups'));
     return snap.docs
-      .map(d => fromFirestoreBulkGroup(d.data(), d.id))
+      .map(d => fromFirestoreGroup(d.data(), d.id))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   },
 
-  async getCouponsByGroupId(groupId: string): Promise<Coupon[]> {
-    const q = query(
-      collection(db, 'coupons'),
-      where('bulkGroupId', '==', groupId)
-    );
+  async getCouponsByGroupId(groupDocId: string): Promise<Coupon[]> {
+    const q = query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId));
     const snap = await getDocs(q);
     return snap.docs
       .map(d => fromFirestore(d.data(), d.id))
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      .sort((a, b) => (a.trackingId || '').localeCompare(b.trackingId || ''));
   },
 
   async getCouponByCode(code: string): Promise<Coupon | null> {
-    const q = query(collection(db, 'coupons'), where('couponCode', '==', code.toUpperCase().trim()));
+    const q = query(
+      collection(db, 'coupons'),
+      where('couponCode', '==', code.toUpperCase().trim())
+    );
     const snap = await getDocs(q);
     if (snap.empty) return null;
-    const d = snap.docs[0];
-    return fromFirestore(d.data(), d.id);
+    return fromFirestore(snap.docs[0].data(), snap.docs[0].id);
   },
 
   async getCouponById(id: string): Promise<Coupon | null> {
@@ -415,61 +412,32 @@ export const couponService = {
     return fromFirestore(d.data(), d.id);
   },
 
-  async getAuditLogs(limit = 100): Promise<AuditLog[]> {
+  async getAuditLogs(limitCount = 100): Promise<AuditLog[]> {
     const snap = await getDocs(collection(db, 'couponAuditLogs'));
     return snap.docs
       .map(d => fromFirestoreLog(d.data(), d.id))
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-      .slice(0, limit);
+      .slice(0, limitCount);
   },
 
-  // ── UPDATE ─────────────────────────────────────────────────────────────
-
-  async updateCoupon(
-    couponId: string,
-    updates: Partial<Omit<Coupon, 'id' | 'createdAt' | 'createdBy'>>,
-    actorUserId: string,
-    actorName?: string
-  ): Promise<void> {
-    const now = new Date();
-    const updateData: any = { ...updates, updatedAt: toTimestamp(now) };
-
-    // Convert dates
-    if (updates.startDate) updateData.startDate = toTimestamp(updates.startDate);
-    if (updates.endDate) updateData.endDate = toTimestamp(updates.endDate);
-    if (updates.activationDate) updateData.activationDate = toTimestamp(updates.activationDate);
-
-    await updateDoc(doc(db, 'coupons', couponId), updateData);
-
-    await writeAuditLog({
-      actionType: 'update',
-      actorUserId,
-      actorName,
-      couponId,
-      adminComments: updates.adminComments,
-      timestamp: now,
-    });
-  },
+  // ── UPDATE / TOGGLE / DELETE ─────────────────────────────────────────
 
   async toggleCouponStatus(
     couponId: string,
     newStatus: 'active' | 'inactive',
     actorUserId: string,
-    actorName?: string,
-    adminComments?: string
+    actorName?: string
   ): Promise<void> {
     const now = new Date();
     await updateDoc(doc(db, 'coupons', couponId), {
       status: newStatus,
-      updatedAt: toTimestamp(now),
+      updatedAt: toTs(now),
     });
-
-    await writeAuditLog({
+    await auditLog({
       actionType: newStatus === 'active' ? 'activate' : 'deactivate',
       actorUserId,
       actorName,
       couponId,
-      adminComments,
       timestamp: now,
     });
   },
@@ -477,25 +445,22 @@ export const couponService = {
   async deleteCoupon(
     couponId: string,
     actorUserId: string,
-    actorName?: string,
-    adminComments?: string
+    actorName?: string
   ): Promise<void> {
     const coupon = await this.getCouponById(couponId);
     const now = new Date();
     await deleteDoc(doc(db, 'coupons', couponId));
-
-    await writeAuditLog({
+    await auditLog({
       actionType: 'delete',
       actorUserId,
       actorName,
       couponId,
       couponCode: coupon?.couponCode,
-      adminComments,
       timestamp: now,
     });
   },
 
-  // ── CHECKOUT VALIDATION ────────────────────────────────────────────────
+  // ── CHECKOUT VALIDATION ──────────────────────────────────────────────
 
   async validateCoupon(
     couponCode: string,
@@ -508,55 +473,37 @@ export const couponService = {
     if (!coupon) return { valid: false, reason: 'Coupon not found.' };
 
     const now = new Date();
-
     if (coupon.status !== 'active') return { valid: false, reason: 'Coupon is not active.' };
     if (now < coupon.startDate) return { valid: false, reason: 'Coupon has not started yet.' };
     if (now > coupon.endDate) return { valid: false, reason: 'Coupon has expired.' };
 
-    if (coupon.usageLimit !== 'unlimited' && coupon.usageCount >= coupon.usageLimit) {
+    if (coupon.usageLimit !== 'unlimited' && coupon.usageCount >= (coupon.usageLimit as number)) {
       return { valid: false, reason: 'Coupon usage limit reached.' };
     }
-
     if (purchaseAmount < coupon.minimumPurchase) {
       return { valid: false, reason: `Minimum purchase of ৳${coupon.minimumPurchase} required.` };
     }
-
-    // User filter check
-    if (coupon.userFilter.type === 'specific') {
-      if (!coupon.userFilter.userIds?.includes(userId)) {
-        return { valid: false, reason: 'This coupon is not applicable to your account.' };
-      }
+    if (coupon.userFilter.type === 'specific' && !coupon.userFilter.userIds?.includes(userId)) {
+      return { valid: false, reason: 'This coupon is not valid for your account.' };
     }
-
-    // Course filter check
-    if (coupon.courseFilter.type === 'specific') {
-      if (!coupon.courseFilter.courseIds?.includes(courseId)) {
-        return { valid: false, reason: 'This coupon is not valid for this course.' };
-      }
+    if (coupon.courseFilter.type === 'specific' && !coupon.courseFilter.courseIds?.includes(courseId)) {
+      return { valid: false, reason: 'This coupon is not valid for this course.' };
     }
-
-    // Enrollment eligibility check
-    if (coupon.nextPurchaseEligibility.enabled) {
-      const hasRequiredEnrollment = coupon.nextPurchaseEligibility.requiredCourseIds.some(
+    if (coupon.nextPurchaseEligibility?.enabled) {
+      const hasReq = (coupon.nextPurchaseEligibility.requiredCourseIds || []).some(
         id => userEnrolledCourseIds.includes(id)
       );
-      if (!hasRequiredEnrollment) {
-        return { valid: false, reason: 'You must be enrolled in a required course to use this coupon.' };
-      }
+      if (!hasReq) return { valid: false, reason: 'You must be enrolled in a required course to use this coupon.' };
     }
 
-    // Per-user limit check (requires couponUsage collection)
-    const usageQ = query(
-      collection(db, 'couponUsage'),
-      where('couponId', '==', coupon.id),
-      where('userId', '==', userId)
+    // Per-user usage check
+    const usageSnap = await getDocs(
+      query(collection(db, 'couponUsage'), where('couponId', '==', coupon.id), where('userId', '==', userId))
     );
-    const usageSnap = await getDocs(usageQ);
     if (usageSnap.size >= coupon.perUserLimit) {
-      return { valid: false, reason: `You have reached the per-user limit for this coupon.` };
+      return { valid: false, reason: 'You have reached the per-user limit for this coupon.' };
     }
 
-    // Calculate discount
     let discount = 0;
     if (coupon.discountType === 'amount') {
       discount = Math.min(coupon.discountValue, purchaseAmount);
@@ -565,21 +512,18 @@ export const couponService = {
       if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
     }
 
-    return {
-      valid: true,
-      discount,
-      finalPrice: Math.max(0, purchaseAmount - discount),
-    };
+    return { valid: true, discount, finalPrice: Math.max(0, purchaseAmount - discount) };
   },
 
   async recordCouponUsage(couponId: string, userId: string, courseId: string): Promise<void> {
     const batch = writeBatch(db);
-    const couponRef = doc(db, 'coupons', couponId);
-    const usageRef = doc(collection(db, 'couponUsage'));
-
-    batch.update(couponRef, { usageCount: increment(1), updatedAt: Timestamp.now() });
-    batch.set(usageRef, { couponId, userId, courseId, usedAt: Timestamp.now() });
-
+    batch.update(doc(db, 'coupons', couponId), {
+      usageCount: increment(1),
+      updatedAt: Timestamp.now(),
+    });
+    batch.set(doc(collection(db, 'couponUsage')), {
+      couponId, userId, courseId, usedAt: Timestamp.now(),
+    });
     await batch.commit();
   },
 };
