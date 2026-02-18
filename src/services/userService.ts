@@ -183,6 +183,51 @@ export const userService = {
     }
   },
 
+  /**
+   * Get only users that are fully registered in Firestore DB.
+   * Filters out ghost accounts that exist only in Firebase Auth
+   * (or were auto-created without completing registration).
+   *
+   * A valid Firestore user MUST have:
+   *   - a `userId` field  (e.g. ST-2601-00001)  — set during registration
+   *   - a `role`   field                          — set during registration
+   *   - status === 'active'
+   *
+   * Use this wherever you need a user-picker (e.g. coupon user filter).
+   */
+  async getRegisteredUsers(): Promise<User[]> {
+    try {
+      const usersCollection = collection(db, 'users');
+
+      // Filter by status=active AND userId field must exist (not null)
+      const activeQuery = query(
+        usersCollection,
+        where('status', '==', 'active'),
+        where('userId', '!=', null),
+        orderBy('userId', 'asc'),
+        orderBy('createdAt', 'desc')
+      );
+      const usersSnapshot = await getDocs(activeQuery);
+
+      return usersSnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          const fixedData = ensureUserFields(data);
+          return {
+            ...fixedData,
+            uid: doc.id,
+            createdAt: fixedData.createdAt?.toDate() || new Date(),
+            lastLogin:  fixedData.lastLogin?.toDate(),
+            approvedAt: fixedData.approvedAt?.toDate()
+          } as User;
+        })
+        // Secondary safety: also require a non-empty role
+        .filter(u => u.userId?.trim() && u.role?.trim());
+    } catch (error: any) {
+      throw new Error(error.message);
+    }
+  },
+
   // Get inactive users only
   async getInactiveUsers(): Promise<User[]> {
     try {
