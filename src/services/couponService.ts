@@ -28,8 +28,8 @@ export interface CategoryFilter {
 
 export interface NextPurchaseEligibility {
   enabled: boolean;
-  anyCourse: boolean;           // if true, any enrolled course qualifies
-  requiredCourseIds: string[];  // used when anyCourse is false
+  anyCourse: boolean;
+  requiredCourseIds: string[];
 }
 
 export interface Coupon {
@@ -47,11 +47,11 @@ export interface Coupon {
   activationDate?: Date;
   usageLimit: number | 'unlimited';
   perUserLimit: number;
-  cooldownHours: number;        // 0 = no cooldown; >0 = hours between reuses
+  cooldownHours: number;
   usageCount: number;
   status: CouponStatus;
   adminComments?: string;
-  successMessage?: string;      // custom message shown after coupon applied at checkout
+  successMessage?: string;
   nextPurchaseEligibility: NextPurchaseEligibility;
   bulkGroupId?: string | null;
   bulkGroupName?: string | null;
@@ -71,9 +71,15 @@ export interface BulkGroup {
   updatedAt: Date;
 }
 
+export interface EditChanges {
+  field: string;
+  previousValue: any;
+  newValue: any;
+}
+
 export interface AuditLog {
   id: string;
-  actionType: 'create_single' | 'create_bulk_group' | 'update' | 'update_group' | 'activate' | 'deactivate' | 'delete';
+  actionType: 'create_single' | 'create_bulk_group' | 'update' | 'update_group' | 'update_group_tokens' | 'activate' | 'deactivate' | 'delete';
   actorUserId: string;
   actorName?: string;
   couponId?: string;
@@ -81,6 +87,8 @@ export interface AuditLog {
   groupId?: string;
   groupName?: string;
   adminComments?: string;
+  changes?: EditChanges[];       // what fields were changed, prev vs new
+  affectedCount?: number;        // for group-level bulk edits
   metadata?: Record<string, any>;
   timestamp: Date;
 }
@@ -146,6 +154,24 @@ export interface UpdateCouponInput {
 
 export interface UpdateBulkGroupInput {
   groupName: string;
+  // Token-level fields (applied to all tokens in group when provided)
+  applyToTokens?: boolean;
+  discountType?: DiscountType;
+  discountValue?: number;
+  maxDiscount?: number;
+  minimumPurchase?: number;
+  courseFilter?: CourseFilter;
+  userFilter?: UserFilter;
+  categoryFilter?: CategoryFilter;
+  startDate?: Date;
+  endDate?: Date;
+  activationDate?: Date;
+  usageLimit?: number | 'unlimited';
+  perUserLimit?: number;
+  cooldownHours?: number;
+  adminComments?: string;
+  successMessage?: string;
+  nextPurchaseEligibility?: NextPurchaseEligibility;
   actorUserId: string;
   actorName?: string;
 }
@@ -216,6 +242,8 @@ const fromFirestoreLog = (data: any, id: string): AuditLog => ({
   groupId: data.groupId,
   groupName: data.groupName,
   adminComments: data.adminComments,
+  changes: data.changes,
+  affectedCount: data.affectedCount,
   metadata: data.metadata,
   timestamp: toDate(data.timestamp),
 });
@@ -224,6 +252,42 @@ const auditLog = async (log: Omit<AuditLog, 'id'>): Promise<void> => {
   try {
     await addDoc(collection(db, 'couponAuditLogs'), { ...log, timestamp: toTs(log.timestamp) });
   } catch { /* silent */ }
+};
+
+/** Compute a list of human-readable field changes between old and new coupon data */
+const computeChanges = (prev: Coupon, next: Record<string, any>): EditChanges[] => {
+  const changes: EditChanges[] = [];
+  const fields: Array<{ key: keyof Coupon; label: string; serialize?: (v: any) => string }> = [
+    { key: 'discountType', label: 'Discount Type' },
+    { key: 'discountValue', label: 'Discount Value' },
+    { key: 'maxDiscount', label: 'Max Discount Cap' },
+    { key: 'minimumPurchase', label: 'Minimum Purchase' },
+    { key: 'startDate', label: 'Start Date', serialize: (v) => v instanceof Date ? v.toISOString() : String(v) },
+    { key: 'endDate', label: 'End Date', serialize: (v) => v instanceof Date ? v.toISOString() : String(v) },
+    { key: 'activationDate', label: 'Activation Date', serialize: (v) => v instanceof Date ? v.toISOString() : String(v) },
+    { key: 'usageLimit', label: 'Usage Limit' },
+    { key: 'perUserLimit', label: 'Per-User Limit' },
+    { key: 'cooldownHours', label: 'Cooldown Hours' },
+    { key: 'adminComments', label: 'Admin Comments' },
+    { key: 'successMessage', label: 'Success Message' },
+    { key: 'courseFilter', label: 'Course Filter', serialize: (v) => JSON.stringify(v) },
+    { key: 'userFilter', label: 'User Filter', serialize: (v) => JSON.stringify(v) },
+    { key: 'categoryFilter', label: 'Category Filter', serialize: (v) => JSON.stringify(v) },
+    { key: 'nextPurchaseEligibility', label: 'Next Purchase Eligibility', serialize: (v) => JSON.stringify(v) },
+  ];
+
+  for (const { key, label, serialize } of fields) {
+    const prevVal = prev[key];
+    const newVal = next[key as string];
+    if (newVal === undefined) continue;
+    const prevStr = serialize ? serialize(prevVal) : String(prevVal ?? '');
+    const newStr = serialize ? serialize(newVal) : String(newVal ?? '');
+    if (prevStr !== newStr) {
+      changes.push({ field: label, previousValue: prevVal, newValue: newVal });
+    }
+  }
+
+  return changes;
 };
 
 // ==================== SERVICE ====================
@@ -392,6 +456,10 @@ export const couponService = {
       throw new Error('Next-purchase eligibility requires selecting at least one course (or "Any Course").');
     }
 
+    // Fetch previous state for change tracking
+    const prevCoupon = await this.getCouponById(couponId);
+    if (!prevCoupon) throw new Error('Coupon not found.');
+
     const now = new Date();
     const updateData: Record<string, any> = {
       discountType: input.discountType,
@@ -418,6 +486,27 @@ export const couponService = {
     const updated = await this.getCouponById(couponId);
     if (!updated) throw new Error('Failed to fetch updated coupon.');
 
+    // Compute changes for security log
+    const changesForLog: Record<string, any> = {
+      discountType: input.discountType,
+      discountValue: input.discountValue,
+      maxDiscount: input.maxDiscount,
+      minimumPurchase: input.minimumPurchase,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      activationDate: input.activationDate,
+      usageLimit: input.usageLimit,
+      perUserLimit: input.perUserLimit,
+      cooldownHours: input.cooldownHours || 0,
+      adminComments: input.adminComments || '',
+      successMessage: input.successMessage || '',
+      courseFilter: input.courseFilter,
+      userFilter: input.userFilter,
+      categoryFilter: input.categoryFilter,
+      nextPurchaseEligibility: input.nextPurchaseEligibility,
+    };
+    const changes = computeChanges(prevCoupon, changesForLog);
+
     await auditLog({
       actionType: 'update',
       actorUserId: input.actorUserId,
@@ -425,6 +514,7 @@ export const couponService = {
       couponId,
       couponCode: updated.couponCode,
       adminComments: input.adminComments,
+      changes,
       timestamp: now,
     });
 
@@ -433,6 +523,7 @@ export const couponService = {
 
   async updateBulkGroup(groupDocId: string, input: UpdateBulkGroupInput): Promise<BulkGroup> {
     const now = new Date();
+
     await updateDoc(doc(db, 'bulkCouponGroups', groupDocId), {
       groupName: input.groupName.trim(),
       updatedAt: toTs(now),
@@ -442,6 +533,7 @@ export const couponService = {
     if (!d.exists()) throw new Error('Group not found after update.');
     const updated = fromFirestoreGroup(d.data(), d.id);
 
+    // Audit: group name change
     await auditLog({
       actionType: 'update_group',
       actorUserId: input.actorUserId,
@@ -450,6 +542,74 @@ export const couponService = {
       groupName: updated.groupName,
       timestamp: now,
     });
+
+    // If token-level fields provided, update all tokens in the group
+    if (input.applyToTokens) {
+      const tokenSnap = await getDocs(query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId)));
+      if (!tokenSnap.empty) {
+        // Build token update data
+        const tokenUpdate: Record<string, any> = { updatedAt: toTs(now) };
+        if (input.discountType !== undefined) tokenUpdate.discountType = input.discountType;
+        if (input.discountValue !== undefined) tokenUpdate.discountValue = input.discountValue;
+        if (input.maxDiscount !== undefined) tokenUpdate.maxDiscount = input.maxDiscount || null;
+        if (input.minimumPurchase !== undefined) tokenUpdate.minimumPurchase = input.minimumPurchase;
+        if (input.courseFilter !== undefined) tokenUpdate.courseFilter = input.courseFilter;
+        if (input.userFilter !== undefined) tokenUpdate.userFilter = input.userFilter;
+        if (input.categoryFilter !== undefined) tokenUpdate.categoryFilter = input.categoryFilter;
+        if (input.startDate !== undefined) tokenUpdate.startDate = toTs(input.startDate);
+        if (input.endDate !== undefined) tokenUpdate.endDate = toTs(input.endDate);
+        if (input.activationDate !== undefined) tokenUpdate.activationDate = input.activationDate ? toTs(input.activationDate) : null;
+        if (input.usageLimit !== undefined) tokenUpdate.usageLimit = input.usageLimit;
+        if (input.perUserLimit !== undefined) tokenUpdate.perUserLimit = input.perUserLimit;
+        if (input.cooldownHours !== undefined) tokenUpdate.cooldownHours = input.cooldownHours || 0;
+        if (input.adminComments !== undefined) tokenUpdate.adminComments = input.adminComments || '';
+        if (input.successMessage !== undefined) tokenUpdate.successMessage = input.successMessage || '';
+        if (input.nextPurchaseEligibility !== undefined) tokenUpdate.nextPurchaseEligibility = input.nextPurchaseEligibility;
+        // Also sync group name
+        tokenUpdate.bulkGroupName = input.groupName.trim();
+
+        // Compute changes against the first token as representative sample
+        const firstToken = fromFirestore(tokenSnap.docs[0].data(), tokenSnap.docs[0].id);
+        const changesForLog: Record<string, any> = {};
+        if (input.discountType !== undefined) changesForLog.discountType = input.discountType;
+        if (input.discountValue !== undefined) changesForLog.discountValue = input.discountValue;
+        if (input.maxDiscount !== undefined) changesForLog.maxDiscount = input.maxDiscount;
+        if (input.minimumPurchase !== undefined) changesForLog.minimumPurchase = input.minimumPurchase;
+        if (input.startDate !== undefined) changesForLog.startDate = input.startDate;
+        if (input.endDate !== undefined) changesForLog.endDate = input.endDate;
+        if (input.activationDate !== undefined) changesForLog.activationDate = input.activationDate;
+        if (input.usageLimit !== undefined) changesForLog.usageLimit = input.usageLimit;
+        if (input.perUserLimit !== undefined) changesForLog.perUserLimit = input.perUserLimit;
+        if (input.cooldownHours !== undefined) changesForLog.cooldownHours = input.cooldownHours || 0;
+        if (input.adminComments !== undefined) changesForLog.adminComments = input.adminComments || '';
+        if (input.successMessage !== undefined) changesForLog.successMessage = input.successMessage || '';
+        if (input.courseFilter !== undefined) changesForLog.courseFilter = input.courseFilter;
+        if (input.userFilter !== undefined) changesForLog.userFilter = input.userFilter;
+        if (input.categoryFilter !== undefined) changesForLog.categoryFilter = input.categoryFilter;
+        if (input.nextPurchaseEligibility !== undefined) changesForLog.nextPurchaseEligibility = input.nextPurchaseEligibility;
+        const changes = computeChanges(firstToken, changesForLog);
+
+        // Batch-update all tokens
+        const BATCH_SIZE = 499;
+        const docs = tokenSnap.docs;
+        for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + BATCH_SIZE).forEach(d => batch.update(d.ref, tokenUpdate));
+          await batch.commit();
+        }
+
+        await auditLog({
+          actionType: 'update_group_tokens',
+          actorUserId: input.actorUserId,
+          actorName: input.actorName,
+          groupId: updated.groupId,
+          groupName: updated.groupName,
+          changes,
+          affectedCount: docs.length,
+          timestamp: now,
+        });
+      }
+    }
 
     return updated;
   },
@@ -499,7 +659,6 @@ export const couponService = {
       return { valid: false, reason: 'This coupon is not valid for this course.' };
     }
 
-    // Next-purchase eligibility check
     if (coupon.nextPurchaseEligibility?.enabled) {
       const enrolled = userEnrolledCourseIds.length > 0;
       if (coupon.nextPurchaseEligibility.anyCourse) {
@@ -510,7 +669,6 @@ export const couponService = {
       }
     }
 
-    // Per-user limit + cooldown check
     const usageSnap = await getDocs(
       query(collection(db, 'couponUsage'), where('couponId', '==', coupon.id), where('userId', '==', userId))
     );
@@ -538,7 +696,6 @@ export const couponService = {
       }
     }
 
-    // Calculate discount
     let discount = 0;
     if (coupon.discountType === 'amount') {
       discount = Math.min(coupon.discountValue, purchaseAmount);
