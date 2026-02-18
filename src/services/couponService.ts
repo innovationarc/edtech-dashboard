@@ -1,19 +1,7 @@
 // src/services/couponService.ts
-// Production-Grade Coupon Management Service
-
 import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  Timestamp,
-  writeBatch,
-  increment
+  collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
+  query, where, orderBy, Timestamp, writeBatch, increment
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -40,7 +28,8 @@ export interface CategoryFilter {
 
 export interface NextPurchaseEligibility {
   enabled: boolean;
-  requiredCourseIds: string[];
+  anyCourse: boolean;           // if true, any enrolled course qualifies
+  requiredCourseIds: string[];  // used when anyCourse is false
 }
 
 export interface Coupon {
@@ -58,9 +47,11 @@ export interface Coupon {
   activationDate?: Date;
   usageLimit: number | 'unlimited';
   perUserLimit: number;
+  cooldownHours: number;        // 0 = no cooldown; >0 = hours between reuses
   usageCount: number;
   status: CouponStatus;
   adminComments?: string;
+  successMessage?: string;      // custom message shown after coupon applied at checkout
   nextPurchaseEligibility: NextPurchaseEligibility;
   bulkGroupId?: string | null;
   bulkGroupName?: string | null;
@@ -99,6 +90,8 @@ export interface CouponValidationResult {
   reason?: string;
   discount?: number;
   finalPrice?: number;
+  successMessage?: string;
+  cooldownEndsAt?: Date;
 }
 
 export interface CreateSingleCouponInput {
@@ -115,7 +108,9 @@ export interface CreateSingleCouponInput {
   activationDate?: Date;
   usageLimit: number | 'unlimited';
   perUserLimit: number;
+  cooldownHours: number;
   adminComments?: string;
+  successMessage?: string;
   nextPurchaseEligibility: NextPurchaseEligibility;
   actorUserId: string;
   actorName?: string;
@@ -132,15 +127,12 @@ export interface CreateBulkCouponInput extends Omit<CreateSingleCouponInput, 'co
 
 const generateCouponCode = (prefix?: string): string => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const random = Array.from({ length: 8 }, () =>
-    chars[Math.floor(Math.random() * chars.length)]
-  ).join('');
+  const random = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   return prefix ? `${prefix.toUpperCase().slice(0, 6)}-${random}` : random;
 };
 
 const toTs = (d: Date) => Timestamp.fromDate(d);
 
-// Safely convert Firestore Timestamp or string or Date → JS Date
 const toDate = (v: any): Date => {
   if (!v) return new Date();
   if (typeof v.toDate === 'function') return v.toDate();
@@ -163,10 +155,12 @@ const fromFirestore = (data: any, id: string): Coupon => ({
   activationDate: data.activationDate ? toDate(data.activationDate) : undefined,
   usageLimit: data.usageLimit ?? 'unlimited',
   perUserLimit: data.perUserLimit || 1,
+  cooldownHours: data.cooldownHours || 0,
   usageCount: data.usageCount || 0,
   status: data.status || 'active',
   adminComments: data.adminComments || '',
-  nextPurchaseEligibility: data.nextPurchaseEligibility || { enabled: false, requiredCourseIds: [] },
+  successMessage: data.successMessage || '',
+  nextPurchaseEligibility: data.nextPurchaseEligibility || { enabled: false, anyCourse: false, requiredCourseIds: [] },
   bulkGroupId: data.bulkGroupId ?? null,
   bulkGroupName: data.bulkGroupName ?? null,
   trackingId: data.trackingId ?? null,
@@ -201,36 +195,24 @@ const fromFirestoreLog = (data: any, id: string): AuditLog => ({
 
 const auditLog = async (log: Omit<AuditLog, 'id'>): Promise<void> => {
   try {
-    await addDoc(collection(db, 'couponAuditLogs'), {
-      ...log,
-      timestamp: toTs(log.timestamp),
-    });
-  } catch {
-    // silent — audit must not break main operation
-  }
+    await addDoc(collection(db, 'couponAuditLogs'), { ...log, timestamp: toTs(log.timestamp) });
+  } catch { /* silent */ }
 };
 
 // ==================== SERVICE ====================
 
 export const couponService = {
 
-  // ── CREATE SINGLE ────────────────────────────────────────────────────
-
   async createSingleCoupon(input: CreateSingleCouponInput): Promise<Coupon> {
     if (!input.couponCode?.trim()) throw new Error('Coupon code is required.');
     if (input.startDate >= input.endDate) throw new Error('Start date must be before end date.');
-    if (input.discountType === 'percentage' && !input.maxDiscount) {
-      throw new Error('Percentage discounts require a maximum discount cap.');
-    }
-    if (input.discountType === 'percentage' && (input.discountValue <= 0 || input.discountValue > 100)) {
-      throw new Error('Percentage discount must be between 1 and 100.');
-    }
+    if (input.discountType === 'percentage' && !input.maxDiscount) throw new Error('Percentage discounts require a maximum discount cap.');
+    if (input.discountType === 'percentage' && (input.discountValue <= 0 || input.discountValue > 100)) throw new Error('Percentage discount must be between 1 and 100.');
     if (input.minimumPurchase < 0) throw new Error('Minimum purchase must be >= 0.');
-    if (input.nextPurchaseEligibility.enabled && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
-      throw new Error('Next-purchase eligibility requires at least one course.');
+    if (input.nextPurchaseEligibility.enabled && !input.nextPurchaseEligibility.anyCourse && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
+      throw new Error('Next-purchase eligibility requires selecting at least one course (or "Any Course").');
     }
 
-    // Check code uniqueness
     const existing = await this.getCouponByCode(input.couponCode);
     if (existing) throw new Error(`Coupon code "${input.couponCode.toUpperCase()}" already exists.`);
 
@@ -249,65 +231,43 @@ export const couponService = {
       activationDate: input.activationDate ? toTs(input.activationDate) : null,
       usageLimit: input.usageLimit,
       perUserLimit: input.perUserLimit,
+      cooldownHours: input.cooldownHours || 0,
       usageCount: 0,
       status: 'active',
       adminComments: input.adminComments || '',
+      successMessage: input.successMessage || '',
       nextPurchaseEligibility: input.nextPurchaseEligibility,
-      bulkGroupId: null,
-      bulkGroupName: null,
-      trackingId: null,
+      bulkGroupId: null, bulkGroupName: null, trackingId: null,
       createdBy: input.actorUserId,
-      createdAt: toTs(now),
-      updatedAt: toTs(now),
+      createdAt: toTs(now), updatedAt: toTs(now),
     };
 
     const ref = await addDoc(collection(db, 'coupons'), docData);
     const coupon = fromFirestore(docData, ref.id);
 
-    await auditLog({
-      actionType: 'create_single',
-      actorUserId: input.actorUserId,
-      actorName: input.actorName,
-      couponId: ref.id,
-      couponCode: docData.couponCode,
-      adminComments: input.adminComments,
-      timestamp: now,
-    });
+    await auditLog({ actionType: 'create_single', actorUserId: input.actorUserId, actorName: input.actorName, couponId: ref.id, couponCode: docData.couponCode, adminComments: input.adminComments, timestamp: now });
 
     return coupon;
   },
-
-  // ── CREATE BULK ──────────────────────────────────────────────────────
 
   async createBulkCoupons(input: CreateBulkCouponInput): Promise<{ group: BulkGroup; coupons: Coupon[] }> {
     if (!input.groupName?.trim()) throw new Error('Group name is required.');
     if (!input.groupId?.trim()) throw new Error('Group ID is required.');
     if (input.quantity < 1 || input.quantity > 1000) throw new Error('Quantity must be between 1 and 1000.');
     if (input.startDate >= input.endDate) throw new Error('Start date must be before end date.');
-    if (input.discountType === 'percentage' && !input.maxDiscount) {
-      throw new Error('Percentage discounts require a maximum discount cap.');
-    }
-    if (input.nextPurchaseEligibility.enabled && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
-      throw new Error('Next-purchase eligibility requires at least one course.');
+    if (input.discountType === 'percentage' && !input.maxDiscount) throw new Error('Percentage discounts require a maximum discount cap.');
+    if (input.nextPurchaseEligibility.enabled && !input.nextPurchaseEligibility.anyCourse && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
+      throw new Error('Next-purchase eligibility requires selecting at least one course (or "Any Course").');
     }
 
     const now = new Date();
     const gid = input.groupId.toUpperCase().trim();
     const gname = input.groupName.trim();
 
-    // Create group doc
-    const groupDocData = {
-      groupName: gname,
-      groupId: gid,
-      couponCount: input.quantity,
-      createdBy: input.actorUserId,
-      createdAt: toTs(now),
-      updatedAt: toTs(now),
-    };
+    const groupDocData = { groupName: gname, groupId: gid, couponCount: input.quantity, createdBy: input.actorUserId, createdAt: toTs(now), updatedAt: toTs(now) };
     const groupRef = await addDoc(collection(db, 'bulkCouponGroups'), groupDocData);
     const group = fromFirestoreGroup(groupDocData, groupRef.id);
 
-    // Generate coupons in batches of 499 (Firestore max is 500 per batch)
     const coupons: Coupon[] = [];
     const BATCH_SIZE = 499;
     let serial = 1;
@@ -322,29 +282,17 @@ export const couponService = {
         const couponRef = doc(collection(db, 'coupons'));
 
         const couponData = {
-          couponCode: code,
-          discountType: input.discountType,
-          discountValue: input.discountValue,
-          maxDiscount: input.maxDiscount || null,
-          minimumPurchase: input.minimumPurchase,
-          courseFilter: input.courseFilter,
-          userFilter: input.userFilter,
-          categoryFilter: input.categoryFilter,
-          startDate: toTs(input.startDate),
-          endDate: toTs(input.endDate),
+          couponCode: code, discountType: input.discountType, discountValue: input.discountValue,
+          maxDiscount: input.maxDiscount || null, minimumPurchase: input.minimumPurchase,
+          courseFilter: input.courseFilter, userFilter: input.userFilter, categoryFilter: input.categoryFilter,
+          startDate: toTs(input.startDate), endDate: toTs(input.endDate),
           activationDate: input.activationDate ? toTs(input.activationDate) : null,
-          usageLimit: input.usageLimit,
-          perUserLimit: input.perUserLimit,
-          usageCount: 0,
-          status: 'active',
-          adminComments: input.adminComments || '',
+          usageLimit: input.usageLimit, perUserLimit: input.perUserLimit,
+          cooldownHours: input.cooldownHours || 0, usageCount: 0, status: 'active',
+          adminComments: input.adminComments || '', successMessage: input.successMessage || '',
           nextPurchaseEligibility: input.nextPurchaseEligibility,
-          bulkGroupId: groupRef.id,
-          bulkGroupName: gname,
-          trackingId,
-          createdBy: input.actorUserId,
-          createdAt: toTs(now),
-          updatedAt: toTs(now),
+          bulkGroupId: groupRef.id, bulkGroupName: gname, trackingId,
+          createdBy: input.actorUserId, createdAt: toTs(now), updatedAt: toTs(now),
         };
 
         batch.set(couponRef, couponData);
@@ -355,16 +303,7 @@ export const couponService = {
       serial = batchEnd + 1;
     }
 
-    await auditLog({
-      actionType: 'create_bulk_group',
-      actorUserId: input.actorUserId,
-      actorName: input.actorName,
-      groupId: gid,
-      groupName: gname,
-      adminComments: input.adminComments,
-      metadata: { quantity: input.quantity },
-      timestamp: now,
-    });
+    await auditLog({ actionType: 'create_bulk_group', actorUserId: input.actorUserId, actorName: input.actorName, groupId: gid, groupName: gname, adminComments: input.adminComments, metadata: { quantity: input.quantity }, timestamp: now });
 
     return { group, coupons };
   },
@@ -372,8 +311,6 @@ export const couponService = {
   // ── READ ─────────────────────────────────────────────────────────────
 
   async getAllSingleCoupons(): Promise<Coupon[]> {
-    // Fetch entire collection then filter client-side.
-    // Avoids composite index requirement for (where bulkGroupId==null + orderBy).
     const snap = await getDocs(collection(db, 'coupons'));
     return snap.docs
       .map(d => fromFirestore(d.data(), d.id))
@@ -389,19 +326,14 @@ export const couponService = {
   },
 
   async getCouponsByGroupId(groupDocId: string): Promise<Coupon[]> {
-    const q = query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId));
-    const snap = await getDocs(q);
+    const snap = await getDocs(query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId)));
     return snap.docs
       .map(d => fromFirestore(d.data(), d.id))
       .sort((a, b) => (a.trackingId || '').localeCompare(b.trackingId || ''));
   },
 
   async getCouponByCode(code: string): Promise<Coupon | null> {
-    const q = query(
-      collection(db, 'coupons'),
-      where('couponCode', '==', code.toUpperCase().trim())
-    );
-    const snap = await getDocs(q);
+    const snap = await getDocs(query(collection(db, 'coupons'), where('couponCode', '==', code.toUpperCase().trim())));
     if (snap.empty) return null;
     return fromFirestore(snap.docs[0].data(), snap.docs[0].id);
   },
@@ -422,42 +354,17 @@ export const couponService = {
 
   // ── UPDATE / TOGGLE / DELETE ─────────────────────────────────────────
 
-  async toggleCouponStatus(
-    couponId: string,
-    newStatus: 'active' | 'inactive',
-    actorUserId: string,
-    actorName?: string
-  ): Promise<void> {
+  async toggleCouponStatus(couponId: string, newStatus: 'active' | 'inactive', actorUserId: string, actorName?: string): Promise<void> {
     const now = new Date();
-    await updateDoc(doc(db, 'coupons', couponId), {
-      status: newStatus,
-      updatedAt: toTs(now),
-    });
-    await auditLog({
-      actionType: newStatus === 'active' ? 'activate' : 'deactivate',
-      actorUserId,
-      actorName,
-      couponId,
-      timestamp: now,
-    });
+    await updateDoc(doc(db, 'coupons', couponId), { status: newStatus, updatedAt: toTs(now) });
+    await auditLog({ actionType: newStatus === 'active' ? 'activate' : 'deactivate', actorUserId, actorName, couponId, timestamp: now });
   },
 
-  async deleteCoupon(
-    couponId: string,
-    actorUserId: string,
-    actorName?: string
-  ): Promise<void> {
+  async deleteCoupon(couponId: string, actorUserId: string, actorName?: string): Promise<void> {
     const coupon = await this.getCouponById(couponId);
     const now = new Date();
     await deleteDoc(doc(db, 'coupons', couponId));
-    await auditLog({
-      actionType: 'delete',
-      actorUserId,
-      actorName,
-      couponId,
-      couponCode: coupon?.couponCode,
-      timestamp: now,
-    });
+    await auditLog({ actionType: 'delete', actorUserId, actorName, couponId, couponCode: coupon?.couponCode, timestamp: now });
   },
 
   // ── CHECKOUT VALIDATION ──────────────────────────────────────────────
@@ -489,21 +396,50 @@ export const couponService = {
     if (coupon.courseFilter.type === 'specific' && !coupon.courseFilter.courseIds?.includes(courseId)) {
       return { valid: false, reason: 'This coupon is not valid for this course.' };
     }
+
+    // Next-purchase eligibility check
     if (coupon.nextPurchaseEligibility?.enabled) {
-      const hasReq = (coupon.nextPurchaseEligibility.requiredCourseIds || []).some(
-        id => userEnrolledCourseIds.includes(id)
-      );
-      if (!hasReq) return { valid: false, reason: 'You must be enrolled in a required course to use this coupon.' };
+      const enrolled = userEnrolledCourseIds.length > 0;
+      if (coupon.nextPurchaseEligibility.anyCourse) {
+        if (!enrolled) return { valid: false, reason: 'You must be enrolled in at least one course to use this coupon.' };
+      } else {
+        const hasReq = (coupon.nextPurchaseEligibility.requiredCourseIds || []).some(id => userEnrolledCourseIds.includes(id));
+        if (!hasReq) return { valid: false, reason: 'You must be enrolled in a required course to use this coupon.' };
+      }
     }
 
-    // Per-user usage check
+    // Per-user limit + cooldown check
     const usageSnap = await getDocs(
       query(collection(db, 'couponUsage'), where('couponId', '==', coupon.id), where('userId', '==', userId))
     );
-    if (usageSnap.size >= coupon.perUserLimit) {
-      return { valid: false, reason: 'You have reached the per-user limit for this coupon.' };
+    const usageCount = usageSnap.size;
+
+    if (usageCount >= coupon.perUserLimit) {
+      // Check cooldown — if cooldown is set, the next use may be allowed after cooldown
+      if (coupon.cooldownHours > 0 && usageCount >= 1) {
+        // Find the most recent usage
+        const usages = usageSnap.docs
+          .map(d => ({ usedAt: toDate(d.data().usedAt) }))
+          .sort((a, b) => b.usedAt.getTime() - a.usedAt.getTime());
+
+        const lastUsed = usages[0]?.usedAt;
+        if (lastUsed) {
+          const cooldownEndsAt = new Date(lastUsed.getTime() + coupon.cooldownHours * 60 * 60 * 1000);
+          if (now < cooldownEndsAt) {
+            return {
+              valid: false,
+              reason: `Coupon is in cooldown. Available again after ${cooldownEndsAt.toLocaleString('en-BD')}.`,
+              cooldownEndsAt,
+            };
+          }
+          // Cooldown expired — allow reuse (don't count against per-user hard limit for cooldown coupons)
+        }
+      } else {
+        return { valid: false, reason: 'You have reached the per-user limit for this coupon.' };
+      }
     }
 
+    // Calculate discount
     let discount = 0;
     if (coupon.discountType === 'amount') {
       discount = Math.min(coupon.discountValue, purchaseAmount);
@@ -512,18 +448,18 @@ export const couponService = {
       if (coupon.maxDiscount) discount = Math.min(discount, coupon.maxDiscount);
     }
 
-    return { valid: true, discount, finalPrice: Math.max(0, purchaseAmount - discount) };
+    return {
+      valid: true,
+      discount,
+      finalPrice: Math.max(0, purchaseAmount - discount),
+      successMessage: coupon.successMessage || undefined,
+    };
   },
 
   async recordCouponUsage(couponId: string, userId: string, courseId: string): Promise<void> {
     const batch = writeBatch(db);
-    batch.update(doc(db, 'coupons', couponId), {
-      usageCount: increment(1),
-      updatedAt: Timestamp.now(),
-    });
-    batch.set(doc(collection(db, 'couponUsage')), {
-      couponId, userId, courseId, usedAt: Timestamp.now(),
-    });
+    batch.update(doc(db, 'coupons', couponId), { usageCount: increment(1), updatedAt: Timestamp.now() });
+    batch.set(doc(collection(db, 'couponUsage')), { couponId, userId, courseId, usedAt: Timestamp.now() });
     await batch.commit();
   },
 };
