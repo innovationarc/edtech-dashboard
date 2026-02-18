@@ -73,7 +73,7 @@ export interface BulkGroup {
 
 export interface AuditLog {
   id: string;
-  actionType: 'create_single' | 'create_bulk_group' | 'update' | 'activate' | 'deactivate' | 'delete';
+  actionType: 'create_single' | 'create_bulk_group' | 'update' | 'update_group' | 'activate' | 'deactivate' | 'delete';
   actorUserId: string;
   actorName?: string;
   couponId?: string;
@@ -121,6 +121,33 @@ export interface CreateBulkCouponInput extends Omit<CreateSingleCouponInput, 'co
   groupId: string;
   quantity: number;
   codePrefix?: string;
+}
+
+export interface UpdateCouponInput {
+  discountType: DiscountType;
+  discountValue: number;
+  maxDiscount?: number;
+  minimumPurchase: number;
+  courseFilter: CourseFilter;
+  userFilter: UserFilter;
+  categoryFilter: CategoryFilter;
+  startDate: Date;
+  endDate: Date;
+  activationDate?: Date;
+  usageLimit: number | 'unlimited';
+  perUserLimit: number;
+  cooldownHours: number;
+  adminComments?: string;
+  successMessage?: string;
+  nextPurchaseEligibility: NextPurchaseEligibility;
+  actorUserId: string;
+  actorName?: string;
+}
+
+export interface UpdateBulkGroupInput {
+  groupName: string;
+  actorUserId: string;
+  actorName?: string;
 }
 
 // ==================== HELPERS ====================
@@ -256,6 +283,8 @@ export const couponService = {
     if (input.quantity < 1 || input.quantity > 1000) throw new Error('Quantity must be between 1 and 1000.');
     if (input.startDate >= input.endDate) throw new Error('Start date must be before end date.');
     if (input.discountType === 'percentage' && !input.maxDiscount) throw new Error('Percentage discounts require a maximum discount cap.');
+    if (input.discountType === 'percentage' && (input.discountValue <= 0 || input.discountValue > 100)) throw new Error('Percentage discount must be between 1 and 100.');
+    if (input.minimumPurchase < 0) throw new Error('Minimum purchase must be >= 0.');
     if (input.nextPurchaseEligibility.enabled && !input.nextPurchaseEligibility.anyCourse && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
       throw new Error('Next-purchase eligibility requires selecting at least one course (or "Any Course").');
     }
@@ -352,7 +381,80 @@ export const couponService = {
       .slice(0, limitCount);
   },
 
-  // ── UPDATE / TOGGLE / DELETE ─────────────────────────────────────────
+  // ── UPDATE ───────────────────────────────────────────────────────────
+
+  async updateCoupon(couponId: string, input: UpdateCouponInput): Promise<Coupon> {
+    if (input.startDate >= input.endDate) throw new Error('Start date must be before end date.');
+    if (input.discountType === 'percentage' && !input.maxDiscount) throw new Error('Percentage discounts require a maximum discount cap.');
+    if (input.discountType === 'percentage' && (input.discountValue <= 0 || input.discountValue > 100)) throw new Error('Percentage discount must be between 1 and 100.');
+    if (input.minimumPurchase < 0) throw new Error('Minimum purchase must be >= 0.');
+    if (input.nextPurchaseEligibility.enabled && !input.nextPurchaseEligibility.anyCourse && input.nextPurchaseEligibility.requiredCourseIds.length === 0) {
+      throw new Error('Next-purchase eligibility requires selecting at least one course (or "Any Course").');
+    }
+
+    const now = new Date();
+    const updateData: Record<string, any> = {
+      discountType: input.discountType,
+      discountValue: input.discountValue,
+      maxDiscount: input.maxDiscount || null,
+      minimumPurchase: input.minimumPurchase,
+      courseFilter: input.courseFilter,
+      userFilter: input.userFilter,
+      categoryFilter: input.categoryFilter,
+      startDate: toTs(input.startDate),
+      endDate: toTs(input.endDate),
+      activationDate: input.activationDate ? toTs(input.activationDate) : null,
+      usageLimit: input.usageLimit,
+      perUserLimit: input.perUserLimit,
+      cooldownHours: input.cooldownHours || 0,
+      adminComments: input.adminComments || '',
+      successMessage: input.successMessage || '',
+      nextPurchaseEligibility: input.nextPurchaseEligibility,
+      updatedAt: toTs(now),
+    };
+
+    await updateDoc(doc(db, 'coupons', couponId), updateData);
+
+    const updated = await this.getCouponById(couponId);
+    if (!updated) throw new Error('Failed to fetch updated coupon.');
+
+    await auditLog({
+      actionType: 'update',
+      actorUserId: input.actorUserId,
+      actorName: input.actorName,
+      couponId,
+      couponCode: updated.couponCode,
+      adminComments: input.adminComments,
+      timestamp: now,
+    });
+
+    return updated;
+  },
+
+  async updateBulkGroup(groupDocId: string, input: UpdateBulkGroupInput): Promise<BulkGroup> {
+    const now = new Date();
+    await updateDoc(doc(db, 'bulkCouponGroups', groupDocId), {
+      groupName: input.groupName.trim(),
+      updatedAt: toTs(now),
+    });
+
+    const d = await getDoc(doc(db, 'bulkCouponGroups', groupDocId));
+    if (!d.exists()) throw new Error('Group not found after update.');
+    const updated = fromFirestoreGroup(d.data(), d.id);
+
+    await auditLog({
+      actionType: 'update_group',
+      actorUserId: input.actorUserId,
+      actorName: input.actorName,
+      groupId: updated.groupId,
+      groupName: updated.groupName,
+      timestamp: now,
+    });
+
+    return updated;
+  },
+
+  // ── TOGGLE / DELETE ──────────────────────────────────────────────────
 
   async toggleCouponStatus(couponId: string, newStatus: 'active' | 'inactive', actorUserId: string, actorName?: string): Promise<void> {
     const now = new Date();
@@ -415,9 +517,7 @@ export const couponService = {
     const usageCount = usageSnap.size;
 
     if (usageCount >= coupon.perUserLimit) {
-      // Check cooldown — if cooldown is set, the next use may be allowed after cooldown
       if (coupon.cooldownHours > 0 && usageCount >= 1) {
-        // Find the most recent usage
         const usages = usageSnap.docs
           .map(d => ({ usedAt: toDate(d.data().usedAt) }))
           .sort((a, b) => b.usedAt.getTime() - a.usedAt.getTime());
@@ -432,7 +532,6 @@ export const couponService = {
               cooldownEndsAt,
             };
           }
-          // Cooldown expired — allow reuse (don't count against per-user hard limit for cooldown coupons)
         }
       } else {
         return { valid: false, reason: 'You have reached the per-user limit for this coupon.' };
