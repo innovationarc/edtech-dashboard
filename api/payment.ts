@@ -1,57 +1,91 @@
 // api/payment.ts
-// Vercel Serverless Function
-// MERGED: Handles all payment operations including the callback (previously payment-callback.ts)
-// FIX: userEmail is optional — a placeholder is accepted when the user has no email
+// Vercel Serverless Function — single file handles all payment operations
+// MERGED: Callback logic (previously payment-callback.ts) lives here as action=callback
+// FIX 1: userEmail is optional — placeholder generated when absent
+// FIX 2: sanitizeForFirestore() strips undefined from every Firestore write
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 import admin from 'firebase-admin';
 
-// ==================== CORS CONFIGURATION ====================
+// ==================== CORS ====================
+
 function setCorsHeaders(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, OPTIONS'
+  );
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
 }
 
-// ==================== FIREBASE ADMIN INIT ====================
+// ==================== FIRESTORE SANITIZER ====================
+// Firestore rejects documents that contain `undefined` anywhere in the tree.
+// Recursively removes every undefined key so all writes are guaranteed safe.
+
+function sanitizeForFirestore(value: any): any {
+  if (value === undefined) return null;
+  if (value === null) return null;
+  if (value instanceof Date) return value;
+  // Firestore FieldValue sentinels and Timestamps — leave untouched
+  if (
+    value &&
+    typeof value === 'object' &&
+    (typeof value.toDate === 'function' ||
+      typeof value._methodName === 'string') // FieldValue sentinel
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item));
+  }
+  if (typeof value === 'object') {
+    const clean: Record<string, any> = {};
+    for (const key of Object.keys(value)) {
+      if (value[key] === undefined) continue;
+      clean[key] = sanitizeForFirestore(value[key]);
+    }
+    return clean;
+  }
+  return value; // primitive
+}
+
+// ==================== FIREBASE ADMIN ====================
 
 function initializeFirebase() {
   try {
     if (admin.apps && admin.apps.length > 0) {
       console.log('✅ Firebase Admin already initialized');
-      return admin.apps[0];
+      return admin.apps[0]!;
     }
 
-    const serviceAccount = {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    };
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
     console.log('🔧 Initializing Firebase Admin...');
-    console.log('Project ID:', serviceAccount.projectId);
-    console.log('Client Email:', serviceAccount.clientEmail);
-    console.log('Private Key exists:', !!serviceAccount.privateKey);
+    console.log('Project ID:', projectId);
+    console.log('Client Email:', clientEmail);
+    console.log('Private Key exists:', !!privateKey);
 
-    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
+    if (!projectId || !clientEmail || !privateKey) {
       throw new Error('Missing Firebase credentials in environment variables');
     }
 
     const app = admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: serviceAccount.projectId,
-        clientEmail: serviceAccount.clientEmail,
-        privateKey: serviceAccount.privateKey,
-      }),
+      credential: admin.credential.cert({ projectId, clientEmail, privateKey })
     });
-    
+
     console.log('✅ Firebase Admin initialized successfully');
     return app;
   } catch (error: any) {
     console.error('❌ Firebase Admin initialization error:', error.message);
-    console.error('Stack:', error.stack);
     throw error;
   }
 }
@@ -68,52 +102,64 @@ try {
 }
 
 function getFirestore(): admin.firestore.Firestore {
-  if (db) {
-    return db;
-  }
-  
-  if (!firebaseApp) {
-    firebaseApp = initializeFirebase();
-  }
-  
+  if (db) return db;
+  if (!firebaseApp) firebaseApp = initializeFirebase();
   db = firebaseApp.firestore();
   return db;
 }
 
-// ==================== CONFIGURATION ====================
+// ==================== SSLCOMMERZ CONFIG ====================
 
 const SSLCOMMERZ_CONFIG = {
   storeId: process.env.SSLCOMMERZ_STORE_ID || '',
   storePassword: process.env.SSLCOMMERZ_STORE_PASSWORD || '',
   isLive: process.env.SSLCOMMERZ_IS_LIVE === 'true',
-  sessionUrl: process.env.SSLCOMMERZ_IS_LIVE === 'true'
-    ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
-    : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php',
-  validationUrl: process.env.SSLCOMMERZ_IS_LIVE === 'true'
-    ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
-    : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php'
+  sessionUrl:
+    process.env.SSLCOMMERZ_IS_LIVE === 'true'
+      ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
+      : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php',
+  validationUrl:
+    process.env.SSLCOMMERZ_IS_LIVE === 'true'
+      ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
+      : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php'
 };
 
-const getBaseUrl = (req: VercelRequest): string => {
+function getBaseUrl(req: VercelRequest): string {
   const host = req.headers.host || 'localhost:3000';
   const protocol = host.includes('localhost') ? 'http' : 'https';
   const baseUrl = `${protocol}://${host}`;
-  
-  console.log('🌐 Base URL determined:', baseUrl);
-  console.log('  - Host:', host);
-  console.log('  - Protocol:', protocol);
-  
+  console.log('🌐 Base URL:', baseUrl, '(host:', host, ')');
   return baseUrl;
-};
+}
+
+// ==================== EMAIL HELPER ====================
+
+function resolveEmail(userId: string, userEmail?: string): string {
+  if (
+    userEmail &&
+    userEmail.trim() &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim())
+  ) {
+    return userEmail.trim();
+  }
+  const safeId =
+    String(userId)
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .substring(0, 20) || 'user';
+  return `${safeId}@noemail.local`;
+}
+
+// ==================== IPN DEDUP SET ====================
 
 const processedIPNs = new Set<string>();
 
-// ==================== HELPER FUNCTIONS ====================
+// ==================== DB HELPERS ====================
 
 async function getTransaction(transactionId: string) {
   try {
     const firestore = getFirestore();
-    const snapshot = await firestore.collection('transactions')
+    const snapshot = await firestore
+      .collection('transactions')
       .where('transactionId', '==', transactionId)
       .limit(1)
       .get();
@@ -128,7 +174,6 @@ async function getTransaction(transactionId: string) {
     return { id: docSnap.id, ref: docSnap.ref, ...docSnap.data() };
   } catch (error: any) {
     console.error('❌ Error getting transaction:', error.message);
-    console.error('Stack:', error.stack);
     return null;
   }
 }
@@ -141,16 +186,17 @@ async function updateTransaction(transactionId: string, updates: any) {
       return false;
     }
 
-    await transaction.ref.update({
+    // Sanitize before every write
+    const cleanUpdates = sanitizeForFirestore({
       ...updates,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    console.log('✅ Transaction updated:', transactionId, updates.status || 'updated');
+    await transaction.ref.update(cleanUpdates);
+    console.log('✅ Transaction updated:', transactionId, updates.status || '');
     return true;
   } catch (error: any) {
     console.error('❌ Error updating transaction:', error.message);
-    console.error('Stack:', error.stack);
     return false;
   }
 }
@@ -165,7 +211,9 @@ async function createEnrollment(transaction: any) {
     console.log('📝 Creating enrollment for:', transaction.transactionId);
 
     const firestore = getFirestore();
-    const existingEnrollment = await firestore.collection('enrollments')
+
+    const existingEnrollment = await firestore
+      .collection('enrollments')
       .where('courseId', '==', transaction.productId)
       .where('studentId', '==', transaction.userId)
       .limit(1)
@@ -176,7 +224,7 @@ async function createEnrollment(transaction: any) {
       return existingEnrollment.docs[0].id;
     }
 
-    const enrollmentData = {
+    const enrollmentData = sanitizeForFirestore({
       courseId: transaction.productId,
       studentId: transaction.userId,
       studentName: transaction.userName,
@@ -191,31 +239,32 @@ async function createEnrollment(transaction: any) {
       paymentMethod: transaction.paymentMethod || 'SSLCOMMERZ',
       paymentDate: admin.firestore.FieldValue.serverTimestamp(),
       appliedDiscounts: transaction.appliedDiscounts || {}
-    };
+    });
 
     const enrollmentRef = await firestore.collection('enrollments').add(enrollmentData);
     console.log('✅ Enrollment created:', enrollmentRef.id);
 
+    // Increment course student count
     try {
-      const courseRef = firestore.collection('courses').doc(transaction.productId);
-      await courseRef.update({
-        studentCount: admin.firestore.FieldValue.increment(1)
-      });
+      await firestore
+        .collection('courses')
+        .doc(transaction.productId)
+        .update({ studentCount: admin.firestore.FieldValue.increment(1) });
       console.log('✅ Course student count updated');
-    } catch (error: any) {
-      console.warn('⚠️ Course count update failed:', error.message);
+    } catch (err: any) {
+      console.warn('⚠️ Course count update failed:', err.message);
     }
 
+    // Add to student library
     try {
       await addCourseToLibrary(transaction.productId, transaction.userId);
-    } catch (error: any) {
-      console.warn('⚠️ Library addition failed:', error.message);
+    } catch (err: any) {
+      console.warn('⚠️ Library addition failed:', err.message);
     }
 
     return enrollmentRef.id;
   } catch (error: any) {
     console.error('❌ Enrollment creation error:', error.message);
-    console.error('Stack:', error.stack);
     throw error;
   }
 }
@@ -224,6 +273,7 @@ async function addCourseToLibrary(courseId: string, studentId: string) {
   try {
     const firestore = getFirestore();
     const courseDoc = await firestore.collection('courses').doc(courseId).get();
+
     if (!courseDoc.exists) {
       console.error('❌ Course not found:', courseId);
       return;
@@ -231,7 +281,8 @@ async function addCourseToLibrary(courseId: string, studentId: string) {
 
     const course = courseDoc.data();
 
-    const existingContent = await firestore.collection('studentContent')
+    const existingContent = await firestore
+      .collection('studentContent')
       .where('courseId', '==', courseId)
       .where('enrolledStudentId', '==', studentId)
       .where('type', '==', 'course')
@@ -243,7 +294,7 @@ async function addCourseToLibrary(courseId: string, studentId: string) {
       return;
     }
 
-    const mainCourseEntry = {
+    const mainCourseEntry = sanitizeForFirestore({
       title: course?.title,
       description: course?.description,
       type: 'course',
@@ -253,7 +304,7 @@ async function addCourseToLibrary(courseId: string, studentId: string) {
       subjects: course?.subjects || [],
       difficulty: course?.level || 'beginner',
       tags: [...(course?.tags || []), 'purchased-course', 'enrolled', 'full-course'],
-      courseId: courseId,
+      courseId,
       isFromCourse: true,
       accessLevel: 'full',
       duration: course?.duration,
@@ -267,20 +318,19 @@ async function addCourseToLibrary(courseId: string, studentId: string) {
       createdBy: course?.instructorId,
       enrolledStudentId: studentId,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
-    };
+    });
 
     await firestore.collection('studentContent').add(mainCourseEntry);
     console.log('✅ Course added to library');
   } catch (error: any) {
     console.error('❌ Library addition error:', error.message);
-    console.error('Stack:', error.stack);
   }
 }
 
-// ==================== CALLBACK HANDLER (merged from payment-callback.ts) ====================
-// Handles SSLCOMMERZ success/fail/cancel redirects as action=callback
-// SSLCOMMERZ sends as a POST (form data) which Vercel parses into req.body
-// The function then redirects the browser to the /payment-success page
+// ==================== CALLBACK HANDLER ====================
+// Merged from the old payment-callback.ts.
+// SSLCOMMERZ POSTs form data here after success/fail/cancel.
+// We validate with SSLCOMMERZ then redirect the browser to /payment-success.
 
 async function handleCallback(req: VercelRequest, res: VercelResponse) {
   console.log('');
@@ -293,12 +343,12 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
   console.log('='.repeat(80));
 
   try {
-    const status      = req.body?.status      || req.query.status;
-    const tran_id     = req.body?.tran_id     || req.query.tran_id;
-    const val_id      = req.body?.val_id      || req.query.val_id;
-    const card_type   = req.body?.card_type;
+    const status = req.body?.status || req.query.status;
+    const tran_id = req.body?.tran_id || req.query.tran_id;
+    const val_id = req.body?.val_id || req.query.val_id;
+    const card_type = req.body?.card_type;
     const bank_tran_id = req.body?.bank_tran_id;
-    const risk_level  = req.body?.risk_level  || '0';
+    const risk_level = req.body?.risk_level || '0';
 
     console.log('Extracted:', { status, tran_id, val_id, card_type, risk_level });
 
@@ -307,10 +357,9 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
       return res.redirect(302, '/payment-success?error=invalid_transaction');
     }
 
-    // Handle cancelled / failed
+    // Cancelled / Failed — update and redirect
     if (status === 'CANCELLED' || status === 'FAILED') {
       console.log('⚠️ Payment', status);
-
       try {
         await updateTransaction(tran_id, {
           status: status === 'CANCELLED' ? 'cancelled' : 'failed'
@@ -318,11 +367,13 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
       } catch (err) {
         console.warn('Failed to update status:', err);
       }
-
-      return res.redirect(302, `/payment-success?status=${status.toLowerCase()}&tran_id=${tran_id}`);
+      return res.redirect(
+        302,
+        `/payment-success?status=${status.toLowerCase()}&tran_id=${tran_id}`
+      );
     }
 
-    // Handle success — validate with SSLCOMMERZ
+    // Successful — validate with SSLCOMMERZ
     if (status === 'VALID' || status === 'VALIDATED') {
       console.log('🔍 Validating payment...');
 
@@ -345,11 +396,12 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
         const validationData = validationResponse.data;
         console.log('✅ Validation response:', validationData.status);
 
-        if (validationData.status === 'VALID' || validationData.status === 'VALIDATED') {
-
+        if (
+          validationData.status === 'VALID' ||
+          validationData.status === 'VALIDATED'
+        ) {
           if (risk_level === '1') {
             console.warn('⚠️ High risk transaction');
-
             await updateTransaction(tran_id, {
               status: 'validating',
               validationId: val_id,
@@ -358,11 +410,13 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
               riskLevel: risk_level,
               needsManualReview: true
             });
-
-            return res.redirect(302, `/payment-success?status=validating&tran_id=${tran_id}`);
+            return res.redirect(
+              302,
+              `/payment-success?status=validating&tran_id=${tran_id}`
+            );
           }
 
-          // Normal success
+          // Normal success path
           await updateTransaction(tran_id, {
             status: 'success',
             validationId: val_id,
@@ -372,7 +426,6 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
             completedAt: admin.firestore.FieldValue.serverTimestamp()
           });
 
-          // Get transaction for enrollment
           const transaction = await getTransaction(tran_id);
           if (transaction) {
             await createEnrollment({
@@ -383,37 +436,30 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
             });
           }
 
-          console.log('✅ Payment successful, redirecting to payment-success page...');
+          console.log('✅ Payment successful — redirecting...');
           return res.redirect(302, `/payment-success?enrolled=true&tran_id=${tran_id}`);
-
         } else {
           console.error('❌ Validation failed:', validationData.status);
-
           await updateTransaction(tran_id, {
             status: 'failed',
             metadata: { validationData }
           });
-
           return res.redirect(302, `/payment-success?status=failed&tran_id=${tran_id}`);
         }
       } catch (validationError: any) {
         console.error('❌ Validation error:', validationError.message);
-        return res.redirect(302, `/payment-success?status=validation_error&tran_id=${tran_id}`);
+        return res.redirect(
+          302,
+          `/payment-success?status=validation_error&tran_id=${tran_id}`
+        );
       }
     }
 
     // Unknown status
     console.error('❌ Unknown status:', status);
     return res.redirect(302, `/payment-success?status=unknown&tran_id=${tran_id}`);
-
   } catch (error: any) {
-    console.error('');
-    console.error('💥 CALLBACK ERROR');
-    console.error('='.repeat(80));
-    console.error('Message:', error.message);
-    console.error('Stack:', error.stack);
-    console.error('='.repeat(80));
-
+    console.error('💥 CALLBACK ERROR:', error.message);
     return res.redirect(302, '/payment-success?error=callback_failed');
   }
 }
@@ -442,6 +488,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('='.repeat(80));
 
   try {
+    // Ensure Firestore is ready
     try {
       getFirestore();
     } catch (initError: any) {
@@ -455,20 +502,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // ==================== CALLBACK (merged from payment-callback.ts) ====================
-    // Accepts both GET and POST since SSLCOMMERZ may use either depending on gateway mode.
+    // ========== CALLBACK (merged from payment-callback.ts) ==========
+    // Accepts GET and POST (SSLCOMMERZ may use either depending on gateway mode)
     if (action === 'callback') {
       return await handleCallback(req, res);
     }
 
-    // ==================== INITIATE PAYMENT ====================
+    // ========== INITIATE PAYMENT ==========
     if (action === 'initiate' && req.method === 'POST') {
       console.log('🚀 Starting payment initiation...');
 
       if (!SSLCOMMERZ_CONFIG.storeId || !SSLCOMMERZ_CONFIG.storePassword) {
-        const errorMsg = 'SSLCOMMERZ credentials missing';
-        console.error('❌', errorMsg);
-        
+        console.error('❌ SSLCOMMERZ credentials missing');
         return res.status(500).json({
           success: false,
           error: 'Payment gateway not configured',
@@ -482,19 +527,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         transactionId,
         userId,
         userName,
-        userEmail,    // optional — may be empty or absent
+        userEmail, // optional
         amount,
         productId,
         productName,
         productType
       } = req.body;
 
-      // Required fields — userEmail is NOT required
-      const missingFields = [];
+      // Validate required fields — userEmail intentionally excluded
+      const missingFields: string[] = [];
       if (!transactionId) missingFields.push('transactionId');
       if (!userId) missingFields.push('userId');
       if (!userName) missingFields.push('userName');
-      if (amount === undefined) missingFields.push('amount');
+      if (amount === undefined || amount === null) missingFields.push('amount');
       if (!productId) missingFields.push('productId');
       if (!productName) missingFields.push('productName');
       if (!productType) missingFields.push('productType');
@@ -513,29 +558,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log('✅ All required fields present');
 
-      // Resolve email — SSLCOMMERZ requires a value; generate a placeholder when absent
-      const resolvedEmail: string = (userEmail && userEmail.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim()))
-        ? userEmail.trim()
-        : `${String(userId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'user'}@noemail.local`;
-
+      // Resolve email — SSLCOMMERZ needs a value
+      const resolvedEmail = resolveEmail(userId, userEmail);
       console.log('📧 Using email for gateway:', resolvedEmail);
 
-      // Callback URL now points to this single file with action=callback
+      // Callback and IPN URLs — both point to this single file
       const callbackUrl = `${baseUrl}/api/payment?action=callback`;
       const ipnUrl = `${baseUrl}/api/payment?action=ipn`;
 
-      console.log('');
-      console.log('🔗 PAYMENT URLs CONFIGURED:');
-      console.log('  Success URL:', callbackUrl);
-      console.log('  Fail URL:', callbackUrl);
-      console.log('  Cancel URL:', callbackUrl);
-      console.log('  IPN URL:', ipnUrl);
-      console.log('');
+      console.log('🔗 Payment URLs:');
+      console.log('  Callback (success/fail/cancel):', callbackUrl);
+      console.log('  IPN:', ipnUrl);
 
       const paymentData = {
         store_id: SSLCOMMERZ_CONFIG.storeId,
         store_passwd: SSLCOMMERZ_CONFIG.storePassword,
-        total_amount: parseFloat(parseFloat(amount).toFixed(2)),
+        total_amount: parseFloat(parseFloat(String(amount)).toFixed(2)),
         currency: 'BDT',
         tran_id: transactionId,
         success_url: callbackUrl,
@@ -575,7 +613,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (response.data.status === 'SUCCESS') {
           console.log('✅ Payment initiation successful');
           console.log('Gateway URL:', response.data.GatewayPageURL);
-          
+
           return res.status(200).json({
             success: true,
             gatewayUrl: response.data.GatewayPageURL,
@@ -586,29 +624,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else {
           const errorReason = response.data.failedreason || 'Unknown error';
           console.error('❌ SSLCOMMERZ returned error:', errorReason);
-          
+
           await updateTransaction(transactionId, {
             status: 'failed',
-            metadata: { 
+            metadata: {
               error: errorReason,
-              sslcommerzResponse: response.data,
+              sslcommerzResponse: sanitizeForFirestore(response.data),
               timestamp: new Date().toISOString()
             }
           });
-          
+
           return res.status(400).json({
             success: false,
             error: 'Payment gateway error',
             details: errorReason,
             userMessage: `Payment could not be initiated: ${errorReason}`,
-            sslcommerzResponse: response.data,
             timestamp: new Date().toISOString()
           });
         }
       } catch (axiosError: any) {
-        console.error('❌ SSLCOMMERZ API call failed');
-        console.error('Error Message:', axiosError.message);
-        
+        console.error('❌ SSLCOMMERZ API call failed:', axiosError.message);
         return res.status(500).json({
           success: false,
           error: 'Failed to connect to payment gateway',
@@ -619,11 +654,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // ==================== IPN HANDLER ====================
+    // ========== IPN HANDLER ==========
     if (action === 'ipn' && req.method === 'POST') {
       console.log('📬 Processing IPN...');
 
-      const { tran_id, val_id, card_type, bank_tran_id, status, risk_level, risk_title } = req.body;
+      const {
+        tran_id,
+        val_id,
+        card_type,
+        bank_tran_id,
+        status,
+        risk_level,
+        risk_title
+      } = req.body;
 
       if (!tran_id || !val_id) {
         console.error('❌ Missing IPN fields');
@@ -663,7 +706,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const validationData = validationResponse.data;
         console.log('✅ Validation response:', validationData.status);
 
-        if (validationData.status === 'VALID' || validationData.status === 'VALIDATED') {
+        if (
+          validationData.status === 'VALID' ||
+          validationData.status === 'VALIDATED'
+        ) {
           if (risk_level === '1') {
             console.warn('⚠️ High risk transaction:', tran_id);
             await updateTransaction(tran_id, {
@@ -695,21 +741,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(200).send('OK');
         } else {
           await updateTransaction(tran_id, {
-            status: validationData.status === 'CANCELLED' ? 'cancelled' : 'failed',
+            status:
+              validationData.status === 'CANCELLED' ? 'cancelled' : 'failed',
             metadata: { validationData, timestamp: new Date().toISOString() }
           });
           processedIPNs.add(tran_id);
           return res.status(200).send('OK');
         }
       } catch (axiosError: any) {
-        console.error('❌ Validation error:', axiosError.message);
+        console.error('❌ IPN validation error:', axiosError.message);
         return res.status(500).send('Validation error');
       }
     }
 
-    // ==================== VALIDATE PAYMENT ====================
+    // ========== VALIDATE PAYMENT ==========
     if (action === 'validate' && req.method === 'POST') {
-      console.log('🔍 Validating payment...');
+      console.log('🔍 Validating payment status...');
 
       const { transactionId } = req.body;
 
@@ -744,8 +791,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // ========== UNKNOWN ACTION ==========
     console.error('❌ Unknown action:', action);
-    return res.status(404).json({ 
+    return res.status(404).json({
       success: false,
       error: 'Route not found',
       details: `Unknown action: ${action}`,
@@ -753,7 +801,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       availableActions: ['initiate', 'callback', 'ipn', 'validate'],
       timestamp: new Date().toISOString()
     });
-
   } catch (error: any) {
     console.error('');
     console.error('💥 FATAL ERROR');
@@ -762,9 +809,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('Message:', error.message);
     console.error('Stack:', error.stack);
     console.error('='.repeat(80));
-    
-    return res.status(500).json({ 
-      success: false, 
+
+    return res.status(500).json({
+      success: false,
       error: 'Internal server error',
       details: error.message,
       userMessage: 'An unexpected error occurred. Please contact support.',
