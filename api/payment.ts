@@ -3,6 +3,8 @@
 // MERGED: Callback logic (previously payment-callback.ts) lives here as action=callback
 // FIX 1: userEmail is optional — placeholder generated when absent
 // FIX 2: sanitizeForFirestore() strips undefined from every Firestore write
+// FIX 3: Redirect to /course-enrollment (not /payment-success which does not exist)
+// FIX 4: createEnrollment() now records coupon usage from transaction.metadata.appliedCoupons
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
@@ -201,6 +203,88 @@ async function updateTransaction(transactionId: string, updates: any) {
   }
 }
 
+// ==================== COUPON USAGE RECORDING ====================
+// Records each coupon's usage into the couponUsage collection so that
+// CouponStatisticsModal can display accurate per-coupon data.
+// This reads the appliedCoupons JSON from transaction.metadata (stored
+// by courseService.initiatePaidEnrollment before the gateway redirect).
+
+interface AppliedCoupon {
+  couponId: string;
+  couponCode: string;
+  discount: number;
+  successMessage?: string;
+}
+
+async function recordCouponUsages(transaction: any, amountPaid: number) {
+  const firestore = getFirestore();
+  const meta = transaction.metadata || {};
+
+  // Parse the appliedCoupons JSON that courseService stored in metadata
+  let appliedCoupons: AppliedCoupon[] = [];
+  if (meta.appliedCoupons) {
+    try {
+      const parsed = JSON.parse(meta.appliedCoupons);
+      if (Array.isArray(parsed)) appliedCoupons = parsed;
+    } catch (_) {
+      console.warn('⚠️ Could not parse metadata.appliedCoupons JSON');
+    }
+  }
+
+  if (appliedCoupons.length === 0) {
+    console.log('ℹ️ No coupons to record for this transaction');
+    return;
+  }
+
+  console.log(`📋 Recording ${appliedCoupons.length} coupon usage(s)...`);
+
+  for (const ac of appliedCoupons) {
+    try {
+      if (!ac.couponId || !ac.couponCode) {
+        console.warn('⚠️ Skipping coupon with missing id/code:', ac);
+        continue;
+      }
+
+      const usageData = sanitizeForFirestore({
+        couponId: ac.couponId,
+        couponCode: ac.couponCode,
+        userId: transaction.userId,
+        userName: meta.studentName || transaction.userName || '',
+        courseId: transaction.productId,
+        courseName: transaction.productName || meta.courseTitle || '',
+        discountApplied: ac.discount,
+        amountPaid,
+        usedAt: admin.firestore.FieldValue.serverTimestamp(),
+        transactionId: transaction.transactionId,
+      });
+
+      await firestore.collection('couponUsage').add(usageData);
+
+      // Also increment the coupon's usageCount in the coupons collection
+      try {
+        const couponSnap = await firestore
+          .collection('coupons')
+          .doc(ac.couponId)
+          .get();
+        if (couponSnap.exists) {
+          await couponSnap.ref.update({
+            usageCount: admin.firestore.FieldValue.increment(1),
+            lastUsedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (updateErr: any) {
+        console.warn(`⚠️ Failed to increment usageCount for coupon ${ac.couponCode}:`, updateErr.message);
+      }
+
+      console.log(`✅ Coupon usage recorded: ${ac.couponCode} (discount: ${ac.discount})`);
+    } catch (couponErr: any) {
+      console.warn(`⚠️ Failed to record usage for coupon ${ac.couponCode}:`, couponErr.message);
+    }
+  }
+}
+
+// ==================== ENROLLMENT CREATION ====================
+
 async function createEnrollment(transaction: any) {
   try {
     if (transaction.productType !== 'course') {
@@ -211,7 +295,21 @@ async function createEnrollment(transaction: any) {
     console.log('📝 Creating enrollment for:', transaction.transactionId);
 
     const firestore = getFirestore();
+    const meta = transaction.metadata || {};
 
+    // ── Idempotency check by transactionId ──────────────────────────────────
+    const byTxn = await firestore
+      .collection('enrollments')
+      .where('transactionId', '==', transaction.transactionId)
+      .limit(1)
+      .get();
+
+    if (!byTxn.empty) {
+      console.log('ℹ️ Enrollment already exists for transactionId:', transaction.transactionId);
+      return byTxn.docs[0].id;
+    }
+
+    // ── Also check by studentId + courseId ──────────────────────────────────
     const existingEnrollment = await firestore
       .collection('enrollments')
       .where('courseId', '==', transaction.productId)
@@ -220,31 +318,55 @@ async function createEnrollment(transaction: any) {
       .get();
 
     if (!existingEnrollment.empty) {
-      console.log('ℹ️ Enrollment already exists');
+      console.log('ℹ️ Enrollment already exists for student+course');
       return existingEnrollment.docs[0].id;
     }
 
+    // ── Parse applied coupons from metadata ─────────────────────────────────
+    let appliedCoupons: AppliedCoupon[] = [];
+    if (meta.appliedCoupons) {
+      try {
+        const parsed = JSON.parse(meta.appliedCoupons);
+        if (Array.isArray(parsed)) appliedCoupons = parsed;
+      } catch (_) {
+        console.warn('⚠️ Could not parse metadata.appliedCoupons');
+      }
+    }
+
+    // ── Build enrollment document ────────────────────────────────────────────
     const enrollmentData = sanitizeForFirestore({
       courseId: transaction.productId,
       studentId: transaction.userId,
-      studentName: transaction.userName,
-      studentEmail: transaction.userEmail || '',
+      studentName: meta.studentName || transaction.userName || '',
+      studentEmail: meta.studentEmail || transaction.userEmail || '',
       progress: 0,
       completedLessons: [],
       enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
       lastAccessedAt: admin.firestore.FieldValue.serverTimestamp(),
       paymentStatus: 'completed',
       transactionId: transaction.transactionId,
-      amountPaid: transaction.amount,
+      amountPaid: meta.finalPrice ?? transaction.amount ?? 0,
       paymentMethod: transaction.paymentMethod || 'SSLCOMMERZ',
       paymentDate: admin.firestore.FieldValue.serverTimestamp(),
-      appliedDiscounts: transaction.appliedDiscounts || {}
+      appliedDiscounts: {
+        previousStudentDiscount: meta.previousStudentDiscount || 0,
+        extraDiscount: meta.extraDiscount || 0,
+        couponDiscount: meta.couponDiscount || 0,
+        appliedCoupons,
+        // Legacy single-coupon fields for backward compatibility
+        ...(meta.couponId ? { couponId: meta.couponId } : {}),
+        ...(meta.couponCode ? { couponCode: meta.couponCode } : {}),
+      }
     });
 
     const enrollmentRef = await firestore.collection('enrollments').add(enrollmentData);
     console.log('✅ Enrollment created:', enrollmentRef.id);
 
-    // Increment course student count
+    // ── Record coupon usages ─────────────────────────────────────────────────
+    const amountPaid = Number(meta.finalPrice ?? transaction.amount ?? 0);
+    await recordCouponUsages(transaction, amountPaid);
+
+    // ── Increment course student count ───────────────────────────────────────
     try {
       await firestore
         .collection('courses')
@@ -255,7 +377,7 @@ async function createEnrollment(transaction: any) {
       console.warn('⚠️ Course count update failed:', err.message);
     }
 
-    // Add to student library
+    // ── Add to student library ───────────────────────────────────────────────
     try {
       await addCourseToLibrary(transaction.productId, transaction.userId);
     } catch (err: any) {
@@ -328,9 +450,13 @@ async function addCourseToLibrary(courseId: string, studentId: string) {
 }
 
 // ==================== CALLBACK HANDLER ====================
-// Merged from the old payment-callback.ts.
 // SSLCOMMERZ POSTs form data here after success/fail/cancel.
-// We validate with SSLCOMMERZ then redirect the browser to /payment-success.
+// We validate with SSLCOMMERZ, update the transaction, create the enrollment,
+// then redirect the browser to /course-enrollment?tran_id=xxx
+//
+// ⚠️  CRITICAL: The redirect target MUST match a real route in your React app.
+//     Previously this was /payment-success which does not exist — causing a 404
+//     and making enrollment appear to fail even though it succeeded on the backend.
 
 async function handleCallback(req: VercelRequest, res: VercelResponse) {
   console.log('');
@@ -341,6 +467,9 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
   console.log('Method:', req.method);
   console.log('Body:', JSON.stringify(req.body, null, 2));
   console.log('='.repeat(80));
+
+  // The React page that handles the ?tran_id= query param on return
+  const RETURN_PAGE = '/course-enrollment';
 
   try {
     const status = req.body?.status || req.query.status;
@@ -354,10 +483,10 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 
     if (!tran_id) {
       console.error('❌ Missing transaction ID');
-      return res.redirect(302, '/payment-success?error=invalid_transaction');
+      return res.redirect(302, `${RETURN_PAGE}?error=invalid_transaction`);
     }
 
-    // Cancelled / Failed — update and redirect
+    // ── Cancelled / Failed ───────────────────────────────────────────────────
     if (status === 'CANCELLED' || status === 'FAILED') {
       console.log('⚠️ Payment', status);
       try {
@@ -369,17 +498,17 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
       }
       return res.redirect(
         302,
-        `/payment-success?status=${status.toLowerCase()}&tran_id=${tran_id}`
+        `${RETURN_PAGE}?status=${status.toLowerCase()}&tran_id=${tran_id}`
       );
     }
 
-    // Successful — validate with SSLCOMMERZ
+    // ── Successful ───────────────────────────────────────────────────────────
     if (status === 'VALID' || status === 'VALIDATED') {
       console.log('🔍 Validating payment...');
 
       if (!val_id) {
         console.error('❌ Missing validation ID');
-        return res.redirect(302, `/payment-success?status=failed&tran_id=${tran_id}`);
+        return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
       }
 
       try {
@@ -412,11 +541,11 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
             });
             return res.redirect(
               302,
-              `/payment-success?status=validating&tran_id=${tran_id}`
+              `${RETURN_PAGE}?status=validating&tran_id=${tran_id}`
             );
           }
 
-          // Normal success path
+          // ── Normal success path ────────────────────────────────────────────
           await updateTransaction(tran_id, {
             status: 'success',
             validationId: val_id,
@@ -428,39 +557,48 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 
           const transaction = await getTransaction(tran_id);
           if (transaction) {
-            await createEnrollment({
-              ...transaction,
-              paymentMethod: card_type,
-              validationId: val_id,
-              bankTransactionId: bank_tran_id
-            });
+            try {
+              await createEnrollment({
+                ...transaction,
+                paymentMethod: card_type,
+                validationId: val_id,
+                bankTransactionId: bank_tran_id
+              });
+            } catch (enrollErr: any) {
+              // Enrollment failure must NOT block the redirect — the user has paid.
+              // They will see their enrollment on page load because the transaction
+              // status is already 'success', so the validate endpoint returns it.
+              console.error('❌ Enrollment creation error (non-fatal):', enrollErr.message);
+            }
           }
 
-          console.log('✅ Payment successful — redirecting...');
-          return res.redirect(302, `/payment-success?enrolled=true&tran_id=${tran_id}`);
+          console.log('✅ Payment successful — redirecting to', RETURN_PAGE);
+          // enrolled=true signals to CourseEnrollment.tsx that it should show
+          // the success banner immediately (before the validate call completes)
+          return res.redirect(302, `${RETURN_PAGE}?enrolled=true&tran_id=${tran_id}`);
         } else {
           console.error('❌ Validation failed:', validationData.status);
           await updateTransaction(tran_id, {
             status: 'failed',
             metadata: { validationData }
           });
-          return res.redirect(302, `/payment-success?status=failed&tran_id=${tran_id}`);
+          return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
         }
       } catch (validationError: any) {
         console.error('❌ Validation error:', validationError.message);
         return res.redirect(
           302,
-          `/payment-success?status=validation_error&tran_id=${tran_id}`
+          `${RETURN_PAGE}?status=validation_error&tran_id=${tran_id}`
         );
       }
     }
 
-    // Unknown status
+    // ── Unknown status ───────────────────────────────────────────────────────
     console.error('❌ Unknown status:', status);
-    return res.redirect(302, `/payment-success?status=unknown&tran_id=${tran_id}`);
+    return res.redirect(302, `${RETURN_PAGE}?status=unknown&tran_id=${tran_id}`);
   } catch (error: any) {
     console.error('💥 CALLBACK ERROR:', error.message);
-    return res.redirect(302, '/payment-success?error=callback_failed');
+    return res.redirect(302, `${RETURN_PAGE}?error=callback_failed`);
   }
 }
 
