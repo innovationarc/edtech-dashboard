@@ -699,8 +699,14 @@ const CouponForm: React.FC<{
               <FInput label="Group Name *" value={bulkGroupName} onChange={e => setBulkGroupName(e.target.value)} error={errors.groupName} placeholder="Summer Promo 2025" />
               <div>
                 <Lbl>Group ID *</Lbl>
-                <input className="w-full bg-gray-600/50 border border-gray-600 text-gray-400 rounded-lg px-3 py-2 text-sm cursor-not-allowed font-mono" value={bulkGroupId} readOnly />
-                <p className="text-xs text-gray-500 mt-1">Group ID cannot be changed</p>
+                <input
+                  className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500 uppercase"
+                  value={bulkGroupId}
+                  onChange={e => setBulkGroupId(e.target.value.toUpperCase())}
+                  placeholder="e.g. SUMMER25"
+                  error={errors.groupId}
+                />
+                {errors.groupId && <p className="text-xs text-red-400 mt-1">{errors.groupId}</p>}
               </div>
               <FInput label="Quantity (1–1000) *" type="number" min={1} max={1000} value={bulkQuantity} onChange={e => setBulkQuantity(e.target.value)} error={errors.quantity} />
             </div>
