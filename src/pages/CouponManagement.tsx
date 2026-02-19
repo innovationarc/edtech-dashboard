@@ -1593,7 +1593,7 @@ const handleDeleteGroup = async (group: BulkGroup) => {
                     <p className="text-xs text-gray-400">ID: <span className="text-indigo-400 font-mono">{group.groupId}</span> · {group.couponCount} coupons · {fmt(group.createdAt)}</p>
                   </div>
                 </button>
-               <div className="flex items-center gap-2 ml-3">
+              
                <div className="flex items-center gap-2 ml-3">
   <Badge variant="info">{group.couponCount} coupons</Badge>
   <Btn
