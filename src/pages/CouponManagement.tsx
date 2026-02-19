@@ -1354,7 +1354,7 @@ const CouponManagement: React.FC = () => {
         groupName: bulk.groupName,
         applyToTokens: true,
         ...base,
-        actorUserId: user!.uid,
+        actorUserId: `$(user as any).userId`,
       actorName: `${user!.name} [${(user as any).userId || user!.uid}]`,
       };
       const updated = await couponService.updateBulkGroup(editGroup.id, input);
