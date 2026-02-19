@@ -1,5 +1,7 @@
 // api/payment.ts
-// Vercel Serverless Function - FIXED with callback endpoint
+// Vercel Serverless Function
+// MERGED: Handles all payment operations including the callback (previously payment-callback.ts)
+// FIX: userEmail is optional — a placeholder is accepted when the user has no email
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
@@ -93,7 +95,6 @@ const SSLCOMMERZ_CONFIG = {
 };
 
 const getBaseUrl = (req: VercelRequest): string => {
-  // CRITICAL: Always use the host from headers for correct URL
   const host = req.headers.host || 'localhost:3000';
   const protocol = host.includes('localhost') ? 'http' : 'https';
   const baseUrl = `${protocol}://${host}`;
@@ -122,9 +123,9 @@ async function getTransaction(transactionId: string) {
       return null;
     }
 
-    const doc = snapshot.docs[0];
+    const docSnap = snapshot.docs[0];
     console.log('✅ Transaction found:', transactionId);
-    return { id: doc.id, ref: doc.ref, ...doc.data() };
+    return { id: docSnap.id, ref: docSnap.ref, ...docSnap.data() };
   } catch (error: any) {
     console.error('❌ Error getting transaction:', error.message);
     console.error('Stack:', error.stack);
@@ -179,7 +180,7 @@ async function createEnrollment(transaction: any) {
       courseId: transaction.productId,
       studentId: transaction.userId,
       studentName: transaction.userName,
-      studentEmail: transaction.userEmail,
+      studentEmail: transaction.userEmail || '',
       progress: 0,
       completedLessons: [],
       enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -276,6 +277,147 @@ async function addCourseToLibrary(courseId: string, studentId: string) {
   }
 }
 
+// ==================== CALLBACK HANDLER (merged from payment-callback.ts) ====================
+// Handles SSLCOMMERZ success/fail/cancel redirects as action=callback
+// SSLCOMMERZ sends as a POST (form data) which Vercel parses into req.body
+// The function then redirects the browser to the /payment-success page
+
+async function handleCallback(req: VercelRequest, res: VercelResponse) {
+  console.log('');
+  console.log('='.repeat(80));
+  console.log('🔔 SSLCOMMERZ CALLBACK (action=callback)');
+  console.log('='.repeat(80));
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Method:', req.method);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('='.repeat(80));
+
+  try {
+    const status      = req.body?.status      || req.query.status;
+    const tran_id     = req.body?.tran_id     || req.query.tran_id;
+    const val_id      = req.body?.val_id      || req.query.val_id;
+    const card_type   = req.body?.card_type;
+    const bank_tran_id = req.body?.bank_tran_id;
+    const risk_level  = req.body?.risk_level  || '0';
+
+    console.log('Extracted:', { status, tran_id, val_id, card_type, risk_level });
+
+    if (!tran_id) {
+      console.error('❌ Missing transaction ID');
+      return res.redirect(302, '/payment-success?error=invalid_transaction');
+    }
+
+    // Handle cancelled / failed
+    if (status === 'CANCELLED' || status === 'FAILED') {
+      console.log('⚠️ Payment', status);
+
+      try {
+        await updateTransaction(tran_id, {
+          status: status === 'CANCELLED' ? 'cancelled' : 'failed'
+        });
+      } catch (err) {
+        console.warn('Failed to update status:', err);
+      }
+
+      return res.redirect(302, `/payment-success?status=${status.toLowerCase()}&tran_id=${tran_id}`);
+    }
+
+    // Handle success — validate with SSLCOMMERZ
+    if (status === 'VALID' || status === 'VALIDATED') {
+      console.log('🔍 Validating payment...');
+
+      if (!val_id) {
+        console.error('❌ Missing validation ID');
+        return res.redirect(302, `/payment-success?status=failed&tran_id=${tran_id}`);
+      }
+
+      try {
+        const validationResponse = await axios.get(SSLCOMMERZ_CONFIG.validationUrl, {
+          params: {
+            val_id,
+            store_id: SSLCOMMERZ_CONFIG.storeId,
+            store_passwd: SSLCOMMERZ_CONFIG.storePassword,
+            format: 'json'
+          },
+          timeout: 30000
+        });
+
+        const validationData = validationResponse.data;
+        console.log('✅ Validation response:', validationData.status);
+
+        if (validationData.status === 'VALID' || validationData.status === 'VALIDATED') {
+
+          if (risk_level === '1') {
+            console.warn('⚠️ High risk transaction');
+
+            await updateTransaction(tran_id, {
+              status: 'validating',
+              validationId: val_id,
+              paymentMethod: card_type,
+              bankTransactionId: bank_tran_id,
+              riskLevel: risk_level,
+              needsManualReview: true
+            });
+
+            return res.redirect(302, `/payment-success?status=validating&tran_id=${tran_id}`);
+          }
+
+          // Normal success
+          await updateTransaction(tran_id, {
+            status: 'success',
+            validationId: val_id,
+            paymentMethod: card_type,
+            bankTransactionId: bank_tran_id,
+            riskLevel: risk_level,
+            completedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          // Get transaction for enrollment
+          const transaction = await getTransaction(tran_id);
+          if (transaction) {
+            await createEnrollment({
+              ...transaction,
+              paymentMethod: card_type,
+              validationId: val_id,
+              bankTransactionId: bank_tran_id
+            });
+          }
+
+          console.log('✅ Payment successful, redirecting to payment-success page...');
+          return res.redirect(302, `/payment-success?enrolled=true&tran_id=${tran_id}`);
+
+        } else {
+          console.error('❌ Validation failed:', validationData.status);
+
+          await updateTransaction(tran_id, {
+            status: 'failed',
+            metadata: { validationData }
+          });
+
+          return res.redirect(302, `/payment-success?status=failed&tran_id=${tran_id}`);
+        }
+      } catch (validationError: any) {
+        console.error('❌ Validation error:', validationError.message);
+        return res.redirect(302, `/payment-success?status=validation_error&tran_id=${tran_id}`);
+      }
+    }
+
+    // Unknown status
+    console.error('❌ Unknown status:', status);
+    return res.redirect(302, `/payment-success?status=unknown&tran_id=${tran_id}`);
+
+  } catch (error: any) {
+    console.error('');
+    console.error('💥 CALLBACK ERROR');
+    console.error('='.repeat(80));
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('='.repeat(80));
+
+    return res.redirect(302, '/payment-success?error=callback_failed');
+  }
+}
+
 // ==================== MAIN HANDLER ====================
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -285,7 +427,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  const { action } = req.query;
+  const action = req.query.action as string | undefined;
   const baseUrl = getBaseUrl(req);
 
   console.log('');
@@ -313,6 +455,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // ==================== CALLBACK (merged from payment-callback.ts) ====================
+    // Accepts both GET and POST since SSLCOMMERZ may use either depending on gateway mode.
+    if (action === 'callback') {
+      return await handleCallback(req, res);
+    }
+
     // ==================== INITIATE PAYMENT ====================
     if (action === 'initiate' && req.method === 'POST') {
       console.log('🚀 Starting payment initiation...');
@@ -334,18 +482,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         transactionId,
         userId,
         userName,
-        userEmail,
+        userEmail,    // optional — may be empty or absent
         amount,
         productId,
         productName,
         productType
       } = req.body;
 
+      // Required fields — userEmail is NOT required
       const missingFields = [];
       if (!transactionId) missingFields.push('transactionId');
       if (!userId) missingFields.push('userId');
       if (!userName) missingFields.push('userName');
-      if (!userEmail) missingFields.push('userEmail');
       if (amount === undefined) missingFields.push('amount');
       if (!productId) missingFields.push('productId');
       if (!productName) missingFields.push('productName');
@@ -365,8 +513,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log('✅ All required fields present');
 
-      // CRITICAL FIX: Use Vercel serverless function callback (guaranteed to work)
-      const callbackUrl = `${baseUrl}/api/payment-callback`;
+      // Resolve email — SSLCOMMERZ requires a value; generate a placeholder when absent
+      const resolvedEmail: string = (userEmail && userEmail.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim()))
+        ? userEmail.trim()
+        : `${String(userId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'user'}@noemail.local`;
+
+      console.log('📧 Using email for gateway:', resolvedEmail);
+
+      // Callback URL now points to this single file with action=callback
+      const callbackUrl = `${baseUrl}/api/payment?action=callback`;
       const ipnUrl = `${baseUrl}/api/payment?action=ipn`;
 
       console.log('');
@@ -375,13 +530,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('  Fail URL:', callbackUrl);
       console.log('  Cancel URL:', callbackUrl);
       console.log('  IPN URL:', ipnUrl);
-      console.log('  ⚠️ Using Vercel serverless function (accepts POST & GET)');
       console.log('');
 
       const paymentData = {
         store_id: SSLCOMMERZ_CONFIG.storeId,
         store_passwd: SSLCOMMERZ_CONFIG.storePassword,
-        total_amount: parseFloat(amount.toFixed(2)),
+        total_amount: parseFloat(parseFloat(amount).toFixed(2)),
         currency: 'BDT',
         tran_id: transactionId,
         success_url: callbackUrl,
@@ -389,7 +543,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         cancel_url: callbackUrl,
         ipn_url: ipnUrl,
         cus_name: userName,
-        cus_email: userEmail,
+        cus_email: resolvedEmail,
         cus_add1: 'N/A',
         cus_city: 'Dhaka',
         cus_state: 'Dhaka',
@@ -596,7 +750,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Route not found',
       details: `Unknown action: ${action}`,
       userMessage: 'Invalid payment operation requested',
-      availableActions: ['initiate', 'ipn', 'validate'],
+      availableActions: ['initiate', 'callback', 'ipn', 'validate'],
       timestamp: new Date().toISOString()
     });
 
