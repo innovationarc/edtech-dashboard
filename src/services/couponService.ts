@@ -1,7 +1,7 @@
 // src/services/couponService.ts
 import {
   collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, Timestamp, writeBatch, increment
+  query, where, Timestamp, writeBatch, increment
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -87,8 +87,8 @@ export interface AuditLog {
   groupId?: string;
   groupName?: string;
   adminComments?: string;
-  changes?: EditChanges[];       // what fields were changed, prev vs new
-  affectedCount?: number;        // for group-level bulk edits
+  changes?: EditChanges[];
+  affectedCount?: number;
   metadata?: Record<string, any>;
   timestamp: Date;
 }
@@ -112,13 +112,10 @@ export interface RecordCouponUsageInput {
   couponId: string;
   userId: string;
   courseId: string;
-  // ── Rich fields populated by the enrollment page ──────────────────────────
-  // Pass these once your Course Enrollment Page is upgraded.
-  // Until then, omit them and stats will show IDs instead of names/amounts.
   userName?: string;
   courseName?: string;
-  discountApplied?: number;   // actual ৳ discount that was applied
-  amountPaid?: number;        // final amount the user paid after discount
+  discountApplied?: number;
+  amountPaid?: number;
 }
 
 export interface CreateSingleCouponInput {
@@ -173,7 +170,6 @@ export interface UpdateCouponInput {
 
 export interface UpdateBulkGroupInput {
   groupName: string;
-  // Token-level fields (applied to all tokens in group when provided)
   applyToTokens?: boolean;
   discountType?: DiscountType;
   discountValue?: number;
@@ -212,34 +208,79 @@ const toDate = (v: any): Date => {
   return new Date(v);
 };
 
-const fromFirestore = (data: any, id: string): Coupon => ({
-  id,
-  couponCode: data.couponCode || '',
-  discountType: data.discountType || 'amount',
-  discountValue: data.discountValue || 0,
-  maxDiscount: data.maxDiscount ?? undefined,
-  minimumPurchase: data.minimumPurchase || 0,
-  courseFilter: data.courseFilter || { type: 'all' },
-  userFilter: data.userFilter || { type: 'all' },
-  categoryFilter: data.categoryFilter || { type: 'all' },
-  startDate: toDate(data.startDate),
-  endDate: toDate(data.endDate),
-  activationDate: data.activationDate ? toDate(data.activationDate) : undefined,
-  usageLimit: data.usageLimit ?? 'unlimited',
-  perUserLimit: data.perUserLimit || 1,
-  cooldownHours: data.cooldownHours || 0,
-  usageCount: data.usageCount || 0,
-  status: data.status || 'active',
-  adminComments: data.adminComments || '',
-  successMessage: data.successMessage || '',
-  nextPurchaseEligibility: data.nextPurchaseEligibility || { enabled: false, anyCourse: false, requiredCourseIds: [] },
-  bulkGroupId: data.bulkGroupId ?? null,
-  bulkGroupName: data.bulkGroupName ?? null,
-  trackingId: data.trackingId ?? null,
-  createdBy: data.createdBy || '',
-  createdAt: toDate(data.createdAt),
-  updatedAt: toDate(data.updatedAt),
-});
+/**
+ * BUG FIX 1 & 2: Compute the effective runtime status of a coupon based on its dates.
+ *
+ * Rules (evaluated in order):
+ *  1. If now > endDate          → 'expired'   (regardless of stored status)
+ *  2. If activationDate is set and now < activationDate → 'scheduled'
+ *     (the coupon exists but hasn't been "activated" yet — distinct from startDate)
+ *  3. If now < startDate        → 'scheduled'  (coupon period hasn't begun)
+ *  4. Otherwise keep the stored status ('active' or 'inactive')
+ *
+ * startDate  = when the coupon becomes usable
+ * activationDate = an optional admin-controlled gate that must also pass before the
+ *                  coupon is usable (useful for drip-release campaigns where you set
+ *                  dates ahead of time but want a separate activation switch)
+ */
+const computeEffectiveStatus = (
+  storedStatus: string,
+  startDate: Date,
+  endDate: Date,
+  activationDate?: Date
+): CouponStatus => {
+  const now = new Date();
+
+  // Expired: end date has passed
+  if (now > endDate) return 'expired';
+
+  // Scheduled: activation date hasn't arrived yet
+  if (activationDate && now < activationDate) return 'scheduled';
+
+  // Scheduled: start date hasn't arrived yet
+  if (now < startDate) return 'scheduled';
+
+  // Within valid window — respect stored active/inactive toggle
+  return (storedStatus === 'active' || storedStatus === 'inactive')
+    ? (storedStatus as CouponStatus)
+    : 'active';
+};
+
+const fromFirestore = (data: any, id: string): Coupon => {
+  const startDate = toDate(data.startDate);
+  const endDate = toDate(data.endDate);
+  const activationDate = data.activationDate ? toDate(data.activationDate) : undefined;
+  const effectiveStatus = computeEffectiveStatus(data.status || 'active', startDate, endDate, activationDate);
+
+  return {
+    id,
+    couponCode: data.couponCode || '',
+    discountType: data.discountType || 'amount',
+    discountValue: data.discountValue || 0,
+    maxDiscount: data.maxDiscount ?? undefined,
+    minimumPurchase: data.minimumPurchase || 0,
+    courseFilter: data.courseFilter || { type: 'all' },
+    userFilter: data.userFilter || { type: 'all' },
+    categoryFilter: data.categoryFilter || { type: 'all' },
+    startDate,
+    endDate,
+    activationDate,
+    usageLimit: data.usageLimit ?? 'unlimited',
+    perUserLimit: data.perUserLimit || 1,
+    cooldownHours: data.cooldownHours || 0,
+    usageCount: data.usageCount || 0,
+    status: effectiveStatus,
+    adminComments: data.adminComments || '',
+    successMessage: data.successMessage || '',
+    nextPurchaseEligibility: data.nextPurchaseEligibility || { enabled: false, anyCourse: false, requiredCourseIds: [] },
+    bulkGroupId: data.bulkGroupId ?? null,
+    bulkGroupName: data.bulkGroupName ?? null,
+    trackingId: data.trackingId ?? null,
+    createdBy: data.createdBy || '',
+    createdAt: toDate(data.createdAt),
+    updatedAt: toDate(data.updatedAt),
+  };
+};
 
 const fromFirestoreGroup = (data: any, id: string): BulkGroup => ({
   id,
@@ -273,7 +314,6 @@ const auditLog = async (log: Omit<AuditLog, 'id'>): Promise<void> => {
   } catch { /* silent */ }
 };
 
-/** Compute a list of human-readable field changes between old and new coupon data */
 const computeChanges = (prev: Coupon, next: Record<string, any>): EditChanges[] => {
   const changes: EditChanges[] = [];
   const fields: Array<{ key: keyof Coupon; label: string; serialize?: (v: any) => string }> = [
@@ -327,6 +367,9 @@ export const couponService = {
     if (existing) throw new Error(`Coupon code "${input.couponCode.toUpperCase()}" already exists.`);
 
     const now = new Date();
+    // Determine initial stored status: inactive if not yet started/activated, active otherwise
+    // The effectiveStatus computed at read-time will handle expired/scheduled dynamically,
+    // but we store 'active' as the intent so toggling works correctly.
     const docData = {
       couponCode: input.couponCode.toUpperCase().trim(),
       discountType: input.discountType,
@@ -343,7 +386,7 @@ export const couponService = {
       perUserLimit: input.perUserLimit,
       cooldownHours: input.cooldownHours || 0,
       usageCount: 0,
-      status: 'active',
+      status: 'active', // stored intent; effective status computed at read-time
       adminComments: input.adminComments || '',
       successMessage: input.successMessage || '',
       nextPurchaseEligibility: input.nextPurchaseEligibility,
@@ -475,7 +518,6 @@ export const couponService = {
       throw new Error('Next-purchase eligibility requires selecting at least one course (or "Any Course").');
     }
 
-    // Fetch previous state for change tracking
     const prevCoupon = await this.getCouponById(couponId);
     if (!prevCoupon) throw new Error('Coupon not found.');
 
@@ -505,7 +547,6 @@ export const couponService = {
     const updated = await this.getCouponById(couponId);
     if (!updated) throw new Error('Failed to fetch updated coupon.');
 
-    // Compute changes for security log
     const changesForLog: Record<string, any> = {
       discountType: input.discountType,
       discountValue: input.discountValue,
@@ -526,12 +567,13 @@ export const couponService = {
     };
     const changes = computeChanges(prevCoupon, changesForLog);
 
+    // BUG FIX 3: Always include couponCode in audit log for edit actions
     await auditLog({
       actionType: 'update',
       actorUserId: input.actorUserId,
       actorName: input.actorName,
       couponId,
-      couponCode: updated.couponCode,
+      couponCode: prevCoupon.couponCode, // use prevCoupon — guaranteed correct code
       adminComments: input.adminComments,
       changes,
       timestamp: now,
@@ -552,7 +594,6 @@ export const couponService = {
     if (!d.exists()) throw new Error('Group not found after update.');
     const updated = fromFirestoreGroup(d.data(), d.id);
 
-    // Audit: group name change
     await auditLog({
       actionType: 'update_group',
       actorUserId: input.actorUserId,
@@ -562,11 +603,9 @@ export const couponService = {
       timestamp: now,
     });
 
-    // If token-level fields provided, update all tokens in the group
     if (input.applyToTokens) {
       const tokenSnap = await getDocs(query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId)));
       if (!tokenSnap.empty) {
-        // Build token update data
         const tokenUpdate: Record<string, any> = { updatedAt: toTs(now) };
         if (input.discountType !== undefined) tokenUpdate.discountType = input.discountType;
         if (input.discountValue !== undefined) tokenUpdate.discountValue = input.discountValue;
@@ -584,10 +623,8 @@ export const couponService = {
         if (input.adminComments !== undefined) tokenUpdate.adminComments = input.adminComments || '';
         if (input.successMessage !== undefined) tokenUpdate.successMessage = input.successMessage || '';
         if (input.nextPurchaseEligibility !== undefined) tokenUpdate.nextPurchaseEligibility = input.nextPurchaseEligibility;
-        // Also sync group name
         tokenUpdate.bulkGroupName = input.groupName.trim();
 
-        // Compute changes against the first token as representative sample
         const firstToken = fromFirestore(tokenSnap.docs[0].data(), tokenSnap.docs[0].id);
         const changesForLog: Record<string, any> = {};
         if (input.discountType !== undefined) changesForLog.discountType = input.discountType;
@@ -608,7 +645,6 @@ export const couponService = {
         if (input.nextPurchaseEligibility !== undefined) changesForLog.nextPurchaseEligibility = input.nextPurchaseEligibility;
         const changes = computeChanges(firstToken, changesForLog);
 
-        // Batch-update all tokens
         const BATCH_SIZE = 499;
         const docs = tokenSnap.docs;
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
@@ -637,50 +673,76 @@ export const couponService = {
 
   async toggleCouponStatus(couponId: string, newStatus: 'active' | 'inactive', actorUserId: string, actorName?: string): Promise<void> {
     const now = new Date();
+    // BUG FIX 3: Fetch coupon first to get couponCode for audit log
+    const coupon = await this.getCouponById(couponId);
     await updateDoc(doc(db, 'coupons', couponId), { status: newStatus, updatedAt: toTs(now) });
-    await auditLog({ actionType: newStatus === 'active' ? 'activate' : 'deactivate', actorUserId, actorName, couponId, timestamp: now });
+    await auditLog({
+      actionType: newStatus === 'active' ? 'activate' : 'deactivate',
+      actorUserId,
+      actorName,
+      couponId,
+      couponCode: coupon?.couponCode, // FIX: now included
+      timestamp: now,
+    });
   },
 
   async deleteCoupon(couponId: string, actorUserId: string, actorName?: string): Promise<void> {
     const coupon = await this.getCouponById(couponId);
     const now = new Date();
+
+    // BUG FIX 4: If this coupon belongs to a group, decrement the group's couponCount
+    if (coupon?.bulkGroupId) {
+      try {
+        await updateDoc(doc(db, 'bulkCouponGroups', coupon.bulkGroupId), {
+          couponCount: increment(-1),
+          updatedAt: toTs(now),
+        });
+      } catch {
+        // Non-fatal: group may have already been deleted or doesn't exist
+      }
+    }
+
     await deleteDoc(doc(db, 'coupons', couponId));
-    await auditLog({ actionType: 'delete', actorUserId, actorName, couponId, couponCode: coupon?.couponCode, timestamp: now });
+    // BUG FIX 3: coupon?.couponCode is already fetched above — always present
+    await auditLog({
+      actionType: 'delete',
+      actorUserId,
+      actorName,
+      couponId,
+      couponCode: coupon?.couponCode,
+      timestamp: now,
+    });
   },
 
   async deleteBulkGroup(groupDocId: string, actorUserId: string, actorName?: string): Promise<void> {
-  // Fetch group info for the audit log before deleting
-  const groupDoc = await getDoc(doc(db, 'bulkCouponGroups', groupDocId));
-  const groupData = groupDoc.exists() ? groupDoc.data() : null;
+    const groupDoc = await getDoc(doc(db, 'bulkCouponGroups', groupDocId));
+    const groupData = groupDoc.exists() ? groupDoc.data() : null;
 
-  const now = new Date();
-  const BATCH_SIZE = 499;
+    const now = new Date();
+    const BATCH_SIZE = 499;
 
-  // Delete all coupon tokens belonging to this group
-  const tokenSnap = await getDocs(
-    query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId))
-  );
+    const tokenSnap = await getDocs(
+      query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId))
+    );
 
-  for (let i = 0; i < tokenSnap.docs.length; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    tokenSnap.docs.slice(i, i + BATCH_SIZE).forEach(d => batch.delete(d.ref));
-    await batch.commit();
-  }
+    for (let i = 0; i < tokenSnap.docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      tokenSnap.docs.slice(i, i + BATCH_SIZE).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
 
-  // Delete the group document itself
-  await deleteDoc(doc(db, 'bulkCouponGroups', groupDocId));
+    await deleteDoc(doc(db, 'bulkCouponGroups', groupDocId));
 
-  // Audit log
-  await auditLog({
-    actionType: 'delete_group',
-    actorUserId,
-    actorName,
-    groupId: groupData?.groupId,
-    groupName: groupData?.groupName,
-    metadata: { deletedTokenCount: tokenSnap.docs.length },
-    timestamp: now,
-  });
-},
+    await auditLog({
+      actionType: 'delete_group',
+      actorUserId,
+      actorName,
+      groupId: groupData?.groupId,
+      groupName: groupData?.groupName,
+      metadata: { deletedTokenCount: tokenSnap.docs.length },
+      timestamp: now,
+    });
+  },
 
   // ── CHECKOUT VALIDATION ──────────────────────────────────────────────
 
@@ -695,9 +757,23 @@ export const couponService = {
     if (!coupon) return { valid: false, reason: 'Coupon not found.' };
 
     const now = new Date();
-    if (coupon.status !== 'active') return { valid: false, reason: 'Coupon is not active.' };
-    if (now < coupon.startDate) return { valid: false, reason: 'Coupon has not started yet.' };
+
+    // BUG FIX 1: Check expiry
     if (now > coupon.endDate) return { valid: false, reason: 'Coupon has expired.' };
+
+    // BUG FIX 2: Check activation date — coupon is not yet released to users
+    if (coupon.activationDate && now < coupon.activationDate) {
+      return { valid: false, reason: 'Coupon is not yet active.' };
+    }
+
+    // BUG FIX 2: Check start date — coupon period hasn't begun
+    if (now < coupon.startDate) return { valid: false, reason: 'Coupon has not started yet.' };
+
+    // Check stored status (admin manually deactivated)
+    // We check effective status after date checks; if effective is expired/scheduled, already caught above.
+    if (coupon.status === 'inactive') return { valid: false, reason: 'Coupon is not active.' };
+    if (coupon.status === 'expired') return { valid: false, reason: 'Coupon has expired.' };
+    if (coupon.status === 'scheduled') return { valid: false, reason: 'Coupon is not yet active.' };
 
     if (coupon.usageLimit !== 'unlimited' && coupon.usageCount >= (coupon.usageLimit as number)) {
       return { valid: false, reason: 'Coupon usage limit reached.' };
@@ -773,9 +849,7 @@ export const couponService = {
    *
    * FUTURE USAGE (after enrollment page upgrade — unlocks full statistics):
    *   await couponService.recordCouponUsage({
-   *     couponId,
-   *     userId,
-   *     courseId,
+   *     couponId, userId, courseId,
    *     userName: user.name,
    *     courseName: course.title,
    *     discountApplied: validationResult.discount,
@@ -791,7 +865,6 @@ export const couponService = {
       usedAt: now,
     };
 
-    // Write rich fields only when provided (keeps records lean until enrollment page is ready)
     if (input.userName !== undefined) usageData.userName = input.userName;
     if (input.courseName !== undefined) usageData.courseName = input.courseName;
     if (input.discountApplied !== undefined) usageData.discountApplied = input.discountApplied;
