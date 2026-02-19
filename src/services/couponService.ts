@@ -79,7 +79,7 @@ export interface EditChanges {
 
 export interface AuditLog {
   id: string;
-  actionType: 'create_single' | 'create_bulk_group' | 'update' | 'update_group' | 'update_group_tokens' | 'activate' | 'deactivate' | 'delete';
+  actionType: 'create_single' | 'create_bulk_group' | 'update' | 'update_group' | 'update_group_tokens' | 'activate' | 'deactivate' | 'delete' | 'delete_group';
   actorUserId: string;
   actorName?: string;
   couponId?: string;
@@ -647,6 +647,40 @@ export const couponService = {
     await deleteDoc(doc(db, 'coupons', couponId));
     await auditLog({ actionType: 'delete', actorUserId, actorName, couponId, couponCode: coupon?.couponCode, timestamp: now });
   },
+
+  async deleteBulkGroup(groupDocId: string, actorUserId: string, actorName?: string): Promise<void> {
+  // Fetch group info for the audit log before deleting
+  const groupDoc = await getDoc(doc(db, 'bulkCouponGroups', groupDocId));
+  const groupData = groupDoc.exists() ? groupDoc.data() : null;
+
+  const now = new Date();
+  const BATCH_SIZE = 499;
+
+  // Delete all coupon tokens belonging to this group
+  const tokenSnap = await getDocs(
+    query(collection(db, 'coupons'), where('bulkGroupId', '==', groupDocId))
+  );
+
+  for (let i = 0; i < tokenSnap.docs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    tokenSnap.docs.slice(i, i + BATCH_SIZE).forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  // Delete the group document itself
+  await deleteDoc(doc(db, 'bulkCouponGroups', groupDocId));
+
+  // Audit log
+  await auditLog({
+    actionType: 'delete_group',
+    actorUserId,
+    actorName,
+    groupId: groupData?.groupId,
+    groupName: groupData?.groupName,
+    metadata: { deletedTokenCount: tokenSnap.docs.length },
+    timestamp: now,
+  });
+},
 
   // ── CHECKOUT VALIDATION ──────────────────────────────────────────────
 
