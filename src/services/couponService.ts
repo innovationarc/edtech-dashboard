@@ -102,6 +102,25 @@ export interface CouponValidationResult {
   cooldownEndsAt?: Date;
 }
 
+/**
+ * The record written to the `couponUsage` collection each time a coupon is redeemed.
+ * Core fields (couponId, userId, courseId, usedAt) are always written.
+ * Rich fields (userName, courseName, discountApplied, amountPaid) are written
+ * by the enrollment page when it supplies them — the Statistics modal reads all of them.
+ */
+export interface RecordCouponUsageInput {
+  couponId: string;
+  userId: string;
+  courseId: string;
+  // ── Rich fields populated by the enrollment page ──────────────────────────
+  // Pass these once your Course Enrollment Page is upgraded.
+  // Until then, omit them and stats will show IDs instead of names/amounts.
+  userName?: string;
+  courseName?: string;
+  discountApplied?: number;   // actual ৳ discount that was applied
+  amountPaid?: number;        // final amount the user paid after discount
+}
+
 export interface CreateSingleCouponInput {
   couponCode: string;
   discountType: DiscountType;
@@ -712,10 +731,41 @@ export const couponService = {
     };
   },
 
-  async recordCouponUsage(couponId: string, userId: string, courseId: string): Promise<void> {
+  /**
+   * Records a coupon usage after a successful enrollment/purchase.
+   *
+   * CURRENT USAGE (before enrollment page upgrade):
+   *   await couponService.recordCouponUsage({ couponId, userId, courseId });
+   *
+   * FUTURE USAGE (after enrollment page upgrade — unlocks full statistics):
+   *   await couponService.recordCouponUsage({
+   *     couponId,
+   *     userId,
+   *     courseId,
+   *     userName: user.name,
+   *     courseName: course.title,
+   *     discountApplied: validationResult.discount,
+   *     amountPaid: validationResult.finalPrice,
+   *   });
+   */
+  async recordCouponUsage(input: RecordCouponUsageInput): Promise<void> {
+    const now = Timestamp.now();
+    const usageData: Record<string, any> = {
+      couponId: input.couponId,
+      userId: input.userId,
+      courseId: input.courseId,
+      usedAt: now,
+    };
+
+    // Write rich fields only when provided (keeps records lean until enrollment page is ready)
+    if (input.userName !== undefined) usageData.userName = input.userName;
+    if (input.courseName !== undefined) usageData.courseName = input.courseName;
+    if (input.discountApplied !== undefined) usageData.discountApplied = input.discountApplied;
+    if (input.amountPaid !== undefined) usageData.amountPaid = input.amountPaid;
+
     const batch = writeBatch(db);
-    batch.update(doc(db, 'coupons', couponId), { usageCount: increment(1), updatedAt: Timestamp.now() });
-    batch.set(doc(collection(db, 'couponUsage')), { couponId, userId, courseId, usedAt: Timestamp.now() });
+    batch.update(doc(db, 'coupons', input.couponId), { usageCount: increment(1), updatedAt: now });
+    batch.set(doc(collection(db, 'couponUsage')), usageData);
     await batch.commit();
   },
 };
