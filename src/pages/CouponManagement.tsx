@@ -1362,6 +1362,21 @@ const CouponManagement: React.FC = () => {
     } catch (e: any) { notify(e.message, 'error'); }
   };
 
+const handleDeleteGroup = async (group: BulkGroup) => {
+  if (!window.confirm(
+    `Delete group "${group.groupName}" and all ${group.couponCount} coupon tokens?\n\nThis cannot be undone.`
+  )) return;
+  try {
+    await couponService.deleteBulkGroup(group.id, user!.uid, user!.name);
+    setBulkGroups(p => p.filter(g => g.id !== group.id));
+    // Clean up cached tokens for this group
+    setGroupCoupons(p => { const n = { ...p }; delete n[group.id]; return n; });
+    notify(`Group "${group.groupName}" and all its tokens deleted`);
+  } catch (e: any) {
+    notify(e.message || 'Failed to delete group', 'error');
+  }
+};
+
   const loadAudit = async () => {
     try {
       setAuditLogs(await couponService.getAuditLogs());
@@ -1579,31 +1594,39 @@ const CouponManagement: React.FC = () => {
                   </div>
                 </button>
                <div className="flex items-center gap-2 ml-3">
-                  <Badge variant="info">{group.couponCount} coupons</Badge>
-                  <Btn
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setStatsTarget({ type: 'group', group });
-                      if (!groupCoupons[group.id]) loadGroupCoupons(group.id);
-                    }}
-                    title="View group statistics"
-                  >
-                    <BarChart2 size={13} className="text-yellow-400" />
-                  </Btn>
-                  <Btn
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setEditGroup(group);
-                      // Pre-load group coupons so we can seed the form from first token
-                      if (!groupCoupons[group.id]) loadGroupCoupons(group.id);
-                    }}
-                    title="Edit group & all tokens"
-                  >
-                    <Pencil size={13} className="text-indigo-400" />
-                  </Btn>
-                </div>
+               <div className="flex items-center gap-2 ml-3">
+  <Badge variant="info">{group.couponCount} coupons</Badge>
+  <Btn
+    variant="ghost"
+    size="sm"
+    onClick={() => {
+      setStatsTarget({ type: 'group', group });
+      if (!groupCoupons[group.id]) loadGroupCoupons(group.id);
+    }}
+    title="View group statistics"
+  >
+    <BarChart2 size={13} className="text-yellow-400" />
+  </Btn>
+  <Btn
+    variant="ghost"
+    size="sm"
+    onClick={() => {
+      setEditGroup(group);
+      if (!groupCoupons[group.id]) loadGroupCoupons(group.id);
+    }}
+    title="Edit group & all tokens"
+  >
+    <Pencil size={13} className="text-indigo-400" />
+  </Btn>
+  <Btn
+    variant="ghost"
+    size="sm"
+    onClick={() => handleDeleteGroup(group)}
+    title="Delete entire group and all tokens"
+  >
+    <Trash2 size={13} className="text-red-400" />
+  </Btn>
+</div>
               </div>
             </Card>
           ))}
