@@ -1,27 +1,27 @@
 // src/services/paymentService.ts
-// Payment Service - FULLY FIXED with Enhanced Error Logging
-// FIX: Email is now optional; userId is the primary identifier
-// FIX: Single api/payment.ts endpoint (no separate payment-callback.ts needed)
+// Payment Service - FULLY FIXED
+// FIX 1: Email is optional; userId is the primary identifier
+// FIX 2: Single api/payment.ts endpoint (no separate payment-callback.ts needed)
+// FIX 3: sanitizeForFirestore() strips undefined from every Firestore write
+//         — this was the root cause of the "Unsupported field value: undefined" crash
 
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  getDoc, 
-  addDoc, 
-  updateDoc, 
-  query, 
-  where, 
+import {
+  collection,
+  doc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  query,
+  where,
   orderBy,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import axios from 'axios';
 
 // Get backend URL from current window location
-const BACKEND_URL = typeof window !== 'undefined' 
-  ? window.location.origin 
-  : 'http://localhost:3000';
+const BACKEND_URL =
+  typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
 
 console.log('💳 PaymentService initialized');
 console.log('🌐 Backend URL:', BACKEND_URL);
@@ -32,7 +32,7 @@ export interface Transaction {
   id: string;
   userId: string;
   userName: string;
-  userEmail: string;        // May be empty string if user has no email
+  userEmail: string; // May be a placeholder when user has no email
   amount: number;
   currency: string;
   status: 'success' | 'failed' | 'pending' | 'validating' | 'refunded' | 'cancelled';
@@ -60,7 +60,7 @@ export interface Transaction {
 export interface PaymentInitiationRequest {
   userId: string;
   userName: string;
-  userEmail?: string;       // OPTIONAL - not required by the user system
+  userEmail?: string; // OPTIONAL — not required by the user system
   amount: number;
   productId: string;
   productName: string;
@@ -93,6 +93,41 @@ export interface PaymentValidationResponse {
   userMessage?: string;
 }
 
+// ==================== FIRESTORE SANITIZER ====================
+// Firestore rejects documents that contain `undefined` anywhere in the object tree
+// (including nested objects like metadata.couponId).
+// This function recursively removes every undefined key so all writes are safe.
+
+function sanitizeForFirestore(value: any): any {
+  // Undefined at the top level becomes null (caller decides whether to include key)
+  if (value === undefined) return null;
+  if (value === null) return null;
+
+  // Leave Timestamps and Dates intact
+  if (value instanceof Date) return value;
+  if (value && typeof value === 'object' && typeof value.toDate === 'function') {
+    return value; // Firestore Timestamp — keep as-is
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item));
+  }
+
+  if (typeof value === 'object') {
+    const clean: Record<string, any> = {};
+    for (const key of Object.keys(value)) {
+      if (value[key] === undefined) continue; // drop the key entirely
+      clean[key] = sanitizeForFirestore(value[key]);
+    }
+    return clean;
+  }
+
+  // Primitives (string, number, boolean) — safe as-is
+  return value;
+}
+
 // ==================== ERROR DISPLAY HELPER ====================
 
 function displayError(error: string, details?: string): void {
@@ -100,21 +135,16 @@ function displayError(error: string, details?: string): void {
   console.error('🚨 PAYMENT ERROR 🚨');
   console.error('═'.repeat(80));
   console.error('Error:', error);
-  if (details) {
-    console.error('Details:', details);
-  }
+  if (details) console.error('Details:', details);
   console.error('Timestamp:', new Date().toISOString());
   console.error('═'.repeat(80));
   console.error('');
-  
-  // Also try to show in UI if possible
+
   if (typeof window !== 'undefined') {
     try {
-      const existingError = document.getElementById('payment-error-toast');
-      if (existingError) {
-        existingError.remove();
-      }
-      
+      const existing = document.getElementById('payment-error-toast');
+      if (existing) existing.remove();
+
       const errorDiv = document.createElement('div');
       errorDiv.id = 'payment-error-toast';
       errorDiv.style.cssText = `
@@ -139,10 +169,8 @@ function displayError(error: string, details?: string): void {
         ${details ? `<div style="margin-top: 8px; font-size: 12px; opacity: 0.9;">${escapeHtml(details)}</div>` : ''}
       `;
       document.body.appendChild(errorDiv);
-      
       setTimeout(() => errorDiv.remove(), 10000);
     } catch (e) {
-      // Fallback to console only
       console.error('Could not display error UI:', e);
     }
   }
@@ -155,24 +183,32 @@ function escapeHtml(text: string): string {
 }
 
 // ==================== EMAIL HELPER ====================
-// SSLCOMMERZ requires an email field. Since our user system doesn't mandate email,
-// we generate a safe placeholder using the userId when a real email isn't available.
+// SSLCOMMERZ requires a cus_email value. Since our user system does not mandate
+// email, we generate a safe deterministic placeholder when none exists.
+
 function resolveEmail(userId: string, userEmail?: string): string {
-  if (userEmail && userEmail.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim())) {
+  if (
+    userEmail &&
+    userEmail.trim() &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim())
+  ) {
     return userEmail.trim();
   }
-  // Generate a deterministic placeholder that satisfies SSLCOMMERZ format validation
-  const safeId = userId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'user';
+  const safeId =
+    String(userId)
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .substring(0, 20) || 'user';
   return `${safeId}@noemail.local`;
 }
 
 // ==================== PAYMENT SERVICE ====================
 
 export const paymentService = {
-  
   // ==================== PAYMENT INITIATION ====================
-  
-  async initiatePayment(request: PaymentInitiationRequest): Promise<PaymentInitiationResponse> {
+
+  async initiatePayment(
+    request: PaymentInitiationRequest
+  ): Promise<PaymentInitiationResponse> {
     console.log('');
     console.log('='.repeat(80));
     console.log('💳 PAYMENT SERVICE: Initiating Payment');
@@ -196,12 +232,13 @@ export const paymentService = {
           success: false,
           error: 'Invalid payment request',
           details: validation.error,
-          userMessage: validation.error || 'Please check your payment details and try again.'
+          userMessage:
+            validation.error || 'Please check your payment details and try again.'
         };
       }
       console.log('✅ Request validated');
 
-      // Step 2: Resolve email (may be a placeholder if user has no email)
+      // Step 2: Resolve email (placeholder if user has none)
       const resolvedEmail = resolveEmail(request.userId, request.userEmail);
       console.log('📋 Step 2: Resolved email:', resolvedEmail);
 
@@ -210,7 +247,7 @@ export const paymentService = {
       const transactionId = this.generateTransactionId(request.productId, request.userId);
       console.log('✅ Transaction ID:', transactionId);
 
-      // Step 4: Create Firestore record
+      // Step 4: Create Firestore record — always sanitized
       console.log('📋 Step 4: Creating Firestore transaction...');
       try {
         const firestoreId = await this.createTransaction({
@@ -225,6 +262,7 @@ export const paymentService = {
           productId: request.productId,
           productType: request.productType,
           status: 'pending',
+          // These two are the common sources of undefined — sanitized in createTransaction
           appliedDiscounts: request.appliedDiscounts,
           metadata: request.metadata
         });
@@ -245,8 +283,9 @@ export const paymentService = {
       console.log('📋 Step 5: Calling backend API...');
       const apiUrl = `${BACKEND_URL}/api/payment?action=initiate`;
       console.log('API URL:', apiUrl);
-      
-      const payload = {
+
+      // Sanitize payload before sending — prevents JSON serialisation issues too
+      const payload = sanitizeForFirestore({
         transactionId,
         userId: request.userId,
         userName: request.userName,
@@ -255,18 +294,15 @@ export const paymentService = {
         productId: request.productId,
         productName: request.productName,
         productType: request.productType,
-        appliedDiscounts: request.appliedDiscounts,
-        metadata: request.metadata
-      };
-      
+        appliedDiscounts: request.appliedDiscounts || {},
+        metadata: request.metadata || {}
+      });
+
       console.log('Payload:', JSON.stringify(payload, null, 2));
 
       try {
         const response = await axios.post(apiUrl, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           timeout: 30000
         });
 
@@ -277,8 +313,7 @@ export const paymentService = {
         if (response.data.success) {
           console.log('✅ Payment initiation successful');
           console.log('Gateway URL:', response.data.gatewayUrl);
-          
-          // Update transaction with gateway session
+
           try {
             await this.updateTransactionByTranId(transactionId, {
               gatewayTransactionId: response.data.gatewayTransactionId,
@@ -292,28 +327,25 @@ export const paymentService = {
           return {
             success: true,
             gatewayUrl: response.data.gatewayUrl,
-            transactionId: transactionId,
+            transactionId,
             sessionId: response.data.gatewayTransactionId,
             userMessage: 'Redirecting to payment gateway...'
           };
         } else {
           const errorMsg = response.data.error || 'Payment initiation failed';
-          const detailsMsg = response.data.details || response.data.userMessage || 'Backend rejected the payment request';
-          
+          const detailsMsg =
+            response.data.details ||
+            response.data.userMessage ||
+            'Backend rejected the payment request';
+
           console.error('❌ Backend returned error:', errorMsg);
           console.error('Details:', detailsMsg);
-          
           displayError(errorMsg, detailsMsg);
-          
-          // Update transaction as failed
+
           try {
             await this.updateTransactionByTranId(transactionId, {
               status: 'failed',
-              metadata: { 
-                error: errorMsg,
-                details: detailsMsg,
-                timestamp: new Date().toISOString()
-              }
+              metadata: { error: errorMsg, details: detailsMsg, timestamp: new Date().toISOString() }
             });
           } catch (updateError) {
             console.warn('⚠️ Failed to update failed transaction');
@@ -334,47 +366,37 @@ export const paymentService = {
         console.error('Message:', axiosError.message);
         console.error('Code:', axiosError.code);
         console.error('URL:', apiUrl);
-        
         if (axiosError.response) {
           console.error('Response Status:', axiosError.response.status);
-          console.error('Response Headers:', axiosError.response.headers);
           console.error('Response Data:', JSON.stringify(axiosError.response.data, null, 2));
         } else if (axiosError.request) {
           console.error('No response received');
-          console.error('Request:', axiosError.request);
         }
-        console.error('Config:', JSON.stringify(axiosError.config, null, 2));
         console.error('='.repeat(80));
-        
+
         let userMessage = 'An unexpected error occurred. Please try again.';
         let errorType = 'Payment initiation failed';
         let errorDetails = axiosError.message;
-        
-        // Handle specific error types
+
         if (axiosError.code === 'ECONNABORTED') {
           userMessage = 'The payment gateway is taking too long to respond. Please try again.';
           errorType = 'Request timeout';
           errorDetails = 'Connection to payment gateway timed out';
         } else if (axiosError.code === 'ERR_NETWORK') {
-          userMessage = 'Unable to connect to payment gateway. Please check your internet connection.';
+          userMessage =
+            'Unable to connect to payment gateway. Please check your internet connection.';
           errorType = 'Network error';
           errorDetails = 'Failed to establish connection';
         } else if (axiosError.response) {
-          const responseError = axiosError.response.data?.error || 'Server error';
-          const responseDetails = axiosError.response.data?.details || axiosError.response.data?.userMessage || axiosError.message;
-          errorType = responseError;
-          errorDetails = responseDetails;
-          userMessage = axiosError.response.data?.userMessage || responseDetails;
+          const rd = axiosError.response.data;
+          errorType = rd?.error || 'Server error';
+          errorDetails = rd?.details || rd?.userMessage || axiosError.message;
+          userMessage = rd?.userMessage || errorDetails;
         }
-        
+
         displayError(errorType, errorDetails);
-        
-        return {
-          success: false,
-          error: errorType,
-          details: errorDetails,
-          userMessage
-        };
+
+        return { success: false, error: errorType, details: errorDetails, userMessage };
       }
     } catch (error: any) {
       console.error('');
@@ -384,9 +406,9 @@ export const paymentService = {
       console.error('Message:', error.message);
       console.error('Stack:', error.stack);
       console.error('='.repeat(80));
-      
+
       displayError('Unexpected Error', error.message);
-      
+
       return {
         success: false,
         error: 'Unexpected error',
@@ -395,6 +417,8 @@ export const paymentService = {
       };
     }
   },
+
+  // ==================== PAYMENT VALIDATION ====================
 
   async validatePayment(transactionId: string): Promise<PaymentValidationResponse> {
     console.log('');
@@ -412,9 +436,8 @@ export const paymentService = {
         };
       }
 
-      // Get from Firestore
       const transaction = await this.getTransactionByTranId(transactionId);
-      
+
       if (!transaction) {
         console.error('❌ Transaction not found');
         displayError('Transaction Not Found', 'No payment record exists');
@@ -428,7 +451,6 @@ export const paymentService = {
 
       console.log('Current status:', transaction.status);
 
-      // Return cached result if completed
       if (transaction.status === 'success') {
         console.log('✅ Already validated');
         return {
@@ -440,7 +462,6 @@ export const paymentService = {
         };
       }
 
-      // Return if failed/cancelled
       if (transaction.status === 'failed' || transaction.status === 'cancelled') {
         const msg = `Payment ${transaction.status}`;
         displayError(msg, `This payment was ${transaction.status}`);
@@ -455,18 +476,14 @@ export const paymentService = {
         };
       }
 
-      // Call backend to validate
       console.log('📞 Calling backend validate API...');
-      
+
       try {
         const response = await axios.post(
           `${BACKEND_URL}/api/payment?action=validate`,
           { transactionId },
           {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
             timeout: 30000
           }
         );
@@ -479,7 +496,9 @@ export const paymentService = {
             status: response.data.status,
             validated: response.data.validated,
             transaction: response.data.transaction || transaction,
-            userMessage: response.data.validated ? 'Payment verified successfully' : 'Payment is being processed'
+            userMessage: response.data.validated
+              ? 'Payment verified successfully'
+              : 'Payment is being processed'
           };
         } else {
           const errorMsg = response.data.error || 'Validation failed';
@@ -490,22 +509,23 @@ export const paymentService = {
             status: transaction.status,
             transaction,
             details: response.data.details || 'Unable to validate payment status',
-            userMessage: response.data.userMessage || 'Unable to verify payment. Please contact support.'
+            userMessage:
+              response.data.userMessage || 'Unable to verify payment. Please contact support.'
           };
         }
       } catch (axiosError: any) {
         console.error('❌ Validation API error:', axiosError.message);
-        
+
         let userMessage = 'Unable to verify payment. Please contact support.';
         let errorDetails = axiosError.message;
-        
+
         if (axiosError.code === 'ECONNABORTED') {
           userMessage = 'Payment verification is taking too long. Please try again.';
           errorDetails = 'Validation request timed out';
         }
-        
+
         displayError('Validation Error', errorDetails);
-        
+
         return {
           success: false,
           error: 'Network error',
@@ -529,8 +549,10 @@ export const paymentService = {
 
   // ==================== VALIDATION HELPERS ====================
 
-  validatePaymentRequest(request: PaymentInitiationRequest): { valid: boolean; error?: string } {
-    // userId is the primary identifier — required
+  validatePaymentRequest(request: PaymentInitiationRequest): {
+    valid: boolean;
+    error?: string;
+  } {
     if (!request.userId || !request.userId.trim()) {
       return { valid: false, error: 'User ID is required' };
     }
@@ -539,8 +561,7 @@ export const paymentService = {
       return { valid: false, error: 'User name is required' };
     }
 
-    // userEmail is OPTIONAL in our system.
-    // If provided, it must be a valid format; if absent/empty, a placeholder will be used.
+    // userEmail is OPTIONAL. Validate format only if a value is supplied.
     if (request.userEmail && request.userEmail.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(request.userEmail.trim())) {
@@ -572,7 +593,6 @@ export const paymentService = {
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const userPart = userId.substring(0, 8).toUpperCase();
     const productPart = productId.substring(0, 8).toUpperCase();
-    
     return `TXN_${productPart}_${userPart}_${timestamp}_${random}`;
   },
 
@@ -580,10 +600,15 @@ export const paymentService = {
 
   async createTransaction(data: Omit<Transaction, 'id' | 'createdAt'>): Promise<string> {
     try {
-      const transactionData = {
+      // Merge in the server timestamp then sanitize the entire document.
+      // sanitizeForFirestore removes EVERY undefined value in the tree —
+      // this is the fix for "Unsupported field value: undefined" errors.
+      const rawData = {
         ...data,
         createdAt: Timestamp.now()
       };
+
+      const transactionData = sanitizeForFirestore(rawData);
 
       const docRef = await addDoc(collection(db, 'transactions'), transactionData);
       return docRef.id;
@@ -596,26 +621,24 @@ export const paymentService = {
 
   async getTransactionByTranId(transactionId: string): Promise<Transaction | null> {
     try {
-      const transactionsCollection = collection(db, 'transactions');
       const q = query(
-        transactionsCollection,
+        collection(db, 'transactions'),
         where('transactionId', '==', transactionId)
       );
       const snapshot = await getDocs(q);
-      
+
       if (!snapshot.empty) {
-        const docData = snapshot.docs[0];
-        const data = docData.data();
-        
+        const docSnap = snapshot.docs[0];
+        const data = docSnap.data();
         return {
-          id: docData.id,
+          id: docSnap.id,
           ...data,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate(),
           completedAt: data.completedAt?.toDate()
         } as Transaction;
       }
-      
+
       return null;
     } catch (error: any) {
       console.error('❌ Error getting transaction:', error.message);
@@ -625,28 +648,32 @@ export const paymentService = {
   },
 
   async updateTransactionByTranId(
-    transactionId: string, 
+    transactionId: string,
     updates: Partial<Transaction>
   ): Promise<void> {
     try {
       const transaction = await this.getTransactionByTranId(transactionId);
-      
+
       if (!transaction) {
         throw new Error(`Transaction not found: ${transactionId}`);
       }
 
       const transactionRef = doc(db, 'transactions', transaction.id);
-      
-      const cleanUpdates: any = { ...updates };
-      delete cleanUpdates.id;
-      delete cleanUpdates.createdAt;
-      delete cleanUpdates.transactionId;
-      delete cleanUpdates.userId;
 
-      await updateDoc(transactionRef, {
-        ...cleanUpdates,
+      // Remove fields that must never be overwritten
+      const raw: any = { ...updates };
+      delete raw.id;
+      delete raw.createdAt;
+      delete raw.transactionId;
+      delete raw.userId;
+
+      // Always sanitize before writing
+      const cleanUpdates = sanitizeForFirestore({
+        ...raw,
         updatedAt: Timestamp.now()
       });
+
+      await updateDoc(transactionRef, cleanUpdates);
     } catch (error: any) {
       console.error('❌ Error updating transaction:', error.message);
       console.error('Stack:', error.stack);
@@ -656,15 +683,14 @@ export const paymentService = {
 
   async getAllTransactions(): Promise<Transaction[]> {
     try {
-      const transactionsCollection = collection(db, 'transactions');
-      const transactionsSnapshot = await getDocs(
-        query(transactionsCollection, orderBy('createdAt', 'desc'))
+      const snapshot = await getDocs(
+        query(collection(db, 'transactions'), orderBy('createdAt', 'desc'))
       );
-      
-      return transactionsSnapshot.docs.map(doc => {
-        const data = doc.data();
+
+      return snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
         return {
-          id: doc.id,
+          id: docSnap.id,
           ...data,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate(),
@@ -684,18 +710,17 @@ export const paymentService = {
         throw new Error('User ID is required');
       }
 
-      const transactionsCollection = collection(db, 'transactions');
       const q = query(
-        transactionsCollection,
+        collection(db, 'transactions'),
         where('userId', '==', userId),
         orderBy('createdAt', 'desc')
       );
-      const transactionsSnapshot = await getDocs(q);
-      
-      return transactionsSnapshot.docs.map(doc => {
-        const data = doc.data();
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
         return {
-          id: doc.id,
+          id: docSnap.id,
           ...data,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate(),
