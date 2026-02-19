@@ -1,5 +1,6 @@
-// src/pages/CourseEnrollment.tsx - PART 1 OF 3
+// src/pages/CourseEnrollment.tsx
 // Course Enrollment — Real coupon validation + full statistics recording
+// BUG FIX: Handles SSLCommerz payment return URL and creates enrollment on success
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
@@ -9,7 +10,7 @@ import {
   AlertCircle, Percent, DollarSign, Check, AlertTriangle, ChevronDown,
   ExternalLink, Ticket, Info, Sparkles, Plus
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
 import { courseService, Course, EnrollmentCalculation, AppliedCoupon } from '../services/courseService';
@@ -40,11 +41,23 @@ interface CouponInputState {
   errorMessage: string;
 }
 
+// ==================== PAYMENT RETURN STATE ====================
+
+type PaymentReturnStatus = 'processing' | 'success' | 'failed' | 'cancelled';
+
+interface PaymentReturnState {
+  isHandling: boolean;
+  status: PaymentReturnStatus;
+  message: string;
+  courseTitle?: string;
+}
+
 // ==================== MAIN COMPONENT ====================
 
 const CourseEnrollment = () => {
   const { user } = useDashboard();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ==================== STATE MANAGEMENT ====================
 
@@ -91,8 +104,201 @@ const CourseEnrollment = () => {
   const [categories, setCategories] = useState<string[]>([]);
   const [classes, setClasses] = useState<string[]>([]);
 
+  // Payment return handling state
+  const [paymentReturn, setPaymentReturn] = useState<PaymentReturnState>({
+    isHandling: false,
+    status: 'processing',
+    message: '',
+  });
+
   // Ref to cancel in-flight coupon validation if user changes input fast
   const couponAbortRef = useRef<AbortController | null>(null);
+  // Guard to prevent double-processing of payment return
+  const paymentHandledRef = useRef(false);
+
+  // ==================== PAYMENT RETURN HANDLER ====================
+  // SSLCommerz redirects back with query params: ?tran_id=xxx&status=VALID/FAILED/CANCELLED
+  // We must detect these params, create the enrollment, then clean the URL.
+
+  useEffect(() => {
+    if (!user?.uid || paymentHandledRef.current) return;
+
+    const searchParams = new URLSearchParams(location.search);
+    const tranId = searchParams.get('tran_id') || searchParams.get('tranId') || searchParams.get('transaction_id');
+    const status = searchParams.get('status') || searchParams.get('payment_status');
+
+    // Also support custom params our paymentService might append
+    const courseId = searchParams.get('courseId') || searchParams.get('course_id');
+    const paymentStatus = searchParams.get('paymentStatus');
+
+    // Only handle if there's a transaction ID (payment gateway return)
+    if (!tranId) return;
+
+    paymentHandledRef.current = true;
+
+    const handlePaymentReturn = async () => {
+      console.log('');
+      console.log('💳 PAYMENT RETURN DETECTED');
+      console.log('═'.repeat(80));
+      console.log('Transaction ID:', tranId);
+      console.log('Status:', status);
+      console.log('Course ID:', courseId);
+      console.log('Payment Status:', paymentStatus);
+      console.log('═'.repeat(80));
+
+      // Clean URL immediately to prevent re-processing on refresh
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+
+      // Handle failed/cancelled payment
+      const statusLower = (status || paymentStatus || '').toLowerCase();
+      if (statusLower === 'failed' || statusLower === 'fail') {
+        setPaymentReturn({
+          isHandling: true,
+          status: 'failed',
+          message: 'Payment was not successful. Please try again.',
+        });
+        setTimeout(() => {
+          setPaymentReturn(prev => ({ ...prev, isHandling: false }));
+        }, 4000);
+        return;
+      }
+
+      if (statusLower === 'cancelled' || statusLower === 'cancel') {
+        setPaymentReturn({
+          isHandling: true,
+          status: 'cancelled',
+          message: 'Payment was cancelled. You can try enrolling again.',
+        });
+        setTimeout(() => {
+          setPaymentReturn(prev => ({ ...prev, isHandling: false }));
+        }, 4000);
+        return;
+      }
+
+      // Payment appears successful — validate and complete enrollment
+      setPaymentReturn({
+        isHandling: true,
+        status: 'processing',
+        message: 'Verifying payment and activating your enrollment...',
+      });
+
+      try {
+        // Step 1: Validate payment with payment service
+        const validation = await courseService.validatePayment(tranId);
+        console.log('Payment validation result:', validation);
+
+        if (!validation.success || !validation.validated) {
+          setPaymentReturn({
+            isHandling: true,
+            status: 'failed',
+            message: validation.message || 'Payment validation failed. Please contact support with transaction ID: ' + tranId,
+          });
+          setTimeout(() => {
+            setPaymentReturn(prev => ({ ...prev, isHandling: false }));
+          }, 8000);
+          return;
+        }
+
+        // Step 2: Extract metadata from payment service
+        // The paymentService.validatePayment should return metadata embedded in the payment record
+        // We need to reconstruct enrollment params. Try to get them from the validation response,
+        // or fall back to querying the payment record directly.
+        let enrollCourseId = courseId;
+        let enrollStudentId = user.uid;
+        let enrollStudentName = user.name;
+        let enrollStudentEmail = user.email;
+        let amountPaid = 0;
+        let appliedCouponsJson = '[]';
+        let discounts = {
+          previousStudentDiscount: 0,
+          extraDiscount: 0,
+          couponDiscount: 0,
+        };
+
+        // If validation response includes metadata, use it
+        const meta = (validation as any).metadata || (validation as any).paymentData?.metadata;
+        if (meta) {
+          enrollCourseId = meta.courseId || enrollCourseId;
+          enrollStudentId = meta.studentId || enrollStudentId;
+          enrollStudentName = meta.studentName || enrollStudentName;
+          enrollStudentEmail = meta.studentEmail || enrollStudentEmail;
+          amountPaid = Number(meta.finalPrice || meta.amount || 0);
+          appliedCouponsJson = meta.appliedCoupons || '[]';
+          discounts = {
+            previousStudentDiscount: Number(meta.previousStudentDiscount || 0),
+            extraDiscount: Number(meta.extraDiscount || 0),
+            couponDiscount: Number(meta.couponDiscount || 0),
+          };
+        } else if ((validation as any).amount) {
+          amountPaid = Number((validation as any).amount);
+        }
+
+        if (!enrollCourseId) {
+          throw new Error('Could not determine course ID from payment. Please contact support with transaction ID: ' + tranId);
+        }
+
+        // Step 3: Create the enrollment
+        setPaymentReturn(prev => ({
+          ...prev,
+          message: 'Payment verified! Activating your course access...',
+        }));
+
+        const enrollResult = await courseService.completeEnrollmentAfterPayment({
+          transactionId: tranId,
+          studentId: enrollStudentId,
+          studentName: enrollStudentName,
+          studentEmail: enrollStudentEmail,
+          courseId: enrollCourseId,
+          amountPaid,
+          appliedCouponsJson,
+          discounts,
+        });
+
+        if (enrollResult.success) {
+          // Fetch course title for success message
+          let courseTitle = 'the course';
+          try {
+            const course = await courseService.getCourseById(enrollCourseId);
+            if (course) courseTitle = course.title;
+          } catch (_) {}
+
+          setPaymentReturn({
+            isHandling: true,
+            status: 'success',
+            message: enrollResult.alreadyEnrolled
+              ? `You are already enrolled in "${courseTitle}".`
+              : `🎉 Successfully enrolled in "${courseTitle}"! You now have full access.`,
+            courseTitle,
+          });
+
+          // Reload course data so UI reflects new enrollment
+          await loadCourses();
+          setActiveTab('enrolled');
+
+          // Dismiss the payment return banner after a delay
+          setTimeout(() => {
+            setPaymentReturn(prev => ({ ...prev, isHandling: false }));
+          }, 6000);
+        } else {
+          throw new Error(enrollResult.error || 'Enrollment creation failed after payment');
+        }
+      } catch (err: any) {
+        console.error('Payment return handling error:', err);
+        setPaymentReturn({
+          isHandling: true,
+          status: 'failed',
+          message: `Payment was received but enrollment setup failed. Please contact support. Transaction ID: ${tranId}. Error: ${err.message}`,
+        });
+        setTimeout(() => {
+          setPaymentReturn(prev => ({ ...prev, isHandling: false }));
+        }, 15000);
+      }
+    };
+
+    handlePaymentReturn();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, location.search]);
 
   // ==================== INITIAL LOAD ====================
 
@@ -361,7 +567,7 @@ const CourseEnrollment = () => {
         return;
       }
 
-      // Paid course — initiate payment
+      // Paid course — initiate payment gateway
       const enrollmentResponse = await courseService.enrollStudent({
         courseId: course.id,
         studentId: user.uid,
@@ -372,6 +578,8 @@ const CourseEnrollment = () => {
 
       if (enrollmentResponse.success && enrollmentResponse.gatewayUrl) {
         setShowEnrollmentModal(false);
+        // Redirect to payment gateway — enrollment will be completed when SSLCommerz
+        // redirects back to this page with ?tran_id=xxx&status=VALID
         window.location.href = enrollmentResponse.gatewayUrl;
       } else {
         throw new Error(enrollmentResponse.error || 'Failed to initiate payment');
@@ -451,9 +659,40 @@ const CourseEnrollment = () => {
     clearMessages();
   };
 
-  // CONTINUE IN PART 2...
-// src/pages/CourseEnrollment.tsx - PART 2 OF 3
-// Course Card and Overview Modal — PASTE IMMEDIATELY AFTER PART 1
+  // ==================== RENDER: PAYMENT RETURN BANNER ====================
+
+  const PaymentReturnBanner = () => {
+    if (!paymentReturn.isHandling) return null;
+
+    const bgMap: Record<PaymentReturnStatus, string> = {
+      processing: 'bg-blue-900/80 border-blue-500/50 text-blue-200',
+      success: 'bg-success-dark border-green-500/50 text-success-light',
+      failed: 'bg-error-dark border-red-500/50 text-error-light',
+      cancelled: 'bg-warning-dark border-yellow-500/50 text-warning-light',
+    };
+
+    const iconMap: Record<PaymentReturnStatus, React.ReactNode> = {
+      processing: <Loader size={20} className="animate-spin flex-shrink-0" />,
+      success: <CheckCircle size={20} className="flex-shrink-0" />,
+      failed: <AlertCircle size={20} className="flex-shrink-0" />,
+      cancelled: <AlertTriangle size={20} className="flex-shrink-0" />,
+    };
+
+    return (
+      <div className={`border rounded-lg px-4 py-3 flex items-center gap-3 ${bgMap[paymentReturn.status]}`}>
+        {iconMap[paymentReturn.status]}
+        <span className="text-sm">{paymentReturn.message}</span>
+        {paymentReturn.status !== 'processing' && (
+          <button
+            onClick={() => setPaymentReturn(prev => ({ ...prev, isHandling: false }))}
+            className="ml-auto opacity-70 hover:opacity-100"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+    );
+  };
 
   // ==================== RENDER: LOADING STATE ====================
 
@@ -865,11 +1104,6 @@ const CourseEnrollment = () => {
     );
   };
 
-  // CONTINUE IN PART 3...
-// src/pages/CourseEnrollment.tsx - PART 3 OF 3
-// Enrollment Modal (with real coupon validation UI) and Main Render
-// PASTE IMMEDIATELY AFTER PART 2
-
   // ==================== ENROLLMENT MODAL ====================
 
   const EnrollmentModal = () => {
@@ -1219,6 +1453,9 @@ const CourseEnrollment = () => {
           </button>
         </div>
       </div>
+
+      {/* Payment return banner — shown when user returns from payment gateway */}
+      <PaymentReturnBanner />
 
       {error && (
         <div className="bg-error-dark text-error-light px-4 py-3 rounded-lg flex items-center justify-between">
