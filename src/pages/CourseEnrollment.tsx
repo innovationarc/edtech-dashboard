@@ -1,15 +1,15 @@
 // src/pages/CourseEnrollment.tsx - PART 1 OF 3
-// Course Enrollment - FIXED: Removed success message display
+// Course Enrollment — Real coupon validation + full statistics recording
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Search, Filter, Star, Clock, Users, Play, BookOpen, Award, Eye,
-  CheckCircle, Lock, Calendar, User, Video, FileText, Heart, X,
+  Search, Star, Clock, Play, BookOpen, Award, Eye,
+  CheckCircle, Calendar, Video, FileText, Heart, X,
   Grid3X3, List, Loader, Tag, TrendingUp, Download, ShoppingCart,
   AlertCircle, Percent, DollarSign, Check, AlertTriangle, ChevronDown,
-  ExternalLink
+  ExternalLink, Ticket, Info, Sparkles
 } from 'lucide-react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
 import { courseService, Course, EnrollmentCalculation } from '../services/courseService';
@@ -26,14 +26,23 @@ interface EnrichedCourse extends Course {
 interface EnrollmentModalData {
   course: Course;
   calculation: EnrollmentCalculation;
-  couponCode: string;
+}
+
+// ==================== COUPON FIELD STATE ====================
+
+type CouponFieldState = 'idle' | 'checking' | 'applied' | 'error';
+
+interface CouponState {
+  inputCode: string;
+  fieldState: CouponFieldState;
+  errorMessage: string;
+  successMessage: string;
 }
 
 // ==================== MAIN COMPONENT ====================
 
 const CourseEnrollment = () => {
   const { user } = useDashboard();
-  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   // ==================== STATE MANAGEMENT ====================
@@ -59,7 +68,6 @@ const CourseEnrollment = () => {
   const [priceFilter, setPriceFilter] = useState('all');
   const [sortBy, setSortBy] = useState('popular');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [showFilters, setShowFilters] = useState(false);
 
   // Modals
   const [showCourseModal, setShowCourseModal] = useState(false);
@@ -70,12 +78,21 @@ const CourseEnrollment = () => {
   // Enrollment Process
   const [enrolling, setEnrolling] = useState(false);
   const [calculatingPrice, setCalculatingPrice] = useState(false);
-  const [couponCode, setCouponCode] = useState('');
-  const [couponError, setCouponError] = useState('');
+
+  // Coupon state (lives at page level for stable reference from EnrollmentModal)
+  const [coupon, setCoupon] = useState<CouponState>({
+    inputCode: '',
+    fieldState: 'idle',
+    errorMessage: '',
+    successMessage: '',
+  });
 
   // Filter Options
   const [categories, setCategories] = useState<string[]>([]);
   const [classes, setClasses] = useState<string[]>([]);
+
+  // Ref to cancel in-flight coupon validation if user changes input fast
+  const couponAbortRef = useRef<AbortController | null>(null);
 
   // ==================== INITIAL LOAD ====================
 
@@ -96,17 +113,12 @@ const CourseEnrollment = () => {
       setLoading(true);
       setError('');
 
-      console.log('Loading courses...');
-
       const publishedCourses = await courseService.getPublishedCourses();
-      console.log('Published courses loaded:', publishedCourses.length);
-      
       const enrollments = await courseService.getStudentEnrollments(user?.uid || '');
-      console.log('User enrollments:', enrollments.length);
       
       const enrolledCourseIds = enrollments.map(e => e.courseId);
       
-      const enrollmentMap = new Map();
+      const enrollmentMap = new Map<string, { progress: number; enrollmentId: string }>();
       enrollments.forEach(enrollment => {
         enrollmentMap.set(enrollment.courseId, {
           progress: enrollment.progress || 0,
@@ -117,7 +129,6 @@ const CourseEnrollment = () => {
       const enrichedCourses: EnrichedCourse[] = publishedCourses.map(course => {
         const isEnrolled = enrolledCourseIds.includes(course.id);
         const enrollmentInfo = enrollmentMap.get(course.id);
-
         return {
           ...course,
           isEnrolled,
@@ -131,16 +142,13 @@ const CourseEnrollment = () => {
 
       const categorySet = new Set<string>();
       const classSet = new Set<string>();
-      
       enrichedCourses.forEach(course => {
         if (course.category) categorySet.add(course.category);
         if (course.class) classSet.add(course.class);
       });
-      
       setCategories(Array.from(categorySet).sort());
       setClasses(Array.from(classSet).sort());
 
-      console.log('Courses loaded successfully');
     } catch (error: any) {
       console.error('Error loading courses:', error);
       setError('Failed to load courses. Please refresh the page or try again later.');
@@ -169,41 +177,28 @@ const CourseEnrollment = () => {
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(course => course.category === selectedCategory);
     }
-
     if (selectedClass !== 'all') {
       filtered = filtered.filter(course => course.class === selectedClass);
     }
-
     if (selectedLevel !== 'all') {
       filtered = filtered.filter(course => course.level === selectedLevel);
     }
 
     if (priceFilter !== 'all') {
-      if (priceFilter === 'free') {
-        filtered = filtered.filter(course => course.price === 0);
-      } else if (priceFilter === 'paid') {
-        filtered = filtered.filter(course => course.price > 0);
-      } else if (priceFilter === 'under1000') {
-        filtered = filtered.filter(course => course.price < 1000);
-      } else if (priceFilter === 'under5000') {
-        filtered = filtered.filter(course => course.price < 5000);
-      }
+      if (priceFilter === 'free') filtered = filtered.filter(c => c.price === 0);
+      else if (priceFilter === 'paid') filtered = filtered.filter(c => c.price > 0);
+      else if (priceFilter === 'under1000') filtered = filtered.filter(c => c.price < 1000);
+      else if (priceFilter === 'under5000') filtered = filtered.filter(c => c.price < 5000);
     }
 
     const sorted = [...filtered].sort((a, b) => {
       switch (sortBy) {
-        case 'popular':
-          return b.studentCount - a.studentCount;
-        case 'rating':
-          return b.rating - a.rating;
-        case 'newest':
-          return b.createdAt.getTime() - a.createdAt.getTime();
-        case 'price-low':
-          return a.price - b.price;
-        case 'price-high':
-          return b.price - a.price;
-        default:
-          return 0;
+        case 'popular': return b.studentCount - a.studentCount;
+        case 'rating': return b.rating - a.rating;
+        case 'newest': return b.createdAt.getTime() - a.createdAt.getTime();
+        case 'price-low': return a.price - b.price;
+        case 'price-high': return b.price - a.price;
+        default: return 0;
       }
     });
 
@@ -213,6 +208,78 @@ const CourseEnrollment = () => {
       setEnrolledCourses(sorted);
     }
   };
+
+  // ==================== COUPON HELPERS ====================
+
+  const resetCoupon = useCallback(() => {
+    // Cancel any in-flight request
+    couponAbortRef.current?.abort();
+    setCoupon({ inputCode: '', fieldState: 'idle', errorMessage: '', successMessage: '' });
+  }, []);
+
+  /**
+   * Applies a coupon code by re-running price calculation.
+   * Returns the updated EnrollmentCalculation on success (or current if already applied).
+   */
+  const applyCoupon = useCallback(async (
+    code: string,
+    currentData: EnrollmentModalData
+  ): Promise<EnrollmentCalculation | null> => {
+    if (!code.trim()) return null;
+
+    // Cancel previous in-flight request
+    couponAbortRef.current?.abort();
+    const abortCtrl = new AbortController();
+    couponAbortRef.current = abortCtrl;
+
+    setCoupon(prev => ({ ...prev, fieldState: 'checking', errorMessage: '', successMessage: '' }));
+
+    try {
+      const calculation = await courseService.calculateEnrollmentPrice(
+        currentData.course.id,
+        user?.uid || '',
+        code.trim()
+      );
+
+      // Abort check — if aborted in the meantime, bail out silently
+      if (abortCtrl.signal.aborted) return null;
+
+      if (calculation.couponDiscount > 0 && calculation.couponCode) {
+        setCoupon(prev => ({
+          ...prev,
+          fieldState: 'applied',
+          successMessage: calculation.couponSuccessMessage || `Coupon "${calculation.couponCode}" applied! You save ৳${calculation.couponDiscount.toLocaleString()}.`,
+          errorMessage: '',
+        }));
+        return calculation;
+      } else {
+        // Coupon was attempted but not applied — use couponError from service
+        const reason = calculation.couponError || 'Invalid or inapplicable coupon code.';
+        setCoupon(prev => ({ ...prev, fieldState: 'error', errorMessage: reason, successMessage: '' }));
+        return null;
+      }
+    } catch (err: any) {
+      if (abortCtrl.signal.aborted) return null;
+      setCoupon(prev => ({
+        ...prev,
+        fieldState: 'error',
+        errorMessage: 'Unable to validate coupon. Please try again.',
+        successMessage: '',
+      }));
+      return null;
+    }
+  }, [user]);
+
+  const removeCoupon = useCallback(async (currentData: EnrollmentModalData) => {
+    setCoupon(prev => ({ ...prev, fieldState: 'idle', errorMessage: '', successMessage: '' }));
+    try {
+      const calculation = await courseService.calculateEnrollmentPrice(
+        currentData.course.id,
+        user?.uid || ''
+      );
+      setEnrollmentData({ ...currentData, calculation });
+    } catch { /* silent */ }
+  }, [user]);
 
   // ==================== EVENT HANDLERS ====================
 
@@ -231,68 +298,19 @@ const CourseEnrollment = () => {
       setCalculatingPrice(true);
       setError('');
       setWarning('');
-      setCouponError('');
-
-      console.log('Calculating enrollment price...');
+      resetCoupon();
 
       const calculation = await courseService.calculateEnrollmentPrice(
         course.id,
         user.uid,
-        undefined // No coupon initially
+        undefined
       );
 
-      console.log('Price calculation:', calculation);
-
-      setEnrollmentData({
-        course,
-        calculation,
-        couponCode: ''
-      });
-
+      setEnrollmentData({ course, calculation });
       setShowEnrollmentModal(true);
     } catch (error: any) {
       console.error('Error calculating price:', error);
       setError('Failed to calculate price. Please try again.');
-    } finally {
-      setCalculatingPrice(false);
-    }
-  };
-
-  const handleApplyCoupon = async (code: string) => {
-    if (!enrollmentData) return;
-
-    try {
-      setCalculatingPrice(true);
-      setCouponError('');
-
-      console.log('Applying coupon code:', code);
-
-      const calculation = await courseService.calculateEnrollmentPrice(
-        enrollmentData.course.id,
-        user?.uid || '',
-        code
-      );
-
-      // Check if coupon was actually applied
-      if (calculation.couponDiscount > 0) {
-        setEnrollmentData({
-          ...enrollmentData,
-          calculation,
-          couponCode: code
-        });
-        console.log('Coupon applied successfully:', calculation);
-      } else {
-        setCouponError('Invalid or expired coupon code');
-        // Still update to remove any previous coupon
-        setEnrollmentData({
-          ...enrollmentData,
-          calculation,
-          couponCode: ''
-        });
-      }
-    } catch (error: any) {
-      console.error('Error applying coupon:', error);
-      setCouponError('Failed to apply coupon code');
     } finally {
       setCalculatingPrice(false);
     }
@@ -308,17 +326,13 @@ const CourseEnrollment = () => {
 
       const { course, calculation } = enrollmentData;
 
-      console.log('Processing enrollment...');
-
-      // Free course - direct enrollment
+      // Free course — direct enrollment
       if (calculation.finalPrice === 0) {
         await handleFreeEnrollment(course, calculation);
         return;
       }
 
-      // Paid course - initiate payment
-      console.log('Initiating payment...');
-
+      // Paid course — initiate payment
       const enrollmentResponse = await courseService.enrollStudent({
         courseId: course.id,
         studentId: user.uid,
@@ -328,12 +342,7 @@ const CourseEnrollment = () => {
       });
 
       if (enrollmentResponse.success && enrollmentResponse.gatewayUrl) {
-        console.log('Redirecting to payment gateway...');
-        
-        // Close modal
         setShowEnrollmentModal(false);
-        
-        // Redirect to payment gateway
         window.location.href = enrollmentResponse.gatewayUrl;
       } else {
         throw new Error(enrollmentResponse.error || 'Failed to initiate payment');
@@ -349,8 +358,6 @@ const CourseEnrollment = () => {
     if (!user) return;
 
     try {
-      console.log('Processing free enrollment...');
-
       const enrollmentResponse = await courseService.enrollStudent({
         courseId: course.id,
         studentId: user.uid,
@@ -363,7 +370,7 @@ const CourseEnrollment = () => {
         setSuccess(`✅ Successfully enrolled in "${course.title}"!`);
         setShowEnrollmentModal(false);
         setEnrollmentData(null);
-        
+        resetCoupon();
         await loadCourses();
         setActiveTab('enrolled');
       } else {
@@ -378,17 +385,10 @@ const CourseEnrollment = () => {
   };
 
   const toggleFavorite = (courseId: string) => {
-    setAllCourses(prevCourses => 
-      prevCourses.map(course => 
-        course.id === courseId 
-          ? { ...course, isFavorite: !course.isFavorite }
-          : course
-      )
-    );
+    setAllCourses(prev => prev.map(c => c.id === courseId ? { ...c, isFavorite: !c.isFavorite } : c));
   };
 
   const handleContinueLearning = (courseId: string) => {
-    // Navigate to content library - placeholder for now
     navigate(`/content-library?courseId=${courseId}`);
   };
 
@@ -405,9 +405,7 @@ const CourseEnrollment = () => {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+      year: 'numeric', month: 'long', day: 'numeric'
     });
   };
 
@@ -415,10 +413,18 @@ const CourseEnrollment = () => {
     setError('');
     setSuccess('');
     setWarning('');
-    setCouponError('');
   };
+
+  const closeEnrollmentModal = () => {
+    setShowEnrollmentModal(false);
+    setEnrollmentData(null);
+    resetCoupon();
+    clearMessages();
+  };
+
+  // CONTINUE IN PART 2...
 // src/pages/CourseEnrollment.tsx - PART 2 OF 3
-// Course Card and Overview Modal - PASTE IMMEDIATELY AFTER PART 1
+// Course Card and Overview Modal — PASTE IMMEDIATELY AFTER PART 1
 
   // ==================== RENDER: LOADING STATE ====================
 
@@ -438,8 +444,7 @@ const CourseEnrollment = () => {
   const CourseCard = ({ course }: { course: EnrichedCourse }) => {
     const isEnrolled = course.isEnrolled;
 
-    // Get special features that are enabled
-    const specialFeatures = [];
+    const specialFeatures: string[] = [];
     if (course.hasAiQnA) specialFeatures.push('AI Q&A');
     if (course.hasHumanQnA) specialFeatures.push('Human Q&A');
     if (course.hasStudyPlanner) specialFeatures.push('Study Planner');
@@ -463,10 +468,7 @@ const CourseEnrollment = () => {
           <div className="absolute top-3 right-3 flex gap-2">
             {!isEnrolled && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFavorite(course.id);
-                }}
+                onClick={(e) => { e.stopPropagation(); toggleFavorite(course.id); }}
                 className={`p-2 rounded-full backdrop-blur-sm transition-colors ${
                   course.isFavorite 
                     ? 'bg-red-500 text-white' 
@@ -505,7 +507,7 @@ const CourseEnrollment = () => {
             <span className="text-gray-400">{course.studentCount.toLocaleString()} students</span>
           </div>
 
-          <h3 
+          <h3
             className="text-white font-medium mb-2 line-clamp-2 cursor-pointer hover:text-primary-300 transition-colors"
             onClick={() => handleCourseClick(course)}
           >
@@ -522,11 +524,10 @@ const CourseEnrollment = () => {
             )}
           </div>
 
-          {/* Special Features */}
           {specialFeatures.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-3">
               {specialFeatures.map((feature, idx) => (
-                <span 
+                <span
                   key={idx}
                   className="px-2 py-0.5 bg-primary-900/30 text-primary-300 rounded text-xs border border-primary-800"
                 >
@@ -611,7 +612,6 @@ const CourseEnrollment = () => {
 
     const isEnrolled = selectedCourse.isEnrolled;
 
-    // Group routine files by category
     const routineFilesByCategory = selectedCourse.routineFiles?.reduce((acc, file) => {
       if (!acc[file.category]) {
         acc[file.category] = [];
@@ -626,10 +626,7 @@ const CourseEnrollment = () => {
           <div className="flex items-center justify-between p-6 border-b border-background-700 sticky top-0 bg-background-900 z-10">
             <h2 className="text-2xl font-bold text-white">Course Overview</h2>
             <button
-              onClick={() => {
-                setShowCourseModal(false);
-                setSelectedCourse(null);
-              }}
+              onClick={() => { setShowCourseModal(false); setSelectedCourse(null); }}
               className="p-2 hover:bg-background-800 rounded-lg transition-colors text-gray-400 hover:text-white"
             >
               <X size={24} />
@@ -637,7 +634,6 @@ const CourseEnrollment = () => {
           </div>
 
           <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-            {/* Thumbnail */}
             {selectedCourse.thumbnail && (
               <div className="rounded-lg overflow-hidden">
                 <img
@@ -648,7 +644,6 @@ const CourseEnrollment = () => {
               </div>
             )}
 
-            {/* Title & Basic Info */}
             <div>
               <h3 className="text-2xl font-bold text-white mb-2">{selectedCourse.title}</h3>
               {selectedCourse.description && (
@@ -656,7 +651,6 @@ const CourseEnrollment = () => {
               )}
             </div>
 
-            {/* Class & Category */}
             <div className="grid grid-cols-2 gap-4">
               {selectedCourse.class && (
                 <div className="bg-background-800 p-4 rounded-lg">
@@ -672,7 +666,6 @@ const CourseEnrollment = () => {
               )}
             </div>
 
-            {/* Level */}
             {selectedCourse.level && selectedCourse.level !== 'unspecified' && (
               <div className="bg-background-800 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm mb-2">Level</p>
@@ -682,7 +675,6 @@ const CourseEnrollment = () => {
               </div>
             )}
 
-            {/* Duration (only for enrolled courses) */}
             {isEnrolled && selectedCourse.duration && selectedCourse.duration !== '00:00' && (
               <div className="bg-background-800 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm mb-1">Duration</p>
@@ -693,7 +685,6 @@ const CourseEnrollment = () => {
               </div>
             )}
 
-            {/* Special Features */}
             {(selectedCourse.hasAiQnA || selectedCourse.hasHumanQnA || selectedCourse.hasStudyPlanner) && (
               <div className="bg-background-800 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm mb-3">Special Features</p>
@@ -717,7 +708,6 @@ const CourseEnrollment = () => {
               </div>
             )}
 
-            {/* Price & Discounts */}
             <div className="bg-background-800 p-4 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Price</span>
@@ -748,7 +738,6 @@ const CourseEnrollment = () => {
               )}
             </div>
 
-            {/* Course Visibility Date */}
             {selectedCourse.validity && (
               <div className="bg-background-800 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm mb-1">Course Available Until</p>
@@ -756,7 +745,6 @@ const CourseEnrollment = () => {
               </div>
             )}
 
-            {/* Requirements */}
             {selectedCourse.requirements && selectedCourse.requirements.length > 0 && (
               <div className="bg-background-800 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm mb-3">Requirements</p>
@@ -771,7 +759,6 @@ const CourseEnrollment = () => {
               </div>
             )}
 
-            {/* What You Will Learn */}
             {selectedCourse.whatYouWillLearn && selectedCourse.whatYouWillLearn.length > 0 && (
               <div className="bg-background-800 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm mb-3">What You Will Learn</p>
@@ -786,7 +773,6 @@ const CourseEnrollment = () => {
               </div>
             )}
 
-            {/* Routine Files */}
             {routineFilesByCategory && Object.keys(routineFilesByCategory).length > 0 && (
               <div className="bg-background-800 p-4 rounded-lg">
                 <p className="text-gray-400 text-sm mb-3">Downloadable Files</p>
@@ -816,7 +802,6 @@ const CourseEnrollment = () => {
             )}
           </div>
 
-          {/* Footer with action button */}
           <div className="p-6 border-t border-background-700 sticky bottom-0 bg-background-900">
             {isEnrolled ? (
               <button
@@ -828,10 +813,7 @@ const CourseEnrollment = () => {
               </button>
             ) : (
               <button
-                onClick={() => {
-                  setShowCourseModal(false);
-                  handleEnrollClick(selectedCourse);
-                }}
+                onClick={() => { setShowCourseModal(false); handleEnrollClick(selectedCourse); }}
                 disabled={calculatingPrice}
                 className="w-full py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-800 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
@@ -856,7 +838,8 @@ const CourseEnrollment = () => {
 
   // CONTINUE IN PART 3...
 // src/pages/CourseEnrollment.tsx - PART 3 OF 3
-// Enrollment Modal and Main Render - PASTE IMMEDIATELY AFTER PART 2
+// Enrollment Modal (with real coupon validation UI) and Main Render
+// PASTE IMMEDIATELY AFTER PART 2
 
   // ==================== ENROLLMENT MODAL ====================
 
@@ -864,19 +847,47 @@ const CourseEnrollment = () => {
     if (!enrollmentData) return null;
 
     const { course, calculation } = enrollmentData;
-    const [localCouponCode, setLocalCouponCode] = useState('');
+
+    // Local coupon input — syncs with page-level coupon state
+    const [localCode, setLocalCode] = useState(coupon.inputCode);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    // When the coupon field state changes to idle/error reset local code visibility
+    useEffect(() => {
+      if (coupon.fieldState === 'idle') setLocalCode('');
+    }, [coupon.fieldState]);
+
+    const handleApply = async () => {
+      if (!localCode.trim() || coupon.fieldState === 'checking') return;
+
+      // Update inputCode in page state so it survives re-renders
+      setCoupon(prev => ({ ...prev, inputCode: localCode.trim().toUpperCase() }));
+
+      const updatedCalc = await applyCoupon(localCode.trim(), enrollmentData);
+      if (updatedCalc) {
+        setEnrollmentData({ ...enrollmentData, calculation: updatedCalc });
+      }
+    };
+
+    const handleRemoveCoupon = async () => {
+      setLocalCode('');
+      await removeCoupon(enrollmentData);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') handleApply();
+    };
+
+    const isCouponApplied = coupon.fieldState === 'applied' && calculation.couponDiscount > 0;
 
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-background-900 rounded-xl w-full max-w-md shadow-2xl border border-background-700">
+          {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-background-700">
             <h2 className="text-xl font-bold text-white">Complete Enrollment</h2>
             <button
-              onClick={() => {
-                setShowEnrollmentModal(false);
-                setEnrollmentData(null);
-                clearMessages();
-              }}
+              onClick={closeEnrollmentModal}
               disabled={enrolling}
               className="p-2 hover:bg-background-800 rounded-lg transition-colors text-gray-400 hover:text-white disabled:opacity-50"
             >
@@ -885,11 +896,13 @@ const CourseEnrollment = () => {
           </div>
 
           <div className="p-6 space-y-4">
+            {/* Course info */}
             <div>
               <h3 className="text-lg font-medium text-white mb-1">{course.title}</h3>
               <p className="text-sm text-gray-400">{course.class}</p>
             </div>
 
+            {/* Price breakdown */}
             <div className="bg-background-800 p-4 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Base Price</span>
@@ -919,8 +932,13 @@ const CourseEnrollment = () => {
               {calculation.couponDiscount > 0 && (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-400 flex items-center gap-1">
-                    <Tag size={14} />
+                    <Ticket size={14} />
                     Coupon
+                    {calculation.couponCode && (
+                      <span className="font-mono text-xs text-primary-300 ml-1 bg-primary-900/30 px-1.5 py-0.5 rounded">
+                        {calculation.couponCode}
+                      </span>
+                    )}
                   </span>
                   <span className="text-green-400">-৳{calculation.couponDiscount.toLocaleString()}</span>
                 </div>
@@ -945,52 +963,131 @@ const CourseEnrollment = () => {
               </div>
             </div>
 
-            {/* Coupon Code Input */}
-            {calculation.finalPrice > 0 && (
-              <div className="space-y-2">
-                <label className="text-sm text-gray-400">Have a coupon code?</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={localCouponCode}
-                    onChange={(e) => setLocalCouponCode(e.target.value.toUpperCase())}
-                    placeholder="Enter coupon code"
-                    className="flex-1 bg-background-700 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    disabled={calculatingPrice}
-                  />
+            {/* ── COUPON CODE SECTION ── */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Ticket size={15} className="text-gray-400" />
+                <label className="text-sm font-medium text-gray-300">Coupon Code</label>
+              </div>
+
+              {/* Coupon applied banner */}
+              {isCouponApplied ? (
+                <div className="flex items-start justify-between gap-3 bg-green-900/20 border border-green-500/40 rounded-lg p-3">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <CheckCircle size={16} className="text-green-400 flex-shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm text-green-400 font-semibold">
+                        Coupon Applied: <span className="font-mono">{calculation.couponCode}</span>
+                      </p>
+                      {coupon.successMessage && (
+                        <p className="text-xs text-green-300/80 mt-0.5 break-words">{coupon.successMessage}</p>
+                      )}
+                      <p className="text-xs text-green-300/70 mt-0.5">
+                        Saving ৳{calculation.couponDiscount.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
                   <button
-                    onClick={() => handleApplyCoupon(localCouponCode)}
-                    disabled={!localCouponCode.trim() || calculatingPrice}
-                    className="px-4 py-2 bg-background-700 hover:bg-background-600 disabled:bg-background-800 disabled:opacity-50 text-white rounded-lg transition-colors"
+                    onClick={handleRemoveCoupon}
+                    disabled={enrolling || coupon.fieldState === 'checking'}
+                    className="flex-shrink-0 text-xs text-gray-400 hover:text-red-400 transition-colors disabled:opacity-40 underline whitespace-nowrap"
                   >
-                    {calculatingPrice ? (
-                      <Loader size={16} className="animate-spin" />
-                    ) : (
-                      'Apply'
-                    )}
+                    Remove
                   </button>
                 </div>
-                {couponError && (
-                  <p className="text-xs text-error-light">{couponError}</p>
-                )}
-                <p className="text-xs text-gray-500">Try: WELCOME10, SAVE50, SAVE100</p>
-              </div>
-            )}
+              ) : (
+                /* Coupon input */
+                <div className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={localCode}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase().replace(/\s/g, '');
+                          setLocalCode(val);
+                          // Clear previous error when user edits
+                          if (coupon.fieldState === 'error') {
+                            setCoupon(prev => ({ ...prev, fieldState: 'idle', errorMessage: '' }));
+                          }
+                        }}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Enter coupon code"
+                        maxLength={30}
+                        disabled={coupon.fieldState === 'checking' || enrolling}
+                        className={`w-full bg-background-700 text-white rounded-lg px-3 py-2 pr-8 font-mono text-sm
+                          focus:outline-none focus:ring-2 transition-colors
+                          ${coupon.fieldState === 'error'
+                            ? 'border border-red-500/60 focus:ring-red-500/40'
+                            : 'border border-background-600 focus:ring-primary-500'
+                          }
+                          disabled:opacity-50`}
+                      />
+                      {localCode && coupon.fieldState !== 'checking' && (
+                        <button
+                          onClick={() => {
+                            setLocalCode('');
+                            setCoupon(prev => ({ ...prev, fieldState: 'idle', errorMessage: '' }));
+                            inputRef.current?.focus();
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleApply}
+                      disabled={!localCode.trim() || coupon.fieldState === 'checking' || enrolling}
+                      className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-background-700
+                        disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium
+                        rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      {coupon.fieldState === 'checking' ? (
+                        <><Loader size={14} className="animate-spin" />Checking...</>
+                      ) : (
+                        'Apply'
+                      )}
+                    </button>
+                  </div>
 
+                  {/* Error message */}
+                  {coupon.fieldState === 'error' && coupon.errorMessage && (
+                    <div className="flex items-start gap-1.5 text-red-400">
+                      <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                      <p className="text-xs">{coupon.errorMessage}</p>
+                    </div>
+                  )}
+
+                  {/* Hint text */}
+                  {coupon.fieldState === 'idle' && !localCode && (
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <Info size={11} />
+                      Have a promotional or discount code? Enter it above.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* ── END COUPON SECTION ── */}
+
+            {/* Previous student discount notice */}
             {calculation.hasPreviousEnrollments && calculation.previousStudentDiscount > 0 && (
               <div className="bg-green-900/20 border border-green-500/30 p-3 rounded-lg">
                 <div className="flex items-start gap-2">
                   <CheckCircle size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-sm text-green-400 font-medium">Previous Student Discount!</p>
+                    <p className="text-sm text-green-400 font-medium">Previous Student Discount Applied!</p>
                     <p className="text-xs text-gray-400 mt-1">
-                      Saving ৳{calculation.previousStudentDiscount.toLocaleString()}
+                      Saving ৳{calculation.previousStudentDiscount.toLocaleString()} as a returning student.
                     </p>
                   </div>
                 </div>
               </div>
             )}
 
+            {/* Page-level error */}
             {error && (
               <div className="bg-error-dark text-error-light p-3 rounded-lg text-sm flex items-center gap-2">
                 <AlertCircle size={16} className="flex-shrink-0" />
@@ -998,6 +1095,7 @@ const CourseEnrollment = () => {
               </div>
             )}
 
+            {/* Warning */}
             {warning && (
               <div className="bg-warning-dark text-warning-light p-3 rounded-lg text-sm flex items-center gap-2">
                 <AlertTriangle size={16} className="flex-shrink-0" />
@@ -1005,13 +1103,10 @@ const CourseEnrollment = () => {
               </div>
             )}
 
+            {/* Action buttons */}
             <div className="flex gap-3 pt-4">
               <button
-                onClick={() => {
-                  setShowEnrollmentModal(false);
-                  setEnrollmentData(null);
-                  clearMessages();
-                }}
+                onClick={closeEnrollmentModal}
                 disabled={enrolling}
                 className="flex-1 py-3 bg-background-700 hover:bg-background-600 disabled:bg-background-800 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
@@ -1019,7 +1114,7 @@ const CourseEnrollment = () => {
               </button>
               <button
                 onClick={handleProceedToPayment}
-                disabled={enrolling}
+                disabled={enrolling || coupon.fieldState === 'checking'}
                 className="flex-1 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-800 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {enrolling ? (
@@ -1041,6 +1136,7 @@ const CourseEnrollment = () => {
               </button>
             </div>
 
+            {/* Secure payment note */}
             {calculation.finalPrice > 0 && !enrolling && (
               <div className="text-center">
                 <p className="text-xs text-gray-500">
@@ -1159,9 +1255,7 @@ const CourseEnrollment = () => {
             className="w-full bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="all">All Categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
+            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
           </select>
 
           <select
@@ -1170,9 +1264,7 @@ const CourseEnrollment = () => {
             className="w-full bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <option value="all">All Classes</option>
-            {classes.map(cls => (
-              <option key={cls} value={cls}>{cls}</option>
-            ))}
+            {classes.map(cls => <option key={cls} value={cls}>{cls}</option>)}
           </select>
 
           <select
@@ -1224,7 +1316,7 @@ const CourseEnrollment = () => {
                 {activeTab === 'available' ? 'No courses found' : 'No enrolled courses'}
               </h3>
               <p className="text-gray-400">
-                {activeTab === 'available' 
+                {activeTab === 'available'
                   ? 'Try adjusting your filters'
                   : 'Enroll in a course to get started'}
               </p>
@@ -1240,5 +1332,3 @@ const CourseEnrollment = () => {
 };
 
 export default CourseEnrollment;
-
-  // CONTINUE IN PART 2...
