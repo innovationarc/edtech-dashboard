@@ -1,5 +1,7 @@
 // src/services/paymentService.ts
 // Payment Service - FULLY FIXED with Enhanced Error Logging
+// FIX: Email is now optional; userId is the primary identifier
+// FIX: Single api/payment.ts endpoint (no separate payment-callback.ts needed)
 
 import { 
   collection, 
@@ -30,7 +32,7 @@ export interface Transaction {
   id: string;
   userId: string;
   userName: string;
-  userEmail: string;
+  userEmail: string;        // May be empty string if user has no email
   amount: number;
   currency: string;
   status: 'success' | 'failed' | 'pending' | 'validating' | 'refunded' | 'cancelled';
@@ -58,7 +60,7 @@ export interface Transaction {
 export interface PaymentInitiationRequest {
   userId: string;
   userName: string;
-  userEmail: string;
+  userEmail?: string;       // OPTIONAL - not required by the user system
   amount: number;
   productId: string;
   productName: string;
@@ -107,9 +109,6 @@ function displayError(error: string, details?: string): void {
   
   // Also try to show in UI if possible
   if (typeof window !== 'undefined') {
-    const errorMsg = `Payment Error: ${error}${details ? '\n' + details : ''}`;
-    
-    // Try to create a visible error notification
     try {
       const existingError = document.getElementById('payment-error-toast');
       if (existingError) {
@@ -155,6 +154,18 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
+// ==================== EMAIL HELPER ====================
+// SSLCOMMERZ requires an email field. Since our user system doesn't mandate email,
+// we generate a safe placeholder using the userId when a real email isn't available.
+function resolveEmail(userId: string, userEmail?: string): string {
+  if (userEmail && userEmail.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim())) {
+    return userEmail.trim();
+  }
+  // Generate a deterministic placeholder that satisfies SSLCOMMERZ format validation
+  const safeId = userId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'user';
+  return `${safeId}@noemail.local`;
+}
+
 // ==================== PAYMENT SERVICE ====================
 
 export const paymentService = {
@@ -190,19 +201,23 @@ export const paymentService = {
       }
       console.log('✅ Request validated');
 
-      // Step 2: Generate transaction ID
-      console.log('📋 Step 2: Generating transaction ID...');
+      // Step 2: Resolve email (may be a placeholder if user has no email)
+      const resolvedEmail = resolveEmail(request.userId, request.userEmail);
+      console.log('📋 Step 2: Resolved email:', resolvedEmail);
+
+      // Step 3: Generate transaction ID
+      console.log('📋 Step 3: Generating transaction ID...');
       const transactionId = this.generateTransactionId(request.productId, request.userId);
       console.log('✅ Transaction ID:', transactionId);
 
-      // Step 3: Create Firestore record
-      console.log('📋 Step 3: Creating Firestore transaction...');
+      // Step 4: Create Firestore record
+      console.log('📋 Step 4: Creating Firestore transaction...');
       try {
         const firestoreId = await this.createTransaction({
           transactionId,
           userId: request.userId,
           userName: request.userName,
-          userEmail: request.userEmail,
+          userEmail: resolvedEmail,
           amount: request.amount,
           currency: 'BDT',
           gateway: 'SSLCOMMERZ',
@@ -226,8 +241,8 @@ export const paymentService = {
         };
       }
 
-      // Step 4: Call backend API
-      console.log('📋 Step 4: Calling backend API...');
+      // Step 5: Call backend API
+      console.log('📋 Step 5: Calling backend API...');
       const apiUrl = `${BACKEND_URL}/api/payment?action=initiate`;
       console.log('API URL:', apiUrl);
       
@@ -235,7 +250,7 @@ export const paymentService = {
         transactionId,
         userId: request.userId,
         userName: request.userName,
-        userEmail: request.userEmail,
+        userEmail: resolvedEmail,
         amount: request.amount,
         productId: request.productId,
         productName: request.productName,
@@ -515,6 +530,7 @@ export const paymentService = {
   // ==================== VALIDATION HELPERS ====================
 
   validatePaymentRequest(request: PaymentInitiationRequest): { valid: boolean; error?: string } {
+    // userId is the primary identifier — required
     if (!request.userId || !request.userId.trim()) {
       return { valid: false, error: 'User ID is required' };
     }
@@ -523,13 +539,13 @@ export const paymentService = {
       return { valid: false, error: 'User name is required' };
     }
 
-    if (!request.userEmail || !request.userEmail.trim()) {
-      return { valid: false, error: 'User email is required' };
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(request.userEmail)) {
-      return { valid: false, error: 'Invalid email address format' };
+    // userEmail is OPTIONAL in our system.
+    // If provided, it must be a valid format; if absent/empty, a placeholder will be used.
+    if (request.userEmail && request.userEmail.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(request.userEmail.trim())) {
+        return { valid: false, error: 'Invalid email address format' };
+      }
     }
 
     if (!request.productId || !request.productId.trim()) {
