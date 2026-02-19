@@ -1,4 +1,4 @@
-// src/services/courseService.ts - PART 1 OF 2
+// src/services/courseService.ts
 // Course Service - Integrated with real CouponService validation & statistics recording
 
 import { 
@@ -479,7 +479,7 @@ export const courseService = {
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date()
       })) as Course[];
-      
+
       console.log('✅ Retrieved instructor courses:', courses.length);
       return courses;
     } catch (error: any) {
@@ -603,9 +603,6 @@ export const courseService = {
       throw new Error(error.message);
     }
   },
-// src/services/courseService.ts - PART 2 OF 2
-// Enrollment and Payment Integration with Real Coupon Validation
-// PASTE IMMEDIATELY AFTER PART 1
 
   // ==================== ENROLLMENT PRICE CALCULATION ====================
 
@@ -945,6 +942,8 @@ export const courseService = {
         metadata: {
           courseId: request.courseId,
           studentId: request.studentId,
+          studentName: request.studentName,
+          studentEmail: request.studentEmail,
           courseTitle: course.title,
           instructorId: course.instructorId,
           category: course.category,
@@ -954,6 +953,13 @@ export const courseService = {
           couponId: request.calculation.couponId,
           couponCode: request.calculation.couponCode,
           discountApplied: request.calculation.couponDiscount,
+          // Store full calculation so it can be reconstructed on return
+          previousStudentDiscount: request.calculation.previousStudentDiscount,
+          extraDiscount: request.calculation.extraDiscount,
+          couponDiscount: request.calculation.couponDiscount,
+          totalDiscount: request.calculation.totalDiscount,
+          finalPrice: request.calculation.finalPrice,
+          basePrice: request.calculation.basePrice,
           courseName: course.title,
           userName: request.studentName,
         }
@@ -999,6 +1005,162 @@ export const courseService = {
       };
     }
   },
+
+  // ── POST-PAYMENT ENROLLMENT CREATION ─────────────────────────────────────────
+  /**
+   * THE CRITICAL MISSING PIECE: Called after a successful payment return/IPN.
+   * Creates the enrollment document, records coupon usages, updates counts,
+   * and adds content to the student's library.
+   *
+   * @param transactionId   The tran_id returned by SSLCommerz
+   * @param studentId       User's Firebase UID
+   * @param studentName     User's display name
+   * @param studentEmail    User's email
+   * @param courseId        Course being enrolled in
+   * @param amountPaid      Final price paid
+   * @param appliedCouponsJson  JSON string of AppliedCoupon[] from payment metadata
+   * @param discounts       Discount breakdown
+   */
+  async completeEnrollmentAfterPayment(params: {
+    transactionId: string;
+    studentId: string;
+    studentName: string;
+    studentEmail: string;
+    courseId: string;
+    amountPaid: number;
+    appliedCouponsJson?: string;
+    discounts?: {
+      previousStudentDiscount?: number;
+      extraDiscount?: number;
+      couponDiscount?: number;
+    };
+  }): Promise<{ success: boolean; enrollmentId?: string; error?: string; alreadyEnrolled?: boolean }> {
+    try {
+      const {
+        transactionId,
+        studentId,
+        studentName,
+        studentEmail,
+        courseId,
+        amountPaid,
+        appliedCouponsJson,
+        discounts = {}
+      } = params;
+
+      console.log('');
+      console.log('🎓 COMPLETING ENROLLMENT AFTER PAYMENT');
+      console.log('═'.repeat(80));
+      console.log('Transaction ID:', transactionId);
+      console.log('Student ID:', studentId);
+      console.log('Course ID:', courseId);
+      console.log('Amount Paid:', amountPaid);
+      console.log('═'.repeat(80));
+
+      // Idempotency guard — check if enrollment already exists for this transaction
+      const existingByTxn = query(
+        collection(db, 'enrollments'),
+        where('transactionId', '==', transactionId)
+      );
+      const existingTxnSnap = await getDocs(existingByTxn);
+      if (!existingTxnSnap.empty) {
+        const existing = existingTxnSnap.docs[0];
+        console.log('ℹ️ Enrollment already exists for transaction:', transactionId);
+        return { success: true, enrollmentId: existing.id, alreadyEnrolled: true };
+      }
+
+      // Also check by student+course to prevent duplicates
+      const existingEnrollments = await this.getStudentEnrollments(studentId);
+      if (existingEnrollments.some(e => e.courseId === courseId)) {
+        const found = existingEnrollments.find(e => e.courseId === courseId);
+        console.log('ℹ️ Student already enrolled in course:', courseId);
+        return { success: true, enrollmentId: found?.id, alreadyEnrolled: true };
+      }
+
+      // Fetch course
+      const course = await this.getCourseById(courseId);
+      if (!course) {
+        throw new Error(`Course not found: ${courseId}`);
+      }
+
+      // Parse applied coupons
+      let appliedCoupons: AppliedCoupon[] = [];
+      if (appliedCouponsJson) {
+        try {
+          appliedCoupons = JSON.parse(appliedCouponsJson);
+        } catch (e) {
+          console.warn('⚠️ Could not parse appliedCoupons JSON:', e);
+        }
+      }
+
+      // Create the enrollment document
+      const enrollmentData: any = {
+        courseId,
+        studentId,
+        studentName,
+        studentEmail,
+        progress: 0,
+        completedLessons: [],
+        enrolledAt: Timestamp.now(),
+        lastAccessedAt: Timestamp.now(),
+        paymentStatus: 'completed' as const,
+        transactionId,
+        amountPaid,
+        paymentMethod: 'SSLCOMMERZ',
+        paymentDate: Timestamp.now(),
+        appliedDiscounts: {
+          previousStudentDiscount: discounts.previousStudentDiscount || 0,
+          extraDiscount: discounts.extraDiscount || 0,
+          couponDiscount: discounts.couponDiscount || 0,
+          appliedCoupons,
+        }
+      };
+
+      const enrollmentRef = doc(collection(db, 'enrollments'));
+      await setDoc(enrollmentRef, enrollmentData);
+      console.log('✅ Enrollment created after payment:', enrollmentRef.id);
+
+      // Record coupon usages
+      for (const ac of appliedCoupons) {
+        try {
+          await couponService.recordCouponUsage({
+            couponId: ac.couponId,
+            userId: studentId,
+            courseId,
+            userName: studentName,
+            courseName: course.title,
+            discountApplied: ac.discount,
+            amountPaid,
+          });
+          console.log(`✅ Post-payment coupon usage recorded: ${ac.couponCode}`);
+        } catch (couponErr: any) {
+          console.warn(`⚠️ Failed to record post-payment usage for ${ac.couponCode}:`, couponErr.message);
+        }
+      }
+
+      // Update course student count
+      try {
+        const courseRef = doc(db, 'courses', courseId);
+        await updateDoc(courseRef, {
+          studentCount: course.studentCount + 1
+        });
+      } catch (updateError: any) {
+        console.warn('⚠️ Course count update failed:', updateError.message);
+      }
+
+      // Add course to student's content library
+      try {
+        await this.addCourseToContentLibrary(courseId, studentId);
+      } catch (libraryError: any) {
+        console.warn('⚠️ Library addition failed:', libraryError.message);
+      }
+
+      return { success: true, enrollmentId: enrollmentRef.id };
+    } catch (error: any) {
+      logError('completeEnrollmentAfterPayment', error, params);
+      return { success: false, error: error.message };
+    }
+  },
+  // ── END POST-PAYMENT ENROLLMENT CREATION ─────────────────────────────────────
 
   // ── POST-PAYMENT COUPON USAGE RECORDING ─────────────────────────────────────
   // Call this from your payment success/IPN handler after a paid enrollment completes.
