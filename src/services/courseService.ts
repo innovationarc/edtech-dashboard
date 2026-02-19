@@ -1,5 +1,5 @@
 // src/services/courseService.ts - PART 1 OF 2
-// Course Service - FIXED with proper discount validation
+// Course Service - Integrated with real CouponService validation & statistics recording
 
 import { 
   collection, 
@@ -18,6 +18,7 @@ import { db } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../config/firebase';
 import paymentService, { PaymentInitiationRequest } from './paymentService';
+import couponService from './couponService';
 
 console.log('📚 CourseService initialized');
 
@@ -117,6 +118,8 @@ export interface Enrollment {
     previousStudentDiscount?: number;
     extraDiscount?: number;
     couponDiscount?: number;
+    couponCode?: string;
+    couponId?: string;
   };
 }
 
@@ -129,6 +132,11 @@ export interface EnrollmentCalculation {
   finalPrice: number;
   hasPreviousEnrollments: boolean;
   isExtraDiscountValid: boolean;
+  // Coupon details carried through for recording and display
+  couponId?: string;
+  couponCode?: string;
+  couponSuccessMessage?: string;
+  couponError?: string;
 }
 
 export interface EnrollmentRequest {
@@ -583,7 +591,8 @@ export const courseService = {
     }
   },
 // src/services/courseService.ts - PART 2 OF 2
-// Enrollment and Payment Integration - PASTE IMMEDIATELY AFTER PART 1
+// Enrollment and Payment Integration with Real Coupon Validation
+// PASTE IMMEDIATELY AFTER PART 1
 
   // ==================== ENROLLMENT PRICE CALCULATION ====================
 
@@ -604,65 +613,75 @@ export const courseService = {
       let previousStudentDiscount = 0;
       let extraDiscount = 0;
       let couponDiscount = 0;
+      let couponId: string | undefined;
+      let appliedCouponCode: string | undefined;
+      let couponSuccessMessage: string | undefined;
+      let couponError: string | undefined;
 
-      // FIXED: Check previous enrollments - ANY previous enrollment qualifies for discount
+      // Check previous enrollments — ANY previous enrollment qualifies for discount
       const previousEnrollments = await this.getStudentEnrollments(studentId);
       const hasPreviousEnrollments = previousEnrollments.length > 0;
+      const enrolledCourseIds = previousEnrollments.map(e => e.courseId);
 
       console.log('Previous enrollments:', previousEnrollments.length);
 
-      // FIXED: Apply previous student discount ONLY if student has purchased ANY course before
-      // Even if those courses no longer exist, the enrollment history qualifies them
+      // Apply previous student discount ONLY if student has purchased ANY course before
       if (hasPreviousEnrollments && course.previousStudentDiscount && course.previousStudentDiscount > 0) {
         previousStudentDiscount = course.previousStudentDiscount;
         console.log('✅ Applied previous student discount:', previousStudentDiscount);
       }
 
-      // FIXED: Apply extra discount ONLY if it's still valid based on the specific date
+      // Apply extra discount ONLY if still valid based on the specific date
       let isExtraDiscountValid = false;
       if (course.extraDiscount && course.extraDiscount > 0 && course.extraDiscountValidUntil) {
         try {
-          // Parse the date string - supports ISO format and common date formats
           const validUntilDate = new Date(course.extraDiscountValidUntil);
           const now = new Date();
-          
-          // Set time to end of day for valid until date to include the entire day
           validUntilDate.setHours(23, 59, 59, 999);
           
-          // Check if current date is before or equal to the valid until date
           if (now <= validUntilDate) {
             extraDiscount = course.extraDiscount;
             isExtraDiscountValid = true;
             console.log('✅ Applied extra discount:', extraDiscount);
-            console.log('Valid until:', validUntilDate.toISOString());
           } else {
             console.log('❌ Extra discount expired');
-            console.log('Valid until:', validUntilDate.toISOString());
-            console.log('Current date:', now.toISOString());
           }
         } catch (dateError) {
           console.warn('⚠️ Invalid extraDiscountValidUntil date format:', course.extraDiscountValidUntil);
         }
       }
 
-      // Coupon simulation (placeholder - implement actual coupon logic later)
+      // ── REAL COUPON VALIDATION via couponService ────────────────────────────
       if (couponCode && couponCode.trim()) {
-        // Simulate coupon validation
-        const couponUpper = couponCode.trim().toUpperCase();
-        
-        // Example coupon codes for simulation
-        if (couponUpper === 'WELCOME10') {
-          couponDiscount = Math.min(basePrice * 0.1, 100); // 10% up to 100 BDT
-          console.log('Applied coupon WELCOME10:', couponDiscount);
-        } else if (couponUpper === 'SAVE50') {
-          couponDiscount = 50;
-          console.log('Applied coupon SAVE50:', couponDiscount);
-        } else if (couponUpper === 'SAVE100') {
-          couponDiscount = 100;
-          console.log('Applied coupon SAVE100:', couponDiscount);
+        const priceAfterOtherDiscounts = Math.max(0, basePrice - previousStudentDiscount - extraDiscount);
+
+        try {
+          const validationResult = await couponService.validateCoupon(
+            couponCode.trim().toUpperCase(),
+            studentId,
+            courseId,
+            priceAfterOtherDiscounts,
+            enrolledCourseIds
+          );
+
+          if (validationResult.valid && validationResult.discount !== undefined) {
+            // Fetch the coupon to get its ID for later recording usage
+            const couponDoc = await couponService.getCouponByCode(couponCode.trim().toUpperCase());
+            couponId = couponDoc?.id;
+            appliedCouponCode = couponCode.trim().toUpperCase();
+            couponDiscount = validationResult.discount;
+            couponSuccessMessage = validationResult.successMessage;
+            console.log('✅ Coupon applied via couponService:', couponCode, 'discount:', couponDiscount);
+          } else {
+            couponError = validationResult.reason || 'Invalid coupon code';
+            console.log('❌ Coupon rejected:', couponError);
+          }
+        } catch (couponErr: any) {
+          couponError = 'Unable to validate coupon. Please try again.';
+          console.warn('⚠️ Coupon validation error:', couponErr.message);
         }
-        // If no valid coupon, discount remains 0
       }
+      // ── END COUPON VALIDATION ───────────────────────────────────────────────
 
       const totalDiscount = previousStudentDiscount + extraDiscount + couponDiscount;
       const finalPrice = Math.max(0, basePrice - totalDiscount);
@@ -675,7 +694,11 @@ export const courseService = {
         totalDiscount, 
         finalPrice,
         hasPreviousEnrollments,
-        isExtraDiscountValid
+        isExtraDiscountValid,
+        couponId,
+        appliedCouponCode,
+        couponSuccessMessage,
+        couponError,
       });
 
       return {
@@ -686,7 +709,11 @@ export const courseService = {
         totalDiscount,
         finalPrice,
         hasPreviousEnrollments,
-        isExtraDiscountValid
+        isExtraDiscountValid,
+        couponId,
+        couponCode: appliedCouponCode,
+        couponSuccessMessage,
+        couponError,
       };
     } catch (error: any) {
       logError('calculateEnrollmentPrice', error, { courseId, studentId });
@@ -706,6 +733,8 @@ export const courseService = {
       console.log('Student ID:', request.studentId);
       console.log('Student Name:', request.studentName);
       console.log('Final Price:', request.calculation.finalPrice);
+      console.log('Coupon Code:', request.calculation.couponCode || 'None');
+      console.log('Coupon Discount:', request.calculation.couponDiscount);
       console.log('═'.repeat(80));
 
       // Validate course
@@ -765,7 +794,7 @@ export const courseService = {
     try {
       console.log('Creating free enrollment');
 
-      const enrollmentData = {
+      const enrollmentData: any = {
         courseId: request.courseId,
         studentId: request.studentId,
         studentName: request.studentName,
@@ -781,7 +810,9 @@ export const courseService = {
         appliedDiscounts: {
           previousStudentDiscount: request.calculation.previousStudentDiscount,
           extraDiscount: request.calculation.extraDiscount,
-          couponDiscount: request.calculation.couponDiscount
+          couponDiscount: request.calculation.couponDiscount,
+          ...(request.calculation.couponCode ? { couponCode: request.calculation.couponCode } : {}),
+          ...(request.calculation.couponId ? { couponId: request.calculation.couponId } : {}),
         }
       };
 
@@ -789,6 +820,26 @@ export const courseService = {
       await setDoc(enrollmentRef, enrollmentData);
 
       console.log('✅ Free enrollment created:', enrollmentRef.id);
+
+      // ── Record coupon usage with full statistics data ───────────────────────
+      if (request.calculation.couponId && request.calculation.couponCode && request.calculation.couponDiscount > 0) {
+        try {
+          await couponService.recordCouponUsage({
+            couponId: request.calculation.couponId,
+            userId: request.studentId,
+            courseId: request.courseId,
+            userName: request.studentName,
+            courseName: course.title,
+            discountApplied: request.calculation.couponDiscount,
+            amountPaid: request.calculation.finalPrice,
+          });
+          console.log('✅ Coupon usage recorded with full statistics data');
+        } catch (couponRecordErr: any) {
+          // Non-fatal: enrollment still succeeds even if usage recording fails
+          console.warn('⚠️ Failed to record coupon usage:', couponRecordErr.message);
+        }
+      }
+      // ── END coupon usage recording ──────────────────────────────────────────
 
       // Update course count
       try {
@@ -841,14 +892,20 @@ export const courseService = {
         appliedDiscounts: {
           previousStudentDiscount: request.calculation.previousStudentDiscount,
           extraDiscount: request.calculation.extraDiscount,
-          couponDiscount: request.calculation.couponDiscount
+          couponDiscount: request.calculation.couponDiscount,
         },
         metadata: {
           courseId: request.courseId,
           studentId: request.studentId,
           courseTitle: course.title,
           instructorId: course.instructorId,
-          category: course.category
+          category: course.category,
+          // Pass coupon info so payment callback can record usage on success
+          couponId: request.calculation.couponId,
+          couponCode: request.calculation.couponCode,
+          discountApplied: request.calculation.couponDiscount,
+          courseName: course.title,
+          userName: request.studentName,
         }
       };
 
@@ -892,6 +949,35 @@ export const courseService = {
       };
     }
   },
+
+  // ── POST-PAYMENT COUPON USAGE RECORDING ─────────────────────────────────────
+  // Call this from your payment success/IPN handler after a paid enrollment completes.
+  async recordCouponUsageAfterPayment(
+    couponId: string,
+    couponCode: string,
+    userId: string,
+    courseId: string,
+    userName: string,
+    courseName: string,
+    discountApplied: number,
+    amountPaid: number,
+  ): Promise<void> {
+    try {
+      await couponService.recordCouponUsage({
+        couponId,
+        userId,
+        courseId,
+        userName,
+        courseName,
+        discountApplied,
+        amountPaid,
+      });
+      console.log('✅ Post-payment coupon usage recorded');
+    } catch (err: any) {
+      console.warn('⚠️ Failed to record post-payment coupon usage:', err.message);
+    }
+  },
+  // ── END POST-PAYMENT COUPON USAGE RECORDING ─────────────────────────────────
 
   async validatePayment(transactionId: string): Promise<{
     success: boolean;
