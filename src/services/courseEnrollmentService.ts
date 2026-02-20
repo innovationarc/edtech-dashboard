@@ -1,34 +1,13 @@
 // src/services/courseEnrollmentService.ts
 //
-// PRODUCTION-GRADE Course Enrollment Service
-// Completely separate from courseService.ts — zero modifications to that file.
+// STANDALONE Course Enrollment Service
+// NO DEPENDENCY on courseService.ts - completely self-contained
 //
-// KEY SECURITY GUARANTEES:
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. ONE-TIME CLAIM TOKEN: The backend writes a cryptographically random
-//    `returnToken` to the transaction Firestore doc at callback time.
-//    The frontend must present this token; the backend atomically marks it
-//    consumed so it can never be reused — even by the same user.
-//
-// 2. OWNERSHIP CHECK: transaction.userId must equal user.uid.
-//    Different-user URL replay is rejected outright.
-//
-// 3. STATUS CHECK: Only 'success' transactions produce an enrollment.
-//    'pending', 'failed', 'cancelled' are all terminal.
-//
-// 4. IDEMPOTENCY: Enrollment creation is keyed on transactionId, so
-//    double-processing (IPN + callback) never creates duplicate records.
-//
-// FRONTEND RACE FIX:
-// ─────────────────────────────────────────────────────────────────────────────
-// Instead of relying on React state to propagate correctly across multiple
-// simultaneous setState() calls (which caused the "enrolled tab empty until
-// refresh" bug), all post-payment UI state is returned from a single async
-// call and applied atomically.
-//
-// BACKWARDS COMPATIBILITY:
-// ─────────────────────────────────────────────────────────────────────────────
-// courseService.ts is NOT modified. This file adds new capabilities only.
+// Handles:
+// - Payment verification & enrollment retrieval
+// - Loading all courses with enrollment status
+// - Checking enrollment status
+// - All enrollment-related operations
 
 import {
   collection,
@@ -44,42 +23,87 @@ import { db } from '../config/firebase';
 // ==================== INTERFACES ====================
 
 export interface EnrollmentVerificationResult {
-  /** Payment ownership + status is verified and enrollment exists */
   verified: boolean;
-  /** Transaction record status */
   status: 'success' | 'pending' | 'failed' | 'cancelled' | 'validating' | 'not_found' | 'ownership_error' | 'token_already_used';
-  /** Enrollment document id if found */
   enrollmentId?: string;
-  /** Course title from transaction metadata */
   courseTitle?: string;
-  /** Course id */
   courseId?: string;
-  /** Whether this is a replayed URL (token already consumed) */
   isReplay: boolean;
-  /** Human-readable message for display */
   message: string;
 }
 
 export interface EnrolledCourseInfo {
+  id: string;
   courseId: string;
   enrollmentId: string;
   progress: number;
   enrolledAt: Date;
   transactionId?: string;
+  completedLessons?: string[];
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  description: string;
+  instructor: string;
+  instructorId: string;
+  category: string;
+  class: string;
+  subjects: string[];
+  level: string;
+  duration: string;
+  thumbnail: string;
+  price: number;
+  rating: number;
+  studentCount: number;
+  tags: string[];
+  status: string;
+  createdAt: Date;
+  // Enrollment-specific fields (added when loading)
+  isEnrolled?: boolean;
+  progress?: number;
+  enrollmentId?: string;
+  enrolledAt?: Date;
 }
 
 // ==================== CONSTANTS ====================
 
-/** Firestore collection names — single source of truth */
 const COLLECTIONS = {
   TRANSACTIONS: 'transactions',
   ENROLLMENTS: 'enrollments',
+  COURSES: 'courses',
 } as const;
 
 // ==================== HELPERS ====================
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Safely convert Firestore Timestamp to Date
+ * Handles both Timestamp objects and plain objects with seconds/nanoseconds
+ */
+function toDate(value: any): Date {
+  if (!value) return new Date();
+  
+  // Already a Date
+  if (value instanceof Date) return value;
+  
+  // Firestore Timestamp with toDate method
+  if (typeof value.toDate === 'function') {
+    return value.toDate();
+  }
+  
+  // Plain object with seconds/nanoseconds (serialized Timestamp)
+  if (value.seconds !== undefined) {
+    return new Date(value.seconds * 1000);
+  }
+  
+  // Fallback: try to parse as date string or timestamp
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
 // ==================== ENROLLMENT SERVICE ====================
@@ -89,17 +113,7 @@ export const courseEnrollmentService = {
   // ─────────────────────────────────────────────────────────────────────────
   // verifyPaymentAndGetEnrollment
   //
-  // PRIMARY ENTRY POINT for the post-payment return URL handler.
-  //
-  // Security flow:
-  //   1. Fetch transaction by tran_id
-  //   2. Check userId ownership
-  //   3. Atomically consume the one-time returnToken
-  //      → if already consumed: isReplay=true, still show info but no re-enroll
-  //   4. Verify payment status
-  //   5. Poll for enrollment doc with exponential backoff
-  //
-  // Returns a rich result object — caller decides what UI to show.
+  // PRIMARY ENTRY POINT for post-payment return URL handler
   // ─────────────────────────────────────────────────────────────────────────
 
   async verifyPaymentAndGetEnrollment(
@@ -119,7 +133,7 @@ export const courseEnrollmentService = {
     }
 
     try {
-      // ── Step 1: Fetch transaction ──────────────────────────────────────────
+      // Step 1: Fetch transaction
       const txnSnap = await getDocs(query(
         collection(db, COLLECTIONS.TRANSACTIONS),
         where('transactionId', '==', tranId)
@@ -138,7 +152,7 @@ export const courseEnrollmentService = {
       const txnDoc = txnSnap.docs[0];
       const txn = txnDoc.data();
 
-      // ── Step 2: Ownership check ───────────────────────────────────────────
+      // Step 2: Ownership check
       if (txn.userId !== currentUserId) {
         console.error(`${TAG} SECURITY: Ownership mismatch`, {
           txnUserId: txn.userId,
@@ -156,15 +170,7 @@ export const courseEnrollmentService = {
       const courseTitle: string = txn.productName || txn.metadata?.courseTitle || '';
       const courseId: string = txn.productId || txn.metadata?.courseId || '';
 
-      // ── Step 3: Atomic one-time token consumption ─────────────────────────
-      // The backend writes `returnToken` when redirecting after payment.
-      // We use a Firestore transaction to atomically:
-      //   a) Read the current returnToken value
-      //   b) If it's already null/consumed → isReplay = true
-      //   c) If present → set it to null (consume it) and continue
-      //
-      // This means the VERY FIRST browser tab to process this URL wins.
-      // Every subsequent open — same user, different tab, copied URL — is replay.
+      // Step 3: Atomic one-time token consumption
       let isReplay = false;
 
       try {
@@ -174,11 +180,8 @@ export const courseEnrollmentService = {
           const freshData = freshSnap.data() || {};
 
           if (freshData.returnToken === null || freshData.returnToken === undefined) {
-            // Token already consumed — this is a replay
             isReplay = true;
-            // Don't throw — we still want to show the user their enrollment
           } else {
-            // First use — consume the token
             t.update(txnRef, {
               returnToken: null,
               returnTokenConsumedAt: Timestamp.now(),
@@ -187,14 +190,11 @@ export const courseEnrollmentService = {
           }
         });
       } catch (tokenErr: any) {
-        // If the transaction fails (e.g. no returnToken field at all — legacy),
-        // treat as replay-safe: check enrollment existence but don't block.
         console.warn(`${TAG} Token consumption failed (non-fatal):`, tokenErr.message);
-        isReplay = true; // conservative: treat missing token as already consumed
+        isReplay = true;
       }
 
-      // ── Step 4: Payment status check ─────────────────────────────────────
-      // Re-fetch to get the most current status after token consumption
+      // Step 4: Payment status check
       const freshTxnSnap = await getDocs(query(
         collection(db, COLLECTIONS.TRANSACTIONS),
         where('transactionId', '==', tranId)
@@ -234,10 +234,8 @@ export const courseEnrollmentService = {
         };
       }
 
-      // ── Step 5: Poll for enrollment doc ──────────────────────────────────
-      // The backend creates the enrollment in the callback, but Firestore
-      // propagation can take seconds. We poll with exponential backoff.
-      const delays = [500, 800, 1200, 1500, 1500, 2000, 2000, 2500]; // ~12s total
+      // Step 5: Poll for enrollment doc
+      const delays = [500, 800, 1200, 1500, 1500, 2000, 2000, 2500];
 
       for (let attempt = 0; attempt <= delays.length; attempt++) {
         if (attempt > 0) {
@@ -245,11 +243,11 @@ export const courseEnrollmentService = {
         }
 
         try {
-          // Primary: by transactionId (most specific)
           const byTxn = await getDocs(query(
             collection(db, COLLECTIONS.ENROLLMENTS),
             where('transactionId', '==', tranId)
           ));
+          
           if (!byTxn.empty) {
             const enrollDoc = byTxn.docs[0];
             console.log(`${TAG} Enrollment found by transactionId on attempt ${attempt + 1}`);
@@ -266,13 +264,13 @@ export const courseEnrollmentService = {
             };
           }
 
-          // Secondary: by studentId + courseId (handles IPN-created enrollments)
           if (courseId) {
             const byCourse = await getDocs(query(
               collection(db, COLLECTIONS.ENROLLMENTS),
               where('studentId', '==', currentUserId),
               where('courseId', '==', courseId)
             ));
+            
             if (!byCourse.empty) {
               const enrollDoc = byCourse.docs[0];
               console.log(`${TAG} Enrollment found by studentId+courseId on attempt ${attempt + 1}`);
@@ -296,10 +294,9 @@ export const courseEnrollmentService = {
         }
       }
 
-      // Exhausted all retries — enrollment not found but payment succeeded
       console.warn(`${TAG} Enrollment not found after ${delays.length + 1} attempts`);
       return {
-        verified: false, // enrollment not confirmed in DB
+        verified: false,
         status: 'pending',
         courseTitle,
         courseId,
@@ -319,24 +316,166 @@ export const courseEnrollmentService = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // getStudentEnrolledCourseIds
+  // getStudentEnrollments
   //
-  // Lightweight helper to get just the enrolled course IDs for a student.
-  // Used to determine which courses are already enrolled so we can filter.
+  // Get all enrollments for a student with full enrollment data
+  // FIX: Safely handles Timestamp conversion
   // ─────────────────────────────────────────────────────────────────────────
 
-  async getStudentEnrolledCourseIds(studentId: string): Promise<Set<string>> {
-    if (!studentId) return new Set();
+  async getStudentEnrollments(studentId: string): Promise<EnrolledCourseInfo[]> {
+    const TAG = '[courseEnrollmentService.getStudentEnrollments]';
+    
+    if (!studentId) {
+      console.warn(`${TAG} No studentId provided`);
+      return [];
+    }
+
     try {
       const snap = await getDocs(query(
         collection(db, COLLECTIONS.ENROLLMENTS),
         where('studentId', '==', studentId)
       ));
+
+      const enrollments: EnrolledCourseInfo[] = snap.docs.map(doc => {
+        const data = doc.data();
+        
+        return {
+          id: doc.id,
+          courseId: data.courseId || '',
+          enrollmentId: doc.id,
+          progress: data.progress || 0,
+          enrolledAt: toDate(data.enrolledAt), // SAFE conversion
+          transactionId: data.transactionId,
+          completedLessons: data.completedLessons || [],
+        };
+      });
+
+      console.log(`${TAG} Found ${enrollments.length} enrollments for student ${studentId}`);
+      return enrollments;
+
+    } catch (err: any) {
+      console.error(`${TAG} Error:`, err.message);
+      console.error('Stack:', err.stack);
+      console.error('Context:', { studentId });
+      return [];
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // getPublishedCourses
+  //
+  // Get all published courses (status === 'published')
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async getPublishedCourses(): Promise<Course[]> {
+    const TAG = '[courseEnrollmentService.getPublishedCourses]';
+    
+    try {
+      const snap = await getDocs(query(
+        collection(db, COLLECTIONS.COURSES),
+        where('status', '==', 'published')
+      ));
+
+      const courses: Course[] = snap.docs.map(doc => {
+        const data = doc.data();
+        
+        return {
+          id: doc.id,
+          title: data.title || '',
+          description: data.description || '',
+          instructor: data.instructor || '',
+          instructorId: data.instructorId || '',
+          category: data.category || '',
+          class: data.class || '',
+          subjects: data.subjects || [],
+          level: data.level || 'beginner',
+          duration: data.duration || '',
+          thumbnail: data.thumbnail || '',
+          price: data.price || 0,
+          rating: data.rating || 0,
+          studentCount: data.studentCount || 0,
+          tags: data.tags || [],
+          status: data.status || 'draft',
+          createdAt: toDate(data.createdAt),
+        };
+      });
+
+      console.log(`${TAG} Found ${courses.length} published courses`);
+      return courses;
+
+    } catch (err: any) {
+      console.error(`${TAG} Error:`, err.message);
+      console.error('Stack:', err.stack);
+      return [];
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // getCoursesWithEnrollmentStatus
+  //
+  // Get all courses with enrollment status for a specific student
+  // Returns courses marked with isEnrolled, progress, enrollmentId
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async getCoursesWithEnrollmentStatus(studentId: string): Promise<Course[]> {
+    const TAG = '[courseEnrollmentService.getCoursesWithEnrollmentStatus]';
+    
+    try {
+      console.log(`${TAG} Loading courses for student:`, studentId);
+
+      const [courses, enrollments] = await Promise.all([
+        this.getPublishedCourses(),
+        this.getStudentEnrollments(studentId),
+      ]);
+
+      const enrollmentMap = new Map<string, EnrolledCourseInfo>();
+      enrollments.forEach(e => {
+        enrollmentMap.set(e.courseId, e);
+      });
+
+      const enrichedCourses: Course[] = courses.map(course => {
+        const enrollment = enrollmentMap.get(course.id);
+        
+        return {
+          ...course,
+          isEnrolled: !!enrollment,
+          progress: enrollment?.progress || 0,
+          enrollmentId: enrollment?.enrollmentId,
+          enrolledAt: enrollment?.enrolledAt,
+        };
+      });
+
+      console.log(`${TAG} Loaded ${enrichedCourses.length} courses, ${enrollments.length} enrolled`);
+      return enrichedCourses;
+
+    } catch (err: any) {
+      console.error(`${TAG} Error:`, err.message);
+      console.error('Stack:', err.stack);
+      return [];
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // getStudentEnrolledCourseIds
+  //
+  // Lightweight helper to get just enrolled course IDs
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async getStudentEnrolledCourseIds(studentId: string): Promise<Set<string>> {
+    if (!studentId) return new Set();
+    
+    try {
+      const snap = await getDocs(query(
+        collection(db, COLLECTIONS.ENROLLMENTS),
+        where('studentId', '==', studentId)
+      ));
+      
       const ids = new Set<string>();
       snap.docs.forEach(d => {
         const courseId = d.data().courseId;
         if (courseId) ids.add(courseId);
       });
+      
       return ids;
     } catch (err: any) {
       console.error('[courseEnrollmentService.getStudentEnrolledCourseIds]', err.message);
@@ -347,17 +486,19 @@ export const courseEnrollmentService = {
   // ─────────────────────────────────────────────────────────────────────────
   // isAlreadyEnrolled
   //
-  // Quick boolean check for a single course.
+  // Quick boolean check for a single course
   // ─────────────────────────────────────────────────────────────────────────
 
   async isAlreadyEnrolled(studentId: string, courseId: string): Promise<boolean> {
     if (!studentId || !courseId) return false;
+    
     try {
       const snap = await getDocs(query(
         collection(db, COLLECTIONS.ENROLLMENTS),
         where('studentId', '==', studentId),
         where('courseId', '==', courseId)
       ));
+      
       return !snap.empty;
     } catch (err: any) {
       console.error('[courseEnrollmentService.isAlreadyEnrolled]', err.message);
