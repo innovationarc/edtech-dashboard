@@ -1,24 +1,5 @@
 // src/pages/CourseEnrollment.tsx
-// PRODUCTION-GRADE — Fixes:
-//
-// FIX 1 — URL REPLAY ATTACK (SECURITY):
-//   The backend now writes a one-time `returnToken` to the Firestore transaction
-//   at callback time. courseEnrollmentService.verifyPaymentAndGetEnrollment()
-//   atomically consumes it via a Firestore transaction so it can never be reused.
-//   Replaying the URL (same user, new tab, copied link) is detected as isReplay=true
-//   and shows "already enrolled" rather than "payment successful".
-//
-// FIX 2 — ENROLLED TAB NOT SWITCHING (RACE CONDITION):
-//   The previous code called filterCourses() + setActiveTab() + setAllCourses()
-//   in different async callbacks, causing React state to be stale when the filter
-//   ran. The new pattern:
-//     a) loadCourses() returns enriched courses synchronously
-//     b) setAllCourses() + setEnrolledCourses() + setAvailableCourses() are
-//        all set ONCE from the same data snapshot
-//     c) setActiveTab() is called AFTER the course state is ready
-//   This eliminates all stale-closure/race issues.
-//
-// BACKWARDS COMPATIBLE: courseService.ts is NOT modified.
+
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
