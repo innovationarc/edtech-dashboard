@@ -40,10 +40,12 @@ export interface Course {
   thumbnail: string;
   price: number;
   rating: number;
+  reviewCount: number;
   studentCount: number;
   tags: string[];
   status: string;
   createdAt: Date;
+  isPublished?: boolean;
   // Enrollment-specific fields
   isEnrolled?: boolean;
   progress?: number;
@@ -417,20 +419,64 @@ export const courseEnrollmentService = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // getPublishedCourses
+  //
+  // IMPORTANT: Matches courseService.getPublishedCourses() exactly
+  // - Primary: Query by isPublished === true with orderBy createdAt
+  // - Fallback: If index missing, load all and filter locally
   // ─────────────────────────────────────────────────────────────────────────
 
   async getPublishedCourses(): Promise<Course[]> {
     const TAG = '[getPublishedCourses]';
+    console.log(`${TAG} Loading published courses...`);
     
     try {
-      const snap = await getDocs(query(
-        collection(db, COLLECTIONS.COURSES),
-        where('status', '==', 'published')
-      ));
-
-      const courses: Course[] = snap.docs.map(doc => {
-        const data = doc.data();
+      const coursesCollection = collection(db, COLLECTIONS.COURSES);
+      
+      // Try indexed query first
+      try {
+        const q = query(
+          coursesCollection,
+          where('isPublished', '==', true),
+          orderBy('createdAt', 'desc')
+        );
+        const snapshot = await getDocs(q);
         
+        if (snapshot.docs.length > 0) {
+          const courses = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              title: data.title || '',
+              description: data.description || '',
+              instructor: data.instructor || '',
+              instructorId: data.instructorId || '',
+              category: data.category || '',
+              class: data.class || '',
+              subjects: data.subjects || [],
+              level: data.level || 'beginner',
+              duration: data.duration || '',
+              thumbnail: data.thumbnail || '',
+              price: data.price || 0,
+              rating: data.rating || 0,
+              reviewCount: data.reviewCount || 0,
+              studentCount: data.studentCount || 0,
+              tags: data.tags || [],
+              status: data.status || 'draft',
+              createdAt: toDate(data.createdAt),
+            };
+          });
+
+          console.log(`${TAG} ✅ Found ${courses.length} published courses (indexed query)`);
+          return courses;
+        }
+      } catch (indexError) {
+        console.warn(`${TAG} ⚠️ Firestore index missing, filtering locally`);
+      }
+      
+      // Fallback: Load all and filter
+      const allSnapshot = await getDocs(coursesCollection);
+      const allCourses = allSnapshot.docs.map(doc => {
+        const data = doc.data();
         return {
           id: doc.id,
           title: data.title || '',
@@ -445,18 +491,25 @@ export const courseEnrollmentService = {
           thumbnail: data.thumbnail || '',
           price: data.price || 0,
           rating: data.rating || 0,
+          reviewCount: data.reviewCount || 0,
           studentCount: data.studentCount || 0,
           tags: data.tags || [],
           status: data.status || 'draft',
           createdAt: toDate(data.createdAt),
+          isPublished: data.isPublished || false,
         };
       });
-
-      console.log(`${TAG} Found ${courses.length} published courses`);
-      return courses;
+      
+      const published = allCourses
+        .filter(c => c.isPublished)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      
+      console.log(`${TAG} ✅ Found ${published.length} published courses (local filter)`);
+      return published;
 
     } catch (err: any) {
-      console.error(`${TAG} Error:`, err);
+      console.error(`${TAG} ❌ Error:`, err.message);
+      console.error(`${TAG} Stack:`, err.stack);
       return [];
     }
   },
