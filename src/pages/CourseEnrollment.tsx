@@ -31,9 +31,11 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
-import { courseService, Course, EnrollmentCalculation, AppliedCoupon } from '../services/courseService';
-import courseEnrollmentService from '../services/courseEnrollmentService';
-
+import courseEnrollmentService, { 
+  Course, 
+  EnrollmentCalculation, 
+  AppliedCoupon 
+} from '../services/courseEnrollmentService';
 // ==================== INTERFACES ====================
 
 interface EnrichedCourse extends Course {
@@ -203,17 +205,17 @@ const CourseEnrollment = () => {
       setError('');
 
       const [publishedCourses, enrollments] = await Promise.all([
-        courseService.getPublishedCourses(),
-        courseService.getStudentEnrollments(user?.uid || ''),
-      ]);
+  courseEnrollmentService.getPublishedCourses(),
+  courseEnrollmentService.getStudentEnrollments(user?.uid || ''),
+]);
 
       const enrolledCourseIds = new Set(enrollments.map(e => e.courseId));
       const enrollmentMap = new Map<string, { progress: number; enrollmentId: string }>();
       enrollments.forEach(e => {
-        enrollmentMap.set(e.courseId, { progress: e.progress || 0, enrollmentId: e.id });
+        enrollmentMap.set(e.courseId, { progress: e.progress || 0, enrollmentId: e.enrollmentId });
       });
 
-      // Force-inject guaranteed enrollment regardless of Firestore read result.
+      // Force-inject guaranteed enrollment regardless of constd result.
       // The Firestore SDK can return a stale snapshot that doesn't yet include
       // a document written milliseconds ago by the server callback. This injection
       // guarantees the UI is always correct immediately after payment.
@@ -489,11 +491,11 @@ const CourseEnrollment = () => {
 
     try {
       const existingCodes = (currentData.calculation.appliedCoupons ?? []).map(c => c.couponCode);
-      const newCalc = await courseService.calculateEnrollmentPrice(
-        currentData.course.id,
-        user?.uid || '',
-        [...existingCodes, upper]
-      );
+      const newCalc = await courseEnrollmentService.calculateEnrollmentPrice(
+  currentData.course.id,
+  user?.uid || '',
+  [...existingCodes, upper]
+);
       if (abort.signal.aborted) return;
 
       const wasAccepted = newCalc.appliedCoupons.some(c => c.couponCode === upper);
@@ -501,9 +503,9 @@ const CourseEnrollment = () => {
         setEnrollmentData({ ...currentData, calculation: newCalc });
         setCouponInput({ code: '', fieldState: 'idle', errorMessage: '' });
       } else {
-        const probeCalc = await courseService.calculateEnrollmentPrice(
-          currentData.course.id, user?.uid || '', [upper]
-        );
+        const probeCalc = await courseEnrollmentService.calculateEnrollmentPrice(
+  currentData.course.id, user?.uid || '', [upper]
+);
         if (abort.signal.aborted) return;
         const reason = probeCalc.couponError || 'This coupon cannot be applied.';
         setCouponInput(prev => ({ ...prev, fieldState: 'error', errorMessage: reason }));
@@ -524,9 +526,9 @@ const CourseEnrollment = () => {
       .filter(c => c.couponCode !== couponCode)
       .map(c => c.couponCode);
     try {
-      const newCalc = await courseService.calculateEnrollmentPrice(
-        currentData.course.id, user?.uid || '', remaining
-      );
+      const newCalc = await courseEnrollmentService.calculateEnrollmentPrice(
+  currentData.course.id, user?.uid || '', remaining
+);
       setEnrollmentData({ ...currentData, calculation: newCalc });
     } catch (err: any) {
       console.warn('Failed to recalculate after coupon removal:', err.message);
@@ -546,7 +548,7 @@ const CourseEnrollment = () => {
       setCalculatingPrice(true);
       setError(''); setWarning('');
       resetCouponInput();
-      const calculation = await courseService.calculateEnrollmentPrice(course.id, user.uid, []);
+      const calculation = await courseEnrollmentService.calculateEnrollmentPrice(course.id, user.uid, []);
       setEnrollmentData({ course, calculation });
       setShowEnrollmentModal(true);
     } catch (err: any) {
@@ -568,13 +570,13 @@ const CourseEnrollment = () => {
         return;
       }
 
-      const enrollmentResponse = await courseService.enrollStudent({
-        courseId: course.id,
-        studentId: user.uid,
-        studentName: user.name,
-        studentEmail: user.email,
-        calculation,
-      });
+      const enrollmentResponse = await courseEnrollmentService.enrollStudent({
+  courseId: course.id,
+  studentId: user.uid,
+  studentName: user.name,
+  studentEmail: user.email,
+  calculation,
+});
 
       if (enrollmentResponse.success && enrollmentResponse.gatewayUrl) {
         setShowEnrollmentModal(false);
@@ -591,13 +593,13 @@ const CourseEnrollment = () => {
   const handleFreeEnrollment = async (course: Course, calculation: EnrollmentCalculation) => {
     if (!user) return;
     try {
-      const enrollmentResponse = await courseService.enrollStudent({
-        courseId: course.id,
-        studentId: user.uid,
-        studentName: user.name,
-        studentEmail: user.email,
-        calculation,
-      });
+      const enrollmentResponse = await courseEnrollmentService.enrollStudent({
+  courseId: course.id,
+  studentId: user.uid,
+  studentName: user.name,
+  studentEmail: user.email,
+  calculation,
+});
 
       if (enrollmentResponse.success) {
         setShowEnrollmentModal(false);
