@@ -1,5 +1,6 @@
 // src/services/courseService.ts
 // Course Service - Integrated with real CouponService validation & statistics recording
+// SECURITY PATCH APPLIED: Updated initiatePaidEnrollment and completeEnrollmentAfterPayment
 
 import { 
   collection, 
@@ -480,7 +481,7 @@ export const courseService = {
         updatedAt: doc.data().updatedAt?.toDate() || new Date()
       })) as Course[];
 
-      console.log('✅ Retrieved instructor courses:', courses.length);
+      console.log('✅ Retrieved courses:', courses.length);
       return courses;
     } catch (error: any) {
       logError('getCoursesByInstructor', error, { instructorId });
@@ -491,25 +492,14 @@ export const courseService = {
   async updateCourse(courseId: string, updates: Partial<Course>): Promise<void> {
     try {
       console.log('📝 Updating course:', courseId);
-      
+
       if (!courseId || !courseId.trim()) {
-        throw new Error('Course ID is required');
+        throw new Error('Course ID required');
       }
 
-      const courseRef = doc(db, 'courses', courseId);
-      const courseDoc = await getDoc(courseRef);
-      
-      if (!courseDoc.exists()) {
-        throw new Error(`Course "${courseId}" not found`);
-      }
-
-      if (updates.contentStructure) {
-        const totalMinutes = this.calculateTotalDurationFromStructure(updates.contentStructure);
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        updates.duration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-      } else if (updates.lessons) {
-        updates.duration = this.calculateTotalDuration(updates.lessons);
+      const existingCourse = await this.getCourseById(courseId);
+      if (!existingCourse) {
+        throw new Error(`Course with ID "${courseId}" not found`);
       }
 
       const updateData: any = {
@@ -517,13 +507,18 @@ export const courseService = {
         updatedAt: Timestamp.now()
       };
 
-      Object.keys(updateData).forEach(key => {
-        if (updateData[key] === undefined || key === 'id' || key === 'createdAt') {
-          delete updateData[key];
-        }
-      });
+      if (updates.contentStructure && updates.contentStructure.length > 0) {
+        const totalMinutes = this.calculateTotalDurationFromStructure(updates.contentStructure);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        updateData.duration = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      } else if (updates.lessons && updates.lessons.length > 0) {
+        updateData.duration = this.calculateTotalDuration(updates.lessons);
+      }
 
+      const courseRef = doc(db, 'courses', courseId);
       await updateDoc(courseRef, updateData);
+      
       console.log('✅ Course updated:', courseId);
     } catch (error: any) {
       logError('updateCourse', error, { courseId });
@@ -534,47 +529,23 @@ export const courseService = {
   async deleteCourse(courseId: string): Promise<void> {
     try {
       console.log('🗑️ Deleting course:', courseId);
-      
+
       if (!courseId || !courseId.trim()) {
-        throw new Error('Course ID is required');
+        throw new Error('Course ID required');
+      }
+
+      const course = await this.getCourseById(courseId);
+      if (!course) {
+        throw new Error('Course not found');
       }
 
       const courseRef = doc(db, 'courses', courseId);
-      const courseDoc = await getDoc(courseRef);
-      
-      if (!courseDoc.exists()) {
-        throw new Error(`Course "${courseId}" not found`);
-      }
-
-      const courseData = courseDoc.data();
-      
-      if (courseData.thumbnail) {
-        try {
-          const thumbnailPath = courseData.thumbnail.split('/').pop();
-          if (thumbnailPath) {
-            await this.deleteFile(thumbnailPath, 'course_thumbnails');
-          }
-        } catch (error) {
-          console.warn('⚠️ Failed to delete thumbnail');
-        }
-      }
-
-      if (courseData.routineFiles && Array.isArray(courseData.routineFiles)) {
-        for (const file of courseData.routineFiles) {
-          try {
-            const fileName = file.url.split('/').pop();
-            if (fileName) {
-              await this.deleteFile(fileName, 'course_routines');
-            }
-          } catch (error) {
-            console.warn('⚠️ Failed to delete routine file');
-          }
-        }
-      }
 
       try {
-        const enrollmentsCollection = collection(db, 'enrollments');
-        const enrollmentsQuery = query(enrollmentsCollection, where('courseId', '==', courseId));
+        const enrollmentsQuery = query(
+          collection(db, 'enrollments'),
+          where('courseId', '==', courseId)
+        );
         const enrollmentsSnapshot = await getDocs(enrollmentsQuery);
         
         await Promise.all(
@@ -585,8 +556,10 @@ export const courseService = {
       }
 
       try {
-        const studentContentCollection = collection(db, 'studentContent');
-        const contentQuery = query(studentContentCollection, where('courseId', '==', courseId));
+        const contentQuery = query(
+          collection(db, 'studentContent'),
+          where('courseId', '==', courseId)
+        );
         const contentSnapshot = await getDocs(contentQuery);
         
         await Promise.all(
@@ -784,7 +757,7 @@ export const courseService = {
       }
 
       console.log('Processing paid enrollment');
-      return await this.initiatePaidEnrollment(request, course);
+      return await this.initiatePaidEnrollment(request);
       
     } catch (error: any) {
       logError('enrollStudent', error, { 
@@ -884,19 +857,56 @@ export const courseService = {
     }
   },
 
+  // ==================== SECURITY PATCHED: initiatePaidEnrollment ====================
   async initiatePaidEnrollment(
-    request: EnrollmentRequest,
-    course: Course
+    request: EnrollmentRequest
   ): Promise<EnrollmentResponse> {
     try {
-      console.log('Initiating paid enrollment');
+      console.log('');
+      console.log('💰 INITIATING PAID ENROLLMENT (SECURE)');
+      console.log('═'.repeat(80));
+      console.log('Course ID:', request.courseId);
+      console.log('Student ID:', request.studentId);
+      console.log('Final Price:', request.calculation.finalPrice);
+      console.log('Has Applied Coupons:', request.calculation.appliedCoupons.length);
+      console.log('═'.repeat(80));
 
-      // Store ALL enrollment data in metadata so it can be recovered from the
-      // transaction record when the payment return handler fires.
+      // Validate final price
+      if (request.calculation.finalPrice <= 0) {
+        return {
+          success: false,
+          error: 'Invalid price',
+          message: 'Price must be greater than zero for paid enrollment.'
+        };
+      }
+
+      // Get course
+      const course = await this.getCourseById(request.courseId);
+      if (!course) {
+        return {
+          success: false,
+          error: 'Course not found',
+          message: 'The course you are trying to enroll in was not found.'
+        };
+      }
+
+      // Check for existing enrollment
+      const existingEnrollments = await this.getStudentEnrollments(request.studentId);
+      const alreadyEnrolled = existingEnrollments.some(e => e.courseId === request.courseId);
+      
+      if (alreadyEnrolled) {
+        return {
+          success: false,
+          error: 'Already enrolled',
+          message: 'You are already enrolled in this course.'
+        };
+      }
+
+      // Prepare payment request with full metadata
       const paymentRequest: PaymentInitiationRequest = {
         userId: request.studentId,
         userName: request.studentName,
-        userEmail: request.studentEmail,
+        userEmail: request.studentEmail || undefined,
         amount: request.calculation.finalPrice,
         productId: request.courseId,
         productName: course.title,
@@ -907,7 +917,7 @@ export const courseService = {
           couponDiscount: request.calculation.couponDiscount,
         },
         metadata: {
-          // Everything needed to reconstruct enrollment on payment return
+          // Everything needed to reconstruct enrollment server-side
           courseId: request.courseId,
           studentId: request.studentId,
           studentName: request.studentName,
@@ -921,9 +931,8 @@ export const courseService = {
           extraDiscount: request.calculation.extraDiscount,
           couponDiscount: request.calculation.couponDiscount,
           totalDiscount: request.calculation.totalDiscount,
-          // Serialize full coupon list for post-payment recording
+          // Serialize full coupon list for server-side statistics
           appliedCoupons: JSON.stringify(request.calculation.appliedCoupons || []),
-          // Legacy compat
           couponId: request.calculation.couponId || '',
           couponCode: request.calculation.couponCode || '',
           discountApplied: request.calculation.couponDiscount,
@@ -942,9 +951,6 @@ export const courseService = {
       console.log('Success:', paymentResponse.success);
       console.log('Has Gateway URL:', !!paymentResponse.gatewayUrl);
       console.log('Transaction ID:', paymentResponse.transactionId);
-      console.log('Error:', paymentResponse.error);
-      console.log('Details:', paymentResponse.details);
-      console.log('User Message:', paymentResponse.userMessage);
       console.log('═'.repeat(80));
 
       if (paymentResponse.success && paymentResponse.gatewayUrl) {
@@ -973,15 +979,12 @@ export const courseService = {
     }
   },
 
-  // ==================== POST-PAYMENT ENROLLMENT ====================
-  // Called after the SSLCommerz gateway redirects the user back.
-  // We query the transaction record (which paymentService already wrote to Firestore
-  // with all metadata), validate it, then create the enrollment.
-  //
-  // This is idempotent: safe to call multiple times for the same transactionId.
-
+  // ==================== SECURITY PATCHED: completeEnrollmentAfterPayment ====================
+  // This function is now ONLY called by the frontend for verification
+  // The actual enrollment creation happens server-side in api/payment.ts
   async completeEnrollmentAfterPayment(
-    transactionId: string
+    transactionId: string,
+    userId: string  // ADD userId parameter for security check
   ): Promise<{
     success: boolean;
     enrollmentId?: string;
@@ -991,168 +994,121 @@ export const courseService = {
   }> {
     try {
       console.log('');
-      console.log('🎓 COMPLETING ENROLLMENT AFTER PAYMENT');
+      console.log('🔍 VERIFYING ENROLLMENT AFTER PAYMENT');
       console.log('═'.repeat(80));
       console.log('Transaction ID:', transactionId);
+      console.log('User ID:', userId);
       console.log('═'.repeat(80));
 
-      // ── Step 1: Validate payment and get the transaction record ───────────
-      // validatePayment returns the full transaction object which contains metadata
-      const validation = await paymentService.validatePayment(transactionId);
+      // Step 1: Get transaction from Firestore
+      const txnSnap = await getDocs(query(
+        collection(db, 'transactions'),
+        where('transactionId', '==', transactionId)
+      ));
 
-      console.log('Validation result:', {
-        success: validation.success,
-        validated: validation.validated,
-        status: validation.status,
-      });
-
-      if (!validation.success || !validation.validated) {
-        const reason = validation.error || validation.userMessage || 'Payment not verified';
-        console.error('❌ Payment validation failed:', reason);
-        return { success: false, error: reason };
+      if (txnSnap.empty) {
+        return { success: false, error: 'Transaction not found' };
       }
 
-      // ── Step 2: Extract enrollment data from transaction metadata ─────────
-      const transaction = validation.transaction;
-      if (!transaction) {
-        return { success: false, error: 'Transaction record not found after validation.' };
+      const txn = txnSnap.docs[0].data();
+
+      // Step 2: SECURITY CHECK - Verify ownership
+      if (txn.userId !== userId) {
+        console.error('🚨 SECURITY: User ID mismatch');
+        console.error('Transaction userId:', txn.userId);
+        console.error('Provided userId:', userId);
+        return { success: false, error: 'Unauthorized access' };
       }
 
-      const meta = transaction.metadata || {};
-
-      const courseId: string = meta.courseId || transaction.productId || '';
-      const studentId: string = meta.studentId || transaction.userId || '';
-      const studentName: string = meta.studentName || transaction.userName || '';
-      const studentEmail: string = meta.studentEmail || transaction.userEmail || '';
-      const amountPaid: number = Number(meta.finalPrice ?? transaction.amount ?? 0);
-      const previousStudentDiscount: number = Number(meta.previousStudentDiscount || 0);
-      const extraDiscount: number = Number(meta.extraDiscount || 0);
-      const couponDiscount: number = Number(meta.couponDiscount || 0);
-
-      let appliedCoupons: AppliedCoupon[] = [];
-      if (meta.appliedCoupons) {
-        try {
-          appliedCoupons = JSON.parse(meta.appliedCoupons);
-          if (!Array.isArray(appliedCoupons)) appliedCoupons = [];
-        } catch (_) {
-          appliedCoupons = [];
-        }
-      }
-
-      if (!courseId || !studentId) {
-        return {
-          success: false,
-          error: `Missing enrollment data in transaction. courseId=${courseId}, studentId=${studentId}`
+      // Step 3: Check transaction status
+      if (txn.status !== 'success') {
+        return { 
+          success: false, 
+          error: `Payment not completed. Status: ${txn.status}` 
         };
       }
 
-      console.log('Enrollment data from transaction:', {
-        courseId, studentId, studentName, amountPaid,
-        appliedCoupons: appliedCoupons.map(c => c.couponCode),
-      });
+      const courseId = txn.productId;
+      const courseTitle = txn.metadata?.courseTitle || txn.productName || '';
 
-      // ── Step 3: Idempotency — check if enrollment already exists ──────────
-      // Check by transactionId first (fastest)
-      try {
-        const byTxn = query(
-          collection(db, 'enrollments'),
-          where('transactionId', '==', transactionId)
-        );
-        const byTxnSnap = await getDocs(byTxn);
-        if (!byTxnSnap.empty) {
-          const existingDoc = byTxnSnap.docs[0];
-          const courseTitle = meta.courseTitle || meta.courseName || '';
-          console.log('ℹ️ Enrollment already exists for this transaction:', existingDoc.id);
-          return { success: true, enrollmentId: existingDoc.id, alreadyEnrolled: true, courseTitle };
-        }
-      } catch (idempotencyErr: any) {
-        console.warn('⚠️ Could not check by transactionId:', idempotencyErr.message);
+      // Step 4: Check if enrollment exists (server should have created it)
+      const enrollmentSnap = await getDocs(query(
+        collection(db, 'enrollments'),
+        where('studentId', '==', userId),
+        where('courseId', '==', courseId)
+      ));
+
+      if (enrollmentSnap.empty) {
+        // Enrollment not found - this shouldn't happen if server processed payment correctly
+        console.error('❌ Enrollment not found after successful payment');
+        console.error('This indicates the server-side enrollment creation failed');
+        return {
+          success: false,
+          error: 'Enrollment pending. Please wait a moment and refresh the page.',
+          courseTitle
+        };
       }
 
-      // Also check by studentId + courseId to prevent true duplicates
-      const existingEnrollments = await this.getStudentEnrollments(studentId);
-      const alreadyInCourse = existingEnrollments.find(e => e.courseId === courseId);
-      if (alreadyInCourse) {
-        const courseTitle = meta.courseTitle || meta.courseName || '';
-        console.log('ℹ️ Student already enrolled in course:', courseId);
-        return { success: true, enrollmentId: alreadyInCourse.id, alreadyEnrolled: true, courseTitle };
-      }
-
-      // ── Step 4: Fetch course ───────────────────────────────────────────────
-      const course = await this.getCourseById(courseId);
-      if (!course) {
-        return { success: false, error: `Course not found: ${courseId}` };
-      }
-
-      // ── Step 5: Write enrollment document ─────────────────────────────────
-      const enrollmentData: any = {
-        courseId,
-        studentId,
-        studentName,
-        studentEmail,
-        progress: 0,
-        completedLessons: [],
-        enrolledAt: Timestamp.now(),
-        lastAccessedAt: Timestamp.now(),
-        paymentStatus: 'completed' as const,
-        transactionId,
-        amountPaid,
-        paymentMethod: 'SSLCOMMERZ',
-        paymentDate: Timestamp.now(),
-        appliedDiscounts: {
-          previousStudentDiscount,
-          extraDiscount,
-          couponDiscount,
-          appliedCoupons,
-        },
-      };
-
-      const enrollmentRef = doc(collection(db, 'enrollments'));
-      await setDoc(enrollmentRef, enrollmentData);
-      console.log('✅ Enrollment created:', enrollmentRef.id);
-
-      // ── Step 6: Record coupon usages ──────────────────────────────────────
-      for (const ac of appliedCoupons) {
-        try {
-          await couponService.recordCouponUsage({
-            couponId: ac.couponId,
-            userId: studentId,
-            courseId,
-            userName: studentName,
-            courseName: course.title,
-            discountApplied: ac.discount,
-            amountPaid,
-          });
-          console.log(`✅ Coupon usage recorded: ${ac.couponCode}`);
-        } catch (couponErr: any) {
-          console.warn(`⚠️ Failed to record coupon usage for ${ac.couponCode}:`, couponErr.message);
-        }
-      }
-
-      // ── Step 7: Update course student count ───────────────────────────────
-      try {
-        const courseRef = doc(db, 'courses', courseId);
-        await updateDoc(courseRef, { studentCount: course.studentCount + 1 });
-      } catch (updateError: any) {
-        console.warn('⚠️ Course count update failed:', updateError.message);
-      }
-
-      // ── Step 8: Add content to student library ────────────────────────────
-      try {
-        await this.addCourseToContentLibrary(courseId, studentId);
-      } catch (libraryError: any) {
-        console.warn('⚠️ Library addition failed:', libraryError.message);
-      }
+      const enrollmentDoc = enrollmentSnap.docs[0];
+      console.log('✅ Enrollment verified:', enrollmentDoc.id);
 
       return {
         success: true,
-        enrollmentId: enrollmentRef.id,
-        courseTitle: course.title,
+        enrollmentId: enrollmentDoc.id,
+        alreadyEnrolled: false,
+        courseTitle
       };
+
     } catch (error: any) {
-      logError('completeEnrollmentAfterPayment', error, { transactionId });
-      return { success: false, error: error.message };
+      console.error('Error verifying enrollment:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to verify enrollment'
+      };
     }
+  },
+
+  // ==================== SECURITY HELPER: verifyEnrollmentExists ====================
+  /**
+   * Verifies that an enrollment exists for a user and course
+   * Used after payment to confirm server-side enrollment creation
+   */
+  async verifyEnrollmentExists(
+    userId: string,
+    courseId: string,
+    maxAttempts: number = 3,
+    delayMs: number = 2000
+  ): Promise<{ exists: boolean; enrollmentId?: string }> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`Checking enrollment existence... Attempt ${attempt}/${maxAttempts}`);
+
+      try {
+        const enrollmentSnap = await getDocs(query(
+          collection(db, 'enrollments'),
+          where('studentId', '==', userId),
+          where('courseId', '==', courseId)
+        ));
+
+        if (!enrollmentSnap.empty) {
+          return {
+            exists: true,
+            enrollmentId: enrollmentSnap.docs[0].id
+          };
+        }
+
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      } catch (error: any) {
+        console.error(`Enrollment check attempt ${attempt} failed:`, error.message);
+        if (attempt === maxAttempts) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+
+    return { exists: false };
   },
 
   // ── POST-PAYMENT COUPON USAGE RECORDING ─────────────────────────────────────
