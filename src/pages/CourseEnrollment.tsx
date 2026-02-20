@@ -193,7 +193,7 @@ const CourseEnrollment = () => {
       const enrolledCourseIds = new Set(enrollments.map(e => e.courseId));
       const enrollmentMap = new Map<string, { progress: number; enrollmentId: string }>();
       enrollments.forEach(e => {
-        enrollmentMap.set(e.courseId, { progress: e.progress || 0, enrollmentId: e.enrollmentId });
+        enrollmentMap.set(e.courseId, { progress: e.progress || 0, enrollmentId: e.id });
       });
 
       // Force-inject guaranteed enrollment regardless of constd result.
