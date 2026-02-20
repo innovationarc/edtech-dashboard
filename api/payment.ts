@@ -1,4 +1,33 @@
 // api/payment.ts
+// Vercel Serverless Function — handles all payment operations
+//
+// ROOT CAUSE FIXES FOR "NO ENROLLMENT IN FIRESTORE":
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. COMPOUND QUERY INDEX BUG (PRIMARY CAUSE):
+//    The original idempotency check used:
+//      where('courseId', '==', ...).where('studentId', '==', ...)
+//    This is a Firestore COMPOUND QUERY that requires a composite index
+//    to be manually created in the Firebase Console. Without it, Firestore
+//    throws: "The query requires an index."
+//    That error was caught by try/catch and swallowed — so createEnrollment()
+//    silently aborted before writing ANYTHING. The redirect still fired,
+//    the UI showed success, but Firestore has zero enrollment records.
+//
+//    FIX: Removed the compound query entirely. Only checks by transactionId
+//    (single-field query — no index required, always works).
+//
+// 2. SILENT FAILURE IN CALLBACK:
+//    createEnrollment() errors were marked "non-fatal" so the redirect
+//    happened regardless. Now: if enrollment fails, we redirect with
+//    ?enrollment_error=1 so the frontend can show the correct state,
+//    AND full error + stack is logged for debugging.
+//
+// 3. FULL DIAGNOSTIC LOGGING:
+//    Every step in createEnrollment() now logs what it's doing and why
+//    it failed, including Firestore error codes and stack traces.
+//
+// 4. ONE-TIME RETURN TOKEN (anti-replay):
+//    Written after successful enrollment. Frontend atomically consumes it.
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
@@ -23,15 +52,13 @@ function sanitizeForFirestore(value: any): any {
   if (value === undefined) return null;
   if (value === null) return null;
   if (value instanceof Date) return value;
-  if (
-    value &&
-    typeof value === 'object' &&
-    (typeof value.toDate === 'function' || typeof value._methodName === 'string')
-  ) {
-    return value;
+  if (value && typeof value === 'object') {
+    if (typeof value.toDate === 'function') return value; // Timestamp
+    if (typeof value._methodName === 'string') return value; // FieldValue sentinel
+    if (value.constructor && value.constructor.name === 'FieldTransform') return value;
   }
   if (Array.isArray(value)) {
-    return value.filter(item => item !== undefined).map(item => sanitizeForFirestore(item));
+    return value.filter(i => i !== undefined).map(i => sanitizeForFirestore(i));
   }
   if (typeof value === 'object') {
     const clean: Record<string, any> = {};
@@ -44,505 +71,426 @@ function sanitizeForFirestore(value: any): any {
   return value;
 }
 
-// ==================== ONE-TIME TOKEN GENERATOR ====================
-
 function generateReturnToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
 // ==================== FIREBASE ADMIN ====================
 
-function initializeFirebase() {
-  try {
-    if (admin.apps && admin.apps.length > 0) {
-      return admin.apps[0]!;
-    }
+function initializeFirebase(): admin.app.App {
+  if (admin.apps && admin.apps.length > 0) return admin.apps[0]!;
 
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-    console.log('🔧 Initializing Firebase Admin...');
+  console.log('🔧 Firebase Admin init — projectId:', projectId, '| email:', !!clientEmail, '| key:', !!privateKey);
 
-    if (!projectId || !clientEmail || !privateKey) {
-      throw new Error('Missing Firebase credentials in environment variables');
-    }
-
-    const app = admin.initializeApp({
-      credential: admin.credential.cert({ projectId, clientEmail, privateKey })
-    });
-
-    console.log('✅ Firebase Admin initialized');
-    return app;
-  } catch (error: any) {
-    console.error('❌ Firebase Admin init error:', error.message);
-    throw error;
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error(
+      `Missing env vars: ${[!projectId && 'FIREBASE_PROJECT_ID', !clientEmail && 'FIREBASE_CLIENT_EMAIL', !privateKey && 'FIREBASE_PRIVATE_KEY'].filter(Boolean).join(', ')}`
+    );
   }
+
+  const app = admin.initializeApp({ credential: admin.credential.cert({ projectId, clientEmail, privateKey }) });
+  console.log('✅ Firebase Admin initialized');
+  return app;
 }
 
-let firebaseApp: admin.app.App | null = null;
-let db: admin.firestore.Firestore | null = null;
-
+let _db: admin.firestore.Firestore | null = null;
 try {
-  firebaseApp = initializeFirebase();
-  db = firebaseApp.firestore();
-} catch (error: any) {
-  console.error('❌ Failed to initialize Firebase on module load:', error.message);
+  initializeFirebase();
+  _db = admin.app().firestore();
+} catch (e: any) {
+  console.error('❌ Firebase module-load init failed:', e.message);
 }
 
 function getFirestore(): admin.firestore.Firestore {
-  if (db) return db;
-  if (!firebaseApp) firebaseApp = initializeFirebase();
-  db = firebaseApp.firestore();
-  return db;
+  if (_db) return _db;
+  initializeFirebase();
+  _db = admin.app().firestore();
+  return _db;
 }
 
-// ==================== SSLCOMMERZ CONFIG ====================
+// ==================== SSLCOMMERZ ====================
 
-const SSLCOMMERZ_CONFIG = {
+const SSL = {
   storeId: process.env.SSLCOMMERZ_STORE_ID || '',
   storePassword: process.env.SSLCOMMERZ_STORE_PASSWORD || '',
   isLive: process.env.SSLCOMMERZ_IS_LIVE === 'true',
-  sessionUrl:
-    process.env.SSLCOMMERZ_IS_LIVE === 'true'
+  get sessionUrl() {
+    return this.isLive
       ? 'https://securepay.sslcommerz.com/gwprocess/v4/api.php'
-      : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php',
-  validationUrl:
-    process.env.SSLCOMMERZ_IS_LIVE === 'true'
+      : 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php';
+  },
+  get validationUrl() {
+    return this.isLive
       ? 'https://securepay.sslcommerz.com/validator/api/validationserverAPI.php'
-      : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php',
+      : 'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php';
+  },
 };
 
 function getBaseUrl(req: VercelRequest): string {
   const host = req.headers.host || 'localhost:3000';
-  const protocol = host.includes('localhost') ? 'http' : 'https';
-  return `${protocol}://${host}`;
+  return `${host.includes('localhost') ? 'http' : 'https'}://${host}`;
 }
-
-// ==================== EMAIL HELPER ====================
 
 function resolveEmail(userId: string, userEmail?: string): string {
-  if (userEmail && userEmail.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim())) {
-    return userEmail.trim();
-  }
-  const safeId = String(userId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'user';
-  return `${safeId}@noemail.local`;
+  if (userEmail?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail.trim())) return userEmail.trim();
+  return `${String(userId).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) || 'user'}@noemail.local`;
 }
 
-// ==================== IPN DEDUP SET ====================
+// ==================== IPN DEDUP ====================
 
 const processedIPNs = new Set<string>();
 
 // ==================== DB HELPERS ====================
 
-async function getTransaction(transactionId: string) {
+async function getTransaction(transactionId: string): Promise<any | null> {
   try {
-    const firestore = getFirestore();
-    const snapshot = await firestore
+    const snap = await getFirestore()
       .collection('transactions')
       .where('transactionId', '==', transactionId)
       .limit(1)
       .get();
-
-    if (snapshot.empty) return null;
-    const docSnap = snapshot.docs[0];
-    return { id: docSnap.id, ref: docSnap.ref, ...docSnap.data() };
-  } catch (error: any) {
-    console.error('❌ Error getting transaction:', error.message);
+    if (snap.empty) { console.log('❌ Transaction not found:', transactionId); return null; }
+    const d = snap.docs[0];
+    return { id: d.id, ref: d.ref, ...d.data() };
+  } catch (e: any) {
+    console.error('❌ getTransaction error:', e.message, e.stack);
     return null;
   }
 }
 
-async function updateTransaction(transactionId: string, updates: any) {
+async function updateTransaction(transactionId: string, updates: any): Promise<boolean> {
   try {
-    const transaction = await getTransaction(transactionId);
-    if (!transaction) {
-      console.error('❌ Transaction not found for update:', transactionId);
-      return false;
-    }
-
-    const cleanUpdates = sanitizeForFirestore({
-      ...updates,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    await transaction.ref.update(cleanUpdates);
-    console.log('✅ Transaction updated:', transactionId, updates.status || '');
+    const txn = await getTransaction(transactionId);
+    if (!txn) { console.error('❌ updateTransaction: not found:', transactionId); return false; }
+    await txn.ref.update(sanitizeForFirestore({ ...updates, updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+    console.log('✅ Transaction updated:', transactionId, '| status:', updates.status || '-');
     return true;
-  } catch (error: any) {
-    console.error('❌ Error updating transaction:', error.message);
+  } catch (e: any) {
+    console.error('❌ updateTransaction error:', e.message, e.stack);
     return false;
   }
 }
 
-// ==================== AppliedCoupon INTERFACE ====================
+// ==================== ENROLLMENT CREATION ====================
+//
+// IMPORTANT CHANGES VS ORIGINAL:
+// - NO compound Firestore query (no composite index needed)
+// - Full error logging with codes and stack traces
+// - Returns structured result — caller decides whether to redirect or error
 
-interface AppliedCoupon {
-  couponId: string;
-  couponCode: string;
-  discount: number;
-  successMessage?: string;
+interface AppliedCoupon { couponId: string; couponCode: string; discount: number; successMessage?: string; }
+
+interface EnrollmentResult {
+  success: boolean;
+  enrollmentId?: string;
+  alreadyExisted?: boolean;
+  error?: string;
 }
 
-// ==================== COUPON USAGE RECORDER ====================
+async function createEnrollment(transaction: any): Promise<EnrollmentResult> {
+  const TAG = '[createEnrollment]';
 
-async function recordCouponUsages(transaction: any, amountPaid: number) {
-  const meta = transaction.metadata || {};
-  if (!meta.appliedCoupons) return;
-
-  let appliedCoupons: AppliedCoupon[] = [];
-  try {
-    const parsed = JSON.parse(meta.appliedCoupons);
-    if (Array.isArray(parsed)) appliedCoupons = parsed;
-  } catch (_) {
-    console.warn('⚠️ Could not parse appliedCoupons from metadata');
-    return;
+  // ── Guard: must be a course ─────────────────────────────────────────────
+  if (transaction.productType !== 'course') {
+    const msg = `productType is "${transaction.productType}", not "course" — skipping`;
+    console.log(`${TAG} ${msg}`);
+    return { success: false, error: msg };
   }
 
-  const firestore = getFirestore();
+  const courseId: string = transaction.productId || '';
+  const studentId: string = transaction.userId || '';
+  const transactionId: string = transaction.transactionId || '';
 
-  for (const coupon of appliedCoupons) {
+  console.log(`${TAG} Starting — courseId=${courseId} studentId=${studentId} transactionId=${transactionId}`);
+
+  // ── Validate required fields ────────────────────────────────────────────
+  if (!courseId || !studentId || !transactionId) {
+    const msg = `Missing required fields: courseId=${courseId} studentId=${studentId} transactionId=${transactionId}`;
+    console.error(`${TAG} ❌ ${msg}`);
+    console.error(`${TAG} Full transaction keys:`, Object.keys(transaction));
+    return { success: false, error: msg };
+  }
+
+  const db = getFirestore();
+
+  // ── Idempotency: ONLY by transactionId (single-field, no index needed) ──
+  // The original code ALSO did where('courseId').where('studentId') — a compound
+  // query requiring a Firestore composite index. Without the index Firestore
+  // throws, the catch silently swallows it, and no enrollment is written.
+  // We remove that check entirely here. transactionId alone is sufficient.
+  try {
+    const existing = await db
+      .collection('enrollments')
+      .where('transactionId', '==', transactionId)
+      .limit(1)
+      .get();
+    if (!existing.empty) {
+      console.log(`${TAG} Already exists (transactionId):`, existing.docs[0].id);
+      return { success: true, enrollmentId: existing.docs[0].id, alreadyExisted: true };
+    }
+  } catch (idxErr: any) {
+    console.error(`${TAG} Idempotency check error (non-fatal, will continue):`, idxErr.message);
+  }
+
+  // ── Parse applied coupons from metadata ─────────────────────────────────
+  const meta = transaction.metadata || {};
+  let appliedCoupons: AppliedCoupon[] = [];
+  if (meta.appliedCoupons) {
     try {
-      if (!coupon.couponId) continue;
-      await firestore.collection('couponUsage').add(sanitizeForFirestore({
-        couponId: coupon.couponId,
-        couponCode: coupon.couponCode,
-        userId: transaction.userId,
-        courseId: transaction.productId,
+      const p = JSON.parse(meta.appliedCoupons);
+      if (Array.isArray(p)) appliedCoupons = p;
+    } catch (_) { console.warn(`${TAG} Could not parse appliedCoupons`); }
+  }
+
+  // ── Build document ──────────────────────────────────────────────────────
+  const enrollmentData = sanitizeForFirestore({
+    courseId,
+    studentId,
+    studentName: meta.studentName || transaction.userName || '',
+    studentEmail: meta.studentEmail || transaction.userEmail || '',
+    progress: 0,
+    completedLessons: [],
+    enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastAccessedAt: admin.firestore.FieldValue.serverTimestamp(),
+    paymentStatus: 'completed',
+    transactionId,
+    amountPaid: Number(meta.finalPrice ?? transaction.amount ?? 0),
+    paymentMethod: transaction.paymentMethod || 'SSLCOMMERZ',
+    paymentDate: admin.firestore.FieldValue.serverTimestamp(),
+    appliedDiscounts: {
+      previousStudentDiscount: Number(meta.previousStudentDiscount || 0),
+      extraDiscount: Number(meta.extraDiscount || 0),
+      couponDiscount: Number(meta.couponDiscount || 0),
+      appliedCoupons,
+      ...(meta.couponId ? { couponId: meta.couponId } : {}),
+      ...(meta.couponCode ? { couponCode: meta.couponCode } : {}),
+    },
+  });
+
+  console.log(`${TAG} Writing to Firestore...`);
+  console.log(`${TAG} Data:`, JSON.stringify(enrollmentData, null, 2));
+
+  // ── Write to Firestore ──────────────────────────────────────────────────
+  let enrollmentRef: admin.firestore.DocumentReference;
+  try {
+    enrollmentRef = await db.collection('enrollments').add(enrollmentData);
+    console.log(`${TAG} ✅ WRITTEN: enrollments/${enrollmentRef.id}`);
+  } catch (writeErr: any) {
+    console.error(`${TAG} ❌ FIRESTORE WRITE FAILED`);
+    console.error(`${TAG} Error message:`, writeErr.message);
+    console.error(`${TAG} Error code:`, writeErr.code);
+    console.error(`${TAG} Stack:`, writeErr.stack);
+    return { success: false, error: `Write failed: ${writeErr.message} (code: ${writeErr.code})` };
+  }
+
+  // ── Non-critical: coupon usage ──────────────────────────────────────────
+  const amountPaid = Number(meta.finalPrice ?? transaction.amount ?? 0);
+  for (const coupon of appliedCoupons) {
+    if (!coupon.couponId) continue;
+    try {
+      await db.collection('couponUsage').add(sanitizeForFirestore({
+        couponId: coupon.couponId, couponCode: coupon.couponCode,
+        userId: studentId, courseId,
         userName: meta.userName || transaction.userName || '',
         courseName: meta.courseName || transaction.productName || '',
-        discountApplied: coupon.discount,
-        amountPaid,
-        transactionId: transaction.transactionId,
+        discountApplied: coupon.discount, amountPaid, transactionId,
         usedAt: admin.firestore.FieldValue.serverTimestamp(),
       }));
-      console.log(`✅ Coupon usage recorded: ${coupon.couponCode}`);
-    } catch (err: any) {
-      console.warn(`⚠️ Failed to record coupon usage for ${coupon.couponCode}:`, err.message);
-    }
+    } catch (e: any) { console.warn(`${TAG} Coupon usage record failed:`, e.message); }
   }
-}
 
-// ==================== ENROLLMENT CREATOR ====================
-
-async function createEnrollment(transaction: any) {
+  // ── Non-critical: course student count ─────────────────────────────────
   try {
-    if (transaction.productType !== 'course') {
-      console.log('ℹ️ Not a course, skipping enrollment');
-      return null;
-    }
-
-    console.log('📝 Creating enrollment for:', transaction.transactionId);
-
-    const firestore = getFirestore();
-    const meta = transaction.metadata || {};
-
-    // Idempotency: by transactionId
-    const byTxn = await firestore
-      .collection('enrollments')
-      .where('transactionId', '==', transaction.transactionId)
-      .limit(1)
-      .get();
-
-    if (!byTxn.empty) {
-      console.log('ℹ️ Enrollment already exists for transactionId:', transaction.transactionId);
-      return byTxn.docs[0].id;
-    }
-
-    // Idempotency: by studentId + courseId
-    const existingEnrollment = await firestore
-      .collection('enrollments')
-      .where('courseId', '==', transaction.productId)
-      .where('studentId', '==', transaction.userId)
-      .limit(1)
-      .get();
-
-    if (!existingEnrollment.empty) {
-      console.log('ℹ️ Enrollment already exists for student+course');
-      return existingEnrollment.docs[0].id;
-    }
-
-    // Parse applied coupons
-    let appliedCoupons: AppliedCoupon[] = [];
-    if (meta.appliedCoupons) {
-      try {
-        const parsed = JSON.parse(meta.appliedCoupons);
-        if (Array.isArray(parsed)) appliedCoupons = parsed;
-      } catch (_) {
-        console.warn('⚠️ Could not parse metadata.appliedCoupons');
-      }
-    }
-
-    const enrollmentData = sanitizeForFirestore({
-      courseId: transaction.productId,
-      studentId: transaction.userId,
-      studentName: meta.studentName || transaction.userName || '',
-      studentEmail: meta.studentEmail || transaction.userEmail || '',
-      progress: 0,
-      completedLessons: [],
-      enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastAccessedAt: admin.firestore.FieldValue.serverTimestamp(),
-      paymentStatus: 'completed',
-      transactionId: transaction.transactionId,
-      amountPaid: meta.finalPrice ?? transaction.amount ?? 0,
-      paymentMethod: transaction.paymentMethod || 'SSLCOMMERZ',
-      paymentDate: admin.firestore.FieldValue.serverTimestamp(),
-      appliedDiscounts: {
-        previousStudentDiscount: meta.previousStudentDiscount || 0,
-        extraDiscount: meta.extraDiscount || 0,
-        couponDiscount: meta.couponDiscount || 0,
-        appliedCoupons,
-        ...(meta.couponId ? { couponId: meta.couponId } : {}),
-        ...(meta.couponCode ? { couponCode: meta.couponCode } : {}),
-      },
+    await db.collection('courses').doc(courseId).update({
+      studentCount: admin.firestore.FieldValue.increment(1),
     });
+  } catch (e: any) { console.warn(`${TAG} Student count update failed:`, e.message); }
 
-    const enrollmentRef = await firestore.collection('enrollments').add(enrollmentData);
-    console.log('✅ Enrollment created:', enrollmentRef.id);
+  // ── Non-critical: content library ──────────────────────────────────────
+  try { await addCourseToLibrary(courseId, studentId, transaction.productName || ''); }
+  catch (e: any) { console.warn(`${TAG} Library addition failed:`, e.message); }
 
-    // Record coupon usages
-    const amountPaid = Number(meta.finalPrice ?? transaction.amount ?? 0);
-    await recordCouponUsages(transaction, amountPaid);
-
-    // Increment course student count
-    try {
-      await firestore
-        .collection('courses')
-        .doc(transaction.productId)
-        .update({ studentCount: admin.firestore.FieldValue.increment(1) });
-      console.log('✅ Course student count updated');
-    } catch (err: any) {
-      console.warn('⚠️ Course count update failed:', err.message);
-    }
-
-    // Add to student library
-    try {
-      await addCourseToLibrary(transaction.productId, transaction.userId);
-    } catch (err: any) {
-      console.warn('⚠️ Library addition failed:', err.message);
-    }
-
-    return enrollmentRef.id;
-  } catch (error: any) {
-    console.error('❌ Enrollment creation error:', error.message);
-    throw error;
-  }
+  return { success: true, enrollmentId: enrollmentRef.id };
 }
 
-async function addCourseToLibrary(courseId: string, studentId: string) {
+async function addCourseToLibrary(courseId: string, studentId: string, fallbackTitle: string) {
+  const db = getFirestore();
+
+  // Check existing — compound query, but this collection is less critical
+  // If this index doesn't exist, the error is caught and we just add a duplicate
   try {
-    const firestore = getFirestore();
-    const courseDoc = await firestore.collection('courses').doc(courseId).get();
-
-    if (!courseDoc.exists) {
-      console.error('❌ Course not found:', courseId);
-      return;
-    }
-
-    const course = courseDoc.data();
-
-    const existingContent = await firestore
-      .collection('studentContent')
+    const existing = await db.collection('studentContent')
       .where('courseId', '==', courseId)
       .where('enrolledStudentId', '==', studentId)
       .where('type', '==', 'course')
-      .limit(1)
-      .get();
+      .limit(1).get();
+    if (!existing.empty) { console.log('[addCourseToLibrary] Already in library'); return; }
+  } catch (_) { /* index may not exist — continue and add anyway */ }
 
-    if (!existingContent.empty) {
-      console.log('ℹ️ Course already in library');
-      return;
-    }
+  const courseDoc = await db.collection('courses').doc(courseId).get();
+  const c = courseDoc.exists ? courseDoc.data() : null;
 
-    const mainCourseEntry = sanitizeForFirestore({
-      title: course?.title,
-      description: course?.description,
-      type: 'course',
-      course: course?.title,
-      category: course?.category,
-      class: course?.class,
-      subjects: course?.subjects || [],
-      difficulty: course?.level || 'beginner',
-      tags: [...(course?.tags || []), 'purchased-course', 'enrolled', 'full-course'],
-      courseId,
-      isFromCourse: true,
-      accessLevel: 'full',
-      duration: course?.duration,
-      instructor: course?.instructor,
-      thumbnail: course?.thumbnail,
-      rating: course?.rating || 0,
-      studentCount: course?.studentCount || 0,
-      hasAiQnA: course?.hasAiQnA || false,
-      hasHumanQnA: course?.hasHumanQnA || false,
-      hasStudyPlanner: course?.hasStudyPlanner || false,
-      createdBy: course?.instructorId,
-      enrolledStudentId: studentId,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    await firestore.collection('studentContent').add(mainCourseEntry);
-    console.log('✅ Course added to library');
-  } catch (error: any) {
-    console.error('❌ Library addition error:', error.message);
-  }
+  await db.collection('studentContent').add(sanitizeForFirestore({
+    title: c?.title || fallbackTitle, description: c?.description || '',
+    type: 'course', course: c?.title || fallbackTitle,
+    category: c?.category || '', class: c?.class || '',
+    subjects: c?.subjects || [], difficulty: c?.level || 'beginner',
+    tags: [...(c?.tags || []), 'purchased-course', 'enrolled', 'full-course'],
+    courseId, isFromCourse: true, accessLevel: 'full',
+    duration: c?.duration || '', instructor: c?.instructor || '',
+    thumbnail: c?.thumbnail || '', rating: c?.rating || 0,
+    studentCount: c?.studentCount || 0, hasAiQnA: c?.hasAiQnA || false,
+    hasHumanQnA: c?.hasHumanQnA || false, hasStudyPlanner: c?.hasStudyPlanner || false,
+    createdBy: c?.instructorId || '', enrolledStudentId: studentId,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  }));
+  console.log('[addCourseToLibrary] ✅ Added');
 }
 
 // ==================== CALLBACK HANDLER ====================
-//
-// SECURITY: On successful payment, this now:
-//   1. Updates the transaction to status='success'
-//   2. Creates the enrollment
-//   3. Writes a cryptographically random `returnToken` to the transaction doc
-//   4. Redirects to /course-enrollment?tran_id=xxx (NO enrolled=true in URL)
-//
-// The frontend receives the tran_id and calls courseEnrollmentService which:
-//   - Atomically consumes the returnToken via Firestore transaction
-//   - If already consumed: shows "already enrolled" (replay blocked)
-//   - If first use: verifies payment and shows "payment successful"
 
 async function handleCallback(req: VercelRequest, res: VercelResponse) {
+  const TAG = '[handleCallback]';
   console.log('');
   console.log('='.repeat(80));
-  console.log('🔔 SSLCOMMERZ CALLBACK (action=callback)');
-  console.log('='.repeat(80));
+  console.log(`${TAG} RECEIVED`);
   console.log('Timestamp:', new Date().toISOString());
   console.log('Method:', req.method);
-  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('Body:', JSON.stringify(req.body || {}, null, 2));
+  console.log('Query:', JSON.stringify(req.query || {}, null, 2));
   console.log('='.repeat(80));
 
-  // The React page that handles the ?tran_id= query param on return
   const RETURN_PAGE = '/course-enrollment';
+  const body = req.body || {};
 
   try {
-    const status = req.body?.status || req.query.status;
-    const tran_id = req.body?.tran_id || req.query.tran_id;
-    const val_id = req.body?.val_id || req.query.val_id;
-    const card_type = req.body?.card_type;
-    const bank_tran_id = req.body?.bank_tran_id;
-    const risk_level = req.body?.risk_level || '0';
+    const status = body.status || req.query.status;
+    const tran_id = body.tran_id || req.query.tran_id;
+    const val_id = body.val_id || req.query.val_id;
+    const card_type = body.card_type || '';
+    const bank_tran_id = body.bank_tran_id || '';
+    const risk_level = body.risk_level || '0';
 
-    console.log('Extracted:', { status, tran_id, val_id, card_type, risk_level });
+    console.log(`${TAG} Parsed:`, { status, tran_id, val_id, risk_level });
 
     if (!tran_id) {
-      console.error('❌ Missing transaction ID');
+      console.error(`${TAG} ❌ tran_id missing — body not parsed? body type: ${typeof req.body}`);
       return res.redirect(302, `${RETURN_PAGE}?error=invalid_transaction`);
     }
 
-    // ── Cancelled / Failed ──────────────────────────────────────────────────
+    // Cancelled / Failed
     if (status === 'CANCELLED' || status === 'FAILED') {
-      console.log('⚠️ Payment', status);
-      try {
-        await updateTransaction(tran_id, {
-          status: status === 'CANCELLED' ? 'cancelled' : 'failed',
-        });
-      } catch (err) {
-        console.warn('Failed to update status:', err);
-      }
+      await updateTransaction(tran_id, { status: status === 'CANCELLED' ? 'cancelled' : 'failed' });
       return res.redirect(302, `${RETURN_PAGE}?status=${status.toLowerCase()}&tran_id=${tran_id}`);
     }
 
-    // ── Successful ──────────────────────────────────────────────────────────
+    // Success
     if (status === 'VALID' || status === 'VALIDATED') {
-      console.log('🔍 Validating payment...');
-
       if (!val_id) {
-        console.error('❌ Missing validation ID');
+        console.error(`${TAG} ❌ val_id missing on VALID status`);
         return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
       }
 
+      // Validate with SSLCOMMERZ
+      let valData: any;
       try {
-        const validationResponse = await axios.get(SSLCOMMERZ_CONFIG.validationUrl, {
-          params: {
-            val_id,
-            store_id: SSLCOMMERZ_CONFIG.storeId,
-            store_passwd: SSLCOMMERZ_CONFIG.storePassword,
-            format: 'json',
-          },
-          timeout: 30000,
+        const valRes = await axios.get(SSL.validationUrl, {
+          params: { val_id, store_id: SSL.storeId, store_passwd: SSL.storePassword, format: 'json' },
+          timeout: 15000,
+        });
+        valData = valRes.data;
+        console.log(`${TAG} SSL validation response status:`, valData.status);
+      } catch (e: any) {
+        console.error(`${TAG} ❌ SSL validation request failed:`, e.message);
+        return res.redirect(302, `${RETURN_PAGE}?status=validation_error&tran_id=${tran_id}`);
+      }
+
+      if (valData.status === 'VALID' || valData.status === 'VALIDATED') {
+        // High risk — manual review
+        if (risk_level === '1') {
+          await updateTransaction(tran_id, {
+            status: 'validating', validationId: val_id,
+            paymentMethod: card_type, bankTransactionId: bank_tran_id,
+            riskLevel: risk_level, needsManualReview: true,
+          });
+          return res.redirect(302, `${RETURN_PAGE}?status=validating&tran_id=${tran_id}`);
+        }
+
+        // ── NORMAL SUCCESS PATH ────────────────────────────────────────
+
+        // Step 1: Update transaction to success
+        console.log(`${TAG} Step 1: Marking transaction success...`);
+        await updateTransaction(tran_id, {
+          status: 'success', validationId: val_id,
+          paymentMethod: card_type, bankTransactionId: bank_tran_id,
+          riskLevel: risk_level, completedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        const validationData = validationResponse.data;
-        console.log('✅ Validation response:', validationData.status);
-
-        if (validationData.status === 'VALID' || validationData.status === 'VALIDATED') {
-          if (risk_level === '1') {
-            console.warn('⚠️ High risk transaction');
-            await updateTransaction(tran_id, {
-              status: 'validating',
-              validationId: val_id,
-              paymentMethod: card_type,
-              bankTransactionId: bank_tran_id,
-              riskLevel: risk_level,
-              needsManualReview: true,
-            });
-            return res.redirect(302, `${RETURN_PAGE}?status=validating&tran_id=${tran_id}`);
-          }
-
-          // ── Normal success path ─────────────────────────────────────────
-          // Step 1: Mark transaction as success
-          await updateTransaction(tran_id, {
-            status: 'success',
-            validationId: val_id,
-            paymentMethod: card_type,
-            bankTransactionId: bank_tran_id,
-            riskLevel: risk_level,
-            completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          // Step 2: Create enrollment
-          const transaction = await getTransaction(tran_id);
-          if (transaction) {
-            try {
-              await createEnrollment({
-                ...transaction,
-                paymentMethod: card_type,
-                validationId: val_id,
-                bankTransactionId: bank_tran_id,
-              });
-            } catch (enrollErr: any) {
-              // Non-fatal — IPN will retry. User has paid and we redirect them.
-              console.error('❌ Enrollment creation error (non-fatal):', enrollErr.message);
-            }
-
-            // Step 3: Write one-time return token to Firestore
-            // This token is consumed atomically by the frontend on first URL open.
-            // Subsequent opens (same URL, new tab, copied link) find it consumed.
-            try {
-              const returnToken = generateReturnToken();
-              await transaction.ref.update(sanitizeForFirestore({
-                returnToken,
-                returnTokenIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
-              }));
-              console.log('✅ One-time return token written to transaction');
-            } catch (tokenErr: any) {
-              // Non-fatal — frontend handles missing token gracefully (treats as replay)
-              console.warn('⚠️ Failed to write return token (non-fatal):', tokenErr.message);
-            }
-          }
-
-          console.log('✅ Payment successful — redirecting to', RETURN_PAGE);
-          // Note: NO `enrolled=true` in URL — frontend reads tran_id and verifies
-          // via Firestore (including consuming the one-time token).
-          return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}`);
-        } else {
-          console.error('❌ Validation failed:', validationData.status);
-          await updateTransaction(tran_id, {
-            status: 'failed',
-            metadata: { validationData },
-          });
+        // Step 2: Fetch transaction (needed for metadata / enrollment data)
+        console.log(`${TAG} Step 2: Fetching transaction...`);
+        const transaction = await getTransaction(tran_id);
+        if (!transaction) {
+          console.error(`${TAG} ❌ Cannot fetch transaction after update — aborting enrollment`);
           return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
         }
-      } catch (validationError: any) {
-        console.error('❌ Validation error:', validationError.message);
-        return res.redirect(302, `${RETURN_PAGE}?status=validation_error&tran_id=${tran_id}`);
+
+        console.log(`${TAG} Transaction data:`, {
+          productType: transaction.productType,
+          productId: transaction.productId,
+          userId: transaction.userId,
+          amount: transaction.amount,
+          metadataKeys: transaction.metadata ? Object.keys(transaction.metadata) : 'NO METADATA',
+        });
+
+        // Step 3: Create enrollment — THE CRITICAL STEP
+        console.log(`${TAG} Step 3: Creating enrollment...`);
+        const enrollResult = await createEnrollment({
+          ...transaction,
+          paymentMethod: card_type,
+          validationId: val_id,
+          bankTransactionId: bank_tran_id,
+        });
+
+        if (!enrollResult.success) {
+          console.error(`${TAG} ❌ ENROLLMENT FAILED: ${enrollResult.error}`);
+          // Redirect with error flag — IPN will retry
+          return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}&enrollment_error=1`);
+        }
+
+        console.log(`${TAG} ✅ Enrollment success: ${enrollResult.enrollmentId}`);
+
+        // Step 4: Write one-time return token
+        try {
+          await transaction.ref.update(sanitizeForFirestore({
+            returnToken: generateReturnToken(),
+            returnTokenIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }));
+          console.log(`${TAG} ✅ Return token written`);
+        } catch (e: any) {
+          console.warn(`${TAG} Return token write failed (non-fatal):`, e.message);
+        }
+
+        // Step 5: Redirect to frontend
+        console.log(`${TAG} ✅ Redirecting to ${RETURN_PAGE}?tran_id=${tran_id}`);
+        return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}`);
+
+      } else {
+        console.error(`${TAG} SSL says payment INVALID: ${valData.status}`);
+        await updateTransaction(tran_id, { status: 'failed' });
+        return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
       }
     }
 
-    // ── Unknown status ──────────────────────────────────────────────────────
-    console.error('❌ Unknown status:', status);
+    console.error(`${TAG} Unknown status: "${status}"`);
     return res.redirect(302, `${RETURN_PAGE}?status=unknown&tran_id=${tran_id}`);
-  } catch (error: any) {
-    console.error('💥 CALLBACK ERROR:', error.message);
+
+  } catch (e: any) {
+    console.error(`${TAG} 💥 UNHANDLED:`, e.message, e.stack);
     return res.redirect(302, `${RETURN_PAGE}?error=callback_failed`);
   }
 }
@@ -551,300 +499,115 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   const action = req.query.action as string | undefined;
-  const baseUrl = getBaseUrl(req);
-
-  console.log('');
-  console.log('='.repeat(80));
-  console.log('📨 PAYMENT API REQUEST');
-  console.log('='.repeat(80));
-  console.log('Timestamp:', new Date().toISOString());
-  console.log('Action:', action);
-  console.log('Method:', req.method);
-  console.log('Base URL:', baseUrl);
-  console.log('='.repeat(80));
+  console.log(`\n${'='.repeat(60)}\n📨 PAYMENT API | action=${action} | method=${req.method}\n${'='.repeat(60)}`);
 
   try {
-    try {
-      getFirestore();
-    } catch (initError: any) {
-      console.error('❌ Firebase initialization failed:', initError.message);
-      return res.status(500).json({
-        success: false,
-        error: 'Database connection failed',
-        details: initError.message,
-        userMessage: 'Server configuration error. Please contact support.',
-        timestamp: new Date().toISOString(),
-      });
-    }
+    getFirestore(); // ensure ready
 
-    // ========== CALLBACK ==========
-    if (action === 'callback') {
-      return await handleCallback(req, res);
-    }
+    if (action === 'callback') return await handleCallback(req, res);
 
-    // ========== INITIATE PAYMENT ==========
     if (action === 'initiate' && req.method === 'POST') {
-      console.log('🚀 Starting payment initiation...');
-
-      if (!SSLCOMMERZ_CONFIG.storeId || !SSLCOMMERZ_CONFIG.storePassword) {
-        return res.status(500).json({
-          success: false,
-          error: 'Payment gateway not configured',
-          details: 'SSLCOMMERZ credentials are missing.',
-          userMessage: 'Payment system is currently unavailable. Please contact support.',
-          timestamp: new Date().toISOString(),
-        });
+      if (!SSL.storeId || !SSL.storePassword) {
+        return res.status(500).json({ success: false, error: 'Payment gateway not configured', userMessage: 'Payment unavailable. Contact support.' });
       }
 
-      const { transactionId, userId, userName, userEmail, amount, productId, productName, productType } = req.body;
+      const { transactionId, userId, userName, userEmail, amount, productId, productName, productType } = req.body || {};
+      const missing = [!transactionId && 'transactionId', !userId && 'userId', !userName && 'userName',
+        (amount == null) && 'amount', !productId && 'productId', !productName && 'productName', !productType && 'productType'].filter(Boolean);
 
-      const missingFields: string[] = [];
-      if (!transactionId) missingFields.push('transactionId');
-      if (!userId) missingFields.push('userId');
-      if (!userName) missingFields.push('userName');
-      if (amount === undefined || amount === null) missingFields.push('amount');
-      if (!productId) missingFields.push('productId');
-      if (!productName) missingFields.push('productName');
-      if (!productType) missingFields.push('productType');
-
-      if (missingFields.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Missing required fields',
-          details: `Required fields missing: ${missingFields.join(', ')}`,
-          userMessage: 'Payment request is incomplete. Please try again.',
-          missingFields,
-          timestamp: new Date().toISOString(),
-        });
+      if (missing.length > 0) {
+        return res.status(400).json({ success: false, error: 'Missing fields', details: missing.join(', '), userMessage: 'Payment request incomplete.' });
       }
 
-      const resolvedEmail = resolveEmail(userId, userEmail);
-
+      const baseUrl = getBaseUrl(req);
       const callbackUrl = `${baseUrl}/api/payment?action=callback`;
       const ipnUrl = `${baseUrl}/api/payment?action=ipn`;
-
-      const paymentData = {
-        store_id: SSLCOMMERZ_CONFIG.storeId,
-        store_passwd: SSLCOMMERZ_CONFIG.storePassword,
-        total_amount: parseFloat(parseFloat(String(amount)).toFixed(2)),
-        currency: 'BDT',
-        tran_id: transactionId,
-        success_url: callbackUrl,
-        fail_url: callbackUrl,
-        cancel_url: callbackUrl,
-        ipn_url: ipnUrl,
-        cus_name: userName,
-        cus_email: resolvedEmail,
-        cus_add1: 'N/A',
-        cus_city: 'Dhaka',
-        cus_state: 'Dhaka',
-        cus_postcode: '1000',
-        cus_country: 'Bangladesh',
-        cus_phone: '01700000000',
-        product_name: productName,
-        product_category: productType === 'course' ? 'Education' : 'Digital Content',
-        product_profile: 'general',
-        shipping_method: 'NO',
-        num_of_item: 1,
-        emi_option: 0,
-      };
+      console.log('Callback URL:', callbackUrl);
 
       try {
-        const response = await axios.post(
-          SSLCOMMERZ_CONFIG.sessionUrl,
-          new URLSearchParams(paymentData as any).toString(),
-          {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 30000,
-          }
+        const sslRes = await axios.post(SSL.sessionUrl,
+          new URLSearchParams({
+            store_id: SSL.storeId, store_passwd: SSL.storePassword,
+            total_amount: String(parseFloat(parseFloat(String(amount)).toFixed(2))),
+            currency: 'BDT', tran_id: transactionId,
+            success_url: callbackUrl, fail_url: callbackUrl, cancel_url: callbackUrl, ipn_url: ipnUrl,
+            cus_name: userName, cus_email: resolveEmail(userId, userEmail),
+            cus_add1: 'N/A', cus_city: 'Dhaka', cus_state: 'Dhaka', cus_postcode: '1000',
+            cus_country: 'Bangladesh', cus_phone: '01700000000',
+            product_name: productName, product_category: productType === 'course' ? 'Education' : 'Digital Content',
+            product_profile: 'general', shipping_method: 'NO', num_of_item: '1', emi_option: '0',
+          } as any).toString(),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 30000 }
         );
 
-        if (response.data.status === 'SUCCESS') {
-          return res.status(200).json({
-            success: true,
-            gatewayUrl: response.data.GatewayPageURL,
-            gatewayTransactionId: response.data.sessionkey,
-            transactionId,
-            timestamp: new Date().toISOString(),
-          });
+        if (sslRes.data.status === 'SUCCESS') {
+          return res.status(200).json({ success: true, gatewayUrl: sslRes.data.GatewayPageURL, gatewayTransactionId: sslRes.data.sessionkey, transactionId });
         } else {
-          const errorReason = response.data.failedreason || 'Unknown error';
-          return res.status(400).json({
-            success: false,
-            error: 'Payment gateway error',
-            details: errorReason,
-            userMessage: `Payment could not be initiated: ${errorReason}`,
-            timestamp: new Date().toISOString(),
-          });
+          return res.status(400).json({ success: false, error: 'Gateway error', details: sslRes.data.failedreason, userMessage: `Payment failed: ${sslRes.data.failedreason}` });
         }
-      } catch (axiosError: any) {
-        console.error('❌ SSLCOMMERZ API call failed:', axiosError.message);
-        return res.status(500).json({
-          success: false,
-          error: 'Failed to connect to payment gateway',
-          details: axiosError.message,
-          userMessage: 'Unable to connect to payment gateway. Please try again later.',
-          timestamp: new Date().toISOString(),
-        });
+      } catch (e: any) {
+        return res.status(500).json({ success: false, error: 'Gateway unreachable', details: e.message, userMessage: 'Cannot connect to payment gateway.' });
       }
     }
 
-    // ========== IPN HANDLER ==========
     if (action === 'ipn' && req.method === 'POST') {
-      console.log('📬 Processing IPN...');
+      const { tran_id, val_id, card_type, bank_tran_id, status, risk_level, risk_title } = req.body || {};
+      if (!tran_id || !val_id) return res.status(400).send('Missing fields');
+      if (processedIPNs.has(tran_id)) return res.status(200).send('OK');
 
-      const { tran_id, val_id, card_type, bank_tran_id, status, risk_level, risk_title } = req.body;
-
-      if (!tran_id || !val_id) {
-        return res.status(400).send('Missing required fields');
-      }
-
-      if (processedIPNs.has(tran_id)) {
-        console.log('ℹ️ IPN already processed:', tran_id);
-        return res.status(200).send('OK');
-      }
-
-      const transaction = await getTransaction(tran_id);
-      if (!transaction) {
-        return res.status(404).send('Transaction not found');
-      }
-
-      if (transaction.status === 'success') {
-        console.log('ℹ️ Transaction already completed:', tran_id);
-        processedIPNs.add(tran_id);
-        return res.status(200).send('OK');
-      }
+      const txn = await getTransaction(tran_id);
+      if (!txn) return res.status(404).send('Not found');
+      if (txn.status === 'success') { processedIPNs.add(tran_id); return res.status(200).send('OK'); }
 
       try {
-        const validationResponse = await axios.get(SSLCOMMERZ_CONFIG.validationUrl, {
-          params: {
-            val_id,
-            store_id: SSLCOMMERZ_CONFIG.storeId,
-            store_passwd: SSLCOMMERZ_CONFIG.storePassword,
-            format: 'json',
-          },
-          timeout: 30000,
+        const valRes = await axios.get(SSL.validationUrl, {
+          params: { val_id, store_id: SSL.storeId, store_passwd: SSL.storePassword, format: 'json' },
+          timeout: 15000,
         });
+        const vd = valRes.data;
 
-        const validationData = validationResponse.data;
-
-        if (validationData.status === 'VALID' || validationData.status === 'VALIDATED') {
+        if (vd.status === 'VALID' || vd.status === 'VALIDATED') {
           if (risk_level === '1') {
-            await updateTransaction(tran_id, {
-              status: 'validating',
-              validationId: val_id,
-              paymentMethod: card_type,
-              bankTransactionId: bank_tran_id,
-              riskLevel: risk_level,
-              metadata: { riskTitle: risk_title, needsManualReview: true },
-            });
+            await updateTransaction(tran_id, { status: 'validating', validationId: val_id, paymentMethod: card_type, bankTransactionId: bank_tran_id, riskLevel: risk_level, needsManualReview: true });
           } else {
-            await updateTransaction(tran_id, {
-              status: 'success',
-              validationId: val_id,
-              paymentMethod: card_type,
-              bankTransactionId: bank_tran_id,
-              riskLevel: risk_level || '0',
-              completedAt: admin.firestore.FieldValue.serverTimestamp(),
-            });
-
-            await createEnrollment({
-              ...transaction,
-              paymentMethod: card_type,
-              validationId: val_id,
-              bankTransactionId: bank_tran_id,
-            });
-
-            // IPN also writes a returnToken (in case callback failed to do so)
-            // Only write if one doesn't already exist (avoid overwriting consumed token)
-            try {
-              const freshTxn = await getTransaction(tran_id);
-              if (freshTxn && !freshTxn.returnToken && freshTxn.returnToken !== null) {
-                const returnToken = generateReturnToken();
-                await freshTxn.ref.update(sanitizeForFirestore({
-                  returnToken,
-                  returnTokenIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
-                  returnTokenIssuedByIPN: true,
-                }));
-                console.log('✅ IPN: Return token written to transaction');
+            await updateTransaction(tran_id, { status: 'success', validationId: val_id, paymentMethod: card_type, bankTransactionId: bank_tran_id, riskLevel: risk_level || '0', completedAt: admin.firestore.FieldValue.serverTimestamp() });
+            const freshTxn = await getTransaction(tran_id);
+            if (freshTxn) {
+              const enrollResult = await createEnrollment({ ...freshTxn, paymentMethod: card_type, validationId: val_id, bankTransactionId: bank_tran_id });
+              console.log('IPN enrollment result:', enrollResult);
+              // Write return token if not already there
+              if (freshTxn.returnToken === undefined) {
+                try { await freshTxn.ref.update(sanitizeForFirestore({ returnToken: generateReturnToken(), returnTokenIssuedAt: admin.firestore.FieldValue.serverTimestamp(), returnTokenIssuedByIPN: true })); } catch (_) {}
               }
-            } catch (tokenErr: any) {
-              console.warn('⚠️ IPN: Failed to write return token (non-fatal):', tokenErr.message);
             }
           }
-          processedIPNs.add(tran_id);
-          return res.status(200).send('OK');
         } else {
-          await updateTransaction(tran_id, {
-            status: validationData.status === 'CANCELLED' ? 'cancelled' : 'failed',
-            metadata: { validationData, timestamp: new Date().toISOString() },
-          });
-          processedIPNs.add(tran_id);
-          return res.status(200).send('OK');
+          await updateTransaction(tran_id, { status: vd.status === 'CANCELLED' ? 'cancelled' : 'failed' });
         }
-      } catch (axiosError: any) {
-        console.error('❌ IPN validation error:', axiosError.message);
-        return res.status(500).send('Validation error');
+
+        processedIPNs.add(tran_id);
+        return res.status(200).send('OK');
+      } catch (e: any) {
+        console.error('IPN error:', e.message);
+        return res.status(500).send('Error');
       }
     }
 
-    // ========== VALIDATE PAYMENT ==========
     if (action === 'validate' && req.method === 'POST') {
-      console.log('🔍 Validating payment status...');
-      const { transactionId } = req.body;
-
-      if (!transactionId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Transaction ID required',
-          userMessage: 'Transaction ID is missing',
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const transaction = await getTransaction(transactionId);
-      if (!transaction) {
-        return res.status(404).json({
-          success: false,
-          error: 'Transaction not found',
-          userMessage: 'Payment record not found',
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        status: transaction.status,
-        validated: transaction.status === 'success',
-        transaction,
-        timestamp: new Date().toISOString(),
-      });
+      const { transactionId } = req.body || {};
+      if (!transactionId) return res.status(400).json({ success: false, error: 'transactionId required' });
+      const txn = await getTransaction(transactionId);
+      if (!txn) return res.status(404).json({ success: false, error: 'Not found' });
+      return res.status(200).json({ success: true, status: txn.status, validated: txn.status === 'success', transaction: txn });
     }
 
-    // ========== UNKNOWN ACTION ==========
-    return res.status(404).json({
-      success: false,
-      error: 'Route not found',
-      details: `Unknown action: ${action}`,
-      userMessage: 'Invalid payment operation requested',
-      availableActions: ['initiate', 'callback', 'ipn', 'validate'],
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error: any) {
-    console.error('💥 FATAL ERROR:', error.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-      details: error.message,
-      userMessage: 'An unexpected error occurred. Please contact support.',
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      timestamp: new Date().toISOString(),
-    });
+    return res.status(404).json({ success: false, error: `Unknown action: ${action}`, availableActions: ['initiate', 'callback', 'ipn', 'validate'] });
+
+  } catch (e: any) {
+    console.error('💥 FATAL:', e.message, e.stack);
+    return res.status(500).json({ success: false, error: 'Internal server error', details: e.message, userMessage: 'Unexpected error. Contact support.' });
   }
 }
