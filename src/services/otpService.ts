@@ -365,6 +365,40 @@ We look forward to supporting your learning journey.`;
     }
   },
 
+  async sendEnrollmentSuccessSMS(phoneNumber: string, surname: string, userId: string, courseName: string): Promise<void> {
+    try {
+      const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
+
+      const rawMessage = `Dear ${surname},
+
+Congratulations! Your enrollment in ${courseName} has been successfully confirmed at Ed-tech.
+Student ID: ${userId}
+
+We're excited to have you with us and wish you great success in your learning journey.`;
+      const gsmMessage = toGSM7Bit(rawMessage);
+
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ||
+                         import.meta.env.VITE_API_URL ||
+                         'https://edtech-dashboard-alpha.vercel.app';
+      const MASTER_API_KEY = import.meta.env.VITE_SMS_MASTER_KEY;
+
+      const requestBody: any = { phoneNumber: normalizedPhone, message: gsmMessage };
+      if (MASTER_API_KEY) requestBody.apiKey = MASTER_API_KEY;
+
+      const response = await fetch(`${BACKEND_URL}/api/sms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to send enrollment success SMS');
+      }
+    } catch (error) {
+      console.error('Error sending enrollment success SMS:', error);
+    }
+  },
+
   async verifyOTP(phoneNumber: string, otp: string, purpose: 'registration' | 'password-reset' | 'user-search' = 'registration'): Promise<{ success: boolean; message: string }> {
     try {
       const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
