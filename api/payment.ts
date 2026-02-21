@@ -238,93 +238,57 @@ interface EnrollmentResult {
 }
 
 // ==================== ENROLLMENT SMS ====================
-// Sends GSM-7bit enrollment confirmation SMS directly via BulkSMSBD API.
-// IMPORTANT: Calls the provider directly — NOT via /api/sms — because a
-// Vercel serverless function cannot reliably HTTP-call itself.
+// Routes through api/sms.ts for unified logging and provider handling.
+// baseUrl is derived from the VercelRequest host header (getBaseUrl(req))
+// so the self-call always hits the correct deployment.
 // Fire-and-forget: errors are logged but never propagate to the caller.
 // ─────────────────────────────────────────────────────────────────────────────
-const _GSM_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
-const _GSM_EXT  = "^{}\\[~]|€";
-const _GSM_REPLACEMENTS: Record<string, string> = {
-  '“': '"', '”': '"', '‘': "'", '’': "'",
-  '–': '-', '—': '-', '…': '...', ' ': ' ',
-  '•': '*', '→': '->', '←': '<-',
-  '™': '(TM)', '©': '(C)', '®': '(R)',
-};
-
-function _toGSM7Bit(text: string): string {
-  return text.split('').map(c =>
-    (_GSM_BASIC.includes(c) || _GSM_EXT.includes(c)) ? c : (_GSM_REPLACEMENTS[c] || c)
-  ).join('');
-}
 
 async function sendEnrollmentSMS(
   phoneNumber: string,
   surname: string,
   userId: string,
   courseName: string,
+  baseUrl: string,
 ): Promise<void> {
   const TAG = '[sendEnrollmentSMS]';
   try {
     if (!phoneNumber) return;
 
-    const SMS_API_KEY = process.env.SMS_API_KEY;
-    const SENDER_ID   = process.env.SMS_SENDER_ID;
-    if (!SMS_API_KEY || !SENDER_ID) {
-      console.warn(`${TAG} SMS credentials not configured — skipping`);
-      return;
-    }
+    const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
 
-    // Normalize to 880XXXXXXXXXX (13 digits, no +)
-    let cleaned = phoneNumber.replace(/\D/g, '');
-    if (cleaned.startsWith('880') && cleaned.length === 13) { /* already correct */ }
-    else {
-      if (cleaned.startsWith('88')) cleaned = cleaned.substring(2);
-      if (cleaned.startsWith('0'))  cleaned = cleaned.substring(1);
-      if (cleaned.length === 10)     cleaned = '880' + cleaned;
-    }
-    if (cleaned.length !== 13) {
-      console.warn(`${TAG} Invalid phone after normalisation (${cleaned}), skipping SMS`);
-      return;
-    }
-
-    const rawMessage = `Dear ${surname || 'Student'},
+    // Build the enrollment message (exact format required)
+    const message = `Dear ${surname || 'Student'},
 
 Congratulations! Your enrollment in ${courseName} has been successfully confirmed at Ed-tech.
 Student ID: ${userId}
 
 We're excited to have you with us and wish you great success in your learning journey.`;
 
-    const gsmMessage = _toGSM7Bit(rawMessage);
+    const requestBody: Record<string, string> = { phoneNumber, message };
+    if (MASTER_API_KEY) requestBody.apiKey = MASTER_API_KEY;
 
-    // Call BulkSMSBD directly — same provider used by api/sms.ts
-    const params = new URLSearchParams({
-      api_key:  SMS_API_KEY,
-      senderid: SENDER_ID,
-      number:   cleaned,
-      message:  gsmMessage,
-      type:     'text',
+    console.log(`${TAG} Calling /api/sms for ${phoneNumber}`);
+
+    // Call api/sms.ts via the same host — avoids cross-deployment URL issues
+    const response = await fetch(`${baseUrl}/api/sms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
     });
 
-    console.log(`${TAG} Sending SMS to ${cleaned}, message length: ${gsmMessage.length}`);
-
-    const smsRes = await fetch(`http://bulksmsbd.net/api/smsapi?${params.toString()}`, {
-      method: 'GET',
-      headers: { 'User-Agent': 'EdTech-Platform/1.0', 'Accept': 'text/plain' },
-    });
-
-    const raw = (await smsRes.text()).trim();
-    if (raw === '202' || raw.toLowerCase().includes('success')) {
-      console.log(`${TAG} ✅ SMS sent successfully to ${cleaned} — provider response: ${raw}`);
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result.success) {
+      console.log(`${TAG} ✅ SMS dispatched successfully`);
     } else {
-      console.error(`${TAG} ❌ SMS provider error: ${raw}`);
+      console.error(`${TAG} ❌ /api/sms returned ${response.status}:`, result);
     }
   } catch (err: any) {
     console.error(`${TAG} Error (non-fatal):`, err.message);
   }
 }
 
-async function createEnrollment(transaction: any): Promise<EnrollmentResult> {
+async function createEnrollment(transaction: any, baseUrl: string = ''): Promise<EnrollmentResult> {
   const TAG = '[createEnrollment]';
 
   if (transaction.productType !== 'course') {
@@ -475,6 +439,7 @@ async function createEnrollment(transaction: any): Promise<EnrollmentResult> {
       meta2.studentSurname || (meta2.studentName || '').split(' ')[0],
       studentId,
       meta2.courseName || transaction.productName || '',
+      baseUrl,
     ).catch(err => console.error(`${TAG} SMS fire-and-forget error:`, err.message));
   }
 
@@ -630,7 +595,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
           paymentMethod: card_type || existingTxn.paymentMethod,
           validationId: val_id || existingTxn.validationId,
           bankTransactionId: bank_tran_id || existingTxn.bankTransactionId,
-        });
+        }, getBaseUrl(req));
         console.log(`${TAG} Enrollment result (already-success path):`, enrollResult);
 
         // Ensure return token exists
@@ -666,7 +631,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
             paymentMethod: card_type || recheckTxn.paymentMethod,
             validationId: val_id,
             bankTransactionId: bank_tran_id,
-          });
+          }, getBaseUrl(req));
           console.log(`${TAG} Enrollment result (post-SSL-error path):`, enrollResult);
 
           if (!recheckTxn.returnToken) {
@@ -732,7 +697,7 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
           paymentMethod: card_type,
           validationId: val_id,
           bankTransactionId: bank_tran_id,
-        });
+        }, getBaseUrl(req));
 
         if (!enrollResult.success) {
           console.error(`${TAG} ❌ ENROLLMENT FAILED: ${enrollResult.error}`);
@@ -954,7 +919,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 paymentMethod: card_type,
                 validationId: val_id,
                 bankTransactionId: bank_tran_id
-              });
+              }, getBaseUrl(req));
               console.log('IPN enrollment result:', enrollResult);
 
               if (!freshTxn.returnToken) {
