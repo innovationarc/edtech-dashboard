@@ -146,8 +146,9 @@ export interface EnrollmentRequest {
   studentId: string;
   studentName: string;
   studentEmail?: string;
-  studentPhone?: string;   // For enrollment SMS notification
-  studentSurname?: string; // For enrollment SMS notification
+  studentPhone?: string;    // For enrollment SMS notification
+  studentSurname?: string;  // For enrollment SMS notification
+  studentUserId?: string;   // Formatted Student ID (e.g. ST-2601-00001) for SMS
   calculation: EnrollmentCalculation;
 }
 
@@ -538,7 +539,7 @@ export const courseEnrollmentService = {
 
   async enrollStudent(request: EnrollmentRequest): Promise<EnrollmentResponse> {
     try {
-      const { courseId, studentId, studentName, studentEmail, studentPhone, studentSurname, calculation } = request;
+      const { courseId, studentId, studentName, studentEmail, studentPhone, studentSurname, studentUserId, calculation } = request;
 
       console.log('📝 Processing enrollment:', { courseId, studentId, finalPrice: calculation.finalPrice });
 
@@ -604,7 +605,7 @@ export const courseEnrollmentService = {
           otpService.sendEnrollmentSuccessSMS(
             studentPhone,
             studentSurname || studentName.split(' ')[0],
-            studentId,
+            studentUserId || studentId, // prefer formatted ID over Firebase UID
             courseName,
           ).catch(err => console.error('Enrollment SMS error (non-fatal):', err));
         }
@@ -645,6 +646,7 @@ export const courseEnrollmentService = {
           studentEmail: studentEmail || '',
           studentPhone: studentPhone || '',
           studentSurname: studentSurname || '',
+          studentUserId: studentUserId || '',
           courseName,
           courseId,
           finalPrice: calculation.finalPrice,
