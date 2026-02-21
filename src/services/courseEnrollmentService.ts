@@ -740,7 +740,23 @@ export const courseEnrollmentService = {
       const courseTitle: string = txn.productName || txn.metadata?.courseTitle || '';
       const courseId: string = txn.productId || txn.metadata?.courseId || '';
 
-      let isReplay = false;
+      // ── One-time token consumption ────────────────────────────────────────
+      // PURPOSE: Prevent URL replay attacks (user opening callback URL in new tab).
+      //
+      // FIX: We distinguish three cases:
+      //   (A) tokenConsumed = false  → token present, we consume it → legitimate first visit
+      //   (B) tokenConsumed = true   → token already null → could be:
+      //       - Server-side replay prevention already consumed it (still legitimate)
+      //       - A real replay (user opened URL twice)
+      //   (C) tokenMissing = true    → token was never written (IPN/callback timing race)
+      //       → treat as legitimate (enrollment by transactionId will confirm)
+      //
+      // We use `isDefiniteReplay` only when token was null AND enrollment was already
+      // found by a DIFFERENT transaction (proving prior enrollment exists independently).
+      // Finding enrollment by THIS transactionId always means success — never "already enrolled".
+
+      let tokenConsumed = false; // token was present and we consumed it (fresh visit)
+      let tokenWasNull = false;  // token was already null before we tried
 
       try {
         await firestoreRunTransaction(db, async (t) => {
@@ -749,8 +765,9 @@ export const courseEnrollmentService = {
           const freshData = freshSnap.data() || {};
 
           if (freshData.returnToken === null || freshData.returnToken === undefined) {
-            isReplay = true;
+            tokenWasNull = true;
           } else {
+            tokenConsumed = true;
             t.update(txnRef, {
               returnToken: null,
               returnTokenConsumedAt: Timestamp.now(),
@@ -759,9 +776,11 @@ export const courseEnrollmentService = {
           }
         });
       } catch (tokenErr: any) {
-        console.warn(`${TAG} Token consumption failed:`, tokenErr.message);
-        isReplay = true;
+        console.warn(`${TAG} Token consumption failed (non-fatal):`, tokenErr.message);
+        tokenWasNull = true;
       }
+
+      console.log(`${TAG} Token state: tokenConsumed=${tokenConsumed} tokenWasNull=${tokenWasNull}`);
 
       const freshTxnSnap = await getDocs(query(
         collection(db, COLLECTIONS.TRANSACTIONS),
@@ -775,7 +794,7 @@ export const courseEnrollmentService = {
           status: freshTxn.status,
           courseTitle,
           courseId,
-          isReplay,
+          isReplay: false,
           message: `Payment was ${freshTxn.status}. Please try again or contact support.`,
         };
       }
@@ -786,7 +805,7 @@ export const courseEnrollmentService = {
           status: 'validating',
           courseTitle,
           courseId,
-          isReplay,
+          isReplay: false,
           message: 'Your payment is under manual review. You will be enrolled once approved.',
         };
       }
@@ -797,7 +816,7 @@ export const courseEnrollmentService = {
           status: 'not_found',
           courseTitle,
           courseId,
-          isReplay,
+          isReplay: false,
           message: `Unexpected payment status: ${freshTxn.status}. Contact support with ref: ${tranId}`,
         };
       }
@@ -810,6 +829,8 @@ export const courseEnrollmentService = {
         }
 
         try {
+          // PRIMARY: find enrollment by this exact transactionId
+          // If found → always SUCCESS (this payment created this enrollment)
           const byTxn = await getDocs(query(
             collection(db, COLLECTIONS.ENROLLMENTS),
             where('transactionId', '==', tranId)
@@ -817,20 +838,21 @@ export const courseEnrollmentService = {
           
           if (!byTxn.empty) {
             const enrollDoc = byTxn.docs[0];
-            console.log(`${TAG} Enrollment found on attempt ${attempt + 1}`);
+            console.log(`${TAG} Enrollment found by transactionId on attempt ${attempt + 1}`);
             return {
               verified: true,
               status: 'success',
               enrollmentId: enrollDoc.id,
               courseTitle,
               courseId,
-              isReplay,
-              message: isReplay
-                ? `You are already enrolled in "${courseTitle || 'this course'}".`
-                : `Payment verified! You are now enrolled in "${courseTitle || 'the course'}".`,
+              isReplay: false, // Found by THIS transaction → always fresh success
+              message: `Payment verified! You are now enrolled in "${courseTitle || 'the course'}".`,
             };
           }
 
+          // FALLBACK: find by studentId+courseId
+          // Only show "already enrolled" if token was null (possible replay)
+          // AND there's no enrollment linked to this exact transaction.
           if (courseId) {
             const byCourse = await getDocs(query(
               collection(db, COLLECTIONS.ENROLLMENTS),
@@ -840,15 +862,24 @@ export const courseEnrollmentService = {
             
             if (!byCourse.empty) {
               const enrollDoc = byCourse.docs[0];
-              console.log(`${TAG} Enrollment found by course on attempt ${attempt + 1}`);
+              const enrollData = enrollDoc.data();
+              console.log(`${TAG} Enrollment found by courseId on attempt ${attempt + 1}, enrollTxnId=${enrollData.transactionId}`);
+
+              // Determine if this is a true replay:
+              // - Token was null (already consumed or never written)
+              // - AND the enrollment belongs to a DIFFERENT transaction
+              //   (meaning enrollment pre-existed this payment)
+              const isFromDifferentTxn = enrollData.transactionId && enrollData.transactionId !== tranId;
+              const isDefiniteReplay = tokenWasNull && isFromDifferentTxn;
+
               return {
                 verified: true,
                 status: 'success',
                 enrollmentId: enrollDoc.id,
                 courseTitle,
                 courseId,
-                isReplay,
-                message: isReplay
+                isReplay: isDefiniteReplay,
+                message: isDefiniteReplay
                   ? `You are already enrolled in "${courseTitle || 'this course'}".`
                   : `Payment verified! You are now enrolled in "${courseTitle || 'the course'}".`,
               };
@@ -865,7 +896,7 @@ export const courseEnrollmentService = {
         status: 'pending',
         courseTitle,
         courseId,
-        isReplay,
+        isReplay: false,
         message: 'Payment confirmed! Your enrollment is being activated. Please refresh in a moment.',
       };
 
