@@ -1,9 +1,4 @@
 // src/services/paymentService.ts
-// Payment Service - FULLY FIXED
-// FIX 1: Email is optional; userId is the primary identifier
-// FIX 2: Single api/payment.ts endpoint (no separate payment-callback.ts needed)
-// FIX 3: sanitizeForFirestore() strips undefined from every Firestore write
-//         — this was the root cause of the "Unsupported field value: undefined" crash
 
 import {
   collection,
