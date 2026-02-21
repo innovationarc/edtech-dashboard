@@ -238,23 +238,24 @@ interface EnrollmentResult {
 }
 
 // ==================== ENROLLMENT SMS ====================
-// Sends a GSM-7bit enrollment confirmation SMS via the internal /api/sms endpoint.
+// Sends GSM-7bit enrollment confirmation SMS directly via BulkSMSBD API.
+// IMPORTANT: Calls the provider directly — NOT via /api/sms — because a
+// Vercel serverless function cannot reliably HTTP-call itself.
 // Fire-and-forget: errors are logged but never propagate to the caller.
 // ─────────────────────────────────────────────────────────────────────────────
-const GSM_7BIT_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
-const GSM_7BIT_EXT = "^{}\\[~]|€";
-const GSM_REPLACEMENTS: Record<string, string> = {
-  '\u201c': '"', '\u201d': '"', '\u2018': "'", '\u2019': "'",
-  '\u2013': '-', '\u2014': '-', '\u2026': '...', '\u00a0': ' ',
-  '\u2022': '*', '\u2192': '->', '\u2190': '<-',
-  '\u2122': '(TM)', '\u00a9': '(C)', '\u00ae': '(R)',
+const _GSM_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+const _GSM_EXT  = "^{}\\[~]|€";
+const _GSM_REPLACEMENTS: Record<string, string> = {
+  '“': '"', '”': '"', '‘': "'", '’': "'",
+  '–': '-', '—': '-', '…': '...', ' ': ' ',
+  '•': '*', '→': '->', '←': '<-',
+  '™': '(TM)', '©': '(C)', '®': '(R)',
 };
 
-function toGSM7BitPayment(text: string): string {
-  return text.split('').map(char => {
-    if (GSM_7BIT_BASIC.includes(char) || GSM_7BIT_EXT.includes(char)) return char;
-    return GSM_REPLACEMENTS[char] || char;
-  }).join('');
+function _toGSM7Bit(text: string): string {
+  return text.split('').map(c =>
+    (_GSM_BASIC.includes(c) || _GSM_EXT.includes(c)) ? c : (_GSM_REPLACEMENTS[c] || c)
+  ).join('');
 }
 
 async function sendEnrollmentSMS(
@@ -267,37 +268,56 @@ async function sendEnrollmentSMS(
   try {
     if (!phoneNumber) return;
 
-    // Normalize to 880XXXXXXXXXX
+    const SMS_API_KEY = process.env.SMS_API_KEY;
+    const SENDER_ID   = process.env.SMS_SENDER_ID;
+    if (!SMS_API_KEY || !SENDER_ID) {
+      console.warn(`${TAG} SMS credentials not configured — skipping`);
+      return;
+    }
+
+    // Normalize to 880XXXXXXXXXX (13 digits, no +)
     let cleaned = phoneNumber.replace(/\D/g, '');
-    if (cleaned.startsWith('880') && cleaned.length === 13) { /* ok */ }
-    else if (cleaned.startsWith('88')) cleaned = cleaned.substring(2);
-    if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
-    if (cleaned.length === 10) cleaned = `880${cleaned}`;
-    else { console.warn(`${TAG} Invalid phone format, skipping SMS`); return; }
+    if (cleaned.startsWith('880') && cleaned.length === 13) { /* already correct */ }
+    else {
+      if (cleaned.startsWith('88')) cleaned = cleaned.substring(2);
+      if (cleaned.startsWith('0'))  cleaned = cleaned.substring(1);
+      if (cleaned.length === 10)     cleaned = '880' + cleaned;
+    }
+    if (cleaned.length !== 13) {
+      console.warn(`${TAG} Invalid phone after normalisation (${cleaned}), skipping SMS`);
+      return;
+    }
 
-    const rawMessage =
-      `Dear ${surname || 'Student'},\n\nCongratulations! Your enrollment in ${courseName} has been successfully confirmed at Ed-tech.\nStudent ID: ${userId}\n\nWe\'re excited to have you with us and wish you great success in your learning journey.`;
+    const rawMessage = `Dear ${surname || 'Student'},
 
-    const gsmMessage = toGSM7BitPayment(rawMessage);
+Congratulations! Your enrollment in ${courseName} has been successfully confirmed at Ed-tech.
+Student ID: ${userId}
 
-    const BACKEND_URL = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.FRONTEND_URL || 'https://edtech-dashboard-alpha.vercel.app';
-    const MASTER_API_KEY = process.env.SMS_MASTER_KEY;
+We're excited to have you with us and wish you great success in your learning journey.`;
 
-    const requestBody: any = { phoneNumber: cleaned, message: gsmMessage };
-    if (MASTER_API_KEY) requestBody.apiKey = MASTER_API_KEY;
+    const gsmMessage = _toGSM7Bit(rawMessage);
 
-    const response = await fetch(`${BACKEND_URL}/api/sms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
+    // Call BulkSMSBD directly — same provider used by api/sms.ts
+    const params = new URLSearchParams({
+      api_key:  SMS_API_KEY,
+      senderid: SENDER_ID,
+      number:   cleaned,
+      message:  gsmMessage,
+      type:     'text',
     });
 
-    if (response.ok) {
-      console.log(`${TAG} ✅ SMS sent to ${cleaned}`);
+    console.log(`${TAG} Sending SMS to ${cleaned}, message length: ${gsmMessage.length}`);
+
+    const smsRes = await fetch(`http://bulksmsbd.net/api/smsapi?${params.toString()}`, {
+      method: 'GET',
+      headers: { 'User-Agent': 'EdTech-Platform/1.0', 'Accept': 'text/plain' },
+    });
+
+    const raw = (await smsRes.text()).trim();
+    if (raw === '202' || raw.toLowerCase().includes('success')) {
+      console.log(`${TAG} ✅ SMS sent successfully to ${cleaned} — provider response: ${raw}`);
     } else {
-      console.error(`${TAG} SMS API returned ${response.status}`);
+      console.error(`${TAG} ❌ SMS provider error: ${raw}`);
     }
   } catch (err: any) {
     console.error(`${TAG} Error (non-fatal):`, err.message);
