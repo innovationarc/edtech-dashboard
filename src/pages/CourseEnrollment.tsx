@@ -273,6 +273,13 @@ const CourseEnrollment = () => {
   //
   // URL params are stripped immediately so the page cannot be refreshed
   // to re-trigger processing.
+  //
+  // KEY FIX:
+  // ───────────────────────────────────────────────────────────────────────
+  // `validation_error` status (SSL API returned 500) is NOT treated as a
+  // terminal failure when tran_id is present. We still do the Firestore
+  // verification — IPN may have already created the enrollment successfully.
+  // Only `cancelled`, `failed` (without tran_id), and `error` are terminal.
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -315,20 +322,31 @@ const CourseEnrollment = () => {
         });
         return;
       }
-      if (statusParam === 'failed' || statusParam === 'validation_error') {
+
+      // ── FIX: `failed` without tran_id is terminal; `failed` WITH tran_id ──
+      // OR `validation_error` (SSL API 500) WITH tran_id — both should still
+      // do Firestore verification because IPN may have already processed the
+      // payment and created the enrollment.
+      if (statusParam === 'failed' && !tranId) {
         setPaymentReturn({
           active: true, status: 'failed', courseTitle: '',
-          message: 'Payment failed or could not be verified. Please try again.',
+          message: 'Payment failed. Please try again.',
         });
         return;
       }
+
       if (statusParam === 'validating') {
-        setPaymentReturn({
-          active: true, status: 'processing', courseTitle: '',
-          message: 'Your payment is under review. You will be enrolled once approved.',
-        });
-        return;
+        // Has tran_id — verify via Firestore (may have been upgraded to success by now)
+        if (!tranId) {
+          setPaymentReturn({
+            active: true, status: 'processing', courseTitle: '',
+            message: 'Your payment is under review. You will be enrolled once approved.',
+          });
+          return;
+        }
+        // Fall through to Firestore verification below with tranId
       }
+
       if (!tranId) {
         setPaymentReturn({
           active: true, status: 'failed', courseTitle: '',
@@ -340,11 +358,14 @@ const CourseEnrollment = () => {
       // ── Show processing state ─────────────────────────────────────────
       setPaymentReturn({
         active: true, status: 'processing', courseTitle: '',
-        message: 'Verifying your payment...',
+        message: statusParam === 'validation_error'
+          ? 'Verifying your payment status...'
+          : 'Verifying your payment...',
       });
 
       // ── Delegate to the enrollment service ───────────────────────────
       // This handles ownership check + one-time token + enrollment polling.
+      // Works for: success, validation_error (SSL 500), failed+tran_id, validating+tran_id
       const result = await courseEnrollmentService.verifyPaymentAndGetEnrollment(
         tranId,
         user.uid
@@ -378,10 +399,13 @@ const CourseEnrollment = () => {
       }
 
       if (result.status === 'not_found') {
+        // If we came from validation_error, give a more helpful message
         setPaymentReturn({
           active: true, status: 'failed',
           courseTitle: result.courseTitle || '',
-          message: result.message,
+          message: statusParam === 'validation_error'
+            ? 'Payment verification could not be completed. If you were charged, please contact support with ref: ' + tranId
+            : result.message,
         });
         return;
       }
@@ -429,17 +453,13 @@ const CourseEnrollment = () => {
     if (user?.uid) {
       loadCourses();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid]);
+  }, [user?.uid, loadCourses]);
 
   // ==================== FILTER EFFECT ====================
-  //
-  // Re-runs whenever filter options OR the source data changes.
-  // Uses the pure buildFilteredCourses() function — no stale closures.
 
   useEffect(() => {
     if (allCourses.length === 0) return;
-    const opts = { searchTerm, selectedCategory, selectedClass, selectedLevel, priceFilter, sortBy };
+    const opts = filterOptsRef.current;
     setAvailableCourses(buildFilteredCourses(allCourses, 'available', opts));
     setEnrolledCourses(buildFilteredCourses(allCourses, 'enrolled', opts));
   }, [searchTerm, selectedCategory, selectedClass, selectedLevel, priceFilter, sortBy, allCourses]);
@@ -448,6 +468,7 @@ const CourseEnrollment = () => {
 
   const resetCouponInput = useCallback(() => {
     couponAbortRef.current?.abort();
+    couponAbortRef.current = null;
     setCouponInput({ code: '', fieldState: 'idle', errorMessage: '' });
   }, []);
 
@@ -455,23 +476,22 @@ const CourseEnrollment = () => {
     code: string,
     currentData: EnrollmentModalData
   ): Promise<void> => {
-    const upper = code.trim().toUpperCase();
-    if (!upper) return;
-
-    if (currentData.calculation.appliedCoupons?.some(c => c.couponCode === upper)) {
-      setCouponInput(prev => ({
-        ...prev, fieldState: 'error', errorMessage: `Coupon "${upper}" is already applied.`,
-      }));
-      return;
-    }
-
     couponAbortRef.current?.abort();
     const abort = new AbortController();
     couponAbortRef.current = abort;
+
+    const upper = code.trim().toUpperCase();
+    if (!upper) return;
+
+    const existingCodes = (currentData.calculation.appliedCoupons ?? []).map(c => c.couponCode);
+    if (existingCodes.includes(upper)) {
+      setCouponInput(prev => ({ ...prev, fieldState: 'error', errorMessage: 'This coupon is already applied.' }));
+      return;
+    }
+
     setCouponInput(prev => ({ ...prev, fieldState: 'checking', errorMessage: '' }));
 
     try {
-      const existingCodes = (currentData.calculation.appliedCoupons ?? []).map(c => c.couponCode);
       const newCalc = await courseEnrollmentService.calculateEnrollmentPrice(
   currentData.course.id,
   user?.uid || '',
