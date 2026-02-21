@@ -392,25 +392,34 @@ async function createEnrollment(transaction: any, baseUrl: string = ''): Promise
     return { success: false, error: `Write failed: ${writeErr.message} (code: ${writeErr.code})` };
   }
 
-  // Non-critical: coupon usage
+  // Non-critical: coupon usage — write usage record AND increment usageCount on coupon doc
   const amountPaid = Number(meta.finalPrice ?? transaction.amount ?? 0);
   for (const coupon of appliedCoupons) {
     if (!coupon.couponId) continue;
     try {
-      await db.collection('couponUsage').add(sanitizeForFirestore({
+      const batch = db.batch();
+      const usageRef = db.collection('couponUsage').doc();
+      batch.set(usageRef, sanitizeForFirestore({
         couponId: coupon.couponId,
         couponCode: coupon.couponCode,
         userId: studentId,
         courseId,
-        userName: meta.userName || transaction.userName || '',
+        userName: meta.studentName || transaction.userName || '',
         courseName: meta.courseName || transaction.productName || '',
         discountApplied: coupon.discount,
         amountPaid,
         transactionId,
         usedAt: admin.firestore.FieldValue.serverTimestamp(),
       }));
+      // Also increment the coupon's usageCount so statistics stay accurate
+      batch.update(db.collection('coupons').doc(coupon.couponId), {
+        usageCount: admin.firestore.FieldValue.increment(1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+      console.log(`${TAG} ✅ Coupon usage recorded: ${coupon.couponCode}`);
     } catch (e: any) {
-      console.warn(`${TAG} Coupon usage record failed:`, e.message);
+      console.warn(`${TAG} Coupon usage record failed (non-fatal):`, e.message);
     }
   }
 
