@@ -1,11 +1,4 @@
 // src/services/courseEnrollmentService.ts
-//
-// COMPLETE STANDALONE Course Enrollment Service
-// ZERO DEPENDENCY on courseService.ts
-// 100% BACKWARDS COMPATIBLE with all existing features
-//
-// Based on the working old courseService implementation
-// Uses spread operator to capture ALL course fields automatically
 
 import {
   collection,
