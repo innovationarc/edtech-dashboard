@@ -1,13 +1,5 @@
 // api/payment.ts
 // Vercel Serverless Function — handles all payment operations
-//
-// FIX FOR "error:1E08010C:DECODER routines::unsupported":
-// This error occurs when Firebase Admin SDK cannot parse the private key.
-// Common causes:
-// 1. FIREBASE_PRIVATE_KEY has incorrect newline escaping
-// 2. Key is wrapped in extra quotes
-// 3. Key is base64 encoded when it shouldn't be
-// 4. Wrong key format entirely
 
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
