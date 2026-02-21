@@ -13,6 +13,7 @@ import {
   addDoc
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { otpService } from './otpService';
 
 // ==================== INTERFACES ====================
 
@@ -600,7 +601,6 @@ export const courseEnrollmentService = {
 
         // Send enrollment confirmation SMS (fire-and-forget — never blocks enrollment)
         if (studentPhone) {
-          const { otpService } = await import('./otpService');
           otpService.sendEnrollmentSuccessSMS(
             studentPhone,
             studentSurname || studentName.split(' ')[0],
