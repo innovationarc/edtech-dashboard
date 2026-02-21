@@ -145,6 +145,8 @@ export interface EnrollmentRequest {
   studentId: string;
   studentName: string;
   studentEmail?: string;
+  studentPhone?: string;   // For enrollment SMS notification
+  studentSurname?: string; // For enrollment SMS notification
   calculation: EnrollmentCalculation;
 }
 
@@ -535,7 +537,7 @@ export const courseEnrollmentService = {
 
   async enrollStudent(request: EnrollmentRequest): Promise<EnrollmentResponse> {
     try {
-      const { courseId, studentId, studentName, studentEmail, calculation } = request;
+      const { courseId, studentId, studentName, studentEmail, studentPhone, studentSurname, calculation } = request;
 
       console.log('📝 Processing enrollment:', { courseId, studentId, finalPrice: calculation.finalPrice });
 
@@ -596,6 +598,17 @@ export const courseEnrollmentService = {
 
         console.log('✅ Free enrollment created:', enrollmentRef.id);
 
+        // Send enrollment confirmation SMS (fire-and-forget — never blocks enrollment)
+        if (studentPhone) {
+          const { otpService } = await import('./otpService');
+          otpService.sendEnrollmentSuccessSMS(
+            studentPhone,
+            studentSurname || studentName.split(' ')[0],
+            studentId,
+            courseName,
+          ).catch(err => console.error('Enrollment SMS error (non-fatal):', err));
+        }
+
         return {
           success: true,
           enrollmentId: enrollmentRef.id,
@@ -630,6 +643,8 @@ export const courseEnrollmentService = {
         metadata: {
           studentName,
           studentEmail: studentEmail || '',
+          studentPhone: studentPhone || '',
+          studentSurname: studentSurname || '',
           courseName,
           courseId,
           finalPrice: calculation.finalPrice,
