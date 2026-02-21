@@ -411,15 +411,13 @@ const CourseEnrollment = () => {
       }
 
       // ── Payment is confirmed (success or pending enrollment) ─────────
-      // Load fresh course data and switch to enrolled tab.
-      // GUARANTEED ENROLLMENT INJECTION:
-      //   Even if the Firestore SDK returns a stale read that doesn't yet
-      //   include the new enrollment (due to propagation lag), we know
-      //   the courseId from the transaction record. We force-mark that
-      //   course as enrolled in the enriched list so the UI is always
-      //   correct, regardless of Firestore read timing.
+      // In both cases switch to enrolled tab and inject courseId so UI
+      // immediately shows course enrolled even before Firestore propagates.
+      const isPendingEnrollment = result.status === 'pending';
+
       setPaymentReturn(p => ({
         ...p,
+        status: 'processing',
         message: 'Activating your enrollment...',
         courseTitle: result.courseTitle || '',
       }));
@@ -433,7 +431,9 @@ const CourseEnrollment = () => {
         active: true,
         status: 'success',
         courseTitle: result.courseTitle || '',
-        message: result.message,
+        message: isPendingEnrollment
+          ? `Payment confirmed for "${result.courseTitle || 'the course'}"! Your enrollment is being activated \u2014 it will appear momentarily.`
+          : result.message,
       });
     };
 
