@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { otpService } from './otpService';
+import couponService from './couponService';
 
 // ==================== INTERFACES ====================
 
@@ -173,21 +174,7 @@ export interface EnrollmentVerificationResult {
   message: string;
 }
 
-interface Coupon {
-  id: string;
-  code: string;
-  type: 'percentage' | 'fixed';
-  value: number;
-  minPurchase?: number;
-  maxDiscount?: number;
-  usageLimit?: number;
-  usageCount?: number;
-  expiresAt?: any;
-  isActive: boolean;
-  applicableTo?: string[];
-  excludedCourses?: string[];
-  successMessage?: string;
-}
+// Coupon validation now handled by couponService (see ./couponService.ts)
 
 // ==================== CONSTANTS ====================
 
@@ -408,95 +395,81 @@ export const courseEnrollmentService = {
         }
       }
 
-      // Process coupons
+      // Process coupons via couponService.validateCoupon (matches CouponManagement schema)
       let couponDiscount = 0;
       const appliedCoupons: AppliedCoupon[] = [];
       let couponError: string | undefined;
 
       if (couponCodes.length > 0) {
+        // Fetch student's already-enrolled course IDs for nextPurchaseEligibility checks
+        let enrolledCourseIds: string[] = [];
+        try {
+          const enrolledSnap = await getDocs(query(
+            collection(db, COLLECTIONS.ENROLLMENTS),
+            where('studentId', '==', studentId)
+          ));
+          enrolledCourseIds = enrolledSnap.docs.map(d => d.data().courseId).filter(Boolean);
+        } catch (e) {
+          console.warn('Could not fetch enrolled courses for coupon validation (non-fatal)');
+        }
+
         for (const code of couponCodes) {
           const upper = code.trim().toUpperCase();
           if (!upper) continue;
 
+          // Skip if already applied (duplicate guard)
+          if (appliedCoupons.some(c => c.couponCode === upper)) {
+            couponError = `Coupon "${upper}" is already applied.`;
+            continue;
+          }
+
           try {
-            const couponSnap = await getDocs(query(
-              collection(db, COLLECTIONS.COUPONS),
-              where('code', '==', upper)
-            ));
+            // Price after all discounts applied so far (including earlier coupons in this loop)
+            const priceForValidation = Math.max(0, basePrice - previousStudentDiscount - extraDiscount - couponDiscount);
 
-            if (couponSnap.empty) {
-              couponError = `Coupon "${upper}" not found`;
+            const result = await couponService.validateCoupon(
+              upper,
+              studentId,
+              courseId,
+              priceForValidation,
+              enrolledCourseIds
+            );
+
+            if (!result.valid) {
+              couponError = result.reason || `Coupon "${upper}" is not valid.`;
               continue;
             }
 
-            const couponDoc = couponSnap.docs[0];
-            const coupon = couponDoc.data() as Coupon;
-
-            // Validate coupon
-            if (!coupon.isActive) {
-              couponError = `Coupon "${upper}" is not active`;
-              continue;
-            }
-
-            if (coupon.expiresAt) {
-              const expiryDate = toDate(coupon.expiresAt);
-              if (expiryDate < new Date()) {
-                couponError = `Coupon "${upper}" has expired`;
-                continue;
-              }
-            }
-
-            if (coupon.usageLimit !== undefined && coupon.usageCount !== undefined) {
-              if (coupon.usageCount >= coupon.usageLimit) {
-                couponError = `Coupon "${upper}" usage limit reached`;
-                continue;
-              }
-            }
-
-            if (coupon.excludedCourses?.includes(courseId)) {
-              couponError = `Coupon "${upper}" cannot be used for this course`;
-              continue;
-            }
-
-            if (coupon.applicableTo && coupon.applicableTo.length > 0) {
-              if (!coupon.applicableTo.includes(courseId)) {
-                couponError = `Coupon "${upper}" is not applicable to this course`;
-                continue;
-              }
-            }
-
-            const priceAfterOtherDiscounts = basePrice - previousStudentDiscount - extraDiscount - couponDiscount;
-            
-            if (coupon.minPurchase && priceAfterOtherDiscounts < coupon.minPurchase) {
-              couponError = `Minimum purchase of ৳${coupon.minPurchase} required for "${upper}"`;
-              continue;
-            }
-
-            // Calculate coupon discount
-            let discount = 0;
-            if (coupon.type === 'percentage') {
-              discount = Math.floor(priceAfterOtherDiscounts * (coupon.value / 100));
-            } else {
-              discount = coupon.value;
-            }
-
-            if (coupon.maxDiscount && discount > coupon.maxDiscount) {
-              discount = coupon.maxDiscount;
-            }
-
+            // result.discount is computed by couponService against priceForValidation
+            const discount = result.discount ?? 0;
             couponDiscount += discount;
             appliedCoupons.push({
-              couponId: couponDoc.id,
+              couponId: '', // will be filled below — we need the doc id
               couponCode: upper,
               discount,
-              successMessage: coupon.successMessage || `Coupon "${upper}" applied!`,
+              successMessage: result.successMessage || `Coupon "${upper}" applied! ৳${discount} off.`,
             });
-
             couponError = undefined;
 
           } catch (err: any) {
             console.error('Error validating coupon:', upper, err);
-            couponError = `Error validating coupon "${upper}"`;
+            couponError = `Error validating coupon "${upper}". Please try again.`;
+          }
+        }
+
+        // Back-fill coupon doc IDs for recordCouponUsage later
+        if (appliedCoupons.length > 0) {
+          try {
+            for (const ac of appliedCoupons) {
+              if (ac.couponId) continue; // already set
+              const snap = await getDocs(query(
+                collection(db, COLLECTIONS.COUPONS),
+                where('couponCode', '==', ac.couponCode)
+              ));
+              if (!snap.empty) ac.couponId = snap.docs[0].id;
+            }
+          } catch (e) {
+            console.warn('Could not back-fill coupon IDs (non-fatal):', e);
           }
         }
       }
@@ -599,6 +572,22 @@ export const courseEnrollmentService = {
         const enrollmentRef = await addDoc(collection(db, COLLECTIONS.ENROLLMENTS), enrollmentData);
 
         console.log('✅ Free enrollment created:', enrollmentRef.id);
+
+        // Record coupon usage for statistics (fire-and-forget — never blocks enrollment)
+        if (calculation.appliedCoupons && calculation.appliedCoupons.length > 0) {
+          for (const ac of calculation.appliedCoupons) {
+            if (!ac.couponId) continue;
+            couponService.recordCouponUsage({
+              couponId: ac.couponId,
+              userId: studentId,
+              courseId,
+              userName: studentName,
+              courseName,
+              discountApplied: ac.discount,
+              amountPaid: 0, // free enrollment
+            }).catch(err => console.error('Coupon usage record error (non-fatal):', err));
+          }
+        }
 
         // Send enrollment confirmation SMS (fire-and-forget — never blocks enrollment)
         if (studentPhone) {
