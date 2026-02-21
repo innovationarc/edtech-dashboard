@@ -69,9 +69,18 @@ const fmtDateTime = (d: Date) => {
 
 const toDate = (v: any): Date => {
   if (!v) return new Date();
-  if (typeof v.toDate === 'function') return v.toDate();
-  if (v instanceof Date) return v;
-  return new Date(v);
+  // Firestore Timestamp with .toDate()
+  if (typeof v.toDate === 'function') {
+    const d = v.toDate();
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
+  if (v instanceof Date) return isNaN(v.getTime()) ? new Date() : v;
+  // Plain Firestore-like object {seconds, nanoseconds} — no .toDate() (e.g. serverTimestamp read-back race)
+  if (v && typeof v === 'object' && typeof v.seconds === 'number') {
+    return new Date(v.seconds * 1000 + Math.floor((v.nanoseconds || 0) / 1e6));
+  }
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? new Date() : d;
 };
 
 const last30Days = (): string[] => {
@@ -203,7 +212,9 @@ async function fetchCouponUsageRecords(couponIds: string[]): Promise<CouponUsage
     });
   }
 
-  return records.sort((a, b) => b.usedAt.getTime() - a.usedAt.getTime());
+  return records
+    .filter(r => r.usedAt instanceof Date && !isNaN(r.usedAt.getTime()))
+    .sort((a, b) => b.usedAt.getTime() - a.usedAt.getTime());
 }
 
 function computeStats(
@@ -218,8 +229,11 @@ function computeStats(
   const dailyMap: Record<string, number> = {};
   days.forEach(d => (dailyMap[d] = 0));
   records.forEach(r => {
-    const day = r.usedAt.toISOString().slice(0, 10);
-    if (dailyMap[day] !== undefined) dailyMap[day]++;
+    try {
+      if (!r.usedAt || isNaN(r.usedAt.getTime())) return;
+      const day = r.usedAt.toISOString().slice(0, 10);
+      if (dailyMap[day] !== undefined) dailyMap[day]++;
+    } catch { /* skip malformed timestamp */ }
   });
   const dailyUsages = days.map(date => ({ date, count: dailyMap[date] }));
 
@@ -255,11 +269,15 @@ function computeStats(
 
   const ref = coupons[0];
   const now = new Date();
+  const safeTime = (d: any): number => {
+    try { const t = d instanceof Date ? d.getTime() : new Date(d).getTime(); return isNaN(t) ? 0 : t; }
+    catch { return 0; }
+  };
   const daysTotal = ref
-    ? Math.max(1, Math.round((ref.endDate.getTime() - ref.startDate.getTime()) / 86400000))
+    ? Math.max(1, Math.round((safeTime(ref.endDate) - safeTime(ref.startDate)) / 86400000))
     : 1;
   const daysRemaining = ref
-    ? Math.max(0, Math.round((ref.endDate.getTime() - now.getTime()) / 86400000))
+    ? Math.max(0, Math.round((safeTime(ref.endDate) - now.getTime()) / 86400000))
     : 0;
 
   const totalUsageLimit = coupons.reduce((sum, c) => {
@@ -709,7 +727,7 @@ const CouponStatisticsModal: React.FC<Props> = ({
                       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                       const counts = Array(7).fill(0);
                       stats.usageRecords.forEach(r => {
-                        counts[r.usedAt.getDay()]++;
+                        try { if (!isNaN(r.usedAt.getTime())) counts[r.usedAt.getDay()]++; } catch { /* skip */ }
                       });
                       const max = Math.max(...counts, 1);
                       return (
@@ -736,7 +754,7 @@ const CouponStatisticsModal: React.FC<Props> = ({
                     {(() => {
                       const hourCounts = Array(24).fill(0);
                       stats.usageRecords.forEach(r => {
-                        hourCounts[r.usedAt.getUTCHours()]++;
+                        try { if (!isNaN(r.usedAt.getTime())) hourCounts[r.usedAt.getUTCHours()]++; } catch { /* skip */ }
                       });
                       const max = Math.max(...hourCounts, 1);
                       const peakHour = hourCounts.indexOf(Math.max(...hourCounts));
@@ -919,7 +937,6 @@ const CouponStatisticsModal: React.FC<Props> = ({
         <div className="px-5 py-3 border-t border-gray-700/50 flex items-center justify-between">
           <p className="text-xs text-gray-600">
             Statistics reflect <code className="bg-gray-800 px-1 rounded">couponUsage</code> collection.
-            Full revenue data will populate after enrollment page upgrade.
           </p>
           <button
             onClick={onClose}
