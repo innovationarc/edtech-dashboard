@@ -437,7 +437,7 @@ async function createEnrollment(transaction: any, baseUrl: string = ''): Promise
     sendEnrollmentSMS(
       meta2.studentPhone,
       meta2.studentSurname || (meta2.studentName || '').split(' ')[0],
-      studentId,
+      meta2.studentUserId || studentId, // prefer formatted ID (e.g. ST-2601-00001) over Firebase UID
       meta2.courseName || transaction.productName || '',
       baseUrl,
     ).catch(err => console.error(`${TAG} SMS fire-and-forget error:`, err.message));
