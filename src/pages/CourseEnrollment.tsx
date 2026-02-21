@@ -1,7 +1,7 @@
 // src/pages/CourseEnrollment.tsx
-// ============================================================
-// WORLD-CLASS REDESIGN — all original logic 100% preserved
-// ============================================================
+// ─────────────────────────────────────────────────────────────
+// Production-grade redesign | All original logic 100% preserved
+// ─────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -10,7 +10,7 @@ import {
   Grid3X3, List, Loader, Tag, TrendingUp, Download, ShoppingCart,
   AlertCircle, Percent, DollarSign, Check, AlertTriangle, ChevronDown,
   ExternalLink, Ticket, Info, Sparkles, Plus, Zap, Users, Trophy,
-  GraduationCap, Rocket, Shield, Globe
+  GraduationCap, Rocket, Shield, Globe, ArrowRight
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Card from '../components/ui/Card';
@@ -94,98 +94,65 @@ function buildFilteredCourses(
 
   return [...filtered].sort((a, b) => {
     switch (sortBy) {
-      case 'popular': return b.studentCount - a.studentCount;
-      case 'rating': return b.rating - a.rating;
-      case 'newest': return b.createdAt.getTime() - a.createdAt.getTime();
-      case 'price-low': return a.price - b.price;
+      case 'popular':    return b.studentCount - a.studentCount;
+      case 'rating':     return b.rating - a.rating;
+      case 'newest':     return b.createdAt.getTime() - a.createdAt.getTime();
+      case 'price-low':  return a.price - b.price;
       case 'price-high': return b.price - a.price;
-      default: return 0;
+      default:           return 0;
     }
   });
 }
-
-// ==================== ANIMATED BACKGROUND ====================
-
-const AnimatedBackground = () => (
-  <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-    <div className="ce-orb ce-orb-1" />
-    <div className="ce-orb ce-orb-2" />
-    <div className="ce-orb ce-orb-3" />
-    <div className="ce-grid-overlay" />
-  </div>
-);
-
-// ==================== STAT TICKER ====================
-
-const StatTicker = ({ available, enrolled }: { available: number; enrolled: number }) => (
-  <div className="ce-stat-ticker">
-    <div className="ce-stat-ticker-inner">
-      {[
-        { icon: <Users size={14} />, label: `${(available + enrolled).toLocaleString()} Courses` },
-        { icon: <GraduationCap size={14} />, label: 'Expert Instructors' },
-        { icon: <Trophy size={14} />, label: 'Certified Learning' },
-        { icon: <Globe size={14} />, label: 'Learn Anywhere' },
-        { icon: <Zap size={14} />, label: 'AI-Powered Q&A' },
-        { icon: <Shield size={14} />, label: 'Secure Payments' },
-      ].map((item, i) => (
-        <span key={i} className="ce-ticker-item">
-          {item.icon} {item.label}
-          <span className="ce-ticker-dot">◆</span>
-        </span>
-      ))}
-    </div>
-  </div>
-);
 
 // ==================== MAIN COMPONENT ====================
 
 const CourseEnrollment = () => {
   const { user } = useDashboard();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
-  // ── Core data state ──────────────────────────────────────────────────────
-  const [allCourses, setAllCourses] = useState<EnrichedCourse[]>([]);
+  // ── Core data ────────────────────────────────────────────────
+  const [allCourses,       setAllCourses]       = useState<EnrichedCourse[]>([]);
   const [availableCourses, setAvailableCourses] = useState<EnrichedCourse[]>([]);
-  const [enrolledCourses, setEnrolledCourses] = useState<EnrichedCourse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [classes, setClasses] = useState<string[]>([]);
+  const [enrolledCourses,  setEnrolledCourses]  = useState<EnrichedCourse[]>([]);
+  const [loading,          setLoading]          = useState(true);
+  const [categories,       setCategories]       = useState<string[]>([]);
+  const [classes,          setClasses]          = useState<string[]>([]);
 
-  // ── UI state ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<'available' | 'enrolled'>('available');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [warning, setWarning] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  // ── UI ───────────────────────────────────────────────────────
+  const [activeTab,        setActiveTab]        = useState<'available' | 'enrolled'>('available');
+  const [error,            setError]            = useState('');
+  const [success,          setSuccess]          = useState('');
+  const [warning,          setWarning]          = useState('');
+  const [searchTerm,       setSearchTerm]       = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedClass, setSelectedClass] = useState('all');
-  const [selectedLevel, setSelectedLevel] = useState('all');
-  const [priceFilter, setPriceFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('popular');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedClass,    setSelectedClass]    = useState('all');
+  const [selectedLevel,    setSelectedLevel]    = useState('all');
+  const [priceFilter,      setPriceFilter]      = useState('all');
+  const [sortBy,           setSortBy]           = useState('popular');
+  const [viewMode,         setViewMode]         = useState<'grid' | 'list'>('grid');
 
-  // ── Modal state ──────────────────────────────────────────────────────────
-  const [showCourseModal, setShowCourseModal] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<EnrichedCourse | null>(null);
+  // ── Modals ───────────────────────────────────────────────────
+  const [showCourseModal,     setShowCourseModal]     = useState(false);
+  const [selectedCourse,      setSelectedCourse]      = useState<EnrichedCourse | null>(null);
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
-  const [enrollmentData, setEnrollmentData] = useState<EnrollmentModalData | null>(null);
-  const [enrolling, setEnrolling] = useState(false);
-  const [calculatingPrice, setCalculatingPrice] = useState(false);
+  const [enrollmentData,      setEnrollmentData]      = useState<EnrollmentModalData | null>(null);
+  const [enrolling,           setEnrolling]           = useState(false);
+  const [calculatingPrice,    setCalculatingPrice]    = useState(false);
 
-  // ── Coupon state ─────────────────────────────────────────────────────────
+  // ── Coupon ───────────────────────────────────────────────────
   const [couponInput, setCouponInput] = useState<CouponInputState>({
     code: '', fieldState: 'idle', errorMessage: '',
   });
   const couponAbortRef = useRef<AbortController | null>(null);
 
-  // ── Payment return state ─────────────────────────────────────────────────
+  // ── Payment return ───────────────────────────────────────────
   const [paymentReturn, setPaymentReturn] = useState<PaymentReturnState>({
     active: false, status: 'processing', message: '', courseTitle: '',
   });
-
   const paymentHandledRef = useRef(false);
 
+  // ── Filter opts ref ──────────────────────────────────────────
   const filterOptsRef = useRef({
     searchTerm, selectedCategory, selectedClass, selectedLevel, priceFilter, sortBy,
   });
@@ -195,98 +162,68 @@ const CourseEnrollment = () => {
     };
   }, [searchTerm, selectedCategory, selectedClass, selectedLevel, priceFilter, sortBy]);
 
-  // ==================== CORE DATA LOADER (unchanged logic) ====================
+  // ==================== DATA LOADER (unchanged logic) ====================
 
   const loadCourses = useCallback(async (
-    opts?: {
-      targetTab?: 'available' | 'enrolled';
-      guaranteedEnrolledCourseId?: string;
-    }
+    opts?: { targetTab?: 'available' | 'enrolled'; guaranteedEnrolledCourseId?: string }
   ): Promise<EnrichedCourse[]> => {
     try {
-      setLoading(true);
-      setError('');
-
+      setLoading(true); setError('');
       const [publishedCourses, enrollments] = await Promise.all([
         courseEnrollmentService.getPublishedCourses(),
         courseEnrollmentService.getStudentEnrollments(user?.uid || ''),
       ]);
-
       const enrolledCourseIds = new Set(enrollments.map(e => e.courseId));
       const enrollmentMap = new Map<string, { progress: number; enrollmentId: string }>();
       enrollments.forEach(e => {
         enrollmentMap.set(e.courseId, { progress: e.progress || 0, enrollmentId: e.id });
       });
-
-      const forcedCourseId = opts?.guaranteedEnrolledCourseId;
-      if (forcedCourseId) {
-        enrolledCourseIds.add(forcedCourseId);
-        if (!enrollmentMap.has(forcedCourseId)) {
-          enrollmentMap.set(forcedCourseId, { progress: 0, enrollmentId: '__pending__' });
-        }
+      const forcedId = opts?.guaranteedEnrolledCourseId;
+      if (forcedId) {
+        enrolledCourseIds.add(forcedId);
+        if (!enrollmentMap.has(forcedId))
+          enrollmentMap.set(forcedId, { progress: 0, enrollmentId: '__pending__' });
       }
-
-      const enriched: EnrichedCourse[] = publishedCourses.map(course => {
-        const info = enrollmentMap.get(course.id);
+      const enriched: EnrichedCourse[] = publishedCourses.map(c => {
+        const info = enrollmentMap.get(c.id);
         return {
-          ...course,
-          isEnrolled: enrolledCourseIds.has(course.id),
+          ...c,
+          isEnrolled: enrolledCourseIds.has(c.id),
           progress: info?.progress || 0,
           enrollmentId: info?.enrollmentId,
           isFavorite: false,
         };
       });
-
       const catSet = new Set<string>();
       const clsSet = new Set<string>();
       enriched.forEach(c => {
         if (c.category) catSet.add(c.category);
-        if (c.class) clsSet.add(c.class);
+        if (c.class)    clsSet.add(c.class);
       });
-
       const currentOpts = filterOptsRef.current;
-      const targetTab = opts?.targetTab;
-
-      const available = buildFilteredCourses(enriched, 'available', currentOpts);
-      const enrolled = buildFilteredCourses(enriched, 'enrolled', currentOpts);
-
       setAllCourses(enriched);
       setCategories(Array.from(catSet).sort());
       setClasses(Array.from(clsSet).sort());
-      setAvailableCourses(available);
-      setEnrolledCourses(enrolled);
-
-      if (targetTab) setActiveTab(targetTab);
-
+      setAvailableCourses(buildFilteredCourses(enriched, 'available', currentOpts));
+      setEnrolledCourses(buildFilteredCourses(enriched, 'enrolled', currentOpts));
+      if (opts?.targetTab) setActiveTab(opts.targetTab);
       return enriched;
     } catch (err: any) {
       console.error('Error loading courses:', err);
       setError('Failed to load courses. Please refresh the page or try again later.');
       return [];
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [user?.uid]);
 
   // ==================== PAYMENT RETURN HANDLER (unchanged logic) ====================
 
   useEffect(() => {
-    if (!user?.uid) return;
-    if (paymentHandledRef.current) return;
-
-    const params = new URLSearchParams(location.search);
-
-    const tranId =
-      params.get('tran_id') ||
-      params.get('tranId') ||
-      params.get('transaction_id') ||
-      params.get('transactionId');
-
+    if (!user?.uid || paymentHandledRef.current) return;
+    const params      = new URLSearchParams(location.search);
+    const tranId      = params.get('tran_id') || params.get('tranId') || params.get('transaction_id') || params.get('transactionId');
     const statusParam = params.get('status');
-    const errorParam = params.get('error');
-
+    const errorParam  = params.get('error');
     if (!tranId && !statusParam && !errorParam) return;
-
     paymentHandledRef.current = true;
     window.history.replaceState({}, '', window.location.pathname);
 
@@ -303,24 +240,19 @@ const CourseEnrollment = () => {
         setPaymentReturn({ active: true, status: 'failed', courseTitle: '', message: 'Payment failed. Please try again.' });
         return;
       }
-      if (statusParam === 'validating') {
-        if (!tranId) {
-          setPaymentReturn({ active: true, status: 'processing', courseTitle: '', message: 'Your payment is under review. You will be enrolled once approved.' });
-          return;
-        }
+      if (statusParam === 'validating' && !tranId) {
+        setPaymentReturn({ active: true, status: 'processing', courseTitle: '', message: 'Your payment is under review. You will be enrolled once approved.' });
+        return;
       }
       if (!tranId) {
         setPaymentReturn({ active: true, status: 'failed', courseTitle: '', message: 'Invalid payment reference. Please contact support.' });
         return;
       }
-
       setPaymentReturn({
         active: true, status: 'processing', courseTitle: '',
         message: statusParam === 'validation_error' ? 'Verifying your payment status...' : 'Verifying your payment...',
       });
-
       const result = await courseEnrollmentService.verifyPaymentAndGetEnrollment(tranId, user.uid);
-
       if (result.status === 'ownership_error') {
         setPaymentReturn({ active: true, status: 'failed', courseTitle: '', message: result.message });
         return;
@@ -342,34 +274,26 @@ const CourseEnrollment = () => {
         });
         return;
       }
-
-      const isPendingEnrollment = result.status === 'pending';
+      const isPending = result.status === 'pending';
       setPaymentReturn(p => ({ ...p, status: 'processing', message: 'Activating your enrollment...', courseTitle: result.courseTitle || '' }));
-
       await loadCourses({ targetTab: 'enrolled', guaranteedEnrolledCourseId: result.courseId || '' });
-
       setPaymentReturn({
         active: true, status: 'success', courseTitle: result.courseTitle || '',
-        message: isPendingEnrollment
+        message: isPending
           ? `Payment confirmed for "${result.courseTitle || 'the course'}"! Your enrollment is being activated — it will appear momentarily.`
           : result.message,
       });
     };
 
-    handleReturn().catch(err => {
-      console.error('Payment return handler crashed:', err);
+    handleReturn().catch(() => {
       setPaymentReturn({ active: true, status: 'failed', courseTitle: '', message: `An unexpected error occurred. Contact support with ref: ${tranId}` });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  // ==================== INITIAL LOAD ====================
+  // ==================== INITIAL LOAD & FILTER EFFECT ====================
 
-  useEffect(() => {
-    if (user?.uid) loadCourses();
-  }, [user?.uid, loadCourses]);
-
-  // ==================== FILTER EFFECT ====================
+  useEffect(() => { if (user?.uid) loadCourses(); }, [user?.uid, loadCourses]);
 
   useEffect(() => {
     if (allCourses.length === 0) return;
@@ -390,42 +314,43 @@ const CourseEnrollment = () => {
     couponAbortRef.current?.abort();
     const abort = new AbortController();
     couponAbortRef.current = abort;
-
     const upper = code.trim().toUpperCase();
     if (!upper) return;
-
     const existingCodes = (currentData.calculation.appliedCoupons ?? []).map(c => c.couponCode);
     if (existingCodes.includes(upper)) {
-      setCouponInput(prev => ({ ...prev, fieldState: 'error', errorMessage: 'This coupon is already applied.' }));
+      setCouponInput(p => ({ ...p, fieldState: 'error', errorMessage: 'This coupon is already applied.' }));
       return;
     }
-
-    setCouponInput(prev => ({ ...prev, fieldState: 'checking', errorMessage: '' }));
-
+    setCouponInput(p => ({ ...p, fieldState: 'checking', errorMessage: '' }));
     try {
-      const newCalc = await courseEnrollmentService.calculateEnrollmentPrice(currentData.course.id, user?.uid || '', [...existingCodes, upper]);
+      const newCalc = await courseEnrollmentService.calculateEnrollmentPrice(
+        currentData.course.id, user?.uid || '', [...existingCodes, upper]
+      );
       if (abort.signal.aborted) return;
-
       const wasAccepted = newCalc.appliedCoupons.some(c => c.couponCode === upper);
       if (wasAccepted) {
         setEnrollmentData({ ...currentData, calculation: newCalc });
         setCouponInput({ code: '', fieldState: 'idle', errorMessage: '' });
       } else {
-        const probeCalc = await courseEnrollmentService.calculateEnrollmentPrice(currentData.course.id, user?.uid || '', [upper]);
+        const probeCalc = await courseEnrollmentService.calculateEnrollmentPrice(
+          currentData.course.id, user?.uid || '', [upper]
+        );
         if (abort.signal.aborted) return;
-        const reason = probeCalc.couponError || 'This coupon cannot be applied.';
-        setCouponInput(prev => ({ ...prev, fieldState: 'error', errorMessage: reason }));
+        setCouponInput(p => ({ ...p, fieldState: 'error', errorMessage: probeCalc.couponError || 'This coupon cannot be applied.' }));
       }
-    } catch (err: any) {
-      if (abort.signal.aborted) return;
-      setCouponInput(prev => ({ ...prev, fieldState: 'error', errorMessage: 'Unable to validate coupon. Please try again.' }));
+    } catch {
+      if (!abort.signal.aborted)
+        setCouponInput(p => ({ ...p, fieldState: 'error', errorMessage: 'Unable to validate coupon. Please try again.' }));
     }
   }, [user]);
 
   const removeCoupon = useCallback(async (couponCode: string, currentData: EnrollmentModalData): Promise<void> => {
-    const remaining = (currentData.calculation.appliedCoupons ?? []).filter(c => c.couponCode !== couponCode).map(c => c.couponCode);
+    const remaining = (currentData.calculation.appliedCoupons ?? [])
+      .filter(c => c.couponCode !== couponCode).map(c => c.couponCode);
     try {
-      const newCalc = await courseEnrollmentService.calculateEnrollmentPrice(currentData.course.id, user?.uid || '', remaining);
+      const newCalc = await courseEnrollmentService.calculateEnrollmentPrice(
+        currentData.course.id, user?.uid || '', remaining
+      );
       setEnrollmentData({ ...currentData, calculation: newCalc });
     } catch (err: any) {
       console.warn('Failed to recalculate after coupon removal:', err.message);
@@ -442,13 +367,11 @@ const CourseEnrollment = () => {
   const handleEnrollClick = async (course: EnrichedCourse) => {
     if (!user) { setError('Please login to enroll in courses'); return; }
     try {
-      setCalculatingPrice(true);
-      setError(''); setWarning('');
-      resetCouponInput();
+      setCalculatingPrice(true); setError(''); setWarning(''); resetCouponInput();
       const calculation = await courseEnrollmentService.calculateEnrollmentPrice(course.id, user.uid, []);
       setEnrollmentData({ course, calculation });
       setShowEnrollmentModal(true);
-    } catch (err: any) {
+    } catch {
       setError('Failed to calculate price. Please try again.');
     } finally {
       setCalculatingPrice(false);
@@ -458,16 +381,10 @@ const CourseEnrollment = () => {
   const handleProceedToPayment = async () => {
     if (!enrollmentData || !user) return;
     try {
-      setEnrolling(true);
-      setError(''); setWarning('');
+      setEnrolling(true); setError(''); setWarning('');
       const { course, calculation } = enrollmentData;
-
-      if (calculation.finalPrice === 0) {
-        await handleFreeEnrollment(course, calculation);
-        return;
-      }
-
-      const enrollmentResponse = await courseEnrollmentService.enrollStudent({
+      if (calculation.finalPrice === 0) { await handleFreeEnrollment(course, calculation); return; }
+      const res = await courseEnrollmentService.enrollStudent({
         courseId: course.id,
         studentId: user.uid,
         studentName: user.name,
@@ -477,12 +394,11 @@ const CourseEnrollment = () => {
         studentUserId: (user as any).userId || '',
         calculation,
       });
-
-      if (enrollmentResponse.success && enrollmentResponse.gatewayUrl) {
+      if (res.success && res.gatewayUrl) {
         setShowEnrollmentModal(false);
-        window.location.href = enrollmentResponse.gatewayUrl;
+        window.location.href = res.gatewayUrl;
       } else {
-        throw new Error(enrollmentResponse.error || 'Failed to initiate payment');
+        throw new Error(res.error || 'Failed to initiate payment');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to process enrollment. Please try again.');
@@ -493,7 +409,7 @@ const CourseEnrollment = () => {
   const handleFreeEnrollment = async (course: Course, calculation: EnrollmentCalculation) => {
     if (!user) return;
     try {
-      const enrollmentResponse = await courseEnrollmentService.enrollStudent({
+      const res = await courseEnrollmentService.enrollStudent({
         courseId: course.id,
         studentId: user.uid,
         studentName: user.name,
@@ -503,15 +419,14 @@ const CourseEnrollment = () => {
         studentUserId: (user as any).userId || '',
         calculation,
       });
-
-      if (enrollmentResponse.success) {
+      if (res.success) {
         setShowEnrollmentModal(false);
         setEnrollmentData(null);
         resetCouponInput();
         await loadCourses({ targetTab: 'enrolled', guaranteedEnrolledCourseId: course.id });
         setSuccess(`Successfully enrolled in "${course.title}"!`);
       } else {
-        throw new Error(enrollmentResponse.error || 'Enrollment failed');
+        throw new Error(res.error || 'Enrollment failed');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to enroll in course');
@@ -520,27 +435,25 @@ const CourseEnrollment = () => {
     }
   };
 
-  const toggleFavorite = (courseId: string) => {
+  const toggleFavorite = (courseId: string) =>
     setAllCourses(prev => prev.map(c => c.id === courseId ? { ...c, isFavorite: !c.isFavorite } : c));
-  };
 
-  const handleContinueLearning = (courseId: string) => {
+  const handleContinueLearning = (courseId: string) =>
     navigate(`/content-library?courseId=${courseId}`);
-  };
 
-  // ==================== HELPERS (unchanged) ====================
+  // ==================== HELPERS ====================
 
-  const getLevelColor = (level: string) => {
+  const getLevelStyle = (level: string) => {
     switch (level) {
-      case 'beginner': return 'ce-badge-beginner';
-      case 'intermediate': return 'ce-badge-intermediate';
-      case 'advanced': return 'ce-badge-advanced';
-      default: return 'ce-badge-default';
+      case 'beginner':     return { cls: 'ep-badge-green', label: 'Beginner' };
+      case 'intermediate': return { cls: 'ep-badge-amber', label: 'Intermediate' };
+      case 'advanced':     return { cls: 'ep-badge-rose',  label: 'Advanced' };
+      default:             return { cls: 'ep-badge-slate', label: level };
     }
   };
 
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const formatDate = (ds: string) =>
+    new Date(ds).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const clearMessages = () => { setError(''); setSuccess(''); setWarning(''); };
 
@@ -556,40 +469,33 @@ const CourseEnrollment = () => {
   const PaymentReturnBanner = () => {
     if (!paymentReturn.active) return null;
     const cfg = {
-      processing: { cls: 'ce-banner-processing', icon: <Loader size={20} className="animate-spin flex-shrink-0" /> },
-      success:    { cls: 'ce-banner-success',    icon: <CheckCircle size={20} className="flex-shrink-0" /> },
-      failed:     { cls: 'ce-banner-error',      icon: <AlertCircle size={20} className="flex-shrink-0" /> },
-      cancelled:  { cls: 'ce-banner-warning',    icon: <AlertTriangle size={20} className="flex-shrink-0" /> },
+      processing: { cls: 'ep-notice-blue',  icon: <Loader size={17} className="animate-spin ep-shrink0" /> },
+      success:    { cls: 'ep-notice-green', icon: <CheckCircle size={17} className="ep-shrink0" /> },
+      failed:     { cls: 'ep-notice-red',   icon: <AlertCircle size={17} className="ep-shrink0" /> },
+      cancelled:  { cls: 'ep-notice-amber', icon: <AlertTriangle size={17} className="ep-shrink0" /> },
     }[paymentReturn.status];
-
     return (
-      <div className={`ce-banner ${cfg.cls}`}>
+      <div className={`ep-notice ep-notice--row ${cfg.cls}`}>
         {cfg.icon}
-        <p className="text-sm flex-1">{paymentReturn.message}</p>
+        <p className="ep-notice-text">{paymentReturn.message}</p>
         {paymentReturn.status !== 'processing' && (
-          <button onClick={() => setPaymentReturn(p => ({ ...p, active: false }))} className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity">
-            <X size={16} />
+          <button className="ep-notice-close" onClick={() => setPaymentReturn(p => ({ ...p, active: false }))} aria-label="Dismiss">
+            <X size={15} />
           </button>
         )}
       </div>
     );
   };
 
-  // ==================== LOADING STATE ====================
+  // ==================== LOADING SCREEN ====================
 
   if (loading && allCourses.length === 0) {
     return (
       <>
         <CEStyles />
-        <div className="ce-loader-screen">
-          <div className="ce-loader-content">
-            <div className="ce-loader-ring" />
-            <GraduationCap size={32} className="ce-loader-icon" />
-            <p className="ce-loader-text">Loading your learning universe...</p>
-            <div className="ce-loader-dots">
-              <span /><span /><span />
-            </div>
-          </div>
+        <div className="ep-fullload">
+          <div className="ep-fullload-ring" />
+          <p className="ep-fullload-text">Loading courses…</p>
         </div>
       </>
     );
@@ -598,125 +504,108 @@ const CourseEnrollment = () => {
   // ==================== COURSE CARD ====================
 
   const CourseCard = ({ course }: { course: EnrichedCourse }) => {
-    const isEnrolled = course.isEnrolled;
-    const specialFeatures: string[] = [];
-    if (course.hasAiQnA) specialFeatures.push('AI Q&A');
-    if (course.hasHumanQnA) specialFeatures.push('Human Q&A');
-    if (course.hasStudyPlanner) specialFeatures.push('Study Planner');
+    const enrolled = course.isEnrolled;
+    const lvl      = getLevelStyle(course.level);
+    const features: string[] = [];
+    if (course.hasAiQnA)       features.push('AI Q&A');
+    if (course.hasHumanQnA)    features.push('Human Q&A');
+    if (course.hasStudyPlanner) features.push('Study Planner');
 
     return (
-      <div className={`ce-card ${viewMode === 'list' ? 'ce-card-list' : ''}`}>
-        {/* Thumbnail */}
-        <div className={`ce-card-thumb ${viewMode === 'list' ? 'ce-card-thumb-list' : ''}`}>
-          {course.thumbnail ? (
-            <img src={course.thumbnail} alt={course.title} className="ce-card-img" loading="lazy" />
-          ) : (
-            <div className="ce-card-thumb-placeholder">
-              <BookOpen size={42} className="opacity-40" />
-            </div>
-          )}
-          <div className="ce-card-thumb-overlay" />
+      <article className={`ep-card${viewMode === 'list' ? ' ep-card--list' : ''}`}>
+        {/* ─ Thumbnail ─ */}
+        <div className={`ep-card-thumb${viewMode === 'list' ? ' ep-card-thumb--list' : ''}`}>
+          {course.thumbnail
+            ? <img src={course.thumbnail} alt={course.title} className="ep-card-img" loading="lazy" />
+            : <div className="ep-card-fallback"><BookOpen size={36} /></div>
+          }
+          <div className="ep-card-shade" />
 
-          {/* badges */}
-          <div className="ce-card-badges-top-right">
-            {!isEnrolled && (
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleFavorite(course.id); }}
-                className={`ce-fav-btn ${course.isFavorite ? 'ce-fav-active' : ''}`}
-              >
-                <Heart size={15} className={course.isFavorite ? 'fill-current' : ''} />
-              </button>
-            )}
-          </div>
-          <div className="ce-card-badges-bottom-left">
-            <span className={`ce-level-badge ${getLevelColor(course.level)}`}>{course.level}</span>
-          </div>
-          {isEnrolled && (
-            <div className="ce-card-badges-top-left">
-              <span className="ce-enrolled-badge">
-                <CheckCircle size={11} /> Enrolled
-              </span>
-            </div>
+          {/* badges top-left */}
+          {enrolled
+            ? <span className="ep-tbadge ep-tbadge-tl ep-badge-enrolled"><CheckCircle size={11} />Enrolled</span>
+            : course.price === 0 && <span className="ep-tbadge ep-tbadge-tl ep-badge-free">FREE</span>
+          }
+
+          {/* fav top-right */}
+          {!enrolled && (
+            <button
+              className={`ep-fav${course.isFavorite ? ' ep-fav--on' : ''}`}
+              onClick={e => { e.stopPropagation(); toggleFavorite(course.id); }}
+              aria-label="Toggle favourite"
+            >
+              <Heart size={13} className={course.isFavorite ? 'ep-fill' : ''} />
+            </button>
           )}
-          {course.price === 0 && !isEnrolled && (
-            <div className="ce-card-free-ribbon">FREE</div>
-          )}
+
+          {/* level bottom-left */}
+          <span className={`ep-tbadge ep-tbadge-bl ep-level ${lvl.cls}`}>{lvl.label}</span>
         </div>
 
-        {/* Body */}
-        <div className="ce-card-body">
-          {/* Rating row */}
-          <div className="ce-card-meta-row">
-            <div className="ce-rating">
-              <Star size={13} className="ce-star" />
-              <span className="ce-rating-val">{course.rating.toFixed(1)}</span>
-              <span className="ce-rating-count">({course.reviewCount})</span>
-            </div>
-            <span className="ce-dot">•</span>
-            <span className="ce-students"><Users size={12} /> {course.studentCount.toLocaleString()}</span>
+        {/* ─ Body ─ */}
+        <div className="ep-card-body">
+          {/* rating row */}
+          <div className="ep-meta-row">
+            <span className="ep-rating">
+              <Star size={12} className="ep-star" />
+              <strong>{course.rating.toFixed(1)}</strong>
+              <span className="ep-dim">({course.reviewCount})</span>
+            </span>
+            <span className="ep-sep">·</span>
+            <span className="ep-dim ep-students"><Users size={12} />{course.studentCount.toLocaleString()}</span>
           </div>
 
-          {/* Title */}
-          <h3 className="ce-card-title" onClick={() => handleCourseClick(course)}>
+          {/* title */}
+          <h3 className="ep-card-title" onClick={() => handleCourseClick(course)}>
             {course.title}
           </h3>
 
-          {/* Class / Category */}
-          <div className="ce-card-sub-row">
-            <span>{course.class}</span>
-            {course.category && <><span className="ce-dot">•</span><span>{course.category}</span></>}
-          </div>
+          {/* sub-meta */}
+          <p className="ep-card-sub">{course.class}{course.category ? ` · ${course.category}` : ''}</p>
 
-          {/* Special features */}
-          {specialFeatures.length > 0 && (
-            <div className="ce-features-row">
-              {specialFeatures.map((f, i) => (
-                <span key={i} className="ce-feature-chip"><Sparkles size={10} /> {f}</span>
-              ))}
+          {/* features */}
+          {features.length > 0 && (
+            <div className="ep-chips">
+              {features.map((f, i) => <span key={i} className="ep-chip"><Sparkles size={10} />{f}</span>)}
             </div>
           )}
 
-          {/* Progress bar (enrolled) */}
-          {isEnrolled && (
-            <div className="ce-progress-wrap">
-              <div className="ce-progress-header">
-                <span>Progress</span>
-                <span className="ce-progress-pct">{course.progress}%</span>
+          {/* progress */}
+          {enrolled && (
+            <div className="ep-progress">
+              <div className="ep-progress-labels">
+                <span>Progress</span><strong>{course.progress}%</strong>
               </div>
-              <div className="ce-progress-track">
-                <div className="ce-progress-fill" style={{ width: `${course.progress}%` }} />
+              <div className="ep-progress-track">
+                <div className="ep-progress-fill" style={{ width: `${course.progress}%` }} />
               </div>
             </div>
           )}
 
-          {/* Price */}
-          {!isEnrolled && (
-            <div className="ce-price-row">
-              <span className="ce-price">{course.price === 0 ? 'Free' : `৳${course.price.toLocaleString()}`}</span>
-            </div>
+          {/* price */}
+          {!enrolled && (
+            <p className="ep-price">{course.price === 0 ? 'Free' : `৳${course.price.toLocaleString()}`}</p>
           )}
 
-          {/* Actions */}
-          <div className="ce-card-actions">
-            <button className="ce-btn-secondary" onClick={() => handleCourseClick(course)}>
-              <Eye size={15} /> Overview
+          {/* actions */}
+          <div className="ep-card-actions">
+            <button className="ep-btn ep-btn--ghost" onClick={() => handleCourseClick(course)}>
+              <Eye size={14} />Overview
             </button>
-            {isEnrolled ? (
-              <button className="ce-btn-primary" onClick={() => handleContinueLearning(course.id)}>
-                <Play size={15} /> Continue
-              </button>
-            ) : (
-              <button
-                className="ce-btn-enroll"
-                onClick={() => handleEnrollClick(course)}
-                disabled={enrolling || calculatingPrice}
-              >
-                {calculatingPrice ? <Loader size={15} className="animate-spin" /> : <><Rocket size={15} /> Enroll</>}
-              </button>
-            )}
+            {enrolled
+              ? <button className="ep-btn ep-btn--primary" onClick={() => handleContinueLearning(course.id)}>
+                  <Play size={14} />Continue
+                </button>
+              : <button className="ep-btn ep-btn--enroll" onClick={() => handleEnrollClick(course)} disabled={enrolling || calculatingPrice}>
+                  {calculatingPrice
+                    ? <Loader size={14} className="animate-spin" />
+                    : <><ArrowRight size={14} />Enroll</>
+                  }
+                </button>
+            }
           </div>
         </div>
-      </div>
+      </article>
     );
   };
 
@@ -724,126 +613,103 @@ const CourseEnrollment = () => {
 
   const CourseOverviewModal = () => {
     if (!selectedCourse) return null;
-    const isEnrolled = selectedCourse.isEnrolled;
+    const enrolled = selectedCourse.isEnrolled;
+    const lvl      = getLevelStyle(selectedCourse.level);
     const routineFilesByCategory = selectedCourse.routineFiles?.reduce((acc, file) => {
       if (!acc[file.category]) acc[file.category] = [];
       acc[file.category].push(file);
       return acc;
     }, {} as Record<string, typeof selectedCourse.routineFiles>);
 
+    const closeModal = () => { setShowCourseModal(false); setSelectedCourse(null); };
+
     return (
-      <div className="ce-modal-overlay">
-        <div className="ce-modal ce-modal-wide">
-          {/* Header */}
-          <div className="ce-modal-header">
-            <div>
-              <p className="ce-modal-eyebrow">Course Overview</p>
-              <h2 className="ce-modal-title">{selectedCourse.title}</h2>
+      <div className="ep-overlay" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+        <div className="ep-modal ep-modal--wide" role="dialog" aria-modal="true">
+          <div className="ep-modal-head">
+            <div className="ep-modal-head-info">
+              <p className="ep-eyebrow">Course Overview</p>
+              <h2 className="ep-modal-h">{selectedCourse.title}</h2>
             </div>
-            <button className="ce-modal-close" onClick={() => { setShowCourseModal(false); setSelectedCourse(null); }}>
-              <X size={20} />
-            </button>
+            <button className="ep-modal-x" onClick={closeModal} aria-label="Close"><X size={18} /></button>
           </div>
 
-          {/* Body */}
-          <div className="ce-modal-body">
+          <div className="ep-modal-body">
             {selectedCourse.thumbnail && (
-              <div className="ce-modal-hero">
-                <img src={selectedCourse.thumbnail} alt={selectedCourse.title} className="ce-modal-hero-img" />
-                <div className="ce-modal-hero-overlay" />
+              <div className="ep-modal-hero">
+                <img src={selectedCourse.thumbnail} alt={selectedCourse.title} className="ep-modal-hero-img" />
               </div>
             )}
 
             {selectedCourse.description && (
-              <div className="ce-modal-section">
-                <p className="ce-modal-desc">{selectedCourse.description}</p>
-              </div>
+              <p className="ep-modal-desc">{selectedCourse.description}</p>
             )}
 
-            {/* Info grid */}
-            <div className="ce-info-grid">
+            {/* Info tiles */}
+            <div className="ep-tile-grid">
               {selectedCourse.class && (
-                <div className="ce-info-card">
-                  <BookOpen size={16} className="ce-info-icon" />
-                  <div><p className="ce-info-label">Class</p><p className="ce-info-val">{selectedCourse.class}</p></div>
-                </div>
+                <div className="ep-tile"><BookOpen size={14} className="ep-tile-icon" /><div><p className="ep-tile-label">Class</p><p className="ep-tile-val">{selectedCourse.class}</p></div></div>
               )}
               {selectedCourse.category && (
-                <div className="ce-info-card">
-                  <Tag size={16} className="ce-info-icon" />
-                  <div><p className="ce-info-label">Category</p><p className="ce-info-val">{selectedCourse.category}</p></div>
-                </div>
+                <div className="ep-tile"><Tag size={14} className="ep-tile-icon" /><div><p className="ep-tile-label">Category</p><p className="ep-tile-val">{selectedCourse.category}</p></div></div>
               )}
               {selectedCourse.level && selectedCourse.level !== 'unspecified' && (
-                <div className="ce-info-card">
-                  <TrendingUp size={16} className="ce-info-icon" />
-                  <div><p className="ce-info-label">Level</p>
-                    <span className={`ce-level-badge ${getLevelColor(selectedCourse.level)}`}>{selectedCourse.level}</span>
-                  </div>
-                </div>
+                <div className="ep-tile"><TrendingUp size={14} className="ep-tile-icon" /><div><p className="ep-tile-label">Level</p><span className={`ep-level ${lvl.cls}`}>{lvl.label}</span></div></div>
               )}
-              {isEnrolled && selectedCourse.duration && selectedCourse.duration !== '00:00' && (
-                <div className="ce-info-card">
-                  <Clock size={16} className="ce-info-icon" />
-                  <div><p className="ce-info-label">Duration</p><p className="ce-info-val">{selectedCourse.duration}</p></div>
-                </div>
+              {enrolled && selectedCourse.duration && selectedCourse.duration !== '00:00' && (
+                <div className="ep-tile"><Clock size={14} className="ep-tile-icon" /><div><p className="ep-tile-label">Duration</p><p className="ep-tile-val">{selectedCourse.duration}</p></div></div>
               )}
             </div>
 
-            {/* Special features */}
+            {/* Features */}
             {(selectedCourse.hasAiQnA || selectedCourse.hasHumanQnA || selectedCourse.hasStudyPlanner) && (
-              <div className="ce-modal-section">
-                <p className="ce-section-heading">Special Features</p>
-                <div className="ce-features-row">
-                  {selectedCourse.hasAiQnA && <span className="ce-feature-chip"><Zap size={11} /> AI Q&A Support</span>}
-                  {selectedCourse.hasHumanQnA && <span className="ce-feature-chip"><Users size={11} /> Human Q&A Support</span>}
-                  {selectedCourse.hasStudyPlanner && <span className="ce-feature-chip"><Calendar size={11} /> Study Planner</span>}
+              <div>
+                <p className="ep-slabel">Special Features</p>
+                <div className="ep-chips">
+                  {selectedCourse.hasAiQnA      && <span className="ep-chip"><Zap size={10} />AI Q&A</span>}
+                  {selectedCourse.hasHumanQnA    && <span className="ep-chip"><Users size={10} />Human Q&A</span>}
+                  {selectedCourse.hasStudyPlanner && <span className="ep-chip"><Calendar size={10} />Study Planner</span>}
                 </div>
               </div>
             )}
 
             {/* Pricing */}
-            <div className="ce-pricing-card">
-              <div className="ce-pricing-row">
-                <span className="ce-pricing-label">Price</span>
-                <span className="ce-pricing-val">
-                  {selectedCourse.price === 0 ? '🎉 Free' : `৳${selectedCourse.price.toLocaleString()}`}
-                </span>
+            <div className="ep-ppanel">
+              <div className="ep-ppanel-mainrow">
+                <span className="ep-dim ep-sm">Price</span>
+                <span className="ep-price-hero">{selectedCourse.price === 0 ? 'Free' : `৳${selectedCourse.price.toLocaleString()}`}</span>
               </div>
               {selectedCourse.previousStudentDiscount && selectedCourse.previousStudentDiscount > 0 && (
-                <div className="ce-pricing-discount-row">
-                  <span>Previous Student Discount</span>
-                  <span className="ce-savings">-৳{selectedCourse.previousStudentDiscount.toLocaleString()}</span>
+                <div className="ep-ppanel-row">
+                  <span className="ep-dim ep-sm">Previous Student Discount</span>
+                  <span className="ep-green">-৳{selectedCourse.previousStudentDiscount.toLocaleString()}</span>
                 </div>
               )}
               {selectedCourse.extraDiscount && selectedCourse.extraDiscount > 0 && selectedCourse.extraDiscountValidUntil && (
-                <div className="ce-pricing-discount-row">
+                <div className="ep-ppanel-row">
                   <div>
-                    <span>Limited Time Discount</span>
-                    <p className="ce-discount-expiry">Valid until: {formatDate(selectedCourse.extraDiscountValidUntil)}</p>
+                    <span className="ep-dim ep-sm">Limited Time Discount</span>
+                    <p className="ep-dim ep-xs" style={{marginTop:2}}>Valid until: {formatDate(selectedCourse.extraDiscountValidUntil)}</p>
                   </div>
-                  <span className="ce-savings">-৳{selectedCourse.extraDiscount.toLocaleString()}</span>
+                  <span className="ep-green">-৳{selectedCourse.extraDiscount.toLocaleString()}</span>
                 </div>
               )}
             </div>
 
-            {/* Validity */}
             {selectedCourse.validity && (
-              <div className="ce-modal-section">
-                <div className="ce-info-card">
-                  <Calendar size={16} className="ce-info-icon" />
-                  <div><p className="ce-info-label">Available Until</p><p className="ce-info-val">{formatDate(selectedCourse.validity)}</p></div>
-                </div>
+              <div className="ep-tile">
+                <Calendar size={14} className="ep-tile-icon" />
+                <div><p className="ep-tile-label">Available Until</p><p className="ep-tile-val">{formatDate(selectedCourse.validity)}</p></div>
               </div>
             )}
 
             {/* Requirements */}
             {selectedCourse.requirements && selectedCourse.requirements.length > 0 && (
-              <div className="ce-modal-section">
-                <p className="ce-section-heading">Requirements</p>
-                <ul className="ce-checklist">
-                  {selectedCourse.requirements.map((req, i) => (
-                    <li key={i} className="ce-checklist-item"><CheckCircle size={15} className="ce-check-icon" /><span>{req}</span></li>
+              <div>
+                <p className="ep-slabel">Requirements</p>
+                <ul className="ep-list-items">
+                  {selectedCourse.requirements.map((r, i) => (
+                    <li key={i} className="ep-list-item"><CheckCircle size={14} className="ep-icon-green ep-shrink0" />{r}</li>
                   ))}
                 </ul>
               </div>
@@ -851,55 +717,47 @@ const CourseEnrollment = () => {
 
             {/* What you'll learn */}
             {selectedCourse.whatYouWillLearn && selectedCourse.whatYouWillLearn.length > 0 && (
-              <div className="ce-modal-section">
-                <p className="ce-section-heading">What You Will Learn</p>
-                <ul className="ce-checklist">
-                  {selectedCourse.whatYouWillLearn.map((item, i) => (
-                    <li key={i} className="ce-checklist-item"><Award size={15} className="ce-award-icon" /><span>{item}</span></li>
+              <div>
+                <p className="ep-slabel">What You Will Learn</p>
+                <ul className="ep-list-items">
+                  {selectedCourse.whatYouWillLearn.map((it, i) => (
+                    <li key={i} className="ep-list-item"><Award size={14} className="ep-icon-blue ep-shrink0" />{it}</li>
                   ))}
                 </ul>
               </div>
             )}
 
-            {/* Downloadable files */}
+            {/* Files */}
             {routineFilesByCategory && Object.keys(routineFilesByCategory).length > 0 && (
-              <div className="ce-modal-section">
-                <p className="ce-section-heading">Downloadable Files</p>
-                {Object.entries(routineFilesByCategory).map(([category, files]) => (
-                  <div key={category} className="ce-files-group">
-                    <p className="ce-files-category">{category}</p>
-                    <div className="space-y-2">
-                      {files?.map((file) => (
-                        <a key={file.id} href={file.url} target="_blank" rel="noopener noreferrer" className="ce-file-item">
-                          <div className="flex items-center gap-2">
-                            <FileText size={15} className="ce-info-icon" />
-                            <span>{file.fileName}</span>
-                          </div>
-                          <Download size={15} className="ce-download-icon" />
-                        </a>
-                      ))}
-                    </div>
+              <div>
+                <p className="ep-slabel">Downloadable Files</p>
+                {Object.entries(routineFilesByCategory).map(([cat, files]) => (
+                  <div key={cat} className="ep-file-grp">
+                    <p className="ep-file-grp-label">{cat}</p>
+                    {files?.map(file => (
+                      <a key={file.id} href={file.url} target="_blank" rel="noopener noreferrer" className="ep-file-row">
+                        <span className="ep-file-left"><FileText size={14} className="ep-tile-icon" />{file.fileName}</span>
+                        <Download size={14} className="ep-dl-icon" />
+                      </a>
+                    ))}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="ce-modal-footer">
-            {isEnrolled ? (
-              <button className="ce-btn-primary ce-btn-full" onClick={() => handleContinueLearning(selectedCourse.id)}>
-                <Play size={18} /> Continue Learning
-              </button>
-            ) : (
-              <button
-                className="ce-btn-enroll ce-btn-full"
-                onClick={() => { setShowCourseModal(false); handleEnrollClick(selectedCourse); }}
-                disabled={calculatingPrice}
-              >
-                {calculatingPrice ? <><Loader size={18} className="animate-spin" /> Calculating...</> : <><ShoppingCart size={18} /> Enroll Now — It's Worth It!</>}
-              </button>
-            )}
+          <div className="ep-modal-foot">
+            {enrolled
+              ? <button className="ep-btn ep-btn--primary ep-btn--full" onClick={() => handleContinueLearning(selectedCourse.id)}>
+                  <Play size={16} />Continue Learning
+                </button>
+              : <button className="ep-btn ep-btn--enroll ep-btn--full" onClick={() => { closeModal(); handleEnrollClick(selectedCourse); }} disabled={calculatingPrice}>
+                  {calculatingPrice
+                    ? <><Loader size={16} className="animate-spin" />Calculating…</>
+                    : <><ShoppingCart size={16} />Enroll Now</>
+                  }
+                </button>
+            }
           </div>
         </div>
       </div>
@@ -919,181 +777,169 @@ const CourseEnrollment = () => {
       if (couponInput.fieldState === 'idle' && couponInput.code === '') setLocalCode('');
     }, [couponInput.fieldState, couponInput.code]);
 
-    const handleAddCoupon = async () => {
+    const doAdd = async () => {
       const code = localCode.trim().toUpperCase();
       if (!code || couponInput.fieldState === 'checking') return;
       await addCoupon(code, enrollmentData);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') handleAddCoupon();
-      if (e.key === 'Escape') {
-        setLocalCode('');
-        setCouponInput(prev => ({ ...prev, fieldState: 'idle', errorMessage: '' }));
-      }
+    const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') doAdd();
+      if (e.key === 'Escape') { setLocalCode(''); setCouponInput(p => ({ ...p, fieldState: 'idle', errorMessage: '' })); }
     };
 
     return (
-      <div className="ce-modal-overlay">
-        <div className="ce-modal ce-modal-narrow">
-          {/* Header */}
-          <div className="ce-modal-header">
-            <div>
-              <p className="ce-modal-eyebrow">🎓 Complete Enrollment</p>
-              <h2 className="ce-modal-title-sm">{course.title}</h2>
-              <p className="ce-modal-subtitle">{course.class}</p>
+      <div className="ep-overlay" onClick={e => { if (e.target === e.currentTarget && !enrolling) closeEnrollmentModal(); }}>
+        <div className="ep-modal ep-modal--narrow" role="dialog" aria-modal="true">
+          <div className="ep-modal-head">
+            <div className="ep-modal-head-info">
+              <p className="ep-eyebrow">Complete Enrollment</p>
+              <h2 className="ep-modal-h-sm">{course.title}</h2>
+              <p className="ep-dim ep-xs" style={{marginTop:3}}>{course.class}</p>
             </div>
-            <button className="ce-modal-close" onClick={closeEnrollmentModal} disabled={enrolling}>
-              <X size={20} />
-            </button>
+            <button className="ep-modal-x" onClick={closeEnrollmentModal} disabled={enrolling} aria-label="Close"><X size={18} /></button>
           </div>
 
-          {/* Body */}
-          <div className="ce-modal-body">
+          <div className="ep-modal-body">
             {/* Price breakdown */}
-            <div className="ce-price-breakdown">
-              <p className="ce-section-heading">Price Breakdown</p>
-              <div className="ce-breakdown-rows">
-                <div className="ce-breakdown-row">
-                  <span>Base Price</span>
-                  <span className="ce-breakdown-val">৳{calculation.basePrice.toLocaleString()}</span>
-                </div>
+            <div className="ep-ppanel">
+              <p className="ep-slabel">Price Breakdown</p>
+              <div className="ep-breakdown">
+                <div className="ep-brow"><span className="ep-dim ep-sm">Base Price</span><span className="ep-brow-val">৳{calculation.basePrice.toLocaleString()}</span></div>
                 {calculation.previousStudentDiscount > 0 && (
-                  <div className="ce-breakdown-row">
-                    <span className="flex items-center gap-1.5"><Percent size={13} /> Previous Student</span>
-                    <span className="ce-savings">-৳{calculation.previousStudentDiscount.toLocaleString()}</span>
+                  <div className="ep-brow">
+                    <span className="ep-dim ep-sm ep-flex-gap"><Percent size={11} />Previous Student</span>
+                    <span className="ep-green">-৳{calculation.previousStudentDiscount.toLocaleString()}</span>
                   </div>
                 )}
                 {calculation.extraDiscount > 0 && (
-                  <div className="ce-breakdown-row">
-                    <span className="flex items-center gap-1.5"><Tag size={13} /> Limited Time</span>
-                    <span className="ce-savings">-৳{calculation.extraDiscount.toLocaleString()}</span>
+                  <div className="ep-brow">
+                    <span className="ep-dim ep-sm ep-flex-gap"><Tag size={11} />Limited Time</span>
+                    <span className="ep-green">-৳{calculation.extraDiscount.toLocaleString()}</span>
                   </div>
                 )}
                 {appliedCoupons.map(ac => (
-                  <div key={ac.couponCode} className="ce-breakdown-row">
-                    <span className="flex items-center gap-1.5"><Ticket size={13} /> Coupon <span className="ce-coupon-code">{ac.couponCode}</span></span>
-                    <span className="ce-savings">-৳{ac.discount.toLocaleString()}</span>
+                  <div key={ac.couponCode} className="ep-brow">
+                    <span className="ep-dim ep-sm ep-flex-gap"><Ticket size={11} />Coupon <code className="ep-code">{ac.couponCode}</code></span>
+                    <span className="ep-green">-৳{ac.discount.toLocaleString()}</span>
                   </div>
                 ))}
                 {calculation.totalDiscount > 0 && (
-                  <div className="ce-breakdown-row ce-savings-total-row">
-                    <span>Total Savings</span>
-                    <span className="ce-savings ce-savings-total">৳{calculation.totalDiscount.toLocaleString()}</span>
+                  <div className="ep-brow ep-brow--savings">
+                    <span className="ep-dim ep-sm">Total Savings</span>
+                    <span className="ep-green ep-green-lg">৳{calculation.totalDiscount.toLocaleString()}</span>
                   </div>
                 )}
               </div>
-              <div className="ce-final-price-row">
-                <span>Final Price</span>
-                <span className="ce-final-price">
-                  {calculation.finalPrice === 0 ? '🎉 Free!' : `৳${calculation.finalPrice.toLocaleString()}`}
+              <div className="ep-final-row">
+                <span className="ep-final-label">Final Price</span>
+                <span className="ep-final-val">
+                  {calculation.finalPrice === 0 ? 'Free' : `৳${calculation.finalPrice.toLocaleString()}`}
                 </span>
               </div>
             </div>
 
-            {/* Previous student banner */}
+            {/* Returning student */}
             {calculation.hasPreviousEnrollments && calculation.previousStudentDiscount > 0 && (
-              <div className="ce-success-notice">
-                <CheckCircle size={16} className="flex-shrink-0" />
+              <div className="ep-notice ep-notice-green ep-notice--row">
+                <CheckCircle size={15} className="ep-shrink0" />
                 <div>
-                  <p className="font-semibold">Previous Student Discount Applied!</p>
-                  <p className="text-xs opacity-80 mt-0.5">Saving ৳{calculation.previousStudentDiscount.toLocaleString()} as a returning student.</p>
+                  <p style={{fontWeight:600,fontSize:'0.85rem'}}>Previous Student Discount Applied!</p>
+                  <p className="ep-dim ep-xs" style={{marginTop:2}}>Saving ৳{calculation.previousStudentDiscount.toLocaleString()} as a returning student.</p>
                 </div>
               </div>
             )}
 
             {/* Coupon section */}
-            <div className="ce-coupon-section">
-              <div className="flex items-center gap-2 mb-3">
-                <Ticket size={15} className="ce-info-icon" />
-                <label className="ce-section-heading mb-0">
+            <div>
+              <div className="ep-cpn-header">
+                <Ticket size={13} className="ep-tile-icon" />
+                <span className="ep-slabel" style={{marginBottom:0}}>
                   Coupon Codes
-                  {appliedCoupons.length > 0 && <span className="ce-applied-count">{appliedCoupons.length} applied</span>}
-                </label>
+                  {appliedCoupons.length > 0 && <span className="ep-applied-badge">{appliedCoupons.length} applied</span>}
+                </span>
               </div>
 
               {appliedCoupons.length > 0 && (
-                <div className="space-y-2 mb-3">
+                <div className="ep-applied-list">
                   {appliedCoupons.map(ac => (
-                    <div key={ac.couponCode} className="ce-applied-coupon">
-                      <div className="flex items-start gap-2 min-w-0">
-                        <CheckCircle size={14} className="flex-shrink-0 mt-0.5 text-emerald-400" />
-                        <div className="min-w-0">
-                          <p className="ce-coupon-applied-code">
-                            <span className="font-mono">{ac.couponCode}</span>
-                            <span className="ce-coupon-saving"> — saving ৳{ac.discount.toLocaleString()}</span>
+                    <div key={ac.couponCode} className="ep-applied-row">
+                      <div className="ep-applied-left">
+                        <CheckCircle size={13} className="ep-icon-green ep-shrink0" />
+                        <div>
+                          <p style={{fontSize:'0.83rem',fontWeight:600,color:'#6ee7b7'}}>
+                            <span style={{fontFamily:'monospace'}}>{ac.couponCode}</span>
+                            <span style={{fontWeight:400,opacity:0.7,marginLeft:6}}>— saving ৳{ac.discount.toLocaleString()}</span>
                           </p>
-                          {ac.successMessage && <p className="text-xs opacity-70 mt-0.5 break-words">{ac.successMessage}</p>}
+                          {ac.successMessage && <p className="ep-dim ep-xs" style={{marginTop:2}}>{ac.successMessage}</p>}
                         </div>
                       </div>
-                      <button onClick={() => removeCoupon(ac.couponCode, enrollmentData)} disabled={enrolling || couponInput.fieldState === 'checking'} className="ce-remove-coupon">
-                        <X size={13} />
-                      </button>
+                      <button
+                        className="ep-remove-btn"
+                        onClick={() => removeCoupon(ac.couponCode, enrollmentData)}
+                        disabled={enrolling || couponInput.fieldState === 'checking'}
+                        aria-label={`Remove ${ac.couponCode}`}
+                      ><X size={12} /></button>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="ce-coupon-input-row">
-                <div className="relative flex-1">
+              <div className="ep-cpn-row">
+                <div className="ep-cpn-input-wrap">
                   <input
                     ref={inputRef}
                     type="text"
                     value={localCode}
-                    onChange={(e) => {
-                      const val = e.target.value.toUpperCase().replace(/\s/g, '');
-                      setLocalCode(val);
-                      if (couponInput.fieldState === 'error') setCouponInput(prev => ({ ...prev, fieldState: 'idle', errorMessage: '' }));
+                    onChange={e => {
+                      const v = e.target.value.toUpperCase().replace(/\s/g, '');
+                      setLocalCode(v);
+                      if (couponInput.fieldState === 'error') setCouponInput(p => ({ ...p, fieldState: 'idle', errorMessage: '' }));
                     }}
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={onKey}
                     placeholder={appliedCoupons.length > 0 ? 'Add another code' : 'Enter coupon code'}
                     maxLength={30}
                     disabled={couponInput.fieldState === 'checking' || enrolling}
-                    className={`ce-coupon-input ${couponInput.fieldState === 'error' ? 'ce-coupon-input-error' : ''}`}
+                    className={`ep-cpn-input${couponInput.fieldState === 'error' ? ' ep-cpn-input--err' : ''}`}
                   />
                   {localCode && couponInput.fieldState !== 'checking' && (
-                    <button onClick={() => { setLocalCode(''); setCouponInput(prev => ({ ...prev, fieldState: 'idle', errorMessage: '' })); inputRef.current?.focus(); }} className="ce-coupon-clear">
-                      <X size={13} />
+                    <button className="ep-cpn-clear" onClick={() => { setLocalCode(''); setCouponInput(p => ({ ...p, fieldState: 'idle', errorMessage: '' })); inputRef.current?.focus(); }} aria-label="Clear">
+                      <X size={12} />
                     </button>
                   )}
                 </div>
-                <button onClick={handleAddCoupon} disabled={!localCode.trim() || couponInput.fieldState === 'checking' || enrolling} className="ce-btn-apply">
-                  {couponInput.fieldState === 'checking' ? <><Loader size={13} className="animate-spin" /> Checking...</> : <><Plus size={13} /> Apply</>}
+                <button onClick={doAdd} disabled={!localCode.trim() || couponInput.fieldState === 'checking' || enrolling} className="ep-btn ep-btn--apply">
+                  {couponInput.fieldState === 'checking' ? <><Loader size={12} className="animate-spin" />Checking…</> : <><Plus size={12} />Apply</>}
                 </button>
               </div>
 
               {couponInput.fieldState === 'error' && couponInput.errorMessage && (
-                <div className="ce-coupon-error"><AlertCircle size={12} /><span>{couponInput.errorMessage}</span></div>
+                <p className="ep-cpn-error"><AlertCircle size={12} />{couponInput.errorMessage}</p>
               )}
               {couponInput.fieldState === 'idle' && !localCode && (
-                <p className="ce-coupon-hint"><Info size={11} /> {appliedCoupons.length > 0 ? 'Stack multiple coupon codes — each validated separately.' : 'Have a promo code? Enter it above.'}</p>
+                <p className="ep-cpn-hint"><Info size={11} />{appliedCoupons.length > 0 ? 'Multiple codes can be stacked.' : 'Have a promo code? Enter it above.'}</p>
               )}
             </div>
 
-            {/* Error / Warning */}
-            {error && (
-              <div className="ce-alert ce-alert-error"><AlertCircle size={15} className="flex-shrink-0" /><span>{error}</span></div>
-            )}
-            {warning && (
-              <div className="ce-alert ce-alert-warning"><AlertTriangle size={15} className="flex-shrink-0" /><span>{warning}</span></div>
-            )}
+            {/* Inline alerts */}
+            {error   && <div className="ep-notice ep-notice-red ep-notice--row"><AlertCircle size={15} className="ep-shrink0" /><span style={{fontSize:'0.85rem'}}>{error}</span></div>}
+            {warning && <div className="ep-notice ep-notice-amber ep-notice--row"><AlertTriangle size={15} className="ep-shrink0" /><span style={{fontSize:'0.85rem'}}>{warning}</span></div>}
 
-            {/* Actions */}
-            <div className="ce-modal-action-row">
-              <button onClick={closeEnrollmentModal} disabled={enrolling} className="ce-btn-cancel">Cancel</button>
-              <button onClick={handleProceedToPayment} disabled={enrolling || couponInput.fieldState === 'checking'} className="ce-btn-pay">
-                {enrolling ? (
-                  <><Loader size={18} className="animate-spin" /> Processing...</>
-                ) : calculation.finalPrice === 0 ? (
-                  <><Check size={18} /> Enroll Free</>
-                ) : (
-                  <><ShoppingCart size={18} /> Pay ৳{calculation.finalPrice.toLocaleString()}</>
-                )}
+            {/* CTA */}
+            <div className="ep-cta-row">
+              <button onClick={closeEnrollmentModal} disabled={enrolling} className="ep-btn ep-btn--ghost ep-btn--cancel">Cancel</button>
+              <button onClick={handleProceedToPayment} disabled={enrolling || couponInput.fieldState === 'checking'} className="ep-btn ep-btn--pay">
+                {enrolling
+                  ? <><Loader size={16} className="animate-spin" />Processing…</>
+                  : calculation.finalPrice === 0
+                    ? <><Check size={16} />Enroll Free</>
+                    : <><ShoppingCart size={16} />Pay ৳{calculation.finalPrice.toLocaleString()}</>
+                }
               </button>
             </div>
 
             {calculation.finalPrice > 0 && !enrolling && (
-              <p className="ce-secure-notice">🔒 Secure payment via SSLCOMMERZ</p>
+              <p className="ep-secure"><Shield size={12} />Secure payment via SSLCOMMERZ</p>
             )}
           </div>
         </div>
@@ -1108,459 +954,452 @@ const CourseEnrollment = () => {
   return (
     <>
       <CEStyles />
-      <AnimatedBackground />
+      <div className="ep-page">
 
-      <div className="ce-page">
-        {/* ── Hero Header ── */}
-        <div className="ce-hero">
-          <div className="ce-hero-content">
-            <div className="ce-hero-left">
-              <div className="ce-hero-badge">
-                <Sparkles size={12} /> Learning Platform
-              </div>
-              <h1 className="ce-hero-title">
-                Unlock Your <span className="ce-hero-accent">Potential</span>
-              </h1>
-              <p className="ce-hero-subtitle">
-                Expert-crafted courses designed to transform your skills and accelerate your career.
-              </p>
-            </div>
-            <div className="ce-hero-stats">
-              <div className="ce-stat-card">
-                <span className="ce-stat-num">{availableCourses.length}</span>
-                <span className="ce-stat-lbl">Available</span>
-              </div>
-              <div className="ce-stat-divider" />
-              <div className="ce-stat-card">
-                <span className="ce-stat-num">{enrolledCourses.length}</span>
-                <span className="ce-stat-lbl">Enrolled</span>
-              </div>
-            </div>
+        {/* Header */}
+        <header className="ep-header">
+          <div>
+            <h1 className="ep-page-h">Course Enrollment</h1>
+            <p className="ep-page-sub">Discover and enroll in expert-led courses</p>
           </div>
-          <StatTicker available={availableCourses.length} enrolled={enrolledCourses.length} />
-        </div>
+          <div className="ep-header-pills">
+            <span className="ep-pill"><BookOpen size={13} /><strong>{availableCourses.length}</strong>Available</span>
+            <span className="ep-pill ep-pill--blue"><GraduationCap size={13} /><strong>{enrolledCourses.length}</strong>Enrolled</span>
+          </div>
+        </header>
 
-        {/* ── Banners ── */}
-        <div className="ce-banners">
+        {/* Notices */}
+        <div className="ep-notices">
           <PaymentReturnBanner />
-          {error && (
-            <div className="ce-alert ce-alert-error ce-alert-dismissible">
-              <div className="flex items-center gap-2"><AlertCircle size={18} /><span>{error}</span></div>
-              <button onClick={clearMessages}><X size={15} /></button>
-            </div>
-          )}
-          {success && (
-            <div className="ce-alert ce-alert-success ce-alert-dismissible">
-              <div className="flex items-center gap-2"><CheckCircle size={18} /><span>{success}</span></div>
-              <button onClick={clearMessages}><X size={15} /></button>
-            </div>
-          )}
-          {warning && (
-            <div className="ce-alert ce-alert-warning ce-alert-dismissible">
-              <div className="flex items-center gap-2"><AlertTriangle size={18} /><span>{warning}</span></div>
-              <button onClick={clearMessages}><X size={15} /></button>
-            </div>
-          )}
+          {error   && <div className="ep-notice ep-notice-red ep-notice--row ep-notice--dismissible"><div className="ep-flex-gap"><AlertCircle size={16} className="ep-shrink0" /><span style={{fontSize:'0.875rem'}}>{error}</span></div><button className="ep-notice-close" onClick={clearMessages}><X size={14} /></button></div>}
+          {success && <div className="ep-notice ep-notice-green ep-notice--row ep-notice--dismissible"><div className="ep-flex-gap"><CheckCircle size={16} className="ep-shrink0" /><span style={{fontSize:'0.875rem'}}>{success}</span></div><button className="ep-notice-close" onClick={clearMessages}><X size={14} /></button></div>}
+          {warning && <div className="ep-notice ep-notice-amber ep-notice--row ep-notice--dismissible"><div className="ep-flex-gap"><AlertTriangle size={16} className="ep-shrink0" /><span style={{fontSize:'0.875rem'}}>{warning}</span></div><button className="ep-notice-close" onClick={clearMessages}><X size={14} /></button></div>}
         </div>
 
-        {/* ── Tabs + View Toggle ── */}
-        <div className="ce-tab-bar">
-          <div className="ce-tabs">
-            <button
-              className={`ce-tab ${activeTab === 'available' ? 'ce-tab-active' : ''}`}
-              onClick={() => setActiveTab('available')}
-            >
-              <BookOpen size={15} /> Available
-              <span className="ce-tab-count">{availableCourses.length}</span>
+        {/* Tab bar */}
+        <div className="ep-tab-bar">
+          <nav className="ep-tabs" role="tablist">
+            <button role="tab" aria-selected={activeTab === 'available'} className={`ep-tab${activeTab === 'available' ? ' ep-tab--on' : ''}`} onClick={() => setActiveTab('available')}>
+              <BookOpen size={13} />Available<span className="ep-tab-ct">{availableCourses.length}</span>
             </button>
-            <button
-              className={`ce-tab ${activeTab === 'enrolled' ? 'ce-tab-active' : ''}`}
-              onClick={() => setActiveTab('enrolled')}
-            >
-              <GraduationCap size={15} /> Enrolled
-              <span className="ce-tab-count">{enrolledCourses.length}</span>
+            <button role="tab" aria-selected={activeTab === 'enrolled'} className={`ep-tab${activeTab === 'enrolled' ? ' ep-tab--on' : ''}`} onClick={() => setActiveTab('enrolled')}>
+              <GraduationCap size={13} />Enrolled<span className="ep-tab-ct">{enrolledCourses.length}</span>
             </button>
-          </div>
-          <div className="ce-view-toggle">
-            <button onClick={() => setViewMode('grid')} className={`ce-view-btn ${viewMode === 'grid' ? 'ce-view-active' : ''}`}>
-              <Grid3X3 size={15} />
-            </button>
-            <button onClick={() => setViewMode('list')} className={`ce-view-btn ${viewMode === 'list' ? 'ce-view-active' : ''}`}>
-              <List size={15} />
-            </button>
+          </nav>
+          <div className="ep-view-toggle" role="group" aria-label="View mode">
+            <button aria-label="Grid" aria-pressed={viewMode === 'grid'} className={`ep-view-btn${viewMode === 'grid' ? ' ep-view-btn--on' : ''}`} onClick={() => setViewMode('grid')}><Grid3X3 size={14} /></button>
+            <button aria-label="List" aria-pressed={viewMode === 'list'} className={`ep-view-btn${viewMode === 'list' ? ' ep-view-btn--on' : ''}`} onClick={() => setViewMode('list')}><List size={14} /></button>
           </div>
         </div>
 
-        {/* ── Filters ── */}
-        <div className="ce-filters">
-          <div className="ce-search-wrap">
-            <Search size={16} className="ce-search-icon" />
-            <input
-              type="text"
-              placeholder="Search courses, instructors, topics..."
-              className="ce-search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="ce-search-clear"><X size={14} /></button>
-            )}
+        {/* Filters */}
+        <div className="ep-filters">
+          <div className="ep-search-wrap">
+            <Search size={14} className="ep-search-icon" aria-hidden="true" />
+            <input type="search" aria-label="Search courses" placeholder="Search courses, instructors, topics…" className="ep-search" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            {searchTerm && <button className="ep-search-x" onClick={() => setSearchTerm('')} aria-label="Clear"><X size={12} /></button>}
           </div>
-
-          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="ce-select">
+          <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="ep-sel" aria-label="Category">
             <option value="all">All Categories</option>
-            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-
-          <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} className="ce-select">
+          <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} className="ep-sel" aria-label="Class">
             <option value="all">All Classes</option>
-            {classes.map(cls => <option key={cls} value={cls}>{cls}</option>)}
+            {classes.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-
-          <select value={selectedLevel} onChange={(e) => setSelectedLevel(e.target.value)} className="ce-select">
+          <select value={selectedLevel} onChange={e => setSelectedLevel(e.target.value)} className="ep-sel" aria-label="Level">
             <option value="all">All Levels</option>
             <option value="beginner">Beginner</option>
             <option value="intermediate">Intermediate</option>
             <option value="advanced">Advanced</option>
           </select>
-
-          <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)} className="ce-select">
+          <select value={priceFilter} onChange={e => setPriceFilter(e.target.value)} className="ep-sel" aria-label="Price">
             <option value="all">Any Price</option>
             <option value="free">Free</option>
             <option value="paid">Paid</option>
             <option value="under1000">Under ৳1,000</option>
             <option value="under5000">Under ৳5,000</option>
           </select>
-
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="ce-select">
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="ep-sel" aria-label="Sort by">
             <option value="popular">Most Popular</option>
             <option value="rating">Highest Rated</option>
             <option value="newest">Newest</option>
-            <option value="price-low">Price: Low to High</option>
-            <option value="price-high">Price: High to Low</option>
+            <option value="price-low">Price: Low → High</option>
+            <option value="price-high">Price: High → Low</option>
           </select>
         </div>
 
-        {/* ── Course Grid ── */}
+        {/* Content */}
         {loading ? (
-          <div className="ce-inline-loader">
-            <Loader className="animate-spin ce-info-icon" size={28} />
-            <span>Refreshing courses...</span>
-          </div>
+          <div className="ep-iloader" aria-live="polite"><Loader size={22} className="animate-spin ep-tile-icon" /><span>Refreshing…</span></div>
         ) : displayCourses.length === 0 ? (
-          <div className="ce-empty">
-            <div className="ce-empty-icon">
-              {activeTab === 'available' ? <Search size={40} /> : <GraduationCap size={40} />}
-            </div>
-            <h3 className="ce-empty-title">
-              {activeTab === 'available' ? 'No courses match your filters' : 'No enrolled courses yet'}
-            </h3>
-            <p className="ce-empty-sub">
-              {activeTab === 'available' ? 'Try adjusting your search or filter criteria.' : 'Explore available courses and start your learning journey!'}
-            </p>
+          <div className="ep-empty" role="status">
+            <div className="ep-empty-icon">{activeTab === 'available' ? <Search size={30} /> : <GraduationCap size={30} />}</div>
+            <h3 className="ep-empty-h">{activeTab === 'available' ? 'No courses match your filters' : 'No enrolled courses yet'}</h3>
+            <p className="ep-empty-p">{activeTab === 'available' ? 'Try adjusting your search or filters.' : 'Explore available courses and start your learning journey!'}</p>
             {activeTab === 'enrolled' && (
-              <button className="ce-btn-enroll mt-4" onClick={() => setActiveTab('available')}>
-                <Rocket size={15} /> Browse Courses
+              <button className="ep-btn ep-btn--primary" style={{marginTop:'1.25rem'}} onClick={() => setActiveTab('available')}>
+                <BookOpen size={14} />Browse Courses
               </button>
             )}
           </div>
         ) : (
-          <div className={viewMode === 'grid' ? 'ce-grid' : 'ce-list'}>
-            {displayCourses.map(course => <CourseCard key={course.id} course={course} />)}
+          <div className={viewMode === 'grid' ? 'ep-grid' : 'ep-list'} role="list">
+            {displayCourses.map(course => (
+              <div role="listitem" key={course.id}><CourseCard course={course} /></div>
+            ))}
           </div>
         )}
       </div>
 
-      {showCourseModal && <CourseOverviewModal />}
+      {showCourseModal     && <CourseOverviewModal />}
       {showEnrollmentModal && <EnrollmentModal />}
     </>
   );
 };
 
-// ==================== STYLES ====================
+// ==================== EMBEDDED STYLES ====================
 
 const CEStyles = () => (
   <style>{`
-    /* ── Reset & Base ── */
-    .ce-page { position: relative; z-index: 1; padding: 0 0 3rem; }
+    /* ─── Design Tokens ─── */
+    :root{
+      --s0:#0c1018;
+      --s1:#131921;
+      --s2:#1a2232;
+      --s3:#222d40;
+      --bd:#28354a;
+      --bd2:#35455e;
 
-    /* ── Animated Background ── */
-    .ce-orb { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.12; pointer-events: none; }
-    .ce-orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, #6366f1, #8b5cf6); top: -200px; left: -200px; animation: ceOrb1 18s ease-in-out infinite alternate; }
-    .ce-orb-2 { width: 500px; height: 500px; background: radial-gradient(circle, #06b6d4, #3b82f6); bottom: -150px; right: -150px; animation: ceOrb2 22s ease-in-out infinite alternate; }
-    .ce-orb-3 { width: 350px; height: 350px; background: radial-gradient(circle, #f59e0b, #ef4444); top: 40%; left: 50%; transform: translate(-50%,-50%); animation: ceOrb3 15s ease-in-out infinite alternate; }
-    .ce-grid-overlay { position: fixed; inset: 0; background-image: linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px); background-size: 60px 60px; pointer-events: none; }
-    @keyframes ceOrb1 { to { transform: translate(120px, 80px) scale(1.15); } }
-    @keyframes ceOrb2 { to { transform: translate(-80px, -60px) scale(1.2); } }
-    @keyframes ceOrb3 { to { transform: translate(-50%, -50%) scale(0.8) rotate(30deg); } }
+      --tx:#dce5f0;
+      --tx2:#7f90a8;
+      --tx3:#49596e;
 
-    /* ── Hero ── */
-    .ce-hero { background: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.10) 50%, rgba(6,182,212,0.08) 100%); border: 1px solid rgba(99,102,241,0.2); border-radius: 24px; margin: 1.5rem 0 1rem; padding: 2.5rem 2rem 0; backdrop-filter: blur(12px); overflow: hidden; box-shadow: 0 4px 40px rgba(99,102,241,0.08), inset 0 1px 0 rgba(255,255,255,0.06); }
-    .ce-hero-content { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; flex-wrap: wrap; margin-bottom: 2rem; }
-    .ce-hero-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #a5b4fc; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 20px; padding: 4px 12px; margin-bottom: 1rem; }
-    .ce-hero-title { font-family: 'Georgia', 'Times New Roman', serif; font-size: clamp(2rem, 5vw, 3rem); font-weight: 700; color: #f1f5f9; line-height: 1.15; margin-bottom: 0.75rem; letter-spacing: -0.02em; }
-    .ce-hero-accent { background: linear-gradient(135deg, #818cf8, #c084fc, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .ce-hero-subtitle { color: #94a3b8; font-size: 1rem; max-width: 480px; line-height: 1.65; }
-    .ce-hero-stats { display: flex; align-items: center; gap: 0; background: rgba(15,23,42,0.5); border: 1px solid rgba(99,102,241,0.25); border-radius: 20px; padding: 1.25rem 1.75rem; backdrop-filter: blur(8px); flex-shrink: 0; box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.03); }
-    .ce-stat-card { text-align: center; padding: 0 1.25rem; }
-    .ce-stat-num { display: block; font-size: 2.2rem; font-weight: 700; color: #818cf8; font-variant-numeric: tabular-nums; line-height: 1; }
-    .ce-stat-lbl { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; margin-top: 4px; display: block; }
-    .ce-stat-divider { width: 1px; height: 48px; background: rgba(99,102,241,0.25); }
+      /* Blue — primary actions */
+      --blue:#2563eb;
+      --blue-h:#1d4ed8;
+      --blue-bg:rgba(37,99,235,.10);
+      --blue-bd:rgba(37,99,235,.28);
 
-    /* ── Stat Ticker ── */
-    .ce-stat-ticker { overflow: hidden; border-top: 1px solid rgba(99,102,241,0.15); padding: 10px 0; margin: 0 -2rem; }
-    .ce-stat-ticker-inner { display: flex; white-space: nowrap; animation: ceTicker 30s linear infinite; }
-    .ce-ticker-item { display: inline-flex; align-items: center; gap: 6px; color: #64748b; font-size: 0.72rem; font-weight: 500; letter-spacing: 0.03em; padding: 0 1.5rem; text-transform: uppercase; }
-    .ce-ticker-dot { color: #4338ca; margin-left: 1.5rem; font-size: 0.5rem; }
-    @keyframes ceTicker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+      /* Teal — enroll CTA (warm, confident, distinct from blue) */
+      --teal:#0d9488;
+      --teal-h:#0f766e;
+      --teal-sh:rgba(13,148,136,.30);
 
-    /* ── Banners ── */
-    .ce-banners { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem; }
-    .ce-banner { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: 12px; font-size: 0.875rem; }
-    .ce-banner-processing { background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); color: #93c5fd; }
-    .ce-banner-success { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; }
-    .ce-banner-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
-    .ce-banner-warning { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3); color: #fcd34d; }
+      /* Violet — pay CTA (premium, trusted) */
+      --violet:#5b45e8;
+      --violet-h:#4c3bd1;
+      --violet-sh:rgba(91,69,232,.30);
 
-    /* ── Alerts ── */
-    .ce-alert { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; font-size: 0.85rem; }
-    .ce-alert-dismissible { justify-content: space-between; }
-    .ce-alert-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); color: #fca5a5; }
-    .ce-alert-success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); color: #6ee7b7; }
-    .ce-alert-warning { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: #fcd34d; }
+      /* Semantic */
+      --green:#10b981; --green-bg:rgba(16,185,129,.10); --green-bd:rgba(16,185,129,.28);
+      --amber:#f59e0b; --amber-bg:rgba(245,158,11,.10); --amber-bd:rgba(245,158,11,.28);
+      --red:#ef4444;   --red-bg:rgba(239,68,68,.10);    --red-bd:rgba(239,68,68,.28);
 
-    /* ── Tab Bar ── */
-    .ce-tab-bar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(99,102,241,0.15); padding-bottom: 0; margin-bottom: 1.25rem; }
-    .ce-tabs { display: flex; gap: 0; }
-    .ce-tab { display: flex; align-items: center; gap: 7px; padding: 0.875rem 1.25rem; font-size: 0.875rem; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; cursor: pointer; background: transparent; border-left: none; border-right: none; border-top: none; white-space: nowrap; }
-    .ce-tab:hover { color: #c7d2fe; }
-    .ce-tab-active { color: #818cf8; border-bottom-color: #818cf8; }
-    .ce-tab-count { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.25); color: #a5b4fc; border-radius: 20px; padding: 1px 8px; font-size: 0.7rem; font-weight: 600; }
-    .ce-tab-active .ce-tab-count { background: rgba(99,102,241,0.25); }
+      --r:10px; --rl:16px; --rxl:20px;
+      --sh:0 2px 10px rgba(0,0,0,.35);
+      --sh-lg:0 10px 48px rgba(0,0,0,.55);
+    }
 
-    /* ── View Toggle ── */
-    .ce-view-toggle { display: flex; gap: 4px; padding: 4px; background: rgba(15,23,42,0.5); border: 1px solid rgba(99,102,241,0.15); border-radius: 10px; }
-    .ce-view-btn { padding: 6px 10px; border-radius: 7px; color: #64748b; transition: all 0.2s; background: transparent; border: none; cursor: pointer; }
-    .ce-view-btn:hover { color: #c7d2fe; }
-    .ce-view-active { background: rgba(99,102,241,0.25); color: #818cf8; }
+    /* ─── Utility classes ─── */
+    .ep-shrink0{flex-shrink:0}
+    .ep-fill{fill:currentColor}
+    .ep-flex-gap{display:inline-flex;align-items:center;gap:6px}
+    .ep-sm{font-size:.82rem}
+    .ep-xs{font-size:.72rem}
+    .ep-dim{color:var(--tx2)}
+    .ep-green{color:#34d399;font-weight:600}
+    .ep-green-lg{font-size:1rem}
+    .ep-icon-green{color:var(--green)}
+    .ep-icon-blue{color:var(--blue)}
+    .animate-spin{animation:ep-spin .75s linear infinite}
+    @keyframes ep-spin{to{transform:rotate(360deg)}}
 
-    /* ── Filters ── */
-    .ce-filters { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-bottom: 1.5rem; background: rgba(15,23,42,0.5); border: 1px solid rgba(99,102,241,0.15); border-radius: 16px; padding: 1.25rem; backdrop-filter: blur(8px); }
-    @media (min-width: 640px) { .ce-filters { grid-template-columns: 1fr 1fr; } }
-    @media (min-width: 1024px) { .ce-filters { grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; } }
-    .ce-search-wrap { position: relative; grid-column: 1 / -1; }
-    @media (min-width: 1024px) { .ce-search-wrap { grid-column: span 2; } }
-    .ce-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #475569; pointer-events: none; }
-    .ce-search { width: 100%; background: rgba(30,41,59,0.8); border: 1px solid rgba(99,102,241,0.2); color: #e2e8f0; border-radius: 10px; padding: 10px 36px; font-size: 0.875rem; transition: all 0.2s; outline: none; }
-    .ce-search:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
-    .ce-search::placeholder { color: #475569; }
-    .ce-search-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #475569; background: transparent; border: none; cursor: pointer; padding: 4px; }
-    .ce-select { width: 100%; background: rgba(30,41,59,0.8); border: 1px solid rgba(99,102,241,0.2); color: #e2e8f0; border-radius: 10px; padding: 10px 12px; font-size: 0.875rem; transition: all 0.2s; outline: none; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23818cf8' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
-    .ce-select:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
-    .ce-select option { background: #1e293b; }
+    /* ─── Page ─── */
+    .ep-page{display:flex;flex-direction:column;gap:1.125rem;padding-bottom:3rem}
 
-    /* ── Grid / List layouts ── */
-    .ce-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
-    @media (min-width: 640px) { .ce-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (min-width: 1024px) { .ce-grid { grid-template-columns: repeat(3, 1fr); } }
-    .ce-list { display: flex; flex-direction: column; gap: 1rem; }
+    /* ─── Header ─── */
+    .ep-header{display:flex;align-items:flex-start;justify-content:space-between;gap:.875rem;flex-wrap:wrap}
+    .ep-page-h{font-size:clamp(1.3rem,4vw,1.65rem);font-weight:700;color:var(--tx);letter-spacing:-.02em;line-height:1.2}
+    .ep-page-sub{font-size:.82rem;color:var(--tx2);margin-top:4px}
+    .ep-header-pills{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    .ep-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--s2);border:1px solid var(--bd);border-radius:40px;font-size:.78rem;color:var(--tx2);white-space:nowrap}
+    .ep-pill strong{color:var(--tx);font-weight:600;margin-right:1px}
+    .ep-pill--blue{border-color:var(--blue-bd);color:#60a5fa}
+    .ep-pill--blue strong{color:#60a5fa}
 
-    /* ── Course Card ── */
-    .ce-card { background: rgba(15,23,42,0.7); border: 1px solid rgba(99,102,241,0.15); border-radius: 20px; overflow: hidden; transition: all 0.35s cubic-bezier(.4,0,.2,1); backdrop-filter: blur(8px); display: flex; flex-direction: column; box-shadow: 0 4px 24px rgba(0,0,0,0.2); position: relative; }
-    .ce-card::before { content: ''; position: absolute; inset: 0; border-radius: 20px; background: linear-gradient(135deg, rgba(99,102,241,0.05) 0%, transparent 60%); pointer-events: none; z-index: 0; }
-    .ce-card:hover { transform: translateY(-6px) scale(1.01); border-color: rgba(99,102,241,0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(99,102,241,0.2), 0 0 40px rgba(99,102,241,0.08); }
-    .ce-card-list { flex-direction: row; }
-    .ce-card-thumb { position: relative; overflow: hidden; height: 200px; flex-shrink: 0; }
-    .ce-card-thumb-list { width: 240px; height: auto; min-height: 160px; }
-    @media (max-width: 640px) { .ce-card-list { flex-direction: column; } .ce-card-thumb-list { width: 100%; height: 180px; } }
-    .ce-card-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s cubic-bezier(.4,0,.2,1); }
-    .ce-card:hover .ce-card-img { transform: scale(1.07); }
-    .ce-card-thumb-placeholder { width: 100%; height: 100%; background: linear-gradient(135deg, #312e81 0%, #1e1b4b 50%, #0f172a 100%); display: flex; align-items: center; justify-content: center; color: #818cf8; }
-    .ce-card-thumb-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%); pointer-events: none; }
+    /* ─── Notices ─── */
+    .ep-notices{display:flex;flex-direction:column;gap:.5rem}
+    .ep-notice{display:flex;align-items:flex-start;padding:10px 13px;border-radius:var(--r);border:1px solid transparent;font-size:.875rem}
+    .ep-notice--row{flex-direction:row;gap:9px;align-items:flex-start}
+    .ep-notice--dismissible{justify-content:space-between}
+    .ep-notice-text{flex:1;font-size:.85rem;line-height:1.5}
+    .ep-notice-blue {background:var(--blue-bg); border-color:var(--blue-bd); color:#93c5fd}
+    .ep-notice-green{background:var(--green-bg);border-color:var(--green-bd);color:#6ee7b7}
+    .ep-notice-red  {background:var(--red-bg);  border-color:var(--red-bd);  color:#fca5a5}
+    .ep-notice-amber{background:var(--amber-bg);border-color:var(--amber-bd);color:#fcd34d}
+    .ep-notice-close{background:transparent;border:none;color:inherit;opacity:.55;cursor:pointer;padding:2px;flex-shrink:0;transition:opacity .15s}
+    .ep-notice-close:hover{opacity:1}
 
-    /* Card badges */
-    .ce-card-badges-top-right { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 2; }
-    .ce-card-badges-top-left { position: absolute; top: 10px; left: 10px; z-index: 2; }
-    .ce-card-badges-bottom-left { position: absolute; bottom: 10px; left: 10px; z-index: 2; }
-    .ce-fav-btn { width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(4px); transition: all 0.2s; }
-    .ce-fav-btn:hover, .ce-fav-active { background: #ef4444; border-color: #ef4444; }
-    .ce-enrolled-badge { display: inline-flex; align-items: center; gap: 4px; background: rgba(16,185,129,0.85); color: #fff; font-size: 0.65rem; font-weight: 600; padding: 3px 8px; border-radius: 20px; backdrop-filter: blur(4px); }
-    .ce-card-free-ribbon { position: absolute; top: 14px; right: -1px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; padding: 4px 10px 4px 8px; clip-path: polygon(8px 0%, 100% 0%, 100% 100%, 8px 100%, 0% 50%); z-index: 2; }
+    /* ─── Tab bar ─── */
+    .ep-tab-bar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;border-bottom:1px solid var(--bd);flex-wrap:wrap}
+    .ep-tabs{display:flex}
+    .ep-tab{display:inline-flex;align-items:center;gap:6px;padding:.7rem 1rem;font-size:.855rem;font-weight:500;color:var(--tx2);border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;transition:color .18s,border-color .18s;white-space:nowrap;line-height:1}
+    .ep-tab:hover{color:var(--tx)}
+    .ep-tab--on{color:var(--blue);border-bottom-color:var(--blue)}
+    .ep-tab-ct{background:var(--s2);border:1px solid var(--bd);color:var(--tx2);border-radius:40px;padding:1px 7px;font-size:.68rem;font-weight:600}
+    .ep-tab--on .ep-tab-ct{background:var(--blue-bg);border-color:var(--blue-bd);color:var(--blue)}
 
-    /* Level badges */
-    .ce-level-badge { font-size: 0.65rem; font-weight: 600; padding: 3px 9px; border-radius: 20px; text-transform: capitalize; letter-spacing: 0.03em; }
-    .ce-badge-beginner { background: rgba(16,185,129,0.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
-    .ce-badge-intermediate { background: rgba(245,158,11,0.2); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
-    .ce-badge-advanced { background: rgba(239,68,68,0.2); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
-    .ce-badge-default { background: rgba(100,116,139,0.2); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+    /* ─── View toggle ─── */
+    .ep-view-toggle{display:flex;gap:3px;padding:3px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r)}
+    .ep-view-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:7px;border:none;background:transparent;color:var(--tx3);cursor:pointer;transition:all .18s}
+    .ep-view-btn:hover{color:var(--tx2);background:var(--s3)}
+    .ep-view-btn--on{background:var(--blue);color:#fff}
+    .ep-view-btn--on:hover{background:var(--blue-h)}
 
-    /* Card body */
-    .ce-card-body { padding: 1.125rem; display: flex; flex-direction: column; gap: 0.625rem; flex: 1; position: relative; z-index: 1; }
-    .ce-card-meta-row { display: flex; align-items: center; gap: 8px; }
-    .ce-rating { display: flex; align-items: center; gap: 4px; }
-    .ce-star { color: #fbbf24; fill: #fbbf24; }
-    .ce-rating-val { font-size: 0.8rem; font-weight: 600; color: #e2e8f0; }
-    .ce-rating-count { font-size: 0.75rem; color: #64748b; }
-    .ce-dot { color: #334155; font-size: 0.6rem; }
-    .ce-students { display: flex; align-items: center; gap: 4px; font-size: 0.75rem; color: #64748b; }
-    .ce-card-title { font-size: 0.95rem; font-weight: 600; color: #e2e8f0; line-height: 1.45; cursor: pointer; transition: color 0.2s; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .ce-card-title:hover { color: #818cf8; }
-    .ce-card-sub-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.75rem; color: #64748b; }
-    .ce-features-row { display: flex; flex-wrap: wrap; gap: 6px; }
-    .ce-feature-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.67rem; font-weight: 600; color: #a5b4fc; background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.25); border-radius: 20px; padding: 3px 8px; }
+    /* ─── Filters ─── */
+    .ep-filters{
+      display:grid;gap:.6rem;grid-template-columns:1fr;
+      background:var(--s1);border:1px solid var(--bd);border-radius:var(--rl);padding:.875rem;
+    }
+    @media(min-width:500px){.ep-filters{grid-template-columns:1fr 1fr}}
+    @media(min-width:768px){.ep-filters{grid-template-columns:1fr 1fr 1fr}}
+    @media(min-width:1100px){.ep-filters{grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr}}
 
-    /* Progress */
-    .ce-progress-wrap { display: flex; flex-direction: column; gap: 5px; }
-    .ce-progress-header { display: flex; justify-content: space-between; font-size: 0.75rem; color: #64748b; }
-    .ce-progress-pct { color: #a5b4fc; font-weight: 600; }
-    .ce-progress-track { height: 6px; border-radius: 3px; background: rgba(30,41,59,0.8); overflow: hidden; }
-    .ce-progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #818cf8, #c084fc); transition: width 0.6s ease; box-shadow: 0 0 8px rgba(129,140,248,0.5); }
+    .ep-search-wrap{position:relative;grid-column:1/-1}
+    @media(min-width:1100px){.ep-search-wrap{grid-column:span 2}}
+    .ep-search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--tx3);pointer-events:none}
+    .ep-search{width:100%;box-sizing:border-box;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:var(--r);padding:9px 32px 9px 34px;font-size:.85rem;outline:none;transition:border-color .18s,box-shadow .18s}
+    .ep-search::placeholder{color:var(--tx3)}
+    .ep-search:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg)}
+    .ep-search-x{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--tx3);cursor:pointer;padding:3px}
 
-    /* Price */
-    .ce-price-row { display: flex; align-items: baseline; gap: 8px; }
-    .ce-price { font-size: 1.25rem; font-weight: 700; color: #f1f5f9; font-variant-numeric: tabular-nums; }
+    .ep-sel{width:100%;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:var(--r);padding:9px 28px 9px 10px;font-size:.85rem;outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath fill='%236b7280' d='M5 7 0 0h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;transition:border-color .18s,box-shadow .18s}
+    .ep-sel:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg)}
+    .ep-sel option{background:var(--s2)}
 
-    /* Action buttons */
-    .ce-card-actions { display: flex; gap: 8px; margin-top: auto; }
-    .ce-btn-secondary { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; background: rgba(30,41,59,0.8); border: 1px solid rgba(99,102,241,0.2); color: #94a3b8; border-radius: 10px; font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
-    .ce-btn-secondary:hover { background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.4); color: #c7d2fe; }
-    .ce-btn-primary { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; border-radius: 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px rgba(99,102,241,0.3); }
-    .ce-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,0.45); }
-    .ce-btn-enroll { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; border: none; border-radius: 10px; font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px rgba(245,158,11,0.25); letter-spacing: 0.02em; }
-    .ce-btn-enroll:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(245,158,11,0.4); }
-    .ce-btn-enroll:disabled { opacity: 0.5; cursor: not-allowed; }
-    .ce-btn-full { width: 100%; flex: initial; border-radius: 12px; padding: 13px 20px; font-size: 0.9rem; }
+    /* ─── Grid / List ─── */
+    .ep-grid{display:grid;grid-template-columns:1fr;gap:1.125rem}
+    @media(min-width:560px){.ep-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:1024px){.ep-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(min-width:1400px){.ep-grid{grid-template-columns:repeat(4,1fr)}}
+    .ep-list{display:flex;flex-direction:column;gap:.75rem}
 
-    /* ── Empty state ── */
-    .ce-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 5rem 2rem; text-align: center; }
-    .ce-empty-icon { width: 80px; height: 80px; border-radius: 50%; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); display: flex; align-items: center; justify-content: center; color: #818cf8; margin-bottom: 1.5rem; }
-    .ce-empty-title { font-size: 1.25rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.5rem; }
-    .ce-empty-sub { color: #64748b; font-size: 0.9rem; max-width: 380px; }
+    /* ─── Course Card ─── */
+    .ep-card{display:flex;flex-direction:column;background:var(--s1);border:1px solid var(--bd);border-radius:var(--rl);overflow:hidden;transition:transform .25s,border-color .25s,box-shadow .25s;box-shadow:var(--sh)}
+    .ep-card:hover{transform:translateY(-4px);border-color:var(--bd2);box-shadow:0 14px 44px rgba(0,0,0,.48)}
+    .ep-card--list{flex-direction:row}
+    @media(max-width:559px){.ep-card--list{flex-direction:column}}
 
-    /* ── Inline loader ── */
-    .ce-inline-loader { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 4rem; color: #64748b; font-size: 0.9rem; }
+    /* thumbnail */
+    .ep-card-thumb{position:relative;overflow:hidden;height:192px;flex-shrink:0}
+    .ep-card-thumb--list{width:210px;height:auto;min-height:148px}
+    @media(max-width:559px){.ep-card-thumb--list{width:100%;height:175px}}
+    .ep-card-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .4s}
+    .ep-card:hover .ep-card-img{transform:scale(1.05)}
+    .ep-card-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#181f2e,#0e1319);color:var(--tx3)}
+    .ep-card-shade{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.52) 0%,transparent 50%);pointer-events:none}
 
-    /* ── Full-page loader ── */
-    .ce-loader-screen { position: fixed; inset: 0; background: #0a0f1e; display: flex; align-items: center; justify-content: center; z-index: 9999; }
-    .ce-loader-content { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
-    .ce-loader-ring { width: 64px; height: 64px; border: 3px solid rgba(99,102,241,0.2); border-top-color: #818cf8; border-radius: 50%; animation: spin 0.8s linear infinite; position: relative; }
-    .ce-loader-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #818cf8; margin-top: 0; }
-    .ce-loader-text { color: #64748b; font-size: 0.875rem; margin-top: 0.5rem; }
-    .ce-loader-dots { display: flex; gap: 6px; }
-    .ce-loader-dots span { width: 6px; height: 6px; border-radius: 50%; background: #818cf8; animation: ceDot 1.2s ease-in-out infinite; }
-    .ce-loader-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .ce-loader-dots span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes ceDot { 0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* thumb badges */
+    .ep-tbadge{position:absolute;display:inline-flex;align-items:center;gap:4px;font-size:.63rem;font-weight:700;padding:3px 8px;border-radius:20px}
+    .ep-tbadge-tl{top:9px;left:9px}
+    .ep-tbadge-bl{bottom:9px;left:9px}
+    .ep-badge-enrolled{background:rgba(16,185,129,.82);color:#fff;backdrop-filter:blur(4px)}
+    .ep-badge-free{background:var(--blue);color:#fff}
 
-    /* ── Modals ── */
-    .ce-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; overflow-y: auto; }
-    .ce-modal { background: #0d1526; border: 1px solid rgba(99,102,241,0.2); border-radius: 24px; width: 100%; box-shadow: 0 25px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(99,102,241,0.1); display: flex; flex-direction: column; max-height: 90vh; animation: ceModalIn 0.3s cubic-bezier(.4,0,.2,1); }
-    .ce-modal-wide { max-width: 860px; }
-    .ce-modal-narrow { max-width: 480px; }
-    @keyframes ceModalIn { from { opacity: 0; transform: scale(0.95) translateY(20px); } to { opacity: 1; transform: none; } }
-    .ce-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.5rem 1.75rem; border-bottom: 1px solid rgba(99,102,241,0.15); position: sticky; top: 0; background: #0d1526; z-index: 10; border-radius: 24px 24px 0 0; }
-    .ce-modal-eyebrow { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #818cf8; margin-bottom: 4px; }
-    .ce-modal-title { font-family: 'Georgia', serif; font-size: 1.6rem; font-weight: 700; color: #f1f5f9; line-height: 1.2; }
-    .ce-modal-title-sm { font-size: 1.15rem; font-weight: 600; color: #f1f5f9; line-height: 1.3; }
-    .ce-modal-subtitle { font-size: 0.8rem; color: #64748b; margin-top: 3px; }
-    .ce-modal-close { width: 36px; height: 36px; border-radius: 10px; background: rgba(30,41,59,0.8); border: 1px solid rgba(99,102,241,0.2); color: #64748b; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
-    .ce-modal-close:hover { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: #fca5a5; }
-    .ce-modal-body { padding: 1.5rem 1.75rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.25rem; }
-    .ce-modal-footer { padding: 1.25rem 1.75rem; border-top: 1px solid rgba(99,102,241,0.15); position: sticky; bottom: 0; background: #0d1526; border-radius: 0 0 24px 24px; }
+    /* fav */
+    .ep-fav{position:absolute;top:9px;right:9px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.12);color:#fff;cursor:pointer;backdrop-filter:blur(4px);transition:all .2s}
+    .ep-fav:hover{background:var(--red);border-color:var(--red)}
+    .ep-fav--on{background:var(--red);border-color:var(--red)}
 
-    /* Modal hero */
-    .ce-modal-hero { border-radius: 16px; overflow: hidden; position: relative; height: 240px; }
-    .ce-modal-hero-img { width: 100%; height: 100%; object-fit: cover; }
-    .ce-modal-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(13,21,38,0.5), transparent); }
+    /* level badge */
+    .ep-level{display:inline-flex;align-items:center;font-size:.62rem;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:capitalize;letter-spacing:.02em}
+    .ep-badge-green{background:rgba(16,185,129,.14);color:#34d399;border:1px solid rgba(16,185,129,.3)}
+    .ep-badge-amber{background:rgba(245,158,11,.14);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+    .ep-badge-rose {background:rgba(239,68,68,.14); color:#f87171;border:1px solid rgba(239,68,68,.3)}
+    .ep-badge-slate{background:var(--s3);color:var(--tx2);border:1px solid var(--bd)}
 
-    /* Info grid */
-    .ce-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    @media (min-width: 640px) { .ce-info-grid { grid-template-columns: repeat(4, 1fr); } }
-    .ce-info-card { background: rgba(30,41,59,0.6); border: 1px solid rgba(99,102,241,0.12); border-radius: 12px; padding: 0.875rem; display: flex; align-items: flex-start; gap: 10px; }
-    .ce-info-icon { color: #818cf8; flex-shrink: 0; }
-    .ce-info-label { font-size: 0.68rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
-    .ce-info-val { font-size: 0.875rem; font-weight: 500; color: #e2e8f0; }
-    .ce-section-heading { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #818cf8; margin-bottom: 0.75rem; }
-    .ce-modal-section { display: flex; flex-direction: column; }
-    .ce-modal-desc { color: #94a3b8; font-size: 0.9rem; line-height: 1.7; }
+    /* card body */
+    .ep-card-body{display:flex;flex-direction:column;gap:.45rem;padding:.9rem;flex:1}
+    .ep-meta-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .ep-rating{display:inline-flex;align-items:center;gap:4px;font-size:.78rem;color:var(--tx)}
+    .ep-rating strong{font-weight:600}
+    .ep-star{color:#fbbf24;fill:#fbbf24}
+    .ep-sep{color:var(--tx3);font-size:.55rem}
+    .ep-students{display:inline-flex;align-items:center;gap:3px;font-size:.76rem}
+    .ep-card-title{font-size:.9rem;font-weight:600;color:var(--tx);line-height:1.45;cursor:pointer;transition:color .18s;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:0}
+    .ep-card-title:hover{color:var(--blue)}
+    .ep-card-sub{font-size:.76rem;color:var(--tx2)}
 
-    /* Pricing card */
-    .ce-pricing-card { background: rgba(30,41,59,0.6); border: 1px solid rgba(99,102,241,0.15); border-radius: 16px; padding: 1.125rem; }
-    .ce-pricing-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
-    .ce-pricing-label { color: #64748b; font-size: 0.85rem; }
-    .ce-pricing-val { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; }
-    .ce-pricing-discount-row { display: flex; align-items: flex-start; justify-content: space-between; padding-top: 0.625rem; border-top: 1px solid rgba(99,102,241,0.1); font-size: 0.8rem; color: #94a3b8; margin-top: 0.5rem; }
-    .ce-savings { color: #34d399; font-weight: 600; }
-    .ce-discount-expiry { font-size: 0.7rem; color: #64748b; margin-top: 2px; }
+    /* chips */
+    .ep-chips{display:flex;flex-wrap:wrap;gap:5px}
+    .ep-chip{display:inline-flex;align-items:center;gap:4px;font-size:.64rem;font-weight:600;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-bd);border-radius:20px;padding:3px 8px;white-space:nowrap}
 
-    /* Checklist */
-    .ce-checklist { display: flex; flex-direction: column; gap: 0.5rem; list-style: none; padding: 0; margin: 0; }
-    .ce-checklist-item { display: flex; align-items: flex-start; gap: 8px; font-size: 0.875rem; color: #94a3b8; }
-    .ce-check-icon { color: #34d399; flex-shrink: 0; margin-top: 1px; }
-    .ce-award-icon { color: #818cf8; flex-shrink: 0; margin-top: 1px; }
+    /* progress */
+    .ep-progress{display:flex;flex-direction:column;gap:4px}
+    .ep-progress-labels{display:flex;justify-content:space-between;font-size:.73rem;color:var(--tx2)}
+    .ep-progress-labels strong{color:var(--tx);font-weight:600}
+    .ep-progress-track{height:5px;border-radius:3px;background:var(--s3);overflow:hidden}
+    .ep-progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--blue),#60a5fa);transition:width .5s}
 
-    /* Files */
-    .ce-files-group { margin-bottom: 1rem; }
-    .ce-files-category { font-size: 0.8rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.5rem; }
-    .ce-file-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(30,41,59,0.6); border: 1px solid rgba(99,102,241,0.12); border-radius: 10px; color: #94a3b8; font-size: 0.85rem; text-decoration: none; transition: all 0.2s; gap: 8px; }
-    .ce-file-item:hover { background: rgba(99,102,241,0.1); border-color: rgba(99,102,241,0.3); color: #e2e8f0; }
-    .ce-download-icon { color: #64748b; flex-shrink: 0; transition: color 0.2s; }
-    .ce-file-item:hover .ce-download-icon { color: #818cf8; }
+    /* price */
+    .ep-price{font-size:1.15rem;font-weight:700;color:var(--tx);margin-top:auto}
 
-    /* Price breakdown (enrollment modal) */
-    .ce-price-breakdown { background: rgba(30,41,59,0.6); border: 1px solid rgba(99,102,241,0.15); border-radius: 16px; padding: 1.125rem; }
-    .ce-breakdown-rows { display: flex; flex-direction: column; gap: 0.625rem; margin-bottom: 0.875rem; padding-bottom: 0.875rem; border-bottom: 1px solid rgba(99,102,241,0.12); }
-    .ce-breakdown-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; color: #94a3b8; }
-    .ce-breakdown-val { color: #e2e8f0; font-weight: 500; }
-    .ce-savings-total-row { padding-top: 0.625rem; border-top: 1px solid rgba(16,185,129,0.2); }
-    .ce-savings-total { font-size: 0.95rem; }
-    .ce-final-price-row { display: flex; align-items: center; justify-content: space-between; }
-    .ce-final-price { font-size: 1.75rem; font-weight: 700; color: #818cf8; }
-    .ce-coupon-code { background: rgba(99,102,241,0.15); color: #a5b4fc; font-family: monospace; padding: 1px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 4px; }
+    /* card actions */
+    .ep-card-actions{display:flex;gap:.45rem;margin-top:auto}
 
-    /* Success notice */
-    .ce-success-notice { display: flex; align-items: flex-start; gap: 10px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); border-radius: 12px; padding: 0.875rem 1rem; color: #6ee7b7; font-size: 0.85rem; }
+    /* ─── Buttons ─── */
+    .ep-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;border:none;border-radius:8px;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .2s;padding:8px 13px;line-height:1;white-space:nowrap;font-family:inherit}
+    .ep-btn:disabled{opacity:.48;cursor:not-allowed;transform:none!important}
 
-    /* Coupon section */
-    .ce-coupon-section { display: flex; flex-direction: column; gap: 0; }
-    .ce-applied-count { margin-left: 8px; font-size: 0.7rem; font-weight: 700; color: #818cf8; background: rgba(99,102,241,0.15); padding: 1px 7px; border-radius: 20px; }
-    .ce-applied-coupon { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 10px; padding: 10px 12px; }
-    .ce-coupon-applied-code { font-size: 0.85rem; color: #6ee7b7; font-weight: 600; }
-    .ce-coupon-saving { color: rgba(110,231,183,0.75); font-weight: 400; font-size: 0.8em; margin-left: 6px; font-family: inherit; }
-    .ce-remove-coupon { padding: 2px; color: #64748b; background: transparent; border: none; cursor: pointer; transition: color 0.2s; flex-shrink: 0; }
-    .ce-remove-coupon:hover:not(:disabled) { color: #f87171; }
-    .ce-coupon-input-row { display: flex; gap: 8px; }
-    .ce-coupon-input { width: 100%; background: rgba(30,41,59,0.8); border: 1px solid rgba(99,102,241,0.2); color: #e2e8f0; border-radius: 10px; padding: 10px 36px 10px 12px; font-family: monospace; font-size: 0.875rem; outline: none; transition: all 0.2s; }
-    .ce-coupon-input:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
-    .ce-coupon-input-error { border-color: rgba(239,68,68,0.5); }
-    .ce-coupon-input-error:focus { box-shadow: 0 0 0 3px rgba(239,68,68,0.15); }
-    .ce-coupon-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #475569; background: transparent; border: none; cursor: pointer; }
-    .ce-coupon-error { display: flex; align-items: center; gap: 6px; color: #f87171; font-size: 0.8rem; margin-top: 6px; }
-    .ce-coupon-hint { font-size: 0.75rem; color: #475569; display: flex; align-items: center; gap: 5px; margin-top: 5px; }
-    .ce-btn-apply { display: flex; align-items: center; gap: 5px; padding: 10px 14px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; border: none; border-radius: 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-    .ce-btn-apply:disabled { background: rgba(30,41,59,0.8); opacity: 0.5; cursor: not-allowed; }
+    /* ghost */
+    .ep-btn--ghost{flex:1;background:var(--s2);border:1px solid var(--bd);color:var(--tx2)}
+    .ep-btn--ghost:hover:not(:disabled){border-color:var(--bd2);color:var(--tx);background:var(--s3)}
 
-    /* Modal actions */
-    .ce-modal-action-row { display: flex; gap: 10px; padding-top: 0.5rem; }
-    .ce-btn-cancel { flex: 1; padding: 13px; background: rgba(30,41,59,0.8); border: 1px solid rgba(99,102,241,0.2); color: #94a3b8; border-radius: 12px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
-    .ce-btn-cancel:hover:not(:disabled) { background: rgba(99,102,241,0.08); color: #c7d2fe; }
-    .ce-btn-pay { flex: 2; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; border: none; border-radius: 12px; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 20px rgba(245,158,11,0.25); }
-    .ce-btn-pay:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(245,158,11,0.4); }
-    .ce-btn-pay:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    .ce-secure-notice { text-align: center; font-size: 0.72rem; color: #475569; margin-top: 0.5rem; }
+    /* primary — blue, confident */
+    .ep-btn--primary{flex:1;background:var(--blue);color:#fff;box-shadow:0 2px 10px rgba(37,99,235,.28)}
+    .ep-btn--primary:hover:not(:disabled){background:var(--blue-h);transform:translateY(-1px);box-shadow:0 4px 16px rgba(37,99,235,.38)}
 
-    /* ── Responsive tweaks ── */
-    @media (max-width: 640px) {
-      .ce-hero { padding: 1.5rem 1.25rem 0; border-radius: 16px; }
-      .ce-hero-content { flex-direction: column; }
-      .ce-hero-stats { align-self: stretch; justify-content: center; }
-      .ce-tab-bar { flex-wrap: wrap; gap: 0.75rem; }
-      .ce-modal { border-radius: 20px; }
-      .ce-modal-header { padding: 1.25rem; }
-      .ce-modal-body { padding: 1.25rem; }
-      .ce-modal-footer { padding: 1.25rem; }
-      .ce-info-grid { grid-template-columns: 1fr 1fr; }
+    /* enroll — teal, warm action */
+    .ep-btn--enroll{flex:1;background:var(--teal);color:#fff;box-shadow:0 2px 10px var(--teal-sh)}
+    .ep-btn--enroll:hover:not(:disabled){background:var(--teal-h);transform:translateY(-1px);box-shadow:0 4px 16px var(--teal-sh)}
+
+    /* pay — violet, premium trust */
+    .ep-btn--pay{flex:2;background:var(--violet);color:#fff;border-radius:10px;padding:12px 18px;font-size:.88rem;box-shadow:0 2px 14px var(--violet-sh)}
+    .ep-btn--pay:hover:not(:disabled){background:var(--violet-h);transform:translateY(-1px);box-shadow:0 5px 22px var(--violet-sh)}
+
+    /* apply coupon */
+    .ep-btn--apply{background:var(--s3);border:1px solid var(--bd2);color:var(--tx);border-radius:8px;padding:9px 13px;font-size:.78rem}
+    .ep-btn--apply:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+
+    /* cancel */
+    .ep-btn--cancel{flex:1;border-radius:10px;padding:12px}
+
+    /* full */
+    .ep-btn--full{width:100%;flex:initial;border-radius:10px;padding:12px 18px;font-size:.88rem}
+
+    /* ─── Empty state ─── */
+    .ep-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;text-align:center}
+    .ep-empty-icon{width:68px;height:68px;border-radius:50%;background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx3);margin-bottom:1.125rem}
+    .ep-empty-h{font-size:1.05rem;font-weight:600;color:var(--tx);margin-bottom:.4rem}
+    .ep-empty-p{font-size:.85rem;color:var(--tx2);max-width:340px;line-height:1.6}
+
+    /* inline loader */
+    .ep-iloader{display:flex;align-items:center;justify-content:center;gap:10px;padding:3.5rem;color:var(--tx2);font-size:.85rem}
+
+    /* full-screen loader */
+    .ep-fullload{position:fixed;inset:0;background:var(--s0);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.875rem;z-index:9999}
+    .ep-fullload-ring{width:44px;height:44px;border:3px solid var(--bd);border-top-color:var(--blue);border-radius:50%;animation:ep-spin .8s linear infinite}
+    .ep-fullload-text{font-size:.82rem;color:var(--tx2)}
+
+    /* ─── Modals ─── */
+    .ep-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:50;padding:1rem;overflow-y:auto}
+    .ep-modal{background:var(--s1);border:1px solid var(--bd2);border-radius:var(--rxl);width:100%;box-shadow:var(--sh-lg);display:flex;flex-direction:column;max-height:90vh;animation:ep-modal-in .24s ease}
+    .ep-modal--wide{max-width:800px}
+    .ep-modal--narrow{max-width:450px}
+    @keyframes ep-modal-in{from{opacity:0;transform:scale(.97) translateY(14px)}to{opacity:1;transform:none}}
+
+    .ep-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.875rem;padding:1.25rem 1.375rem;border-bottom:1px solid var(--bd);background:var(--s1);border-radius:var(--rxl) var(--rxl) 0 0;position:sticky;top:0;z-index:10}
+    .ep-modal-head-info{min-width:0}
+    .ep-eyebrow{font-size:.65rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);margin-bottom:4px}
+    .ep-modal-h{font-size:1.25rem;font-weight:700;color:var(--tx);line-height:1.25;word-break:break-word}
+    .ep-modal-h-sm{font-size:1rem;font-weight:600;color:var(--tx);line-height:1.35;word-break:break-word}
+    .ep-modal-x{width:32px;height:32px;flex-shrink:0;border-radius:8px;background:var(--s2);border:1px solid var(--bd);color:var(--tx2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s}
+    .ep-modal-x:hover:not(:disabled){background:var(--red-bg);border-color:var(--red-bd);color:#fca5a5}
+    .ep-modal-x:disabled{opacity:.4;cursor:not-allowed}
+
+    .ep-modal-body{padding:1.25rem 1.375rem;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:1rem}
+    .ep-modal-foot{padding:1rem 1.375rem;border-top:1px solid var(--bd);background:var(--s1);border-radius:0 0 var(--rxl) var(--rxl)}
+
+    .ep-modal-hero{border-radius:var(--r);overflow:hidden;height:200px}
+    .ep-modal-hero-img{width:100%;height:100%;object-fit:cover;display:block}
+    .ep-modal-desc{font-size:.855rem;color:var(--tx2);line-height:1.7}
+
+    /* section label */
+    .ep-slabel{font-size:.67rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--blue);margin-bottom:.55rem;display:block}
+
+    /* tiles */
+    .ep-tile-grid{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}
+    @media(min-width:520px){.ep-tile-grid{grid-template-columns:repeat(4,1fr)}}
+    .ep-tile{display:flex;align-items:flex-start;gap:8px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:.7rem}
+    .ep-tile-icon{color:var(--blue);flex-shrink:0;margin-top:1px}
+    .ep-tile-label{font-size:.64rem;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+    .ep-tile-val{font-size:.84rem;font-weight:500;color:var(--tx)}
+
+    /* price panel */
+    .ep-ppanel{background:var(--s2);border:1px solid var(--bd);border-radius:var(--rl);padding:.9rem}
+    .ep-ppanel-mainrow{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.6rem;padding-bottom:.6rem;border-bottom:1px solid var(--bd)}
+    .ep-ppanel-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;font-size:.82rem;margin-top:.45rem}
+    .ep-price-hero{font-size:1.55rem;font-weight:700;color:var(--tx)}
+
+    /* breakdown */
+    .ep-breakdown{display:flex;flex-direction:column;gap:.42rem;padding:.55rem 0 .65rem;border-bottom:1px solid var(--bd)}
+    .ep-brow{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;font-size:.82rem}
+    .ep-brow-val{color:var(--tx);font-weight:500}
+    .ep-brow--savings{padding-top:.42rem;border-top:1px solid rgba(52,211,153,.15)}
+    .ep-final-row{display:flex;align-items:center;justify-content:space-between;padding-top:.65rem}
+    .ep-final-label{font-size:.9rem;font-weight:600;color:var(--tx)}
+    .ep-final-val{font-size:1.6rem;font-weight:700;color:var(--blue)}
+
+    /* code badge */
+    .ep-code{font-family:monospace;font-size:.78em;background:var(--blue-bg);color:var(--blue);padding:1px 5px;border-radius:4px}
+
+    /* checklist */
+    .ep-list-items{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.45rem}
+    .ep-list-item{display:flex;align-items:flex-start;gap:7px;font-size:.855rem;color:var(--tx2);line-height:1.5}
+
+    /* files */
+    .ep-file-grp{margin-bottom:.75rem}
+    .ep-file-grp-label{font-size:.78rem;font-weight:600;color:var(--tx);margin-bottom:.35rem}
+    .ep-file-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 11px;background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);text-decoration:none;color:var(--tx2);font-size:.83rem;transition:all .18s;margin-bottom:5px}
+    .ep-file-row:hover{border-color:var(--bd2);color:var(--tx)}
+    .ep-file-left{display:flex;align-items:center;gap:7px;min-width:0}
+    .ep-dl-icon{color:var(--tx3);flex-shrink:0;transition:color .18s}
+    .ep-file-row:hover .ep-dl-icon{color:var(--blue)}
+
+    /* coupon */
+    .ep-cpn-header{display:flex;align-items:center;gap:7px;margin-bottom:.55rem}
+    .ep-applied-badge{margin-left:7px;background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue);font-size:.65rem;font-weight:700;padding:1px 7px;border-radius:20px}
+    .ep-applied-list{display:flex;flex-direction:column;gap:5px;margin-bottom:.5rem}
+    .ep-applied-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:var(--r);padding:8px 11px}
+    .ep-applied-left{display:flex;align-items:flex-start;gap:7px;min-width:0}
+    .ep-remove-btn{background:transparent;border:none;color:var(--tx3);cursor:pointer;padding:2px;border-radius:4px;flex-shrink:0;transition:color .15s}
+    .ep-remove-btn:hover:not(:disabled){color:#f87171}
+    .ep-remove-btn:disabled{opacity:.4;cursor:not-allowed}
+    .ep-cpn-row{display:flex;gap:7px;align-items:stretch}
+    .ep-cpn-input-wrap{position:relative;flex:1}
+    .ep-cpn-input{width:100%;box-sizing:border-box;background:var(--s2);border:1px solid var(--bd);color:var(--tx);border-radius:8px;padding:9px 28px 9px 11px;font-family:monospace;font-size:.84rem;outline:none;transition:border-color .18s,box-shadow .18s}
+    .ep-cpn-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg)}
+    .ep-cpn-input--err{border-color:var(--red)}
+    .ep-cpn-input--err:focus{box-shadow:0 0 0 3px var(--red-bg)}
+    .ep-cpn-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--tx3);cursor:pointer;padding:3px}
+    .ep-cpn-error{display:flex;align-items:center;gap:5px;color:#f87171;font-size:.76rem;margin-top:5px}
+    .ep-cpn-hint{display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--tx3);margin-top:4px}
+
+    /* CTA row */
+    .ep-cta-row{display:flex;gap:.55rem}
+    .ep-secure{display:flex;align-items:center;justify-content:center;gap:5px;font-size:.7rem;color:var(--tx3);margin-top:.25rem}
+
+    /* ─── Responsive breakpoints ─── */
+    @media(max-width:479px){
+      .ep-header{flex-direction:column;gap:.625rem}
+      .ep-tab-bar{flex-direction:column;align-items:flex-start;border-bottom:none}
+      .ep-tabs{border-bottom:1px solid var(--bd);width:100%}
+      .ep-view-toggle{align-self:flex-end}
+      .ep-modal-head{padding:.9rem 1rem}
+      .ep-modal-body{padding:.9rem 1rem}
+      .ep-modal-foot{padding:.9rem 1rem}
+      .ep-modal--wide,.ep-modal--narrow{max-height:96vh;border-radius:var(--rl)}
+      .ep-tile-grid{grid-template-columns:1fr 1fr}
+      .ep-cta-row{flex-direction:column}
+      .ep-btn--cancel,.ep-btn--pay{flex:initial;width:100%}
+      .ep-card-actions{flex-direction:column}
+      .ep-btn--ghost,.ep-btn--primary,.ep-btn--enroll{flex:initial;width:100%}
+    }
+
+    @media(max-width:360px){
+      .ep-tab{padding:.55rem .7rem;font-size:.78rem}
+      .ep-page-h{font-size:1.2rem}
     }
   `}</style>
 );
