@@ -123,6 +123,37 @@ function sanitizeForFirestore(value: any): any {
   return value;
 }
 
+// ==================== TIMESTAMP HELPER ====================
+// Safely converts any Firestore timestamp variant to a JS Date.
+// Handles: Firestore Timestamp, plain {seconds,nanoseconds} objects,
+// already-Date values, ISO strings, and Unix epoch numbers.
+// Returns undefined (not null) so optional Date fields stay optional.
+
+function safeToDate(value: any): Date | undefined {
+  if (!value) return undefined;
+
+  // Already a real JS Date
+  if (value instanceof Date) return isNaN(value.getTime()) ? undefined : value;
+
+  // Firestore Timestamp instance (has .toDate())
+  if (typeof value.toDate === 'function') {
+    try { return value.toDate(); } catch { return undefined; }
+  }
+
+  // Plain Firestore-like object: { seconds: number, nanoseconds: number }
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000);
+  }
+
+  // ISO string or numeric timestamp
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+
+  return undefined;
+}
+
 // ==================== ERROR DISPLAY HELPER ====================
 
 function displayError(error: string, details?: string): void {
@@ -628,9 +659,9 @@ export const paymentService = {
         return {
           id: docSnap.id,
           ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate(),
-          completedAt: data.completedAt?.toDate()
+          createdAt: safeToDate(data.createdAt) ?? new Date(),
+          updatedAt: safeToDate(data.updatedAt),
+          completedAt: safeToDate(data.completedAt)
         } as Transaction;
       }
 
@@ -687,9 +718,9 @@ export const paymentService = {
         return {
           id: docSnap.id,
           ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate(),
-          completedAt: data.completedAt?.toDate()
+          createdAt: safeToDate(data.createdAt) ?? new Date(),
+          updatedAt: safeToDate(data.updatedAt),
+          completedAt: safeToDate(data.completedAt)
         } as Transaction;
       });
     } catch (error: any) {
@@ -717,9 +748,9 @@ export const paymentService = {
         return {
           id: docSnap.id,
           ...data,
-          createdAt: data.createdAt?.toDate() || new Date(),
-          updatedAt: data.updatedAt?.toDate(),
-          completedAt: data.completedAt?.toDate()
+          createdAt: safeToDate(data.createdAt) ?? new Date(),
+          updatedAt: safeToDate(data.updatedAt),
+          completedAt: safeToDate(data.completedAt)
         } as Transaction;
       });
     } catch (error: any) {
