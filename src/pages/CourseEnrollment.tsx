@@ -578,6 +578,7 @@ const CourseEnrollment = () => {
   studentEmail: user.email,
   studentPhone: (user as any).phoneNumber || '',
   studentSurname: (user as any).surname || '',
+  studentUserId: (user as any).userId || '',
   calculation,
 });
 
@@ -603,6 +604,7 @@ const CourseEnrollment = () => {
   studentEmail: user.email,
   studentPhone: (user as any).phoneNumber || '',
   studentSurname: (user as any).surname || '',
+  studentUserId: (user as any).userId || '',
   calculation,
 });
 
