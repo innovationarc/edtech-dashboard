@@ -47,7 +47,7 @@ function generateReturnToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// ==================== FIREBASE ADMIN (FIXED) ====================
+// ==================== FIREBASE ADMIN ====================
 
 function initializeFirebase(): admin.app.App {
   if (admin.apps && admin.apps.length > 0) {
@@ -73,42 +73,23 @@ function initializeFirebase(): admin.app.App {
     throw new Error(`Missing environment variables: ${missing.join(', ')}`);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // CRITICAL FIX: Private key parsing
-  // ─────────────────────────────────────────────────────────────────────────
-  // The private key from environment variables can be malformed in several ways:
-  // 1. Literal "\n" strings instead of actual newlines
-  // 2. Extra quotes around the key
-  // 3. Missing header/footer
-  // 4. Base64 encoded (rare but possible)
-  
   try {
-    // Step 1: Remove any surrounding quotes
     privateKey = privateKey.trim().replace(/^["']|["']$/g, '');
-    
-    // Step 2: Replace literal \n with actual newlines
     privateKey = privateKey.replace(/\\n/g, '\n');
-    
-    // Step 3: Validate key format
+
     if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
-      console.error('❌ Private key missing BEGIN header');
       throw new Error('FIREBASE_PRIVATE_KEY must be a valid PEM format key starting with -----BEGIN PRIVATE KEY-----');
     }
     if (!privateKey.includes('-----END PRIVATE KEY-----')) {
-      console.error('❌ Private key missing END footer');
       throw new Error('FIREBASE_PRIVATE_KEY must be a valid PEM format key ending with -----END PRIVATE KEY-----');
     }
 
     console.log('✅ Private key format validated');
-    console.log('  - First 50 chars:', privateKey.substring(0, 50));
-    console.log('  - Has newlines:', privateKey.includes('\n') ? '✓' : '✗');
-    
   } catch (e: any) {
     console.error('❌ Private key validation failed:', e.message);
     throw e;
   }
 
-  // Initialize Firebase Admin
   try {
     const app = admin.initializeApp({
       credential: admin.credential.cert({
@@ -120,34 +101,7 @@ function initializeFirebase(): admin.app.App {
     console.log('✅ Firebase Admin initialized successfully');
     return app;
   } catch (e: any) {
-    console.error('❌ Firebase Admin initialization failed');
-    console.error('Error:', e.message);
-    console.error('Stack:', e.stack);
-    
-    // Provide helpful error messages
-    if (e.message.includes('DECODER') || e.message.includes('unsupported')) {
-      console.error('');
-      console.error('═══════════════════════════════════════════════════════════════');
-      console.error('PRIVATE KEY FORMAT ERROR');
-      console.error('═══════════════════════════════════════════════════════════════');
-      console.error('Your FIREBASE_PRIVATE_KEY is malformed. Common fixes:');
-      console.error('');
-      console.error('1. In Vercel/Railway/etc environment variables:');
-      console.error('   - DO NOT add extra quotes');
-      console.error('   - Copy the entire key including BEGIN/END lines');
-      console.error('   - The platform will handle escaping automatically');
-      console.error('');
-      console.error('2. If setting via CLI:');
-      console.error('   vercel env add FIREBASE_PRIVATE_KEY');
-      console.error('   (paste the key when prompted, INCLUDING the BEGIN/END lines)');
-      console.error('');
-      console.error('3. The key should look like:');
-      console.error('   -----BEGIN PRIVATE KEY-----');
-      console.error('   MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSj...');
-      console.error('   -----END PRIVATE KEY-----');
-      console.error('═══════════════════════════════════════════════════════════════');
-    }
-    
+    console.error('❌ Firebase Admin initialization failed:', e.message);
     throw e;
   }
 }
@@ -165,7 +119,7 @@ try {
 
 function getFirestore(): admin.firestore.Firestore {
   if (_db) return _db;
-  
+
   try {
     initializeFirebase();
     _db = admin.app().firestore();
@@ -194,6 +148,18 @@ const SSL = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX: Use WHATWG URL API to build URLs — avoids url.parse() deprecation warning
+// ─────────────────────────────────────────────────────────────────────────────
+function buildSSLValidationUrl(val_id: string): string {
+  const url = new URL(SSL.validationUrl);
+  url.searchParams.set('val_id', val_id);
+  url.searchParams.set('store_id', SSL.storeId);
+  url.searchParams.set('store_passwd', SSL.storePassword);
+  url.searchParams.set('format', 'json');
+  return url.toString();
+}
+
 function getBaseUrl(req: VercelRequest): string {
   const host = req.headers.host || 'localhost:3000';
   return `${host.includes('localhost') ? 'http' : 'https'}://${host}`;
@@ -218,25 +184,17 @@ async function getTransaction(transactionId: string): Promise<any | null> {
       .where('transactionId', '==', transactionId)
       .limit(1)
       .get();
-    
+
     if (snap.empty) {
       console.log('❌ Transaction not found:', transactionId);
       return null;
     }
-    
+
     const d = snap.docs[0];
     return { id: d.id, ref: d.ref, ...d.data() };
   } catch (e: any) {
     console.error('❌ getTransaction error:', e.message);
     console.error('Stack:', e.stack);
-    
-    // If this is the decoder error, provide specific guidance
-    if (e.message.includes('DECODER') || e.message.includes('unsupported')) {
-      console.error('');
-      console.error('⚠️  This is the FIREBASE_PRIVATE_KEY configuration error.');
-      console.error('⚠️  Please check the initialization logs above for fix instructions.');
-    }
-    
     return null;
   }
 }
@@ -248,12 +206,12 @@ async function updateTransaction(transactionId: string, updates: any): Promise<b
       console.error('❌ updateTransaction: not found:', transactionId);
       return false;
     }
-    
+
     await txn.ref.update(sanitizeForFirestore({
       ...updates,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }));
-    
+
     console.log('✅ Transaction updated:', transactionId, '| status:', updates.status || '-');
     return true;
   } catch (e: any) {
@@ -297,26 +255,42 @@ async function createEnrollment(transaction: any): Promise<EnrollmentResult> {
   if (!courseId || !studentId || !transactionId) {
     const msg = `Missing required fields: courseId=${courseId} studentId=${studentId} transactionId=${transactionId}`;
     console.error(`${TAG} ❌ ${msg}`);
-    console.error(`${TAG} Full transaction keys:`, Object.keys(transaction));
     return { success: false, error: msg };
   }
 
   const db = getFirestore();
 
-  // Idempotency check
+  // Idempotency check by transactionId
   try {
     const existing = await db
       .collection('enrollments')
       .where('transactionId', '==', transactionId)
       .limit(1)
       .get();
-    
+
     if (!existing.empty) {
       console.log(`${TAG} Already exists (transactionId):`, existing.docs[0].id);
       return { success: true, enrollmentId: existing.docs[0].id, alreadyExisted: true };
     }
   } catch (idxErr: any) {
-    console.error(`${TAG} Idempotency check error (non-fatal, will continue):`, idxErr.message);
+    console.error(`${TAG} Idempotency check error (non-fatal):`, idxErr.message);
+  }
+
+  // Secondary idempotency check by studentId+courseId
+  try {
+    const existingByCourse = await db
+      .collection('enrollments')
+      .where('studentId', '==', studentId)
+      .where('courseId', '==', courseId)
+      .limit(1)
+      .get();
+
+    if (!existingByCourse.empty) {
+      console.log(`${TAG} Already exists (studentId+courseId):`, existingByCourse.docs[0].id);
+      return { success: true, enrollmentId: existingByCourse.docs[0].id, alreadyExisted: true };
+    }
+  } catch (idxErr: any) {
+    console.error(`${TAG} Secondary idempotency check error (non-fatal):`, idxErr.message);
   }
 
   // Parse applied coupons
@@ -357,18 +331,13 @@ async function createEnrollment(transaction: any): Promise<EnrollmentResult> {
   });
 
   console.log(`${TAG} Writing to Firestore...`);
-  console.log(`${TAG} Data:`, JSON.stringify(enrollmentData, null, 2));
 
-  // Write to Firestore
   let enrollmentRef: admin.firestore.DocumentReference;
   try {
     enrollmentRef = await db.collection('enrollments').add(enrollmentData);
     console.log(`${TAG} ✅ WRITTEN: enrollments/${enrollmentRef.id}`);
   } catch (writeErr: any) {
-    console.error(`${TAG} ❌ FIRESTORE WRITE FAILED`);
-    console.error(`${TAG} Error message:`, writeErr.message);
-    console.error(`${TAG} Error code:`, writeErr.code);
-    console.error(`${TAG} Stack:`, writeErr.stack);
+    console.error(`${TAG} ❌ FIRESTORE WRITE FAILED:`, writeErr.message);
     return { success: false, error: `Write failed: ${writeErr.message} (code: ${writeErr.code})` };
   }
 
@@ -423,7 +392,7 @@ async function addCourseToLibrary(courseId: string, studentId: string, fallbackT
       .where('type', '==', 'course')
       .limit(1)
       .get();
-    
+
     if (!existing.empty) {
       console.log('[addCourseToLibrary] Already in library');
       return;
@@ -460,11 +429,44 @@ async function addCourseToLibrary(courseId: string, studentId: string, fallbackT
     enrolledStudentId: studentId,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   }));
-  
+
   console.log('[addCourseToLibrary] ✅ Added');
 }
 
+// ==================== SSL VALIDATION HELPER ====================
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX: Centralized SSL validation using WHATWG URL (no url.parse deprecation).
+// Returns { valid: boolean, data: any, error?: string }
+// ─────────────────────────────────────────────────────────────────────────────
+async function validateWithSSL(val_id: string): Promise<{ valid: boolean; data: any; error?: string }> {
+  const TAG = '[validateWithSSL]';
+  try {
+    const validationUrl = buildSSLValidationUrl(val_id);
+    console.log(`${TAG} Calling SSL validation (val_id=${val_id})`);
+
+    const valRes = await axios.get(validationUrl, {
+      timeout: 15000,
+      // Explicitly do NOT pass params here since they're already in the URL
+      // This avoids axios using url.parse() internally on a params object
+    });
+
+    const data = valRes.data;
+    console.log(`${TAG} Response status:`, data?.status);
+
+    const isValid = data?.status === 'VALID' || data?.status === 'VALIDATED';
+    return { valid: isValid, data };
+  } catch (e: any) {
+    console.error(`${TAG} ❌ SSL validation request failed:`, e.message);
+    return { valid: false, data: null, error: e.message };
+  }
+}
+
 // ==================== CALLBACK HANDLER ====================
+// ─────────────────────────────────────────────────────────────────────────────
+// KEY FIX: If SSL validation fails (500/network error), check if the transaction
+// was already marked successful (e.g. by IPN) and route accordingly.
+// This prevents the "payment failed" screen from appearing after successful payment.
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function handleCallback(req: VercelRequest, res: VercelResponse) {
   const TAG = '[handleCallback]';
@@ -473,7 +475,6 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
   console.log(`${TAG} RECEIVED`);
   console.log('Timestamp:', new Date().toISOString());
   console.log('Method:', req.method);
-  console.log('Content-Type:', req.headers['content-type']);
   console.log('Body:', JSON.stringify(req.body || {}, null, 2));
   console.log('Query:', JSON.stringify(req.query || {}, null, 2));
   console.log('='.repeat(80));
@@ -504,33 +505,93 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
       return res.redirect(302, `${RETURN_PAGE}?status=${status.toLowerCase()}&tran_id=${tran_id}`);
     }
 
-    // Success
+    // Success path — SSLCOMMERZ sends VALID or VALIDATED
     if (status === 'VALID' || status === 'VALIDATED') {
       if (!val_id) {
         console.error(`${TAG} ❌ val_id missing on VALID status`);
+        // Check if transaction already succeeded (via IPN)
+        const existingTxn = await getTransaction(tran_id);
+        if (existingTxn?.status === 'success') {
+          console.log(`${TAG} ✅ Transaction already success (no val_id, IPN processed it)`);
+          return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}`);
+        }
         return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
       }
 
-      // Validate with SSLCOMMERZ
-      let valData: any;
-      try {
-        const valRes = await axios.get(SSL.validationUrl, {
-          params: {
-            val_id,
-            store_id: SSL.storeId,
-            store_passwd: SSL.storePassword,
-            format: 'json'
-          },
-          timeout: 15000,
+      // ── FIX: Check if transaction is ALREADY marked success by IPN ────────
+      // IPN and callback can race. If IPN already processed this transaction,
+      // we don't need to validate again — just ensure enrollment exists and redirect.
+      const existingTxn = await getTransaction(tran_id);
+      if (existingTxn?.status === 'success') {
+        console.log(`${TAG} ✅ Transaction already marked success (IPN processed it), ensuring enrollment...`);
+
+        // Ensure enrollment exists (idempotent)
+        const enrollResult = await createEnrollment({
+          ...existingTxn,
+          paymentMethod: card_type || existingTxn.paymentMethod,
+          validationId: val_id || existingTxn.validationId,
+          bankTransactionId: bank_tran_id || existingTxn.bankTransactionId,
         });
-        valData = valRes.data;
-        console.log(`${TAG} SSL validation response status:`, valData.status);
-      } catch (e: any) {
-        console.error(`${TAG} ❌ SSL validation request failed:`, e.message);
+        console.log(`${TAG} Enrollment result (already-success path):`, enrollResult);
+
+        // Ensure return token exists
+        if (!existingTxn.returnToken) {
+          try {
+            await existingTxn.ref.update(sanitizeForFirestore({
+              returnToken: generateReturnToken(),
+              returnTokenIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }));
+          } catch (e: any) {
+            console.warn(`${TAG} Return token write failed (non-fatal):`, e.message);
+          }
+        }
+
+        return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}`);
+      }
+
+      // ── SSL Validation ────────────────────────────────────────────────────
+      const { valid, data: valData, error: valError } = await validateWithSSL(val_id);
+
+      if (valError || !valData) {
+        // ── FIX: SSL validation request itself failed (network/500 error) ──
+        // Before giving up, re-check transaction status — IPN might have
+        // already processed it successfully between our request attempts.
+        console.error(`${TAG} SSL validation failed:`, valError);
+
+        const recheckTxn = await getTransaction(tran_id);
+        if (recheckTxn?.status === 'success') {
+          console.log(`${TAG} ✅ Transaction success after SSL error recheck — redirecting as success`);
+
+          const enrollResult = await createEnrollment({
+            ...recheckTxn,
+            paymentMethod: card_type || recheckTxn.paymentMethod,
+            validationId: val_id,
+            bankTransactionId: bank_tran_id,
+          });
+          console.log(`${TAG} Enrollment result (post-SSL-error path):`, enrollResult);
+
+          if (!recheckTxn.returnToken) {
+            try {
+              await recheckTxn.ref.update(sanitizeForFirestore({
+                returnToken: generateReturnToken(),
+                returnTokenIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
+              }));
+            } catch (e: any) {
+              console.warn(`${TAG} Return token write failed (non-fatal):`, e.message);
+            }
+          }
+
+          return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}`);
+        }
+
+        // Transaction truly failed or unknown — mark as failed and redirect
+        // Use validation_error status so frontend can show appropriate message
+        // but do NOT create enrollment
+        await updateTransaction(tran_id, { status: 'failed', failReason: `SSL validation error: ${valError}` });
         return res.redirect(302, `${RETURN_PAGE}?status=validation_error&tran_id=${tran_id}`);
       }
 
-      if (valData.status === 'VALID' || valData.status === 'VALIDATED') {
+      if (valid) {
         // High risk — manual review
         if (risk_level === '1') {
           await updateTransaction(tran_id, {
@@ -565,14 +626,6 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
           return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
         }
 
-        console.log(`${TAG} Transaction data:`, {
-          productType: transaction.productType,
-          productId: transaction.productId,
-          userId: transaction.userId,
-          amount: transaction.amount,
-          metadataKeys: transaction.metadata ? Object.keys(transaction.metadata) : 'NO METADATA',
-        });
-
         // Step 3: Create enrollment
         console.log(`${TAG} Step 3: Creating enrollment...`);
         const enrollResult = await createEnrollment({
@@ -584,6 +637,9 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
 
         if (!enrollResult.success) {
           console.error(`${TAG} ❌ ENROLLMENT FAILED: ${enrollResult.error}`);
+          // Even if enrollment fails, transaction is success — redirect with tran_id
+          // The frontend verifyPaymentAndGetEnrollment will poll and find the enrollment
+          // or the IPN will create it. Don't show failed screen for a paid transaction.
           return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}&enrollment_error=1`);
         }
 
@@ -605,7 +661,16 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
         return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}`);
 
       } else {
-        console.error(`${TAG} SSL says payment INVALID: ${valData.status}`);
+        // SSL says INVALID
+        console.error(`${TAG} SSL says payment INVALID: ${valData?.status}`);
+
+        // FIX: Before marking failed, check if IPN already set it to success
+        const recheckTxn = await getTransaction(tran_id);
+        if (recheckTxn?.status === 'success') {
+          console.log(`${TAG} ✅ IPN already marked success despite SSL INVALID response`);
+          return res.redirect(302, `${RETURN_PAGE}?tran_id=${tran_id}`);
+        }
+
         await updateTransaction(tran_id, { status: 'failed' });
         return res.redirect(302, `${RETURN_PAGE}?status=failed&tran_id=${tran_id}`);
       }
@@ -747,7 +812,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'ipn' && req.method === 'POST') {
       const {
         tran_id, val_id, card_type, bank_tran_id,
-        status, risk_level, risk_title
+        status, risk_level
       } = req.body || {};
 
       if (!tran_id || !val_id) return res.status(400).send('Missing fields');
@@ -761,18 +826,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       try {
-        const valRes = await axios.get(SSL.validationUrl, {
-          params: {
-            val_id,
-            store_id: SSL.storeId,
-            store_passwd: SSL.storePassword,
-            format: 'json'
-          },
-          timeout: 15000,
-        });
-        const vd = valRes.data;
+        const { valid, data: vd } = await validateWithSSL(val_id);
 
-        if (vd.status === 'VALID' || vd.status === 'VALIDATED') {
+        if (valid) {
           if (risk_level === '1') {
             await updateTransaction(tran_id, {
               status: 'validating',
@@ -791,7 +847,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               riskLevel: risk_level || '0',
               completedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            
+
             const freshTxn = await getTransaction(tran_id);
             if (freshTxn) {
               const enrollResult = await createEnrollment({
@@ -801,8 +857,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 bankTransactionId: bank_tran_id
               });
               console.log('IPN enrollment result:', enrollResult);
-              
-              if (freshTxn.returnToken === undefined) {
+
+              if (!freshTxn.returnToken) {
                 try {
                   await freshTxn.ref.update(sanitizeForFirestore({
                     returnToken: generateReturnToken(),
@@ -815,7 +871,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         } else {
           await updateTransaction(tran_id, {
-            status: vd.status === 'CANCELLED' ? 'cancelled' : 'failed'
+            status: vd?.status === 'CANCELLED' ? 'cancelled' : 'failed'
           });
         }
 
@@ -835,7 +891,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: 'transactionId required'
         });
       }
-      
+
       const txn = await getTransaction(transactionId);
       if (!txn) {
         return res.status(404).json({
@@ -843,7 +899,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           error: 'Not found'
         });
       }
-      
+
       return res.status(200).json({
         success: true,
         status: txn.status,
