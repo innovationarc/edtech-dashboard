@@ -34,7 +34,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { paymentService, Transaction } from '../services/paymentService';
-import { useAuth } from '../contexts/AuthContext'; // adjust to your auth context path
+import { useDashboard } from '../contexts/DashboardContext';
 
 // ─── Role Guard ─────────────────────────────────────────────────────────────
 
@@ -373,7 +373,7 @@ const DEFAULT_FILTERS: Filters = {
 };
 
 const PaymentManagement = () => {
-  const { userProfile } = useAuth(); // adjust to your actual auth context
+  const { user: userProfile } = useDashboard();
 
   // ── State ──
   const [transactions, setTransactions] = useState<Transaction[]>([]);
