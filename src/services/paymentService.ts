@@ -1,7 +1,4 @@
 // src/services/paymentService.ts
-// BACKWARDS COMPATIBLE — all original methods preserved exactly.
-// New additions: deleteTransactionById, updateTransactionStatusById,
-// getReadableUserId, writeAuditLog, getAuditLogs, getAllGateways stub, updateGateway stub.
 
 import {
   collection,
@@ -34,7 +31,9 @@ export interface Transaction {
   userId: string;
   userName: string;
   userEmail: string;
+  userPhone?: string;
   amount: number;
+  basePrice?: number;
   currency: string;
   status: 'success' | 'failed' | 'pending' | 'validating' | 'refunded' | 'cancelled';
   gateway: string;
@@ -51,6 +50,7 @@ export interface Transaction {
     previousStudentDiscount?: number;
     extraDiscount?: number;
     couponDiscount?: number;
+    couponCode?: string;
   };
   metadata?: any;
   createdAt: Date;
@@ -70,6 +70,7 @@ export interface PaymentInitiationRequest {
     previousStudentDiscount?: number;
     extraDiscount?: number;
     couponDiscount?: number;
+    couponCode?: string;
   };
   metadata?: any;
 }
@@ -99,6 +100,9 @@ export interface PaymentValidationResponse {
 export type AuditAction =
   | 'status_changed'
   | 'transaction_deleted'
+  | 'transaction_moved_to_trash'
+  | 'transaction_restored_from_trash'
+  | 'transaction_purged'
   | 'transaction_viewed'
   | 'transaction_created'
   | 'transaction_updated';
@@ -120,7 +124,22 @@ export interface AuditLog {
   timestamp: Date;
   changes?: AuditLogChange[];
   note?: string;
+  reason?: string;             // mandatory reason for status changes / deletions
   snapshotBefore?: Partial<Transaction>;
+}
+
+// ── Trash record type ─────────────────────────────────────────────────────────
+
+export interface TrashRecord {
+  id: string;                  // Firestore doc ID in paymentTrash collection
+  originalDocId: string;       // Original transactions doc ID
+  transaction: Transaction;    // Full snapshot of the deleted transaction
+  deletedAt: Date;
+  deletedBy: string;
+  deletedByName: string;
+  deletedByRole: string;
+  reason: string;
+  expiresAt: Date;             // deletedAt + 30 days — auto-purge after this
 }
 
 // ── Backwards-compat gateway stub type ───────────────────────────────────────
@@ -744,6 +763,22 @@ export const paymentService = {
     }
   },
 
+  // ── NEW: Fetch user phone number from the users collection ──────────────────
+  // Returns null on any error — never crashes the UI.
+
+  async getUserPhone(authUid: string): Promise<string | null> {
+    try {
+      if (!authUid?.trim()) return null;
+      const snap = await getDoc(doc(db, 'users', authUid));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      return (data.phoneNumber as string) || (data.mobileNumber as string) || null;
+    } catch (error: any) {
+      console.error('❌ getUserPhone failed (non-fatal):', error.message);
+      return null;
+    }
+  },
+
   // ── NEW: Write an audit log entry ────────────────────────────────────────────
   // Never throws — audit failures must NEVER block the primary operation.
   // Returns the new document ID or null on failure.
@@ -784,6 +819,202 @@ export const paymentService = {
     } catch (error: any) {
       console.error('❌ Error fetching audit logs:', error.message);
       throw new Error(`Failed to fetch audit logs: ${error.message}`);
+    }
+  },
+
+  // ── NEW: Move transaction to trash (soft delete) ─────────────────────────────
+  // Moves the transaction to paymentTrash collection with a 30-day TTL.
+  // Writes full snapshot + deletion metadata. Deletes from transactions collection.
+  // An audit log entry is ALSO written automatically here.
+
+  async moveTransactionToTrash(
+    txn: Transaction,
+    actor: { uid: string; name: string; role: string },
+    reason: string
+  ): Promise<void> {
+    try {
+      if (!txn?.id) throw new Error('Transaction document ID is required');
+      if (!reason?.trim()) throw new Error('A reason is required when deleting a transaction');
+
+      const now = Timestamp.now();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      // Write to paymentTrash collection
+      const trashData = sanitizeForFirestore({
+        originalDocId: txn.id,
+        transaction: txn,
+        deletedAt: now,
+        deletedBy: actor.uid,
+        deletedByName: actor.name,
+        deletedByRole: actor.role,
+        reason: reason.trim(),
+        expiresAt: Timestamp.fromDate(expiresAt),
+      });
+      const trashRef = await addDoc(collection(db, 'paymentTrash'), trashData);
+      console.log('✅ Transaction moved to trash:', trashRef.id);
+
+      // Delete from live transactions
+      await deleteDoc(doc(db, 'transactions', txn.id));
+      console.log('✅ Transaction removed from live collection:', txn.id);
+
+      // Write audit log
+      await this.writeAuditLog({
+        transactionId: txn.transactionId,
+        transactionDocId: txn.id,
+        action: 'transaction_moved_to_trash',
+        performedBy: actor.uid,
+        performedByName: actor.name,
+        performedByRole: actor.role,
+        note: `Transaction moved to trash. Trash Doc ID: ${trashRef.id}. Auto-purge after: ${expiresAt.toISOString()}`,
+        reason: reason.trim(),
+        snapshotBefore: {
+          transactionId: txn.transactionId,
+          status: txn.status,
+          amount: txn.amount,
+          userName: txn.userName,
+          productName: txn.productName,
+        },
+      });
+    } catch (error: any) {
+      console.error('❌ Error moving transaction to trash:', error.message);
+      throw new Error(`Failed to move transaction to trash: ${error.message}`);
+    }
+  },
+
+  // ── NEW: Get all trash records ───────────────────────────────────────────────
+
+  async getTrashTransactions(): Promise<TrashRecord[]> {
+    try {
+      const snapshot = await getDocs(
+        query(collection(db, 'paymentTrash'), orderBy('deletedAt', 'desc'))
+      );
+      return snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        // Reconstruct Transaction dates inside snapshot
+        const txnRaw = data.transaction ?? {};
+        const transaction: Transaction = {
+          ...txnRaw,
+          createdAt: safeToDate(txnRaw.createdAt) ?? new Date(),
+          updatedAt: safeToDate(txnRaw.updatedAt),
+          completedAt: safeToDate(txnRaw.completedAt),
+        };
+        return {
+          id: docSnap.id,
+          originalDocId: data.originalDocId,
+          transaction,
+          deletedAt: safeToDate(data.deletedAt) ?? new Date(),
+          deletedBy: data.deletedBy,
+          deletedByName: data.deletedByName,
+          deletedByRole: data.deletedByRole,
+          reason: data.reason,
+          expiresAt: safeToDate(data.expiresAt) ?? new Date(),
+        } as TrashRecord;
+      });
+    } catch (error: any) {
+      console.error('❌ Error fetching trash:', error.message);
+      throw new Error(`Failed to fetch trash records: ${error.message}`);
+    }
+  },
+
+  // ── NEW: Restore transaction from trash ──────────────────────────────────────
+  // Moves the transaction back to the live transactions collection.
+
+  async restoreTransactionFromTrash(
+    trashRecord: TrashRecord,
+    actor: { uid: string; name: string; role: string }
+  ): Promise<void> {
+    try {
+      if (!trashRecord?.id) throw new Error('Trash record ID is required');
+
+      // Re-create in transactions collection
+      const txnData = sanitizeForFirestore({
+        ...trashRecord.transaction,
+        updatedAt: Timestamp.now(),
+      });
+      delete txnData.id; // Firestore auto-generates the doc ID
+      const restoredRef = await addDoc(collection(db, 'transactions'), txnData);
+      console.log('✅ Transaction restored to live collection:', restoredRef.id);
+
+      // Delete from trash
+      await deleteDoc(doc(db, 'paymentTrash', trashRecord.id));
+      console.log('✅ Trash record deleted:', trashRecord.id);
+
+      // Write audit log
+      await this.writeAuditLog({
+        transactionId: trashRecord.transaction.transactionId,
+        transactionDocId: restoredRef.id,
+        action: 'transaction_restored_from_trash',
+        performedBy: actor.uid,
+        performedByName: actor.name,
+        performedByRole: actor.role,
+        note: `Transaction restored from trash. New Doc ID: ${restoredRef.id}. Original trash ID: ${trashRecord.id}`,
+      });
+    } catch (error: any) {
+      console.error('❌ Error restoring transaction from trash:', error.message);
+      throw new Error(`Failed to restore transaction: ${error.message}`);
+    }
+  },
+
+  // ── NEW: Purge expired trash records (30-day auto-cleanup) ──────────────────
+  // Call this on page load to silently remove expired trash items.
+  // Never throws — purge failures must not block the UI.
+  // Records a purge audit log for each item removed.
+
+  async purgeExpiredTrash(): Promise<number> {
+    try {
+      const now = new Date();
+      const snapshot = await getDocs(query(collection(db, 'paymentTrash'), orderBy('expiresAt', 'asc')));
+      let purgedCount = 0;
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const expiresAt = safeToDate(data.expiresAt);
+        if (expiresAt && expiresAt <= now) {
+          // Log the purge before deleting
+          await this.writeAuditLog({
+            transactionId: data.transaction?.transactionId ?? 'unknown',
+            transactionDocId: data.originalDocId ?? docSnap.id,
+            action: 'transaction_purged',
+            performedBy: 'system',
+            performedByName: 'System Auto-Purge',
+            performedByRole: 'system',
+            note: `Trash record auto-purged after 30-day retention. Trash Doc ID: ${docSnap.id}. Original deleted by: ${data.deletedByName ?? 'unknown'}.`,
+            reason: `Auto-purge: 30-day retention expired on ${expiresAt.toISOString()}`,
+          });
+          await deleteDoc(doc(db, 'paymentTrash', docSnap.id));
+          purgedCount++;
+          console.log('✅ Expired trash purged:', docSnap.id);
+        }
+      }
+      if (purgedCount > 0) {
+        console.log(`🗑️ Auto-purged ${purgedCount} expired trash record(s)`);
+      }
+      return purgedCount;
+    } catch (error: any) {
+      console.error('❌ Trash purge failed (non-blocking):', error.message);
+      return 0;
+    }
+  },
+
+  // ── NEW: Get distinct course/product list from transactions ──────────────────
+  // Used to populate the course filter dropdown.
+
+  async getCourseList(): Promise<{ productId: string; productName: string }[]> {
+    try {
+      const snapshot = await getDocs(
+        query(collection(db, 'transactions'), orderBy('createdAt', 'desc'))
+      );
+      const seen = new Map<string, string>();
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.productId && data.productName && !seen.has(data.productId)) {
+          seen.set(data.productId, data.productName);
+        }
+      });
+      return Array.from(seen.entries()).map(([productId, productName]) => ({ productId, productName }));
+    } catch (error: any) {
+      console.error('❌ getCourseList failed (non-fatal):', error.message);
+      return [];
     }
   }
 };
