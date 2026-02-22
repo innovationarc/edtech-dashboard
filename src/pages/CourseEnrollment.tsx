@@ -1349,6 +1349,7 @@ const CourseEnrollment: React.FC = () => {
             {Ico.arrow} Enroll
           </button>
         </div>
+        </div>
       </div>
     );
   };
