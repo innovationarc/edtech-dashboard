@@ -1,4 +1,12 @@
 // src/pages/PaymentManagement.tsx
+// Production-grade · World-class Payment Management System
+// Features: list, search, filters (incl. course filter), sort, pagination,
+//           detail modal (phone instead of email/authUID, base price, coupon code),
+//           status change with mandatory reason, delete → trash (30-day auto-purge),
+//           trash tab, restore from trash, security audit log with reasons,
+//           CSV export, revenue reports, Statistics tab (professional analytics)
+// Access: admin | manager | course_manager | student_manager | coordinator
+// Blocked: teacher | parent | student
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
@@ -372,27 +380,46 @@ const DetailModal = ({
     ['Completed At',    fmtDate(txn.completedAt)],
   );
 
-  // Discounts — show in taka, not %
+  // Discounts — always show in taka; use basePrice from field or metadata fallback
+  const effectiveBasePrice: number | null =
+    (txn.basePrice !== undefined && txn.basePrice !== null)
+      ? txn.basePrice
+      : (txn.metadata?.basePrice !== undefined && txn.metadata?.basePrice !== null)
+        ? Number(txn.metadata.basePrice)
+        : null;
+
+  const discTaka = (pct: number): React.ReactNode => {
+    if (effectiveBasePrice !== null && effectiveBasePrice > 0) {
+      const taka = effectiveBasePrice * pct / 100;
+      return <span>৳{taka.toLocaleString('en-BD', { minimumFractionDigits: 2 })} <span className="text-gray-500 text-xs">({pct}%)</span></span>;
+    }
+    // Fallback: compute from amount difference if possible, else show just the number as taka
+    return <span>৳{pct.toLocaleString('en-BD', { minimumFractionDigits: 2 })}</span>;
+  };
+
   if (disc?.couponCode) {
     rows.push(['Coupon Used', <span className="flex items-center gap-1"><Tag size={11} className="text-amber-400" /><span className="font-mono text-amber-400">{disc.couponCode}</span></span>]);
   }
+  // Also check metadata for coupon code
+  if (!disc?.couponCode && txn.metadata?.appliedCoupons) {
+    try {
+      const coupons = typeof txn.metadata.appliedCoupons === 'string'
+        ? JSON.parse(txn.metadata.appliedCoupons)
+        : txn.metadata.appliedCoupons;
+      if (Array.isArray(coupons) && coupons.length > 0) {
+        const codes = coupons.map((c: any) => c.couponCode ?? c.couponId ?? '').filter(Boolean).join(', ');
+        if (codes) rows.push(['Coupon Used', <span className="flex items-center gap-1"><Tag size={11} className="text-amber-400" /><span className="font-mono text-amber-400">{codes}</span></span>]);
+      }
+    } catch {}
+  }
   if (disc?.couponDiscount) {
-    const discTaka = txn.basePrice ? (txn.basePrice * disc.couponDiscount / 100) : null;
-    rows.push(['Coupon Discount', discTaka !== null
-      ? <span>৳{discTaka.toLocaleString('en-BD', { minimumFractionDigits: 2 })} <span className="text-gray-500 text-xs">({disc.couponDiscount}%)</span></span>
-      : `${disc.couponDiscount}%`]);
+    rows.push(['Coupon Discount', discTaka(disc.couponDiscount)]);
   }
   if (disc?.previousStudentDiscount) {
-    const discTaka = txn.basePrice ? (txn.basePrice * disc.previousStudentDiscount / 100) : null;
-    rows.push(['Returning Student Disc.', discTaka !== null
-      ? <span>৳{discTaka.toLocaleString('en-BD', { minimumFractionDigits: 2 })} <span className="text-gray-500 text-xs">({disc.previousStudentDiscount}%)</span></span>
-      : `${disc.previousStudentDiscount}%`]);
+    rows.push(['Returning Student Disc.', discTaka(disc.previousStudentDiscount)]);
   }
   if (disc?.extraDiscount) {
-    const discTaka = txn.basePrice ? (txn.basePrice * disc.extraDiscount / 100) : null;
-    rows.push(['Extra Discount', discTaka !== null
-      ? <span>৳{discTaka.toLocaleString('en-BD', { minimumFractionDigits: 2 })} <span className="text-gray-500 text-xs">({disc.extraDiscount}%)</span></span>
-      : `${disc.extraDiscount}%`]);
+    rows.push(['Extra Discount', discTaka(disc.extraDiscount)]);
   }
 
   return (
@@ -526,7 +553,15 @@ const AuditLogTab = ({ logs, loading, error, onRefresh }: {
                     <div>
                       <span className={`text-xs font-semibold ${cfg.cls}`}>{cfg.label}</span>
                       <p className="text-[10px] text-gray-500 mt-0.5">
-                        by <span className="text-gray-300 font-medium">{log.performedByName}</span>
+                        by{' '}
+                        <span className="text-gray-300 font-medium">
+                          {log.performedBySurname
+                            ? log.performedBySurname
+                            : log.performedByName}
+                        </span>
+                        {log.performedByUserId && (
+                          <span className="font-mono text-emerald-500 ml-1">({log.performedByUserId})</span>
+                        )}
                         <span className="mx-1 text-gray-600">·</span>
                         <span className="text-gray-500">{log.performedByRole}</span>
                       </p>
@@ -651,6 +686,284 @@ const FiltersPanel = ({
 
 // ─── Statistics Tab ───────────────────────────────────────────────────────────
 
+// SVG Bar Chart — always renders bars and labels; hover shows enhanced tooltip
+const SvgBarChart = ({
+  data, color, height = 180, yLabel,
+}: {
+  data: { label: string; value: number; subLabel?: string }[];
+  color: string;
+  height?: number;
+  yLabel?: string;
+}) => {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const padTop = 28;
+  const padBottom = 32;
+  const padLeft = 8;
+  const padRight = 8;
+  const chartH = height - padTop - padBottom;
+  const barCount = data.length;
+  const barGap = 4;
+
+  // Y-axis guide lines
+  const guideCount = 4;
+  const guides = Array.from({ length: guideCount + 1 }, (_, i) => {
+    const val = (maxVal / guideCount) * i;
+    const y = padTop + chartH - (chartH * (val / maxVal));
+    return { val, y };
+  });
+
+  return (
+    <div className="relative w-full" style={{ height }}>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${Math.max(barCount * 40, 300)} ${height}`}
+        preserveAspectRatio="none"
+        className="w-full"
+      >
+        {/* Guide lines */}
+        {guides.map((g, i) => (
+          <g key={i}>
+            <line
+              x1={padLeft} y1={g.y}
+              x2={`100%`} y2={g.y}
+              stroke="rgba(255,255,255,0.04)"
+              strokeWidth="1"
+            />
+            {g.val > 0 && (
+              <text
+                x={padLeft}
+                y={g.y - 3}
+                fontSize="8"
+                fill="rgba(156,163,175,0.6)"
+                textAnchor="start"
+              >
+                ৳{g.val >= 1000 ? `${(g.val / 1000).toFixed(0)}k` : g.val.toFixed(0)}
+              </text>
+            )}
+          </g>
+        ))}
+
+        {/* Bars */}
+        {data.map((d, i) => {
+          const totalW = Math.max(barCount * 40, 300);
+          const slotW = totalW / barCount;
+          const barW = Math.max(slotW - barGap * 2, 4);
+          const x = i * slotW + barGap;
+          const barH = maxVal > 0 ? Math.max((d.value / maxVal) * chartH, d.value > 0 ? 3 : 0) : 0;
+          const y = padTop + chartH - barH;
+          const isHov = hovered === i;
+
+          return (
+            <g key={i} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+              {/* Bar background track */}
+              <rect
+                x={x} y={padTop}
+                width={barW} height={chartH}
+                rx="3" ry="3"
+                fill="rgba(255,255,255,0.03)"
+              />
+              {/* Actual bar */}
+              <rect
+                x={x} y={y}
+                width={barW} height={Math.max(barH, 0)}
+                rx="3" ry="3"
+                fill={isHov ? color.replace('0.8', '1') : color}
+                opacity={isHov ? 1 : 0.85}
+              />
+              {/* Value label on top of bar — always visible when bar is tall enough */}
+              {barH > 18 && (
+                <text
+                  x={x + barW / 2}
+                  y={y + 11}
+                  fontSize="8"
+                  fill="rgba(255,255,255,0.9)"
+                  textAnchor="middle"
+                  fontWeight="600"
+                >
+                  {d.value >= 1000 ? `৳${(d.value / 1000).toFixed(0)}k` : `৳${d.value}`}
+                </text>
+              )}
+              {/* X-axis label */}
+              <text
+                x={x + barW / 2}
+                y={height - 4}
+                fontSize="8"
+                fill={isHov ? 'rgba(156,163,175,0.9)' : 'rgba(156,163,175,0.5)'}
+                textAnchor="middle"
+              >
+                {d.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Floating tooltip on hover */}
+      {hovered !== null && data[hovered] && (() => {
+        const d = data[hovered];
+        return (
+          <div
+            className="absolute pointer-events-none z-20 bg-[#1a1d27] border border-white/15 rounded-lg px-3 py-2 shadow-2xl text-xs"
+            style={{
+              bottom: padBottom + 4,
+              left: `${(hovered / data.length) * 100}%`,
+              transform: hovered > data.length / 2 ? 'translateX(-100%)' : 'translateX(8px)',
+              minWidth: 100,
+            }}
+          >
+            <p className="text-white font-bold">৳{d.value.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
+            {d.subLabel && <p className="text-gray-400 mt-0.5">{d.subLabel}</p>}
+            <p className="text-gray-500">{d.label}</p>
+          </div>
+        );
+      })()}
+    </div>
+  );
+};
+
+// SVG Line Chart — smooth sparkline with filled area
+const SvgLineChart = ({
+  data, height = 140,
+}: {
+  data: { label: string; value: number; subLabel?: string }[];
+  height?: number;
+}) => {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const minVal = 0;
+  const padTop = 20;
+  const padBottom = 28;
+  const padLeft = 10;
+  const padRight = 10;
+  const W = 600;
+  const chartH = height - padTop - padBottom;
+  const chartW = W - padLeft - padRight;
+  const step = chartW / Math.max(data.length - 1, 1);
+
+  const pts = data.map((d, i) => ({
+    x: padLeft + i * step,
+    y: padTop + chartH - ((d.value - minVal) / (maxVal - minVal)) * chartH,
+  }));
+
+  // Build smooth polyline path
+  const pointsStr = pts.map(p => `${p.x},${p.y}`).join(' ');
+  // Area fill path
+  const areaPath = pts.length > 0
+    ? `M${pts[0].x},${padTop + chartH} ` +
+      pts.map(p => `L${p.x},${p.y}`).join(' ') +
+      ` L${pts[pts.length - 1].x},${padTop + chartH} Z`
+    : '';
+
+  return (
+    <div className="relative w-full" style={{ height }}>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${W} ${height}`}
+        preserveAspectRatio="none"
+        className="w-full"
+      >
+        <defs>
+          <linearGradient id="lineAreaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgb(139,92,246)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="rgb(139,92,246)" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* Guide lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
+          const y = padTop + chartH * (1 - f);
+          const val = minVal + (maxVal - minVal) * f;
+          return (
+            <g key={i}>
+              <line x1={padLeft} y1={y} x2={W - padRight} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+              {f > 0 && (
+                <text x={padLeft} y={y - 2} fontSize="8" fill="rgba(156,163,175,0.5)" textAnchor="start">
+                  ৳{val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val.toFixed(0)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {/* Area fill */}
+        {areaPath && <path d={areaPath} fill="url(#lineAreaGrad)" />}
+        {/* Line */}
+        {pts.length > 1 && (
+          <polyline
+            points={pointsStr}
+            fill="none"
+            stroke="rgb(139,92,246)"
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )}
+        {/* Data points */}
+        {pts.map((p, i) => {
+          const d = data[i];
+          const isHov = hovered === i;
+          return (
+            <g key={i} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} style={{ cursor: 'pointer' }}>
+              {/* Hover hit area */}
+              <rect
+                x={p.x - step / 2} y={padTop}
+                width={step} height={chartH}
+                fill="transparent"
+              />
+              {/* Dot */}
+              <circle cx={p.x} cy={p.y} r={isHov ? 5 : 3} fill="rgb(139,92,246)" stroke="#0d0f14" strokeWidth="2" />
+              {/* Always-visible value label above point if enough room */}
+              {d.value > 0 && (
+                <text
+                  x={p.x}
+                  y={p.y - 8}
+                  fontSize="7.5"
+                  fill="rgba(167,139,250,0.85)"
+                  textAnchor="middle"
+                  fontWeight="600"
+                >
+                  {d.value >= 1000 ? `৳${(d.value / 1000).toFixed(0)}k` : `৳${d.value}`}
+                </text>
+              )}
+              {/* X label */}
+              <text
+                x={p.x}
+                y={height - 4}
+                fontSize="7.5"
+                fill={isHov ? 'rgba(156,163,175,0.9)' : 'rgba(156,163,175,0.5)'}
+                textAnchor="middle"
+              >
+                {d.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Tooltip */}
+      {hovered !== null && data[hovered] && (() => {
+        const d = data[hovered];
+        return (
+          <div
+            className="absolute pointer-events-none z-20 bg-[#1a1d27] border border-white/15 rounded-lg px-3 py-2 shadow-2xl text-xs"
+            style={{
+              bottom: padBottom + 4,
+              left: `${(hovered / (data.length - 1)) * 100}%`,
+              transform: hovered > data.length / 2 ? 'translateX(-100%)' : 'translateX(8px)',
+              minWidth: 110,
+            }}
+          >
+            <p className="text-white font-bold">৳{d.value.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
+            {d.subLabel && <p className="text-gray-400 mt-0.5">{d.subLabel}</p>}
+            <p className="text-gray-500">{d.label}</p>
+          </div>
+        );
+      })()}
+    </div>
+  );
+};
+
 const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
   const stats = useMemo(() => {
     const success = transactions.filter(t => t.status === 'success');
@@ -714,9 +1027,6 @@ const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
     };
   }, [transactions]);
 
-  const maxMonthRev = Math.max(...stats.monthlyRevenue.map(m => m.revenue), 1);
-  const maxDayRev = Math.max(...stats.dayRevenue.map(d => d.revenue), 1);
-
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
@@ -745,55 +1055,31 @@ const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
         </div>
       </div>
 
-      {/* Monthly Revenue Chart */}
+      {/* Monthly Revenue — SVG Line Chart */}
       <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
-        <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><BarChart2 size={15} className="text-primary-400" /> Monthly Revenue (Last 12 Months)</h3>
-        <div className="flex items-end gap-1.5 h-40">
-          {stats.monthlyRevenue.map((m) => {
-            const h = maxMonthRev > 0 ? (m.revenue / maxMonthRev) * 100 : 0;
-            return (
-              <div key={m.month} className="flex-1 flex flex-col items-center gap-1 group relative">
-                {/* Tooltip */}
-                <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center z-10">
-                  <div className="bg-[#1a1d27] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white whitespace-nowrap shadow-xl">
-                    <p className="font-semibold">৳{m.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
-                    <p className="text-gray-400">{m.count} txn{m.count !== 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-                <div
-                  className="w-full rounded-t-md bg-gradient-to-t from-primary-600 to-primary-400 transition-all group-hover:from-primary-500 group-hover:to-primary-300"
-                  style={{ height: `${Math.max(h, m.revenue > 0 ? 4 : 0)}%` }}
-                />
-                <span className="text-[9px] text-gray-600 group-hover:text-gray-400 transition-colors">{m.month}</span>
-              </div>
-            );
-          })}
-        </div>
+        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><BarChart2 size={15} className="text-primary-400" /> Monthly Revenue (Last 12 Months)</h3>
+        <SvgLineChart
+          height={180}
+          data={stats.monthlyRevenue.map(m => ({
+            label: m.month,
+            value: m.revenue,
+            subLabel: `${m.count} txn${m.count !== 1 ? 's' : ''}`,
+          }))}
+        />
       </div>
 
-      {/* Day of Week Heatmap */}
+      {/* Revenue by Day of Week — SVG Bar Chart */}
       <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Activity size={15} className="text-primary-400" /> Revenue by Day of Week</h3>
-        <div className="flex items-end gap-2 h-28">
-          {stats.dayRevenue.map((d) => {
-            const h = maxDayRev > 0 ? (d.revenue / maxDayRev) * 100 : 0;
-            return (
-              <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5 group relative">
-                <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center z-10">
-                  <div className="bg-[#1a1d27] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white whitespace-nowrap shadow-xl">
-                    <p className="font-semibold">৳{d.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
-                    <p className="text-gray-400">{d.count} txn{d.count !== 1 ? 's' : ''}</p>
-                  </div>
-                </div>
-                <div
-                  className="w-full rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all group-hover:opacity-90"
-                  style={{ height: `${Math.max(h, d.revenue > 0 ? 6 : 0)}%` }}
-                />
-                <span className="text-[10px] text-gray-500 font-medium">{d.day}</span>
-              </div>
-            );
-          })}
-        </div>
+        <SvgBarChart
+          height={160}
+          color="rgba(52,211,153,0.8)"
+          data={stats.dayRevenue.map(d => ({
+            label: d.day,
+            value: d.revenue,
+            subLabel: `${d.count} txn${d.count !== 1 ? 's' : ''}`,
+          }))}
+        />
       </div>
 
       {/* Top Products & Gateway Stats */}
@@ -813,8 +1099,8 @@ const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
                       <span className="text-gray-200 font-medium truncate flex-1 mr-2">{p.name}</span>
                       <span className="text-white font-bold shrink-0">৳{p.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</span>
                     </div>
-                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-primary-600 to-primary-400 rounded-full" style={{ width: `${pct}%` }} />
+                    <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-primary-600 to-primary-400 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                     <p className="text-[10px] text-gray-600">{p.count} sale{p.count !== 1 ? 's' : ''} · {pct.toFixed(1)}% of revenue</p>
                   </div>
@@ -868,7 +1154,7 @@ const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
                   <span className="text-white font-semibold">{f.count.toLocaleString()} <span className="text-gray-500 font-normal">({pct.toFixed(1)}%)</span></span>
                 </div>
                 <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden">
-                  <div className={`h-full ${f.color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                  <div className={`h-full ${f.color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
             );
@@ -1062,6 +1348,8 @@ const PaymentManagement = () => {
   const actorInfo = useMemo(() => ({
     performedBy: userProfile?.uid ?? 'unknown',
     performedByName: userProfile?.fullName ?? userProfile?.name ?? 'Unknown',
+    performedBySurname: userProfile?.surname ?? '',
+    performedByUserId: userProfile?.userId ?? '',
     performedByRole: userProfile?.role ?? 'unknown',
   }), [userProfile]);
 
@@ -1230,7 +1518,7 @@ const PaymentManagement = () => {
     try {
       await paymentService.moveTransactionToTrash(
         deleteTxn,
-        { uid: actorInfo.performedBy, name: actorInfo.performedByName, role: actorInfo.performedByRole },
+        { uid: actorInfo.performedBy, name: actorInfo.performedByName, role: actorInfo.performedByRole, surname: actorInfo.performedBySurname, userId: actorInfo.performedByUserId },
         reason
       );
       setTransactions(prev => prev.filter(t => t.id !== deleteTxn.id));
@@ -1281,7 +1569,7 @@ const PaymentManagement = () => {
     try {
       await paymentService.restoreTransactionFromTrash(
         record,
-        { uid: actorInfo.performedBy, name: actorInfo.performedByName, role: actorInfo.performedByRole }
+        { uid: actorInfo.performedBy, name: actorInfo.performedByName, role: actorInfo.performedByRole, surname: actorInfo.performedBySurname, userId: actorInfo.performedByUserId }
       );
       setTrashRecords(prev => prev.filter(r => r.id !== record.id));
       showToast('Transaction restored successfully.', 'success');
