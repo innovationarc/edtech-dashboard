@@ -1337,6 +1337,8 @@ const CourseEnrollment: React.FC = () => {
             {showOrig && <span className="ce-price-orig">৳{course.price}</span>}
             {/* Only show sale badge if it's a LIMITED TIME discount (not just any discount) */}
             {discounted && (
+        <span className="ce-sale-badge">Limited Time</span>
+)}
         </div>
 
         <div className="ce-card-actions">
