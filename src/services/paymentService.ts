@@ -120,6 +120,8 @@ export interface AuditLog {
   action: AuditAction;
   performedBy: string;         // Firebase Auth uid of the actor
   performedByName: string;     // display name at time of action
+  performedBySurname?: string; // surname of the actor at time of action
+  performedByUserId?: string;  // readable userId (e.g. ST-2601-00001) of the actor
   performedByRole: string;     // role at time of action
   timestamp: Date;
   changes?: AuditLogChange[];
@@ -829,7 +831,7 @@ export const paymentService = {
 
   async moveTransactionToTrash(
     txn: Transaction,
-    actor: { uid: string; name: string; role: string },
+    actor: { uid: string; name: string; role: string; surname?: string; userId?: string },
     reason: string
   ): Promise<void> {
     try {
@@ -847,6 +849,8 @@ export const paymentService = {
         deletedAt: now,
         deletedBy: actor.uid,
         deletedByName: actor.name,
+        deletedBySurname: actor.surname ?? '',
+        deletedByUserId: actor.userId ?? '',
         deletedByRole: actor.role,
         reason: reason.trim(),
         expiresAt: Timestamp.fromDate(expiresAt),
@@ -865,6 +869,8 @@ export const paymentService = {
         action: 'transaction_moved_to_trash',
         performedBy: actor.uid,
         performedByName: actor.name,
+        performedBySurname: actor.surname ?? '',
+        performedByUserId: actor.userId ?? '',
         performedByRole: actor.role,
         note: `Transaction moved to trash. Trash Doc ID: ${trashRef.id}. Auto-purge after: ${expiresAt.toISOString()}`,
         reason: reason.trim(),
@@ -922,7 +928,7 @@ export const paymentService = {
 
   async restoreTransactionFromTrash(
     trashRecord: TrashRecord,
-    actor: { uid: string; name: string; role: string }
+    actor: { uid: string; name: string; role: string; surname?: string; userId?: string }
   ): Promise<void> {
     try {
       if (!trashRecord?.id) throw new Error('Trash record ID is required');
@@ -947,6 +953,8 @@ export const paymentService = {
         action: 'transaction_restored_from_trash',
         performedBy: actor.uid,
         performedByName: actor.name,
+        performedBySurname: actor.surname ?? '',
+        performedByUserId: actor.userId ?? '',
         performedByRole: actor.role,
         note: `Transaction restored from trash. New Doc ID: ${restoredRef.id}. Original trash ID: ${trashRecord.id}`,
       });
