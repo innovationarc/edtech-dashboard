@@ -1,10 +1,4 @@
 // src/pages/PaymentManagement.tsx
-// Production-grade · World-class Payment Management System
-// Features: list, search, filters, sort, pagination, detail modal,
-//           status change, delete with confirmation, security audit log,
-//           readable userId fetch, CSV export, revenue reports
-// Access: admin | manager | course_manager | student_manager | coordinator
-// Blocked: teacher | parent | student
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
@@ -13,11 +7,13 @@ import {
   AlertTriangle, TrendingUp, DollarSign, Activity, Filter,
   Eye, Copy, Check, Shield, ArrowUpDown, ChevronLeft,
   ChevronRight, Trash2, Edit2, ClipboardList, AlertCircle,
-  Info, RotateCcw, Ban, ArrowRight,
+  Info, RotateCcw, Ban, ArrowRight, BarChart2, PieChart,
+  BookOpen, Phone, Tag, History, Undo2,
 } from 'lucide-react';
 import {
   paymentService,
   Transaction,
+  TrashRecord,
   AuditLog,
   AuditAction,
 } from '../services/paymentService';
@@ -26,7 +22,6 @@ import { useDashboard } from '../contexts/DashboardContext';
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const ALLOWED_ROLES = ['admin', 'manager', 'course_manager', 'student_manager', 'coordinator'];
-// Only admins and managers can delete or change status
 const POWER_ROLES = ['admin', 'manager'];
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const ALL_STATUSES = ['success', 'failed', 'pending', 'validating', 'refunded', 'cancelled'] as const;
@@ -35,13 +30,14 @@ const ALL_STATUSES = ['success', 'failed', 'pending', 'validating', 'refunded', 
 
 type SortField = 'createdAt' | 'amount' | 'status' | 'transactionId' | 'userName';
 type SortDir = 'asc' | 'desc';
-type TabId = 'transactions' | 'gateways' | 'reports' | 'audit';
+type TabId = 'transactions' | 'gateways' | 'reports' | 'audit' | 'statistics' | 'trash';
 
 interface Filters {
   search: string;
   status: string;
   gateway: string;
   productType: string;
+  courseId: string;
   dateFrom: string;
   dateTo: string;
   amountMin: string;
@@ -50,7 +46,7 @@ interface Filters {
 
 const DEFAULT_FILTERS: Filters = {
   search: '', status: 'all', gateway: 'all',
-  productType: 'all', dateFrom: '', dateTo: '',
+  productType: 'all', courseId: 'all', dateFrom: '', dateTo: '',
   amountMin: '', amountMax: '',
 };
 
@@ -76,6 +72,12 @@ function diff<T extends object>(before: T, after: Partial<T>) {
   });
 }
 
+function isFilterActive(f: Filters) {
+  return f.search !== '' || f.status !== 'all' || f.gateway !== 'all' ||
+    f.productType !== 'all' || f.courseId !== 'all' || f.dateFrom !== '' ||
+    f.dateTo !== '' || f.amountMin !== '' || f.amountMax !== '';
+}
+
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CFG: Record<string, { label: string; cls: string; dot: string; Icon: any }> = {
@@ -88,11 +90,14 @@ const STATUS_CFG: Record<string, { label: string; cls: string; dot: string; Icon
 };
 
 const AUDIT_CFG: Record<AuditAction, { label: string; cls: string; Icon: any }> = {
-  status_changed:       { label: 'Status Changed',       cls: 'text-blue-400',   Icon: Edit2 },
-  transaction_deleted:  { label: 'Transaction Deleted',  cls: 'text-red-400',    Icon: Trash2 },
-  transaction_viewed:   { label: 'Viewed',               cls: 'text-gray-400',   Icon: Eye },
-  transaction_created:  { label: 'Created',              cls: 'text-emerald-400',Icon: CheckCircle },
-  transaction_updated:  { label: 'Updated',              cls: 'text-amber-400',  Icon: Edit2 },
+  status_changed:                 { label: 'Status Changed',         cls: 'text-blue-400',   Icon: Edit2 },
+  transaction_deleted:            { label: 'Transaction Deleted',    cls: 'text-red-400',    Icon: Trash2 },
+  transaction_moved_to_trash:     { label: 'Moved to Trash',         cls: 'text-orange-400', Icon: Trash2 },
+  transaction_restored_from_trash:{ label: 'Restored from Trash',    cls: 'text-emerald-400',Icon: Undo2 },
+  transaction_purged:             { label: 'Auto-Purged',            cls: 'text-gray-400',   Icon: Ban },
+  transaction_viewed:             { label: 'Viewed',                 cls: 'text-gray-400',   Icon: Eye },
+  transaction_created:            { label: 'Created',                cls: 'text-emerald-400',Icon: CheckCircle },
+  transaction_updated:            { label: 'Updated',                cls: 'text-amber-400',  Icon: Edit2 },
 };
 
 // ─── Small reusable components ───────────────────────────────────────────────
@@ -151,60 +156,91 @@ const Toast = ({ msg, type, onClose }: { msg: string; type: 'success' | 'error' 
   );
 };
 
-// ─── Confirm Delete Modal ─────────────────────────────────────────────────────
+// ─── Confirm Delete Modal (now asks for reason, explains trash) ───────────────
 
 const ConfirmDeleteModal = ({
   txn, onConfirm, onCancel, loading,
-}: { txn: Transaction; onConfirm: () => void; onCancel: () => void; loading: boolean }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)' }}>
-    <div className="w-full max-w-md rounded-2xl border border-red-500/20 bg-[#0d0f14] shadow-2xl p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-full bg-red-500/15 border border-red-500/30">
-          <Trash2 size={18} className="text-red-400" />
+}: { txn: Transaction; onConfirm: (reason: string) => void; onCancel: () => void; loading: boolean }) => {
+  const [reason, setReason] = useState('');
+  const [touched, setTouched] = useState(false);
+  const isValid = reason.trim().length >= 5;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)' }}>
+      <div className="w-full max-w-md rounded-2xl border border-red-500/20 bg-[#0d0f14] shadow-2xl p-6 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-full bg-red-500/15 border border-red-500/30">
+            <Trash2 size={18} className="text-red-400" />
+          </div>
+          <div>
+            <h3 className="text-white font-bold text-base">Move to Trash</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Transaction will be moved to trash for 30 days</p>
+          </div>
         </div>
+        <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 space-y-1.5">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Transaction ID</span>
+            <span className="text-gray-200 font-mono">{trunc(txn.transactionId, 28)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">User</span>
+            <span className="text-gray-200">{txn.userName}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">Amount</span>
+            <span className="text-white font-semibold">৳{txn.amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div className="flex justify-between text-xs items-center">
+            <span className="text-gray-500">Status</span>
+            <StatusBadge status={txn.status} />
+          </div>
+        </div>
+        {/* Mandatory Reason */}
         <div>
-          <h3 className="text-white font-bold text-base">Delete Transaction</h3>
-          <p className="text-xs text-gray-500 mt-0.5">This action cannot be undone</p>
+          <label className="text-xs text-gray-400 font-medium mb-1.5 block">
+            Reason for deletion <span className="text-red-400">*</span>
+          </label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            onBlur={() => setTouched(true)}
+            placeholder="Explain why this transaction is being removed…"
+            rows={3}
+            className={`w-full bg-white/[0.04] border rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 resize-none transition-colors ${touched && !isValid ? 'border-red-500/50 focus:ring-red-500' : 'border-white/10 focus:ring-primary-500'}`}
+          />
+          {touched && !isValid && (
+            <p className="text-xs text-red-400 mt-1">Reason must be at least 5 characters.</p>
+          )}
         </div>
-      </div>
-      <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 space-y-1.5">
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-500">Transaction ID</span>
-          <span className="text-gray-200 font-mono">{trunc(txn.transactionId, 28)}</span>
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+          <History size={13} />
+          Record will be kept in Trash for 30 days, then auto-purged. All actions are audit-logged.
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-500">User</span>
-          <span className="text-gray-200">{txn.userName}</span>
+        <div className="flex gap-3">
+          <button onClick={onCancel} disabled={loading} className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm hover:bg-white/5 transition-colors disabled:opacity-50">Cancel</button>
+          <button
+            onClick={() => { setTouched(true); if (isValid) onConfirm(reason.trim()); }}
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            {loading ? 'Moving…' : 'Move to Trash'}
+          </button>
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="text-gray-500">Amount</span>
-          <span className="text-white font-semibold">৳{txn.amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div className="flex justify-between text-xs items-center">
-          <span className="text-gray-500">Status</span>
-          <StatusBadge status={txn.status} />
-        </div>
-      </div>
-      <p className="text-xs text-gray-400 leading-relaxed">
-        This will permanently delete the transaction record and write a security audit log. This action is <span className="text-red-400 font-semibold">irreversible</span>.
-      </p>
-      <div className="flex gap-3">
-        <button onClick={onCancel} disabled={loading} className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm hover:bg-white/5 transition-colors disabled:opacity-50">Cancel</button>
-        <button onClick={onConfirm} disabled={loading} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-          {loading ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
-          {loading ? 'Deleting…' : 'Delete'}
-        </button>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-// ─── Status Change Modal ──────────────────────────────────────────────────────
+// ─── Status Change Modal (now asks for mandatory reason) ─────────────────────
 
 const StatusChangeModal = ({
   txn, onConfirm, onCancel, loading,
-}: { txn: Transaction; onConfirm: (newStatus: Transaction['status']) => void; onCancel: () => void; loading: boolean }) => {
+}: { txn: Transaction; onConfirm: (newStatus: Transaction['status'], reason: string) => void; onCancel: () => void; loading: boolean }) => {
   const [selected, setSelected] = useState<Transaction['status']>(txn.status);
+  const [reason, setReason] = useState('');
+  const [touched, setTouched] = useState(false);
+  const isValid = reason.trim().length >= 5;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)' }}>
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f14] shadow-2xl p-6 space-y-5">
@@ -252,14 +288,32 @@ const StatusChangeModal = ({
         {selected !== txn.status && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
             <AlertTriangle size={13} />
-            Changing from <StatusBadge status={txn.status} /> to <StatusBadge status={selected} />. This will be logged in the audit trail.
+            Changing from <StatusBadge status={txn.status} /> to <StatusBadge status={selected} />. This will be logged.
           </div>
         )}
+
+        {/* Mandatory Reason */}
+        <div>
+          <label className="text-xs text-gray-400 font-medium mb-1.5 block">
+            Reason for status change <span className="text-red-400">*</span>
+          </label>
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            onBlur={() => setTouched(true)}
+            placeholder="Explain why the status is being changed…"
+            rows={3}
+            className={`w-full bg-white/[0.04] border rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 resize-none transition-colors ${touched && !isValid ? 'border-red-500/50 focus:ring-red-500' : 'border-white/10 focus:ring-primary-500'}`}
+          />
+          {touched && !isValid && (
+            <p className="text-xs text-red-400 mt-1">Reason must be at least 5 characters.</p>
+          )}
+        </div>
 
         <div className="flex gap-3">
           <button onClick={onCancel} disabled={loading} className="flex-1 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm hover:bg-white/5 transition-colors disabled:opacity-50">Cancel</button>
           <button
-            onClick={() => onConfirm(selected)}
+            onClick={() => { setTouched(true); if (isValid && selected !== txn.status) onConfirm(selected, reason.trim()); }}
             disabled={loading || selected === txn.status}
             className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
           >
@@ -275,41 +329,71 @@ const StatusChangeModal = ({
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 
 const DetailModal = ({
-  txn, readableUserId, onClose, onDelete, onChangeStatus, canModify,
+  txn, readableUserId, userPhone, onClose, onDelete, onChangeStatus, canModify,
 }: {
   txn: Transaction;
   readableUserId: string | null;
+  userPhone: string | null;
   onClose: () => void;
   onDelete: () => void;
   onChangeStatus: () => void;
   canModify: boolean;
 }) => {
+  const disc = txn.appliedDiscounts;
   const rows: [string, React.ReactNode][] = [
     ['Transaction ID',  <span className="flex items-center font-mono text-xs">{txn.transactionId}<CopyBtn text={txn.transactionId} /></span>],
-    ['Document ID',     <span className="flex items-center font-mono text-xs">{txn.id}<CopyBtn text={txn.id} /></span>],
     ['Status',          <StatusBadge status={txn.status} />],
-    ['Amount',          <span className="text-white font-bold">৳{txn.amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })} {txn.currency}</span>],
+    ['Amount Paid',     <span className="text-white font-bold">৳{txn.amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })} {txn.currency}</span>],
+  ];
+
+  // Show base price if available
+  if (txn.basePrice !== undefined && txn.basePrice !== null) {
+    rows.push(['Base Price', <span className="text-gray-200">৳{txn.basePrice.toLocaleString('en-BD', { minimumFractionDigits: 2 })}</span>]);
+  }
+
+  rows.push(
     ['Gateway',         txn.gateway || '—'],
     ['Payment Method',  txn.paymentMethod || '—'],
     ['Bank Txn ID',     txn.bankTransactionId || '—'],
     ['Validation ID',   txn.validationId || '—'],
     ['Risk Level',      txn.riskLevel || '—'],
     ['User Name',       txn.userName || '—'],
-    ['User Email',      txn.userEmail || '—'],
-    ['User ID (Readable)', readableUserId ? <span className="flex items-center gap-1 font-mono text-emerald-400">{readableUserId}<CopyBtn text={readableUserId} /></span> : <span className="text-gray-500 text-xs">Loading…</span>],
-    ['Auth UID',        <span className="flex items-center font-mono text-xs">{txn.userId}<CopyBtn text={txn.userId} /></span>],
+    ['Phone Number',    userPhone
+      ? <span className="flex items-center gap-1"><Phone size={11} className="text-primary-400" />{userPhone}<CopyBtn text={userPhone} /></span>
+      : <span className="text-gray-500 text-xs">—</span>],
+    ['User ID (Readable)', readableUserId
+      ? <span className="flex items-center gap-1 font-mono text-emerald-400">{readableUserId}<CopyBtn text={readableUserId} /></span>
+      : <span className="text-gray-500 text-xs">Loading…</span>],
     ['Product Name',    txn.productName || '—'],
     ['Product ID',      txn.productId || '—'],
     ['Product Type',    txn.productType || '—'],
     ['Created At',      fmtDate(txn.createdAt)],
     ['Updated At',      fmtDate(txn.updatedAt)],
     ['Completed At',    fmtDate(txn.completedAt)],
-  ];
+  );
 
-  const disc = txn.appliedDiscounts;
-  if (disc?.couponDiscount) rows.push(['Coupon Discount', `${disc.couponDiscount}%`]);
-  if (disc?.previousStudentDiscount) rows.push(['Returning Student Discount', `${disc.previousStudentDiscount}%`]);
-  if (disc?.extraDiscount) rows.push(['Extra Discount', `${disc.extraDiscount}%`]);
+  // Discounts — show in taka, not %
+  if (disc?.couponCode) {
+    rows.push(['Coupon Used', <span className="flex items-center gap-1"><Tag size={11} className="text-amber-400" /><span className="font-mono text-amber-400">{disc.couponCode}</span></span>]);
+  }
+  if (disc?.couponDiscount) {
+    const discTaka = txn.basePrice ? (txn.basePrice * disc.couponDiscount / 100) : null;
+    rows.push(['Coupon Discount', discTaka !== null
+      ? <span>৳{discTaka.toLocaleString('en-BD', { minimumFractionDigits: 2 })} <span className="text-gray-500 text-xs">({disc.couponDiscount}%)</span></span>
+      : `${disc.couponDiscount}%`]);
+  }
+  if (disc?.previousStudentDiscount) {
+    const discTaka = txn.basePrice ? (txn.basePrice * disc.previousStudentDiscount / 100) : null;
+    rows.push(['Returning Student Disc.', discTaka !== null
+      ? <span>৳{discTaka.toLocaleString('en-BD', { minimumFractionDigits: 2 })} <span className="text-gray-500 text-xs">({disc.previousStudentDiscount}%)</span></span>
+      : `${disc.previousStudentDiscount}%`]);
+  }
+  if (disc?.extraDiscount) {
+    const discTaka = txn.basePrice ? (txn.basePrice * disc.extraDiscount / 100) : null;
+    rows.push(['Extra Discount', discTaka !== null
+      ? <span>৳{discTaka.toLocaleString('en-BD', { minimumFractionDigits: 2 })} <span className="text-gray-500 text-xs">({disc.extraDiscount}%)</span></span>
+      : `${disc.extraDiscount}%`]);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }}>
@@ -460,6 +544,14 @@ const AuditLogTab = ({ logs, loading, error, onRefresh }: {
                   <CopyBtn text={log.transactionId} />
                 </div>
 
+                {/* Reason */}
+                {log.reason && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/8 border border-amber-500/15 text-xs text-amber-300">
+                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                    <span><span className="font-semibold">Reason: </span>{log.reason}</span>
+                  </div>
+                )}
+
                 {/* Changes */}
                 {log.changes && log.changes.length > 0 && (
                   <div className="space-y-1.5 pt-1 border-t border-white/5">
@@ -491,13 +583,14 @@ const AuditLogTab = ({ logs, loading, error, onRefresh }: {
 // ─── Filters Panel ────────────────────────────────────────────────────────────
 
 const FiltersPanel = ({
-  filters, onChange, onReset, gateways, productTypes,
+  filters, onChange, onReset, gateways, productTypes, courses,
 }: {
   filters: Filters;
   onChange: (k: keyof Filters, v: string) => void;
   onReset: () => void;
   gateways: string[];
   productTypes: string[];
+  courses: { productId: string; productName: string }[];
 }) => {
   const sel = 'w-full bg-white/[0.04] border border-white/10 text-white text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary-500 [color-scheme:dark]';
   return (
@@ -506,7 +599,7 @@ const FiltersPanel = ({
         <p className="text-xs font-semibold text-gray-400 flex items-center gap-1.5"><Filter size={12} className="text-primary-400" /> Advanced Filters</p>
         <button onClick={onReset} className="text-xs text-gray-600 hover:text-gray-300 transition-colors">Reset all</button>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2">
         <div>
           <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Status</label>
           <select value={filters.status} onChange={e => onChange('status', e.target.value)} className={sel}>
@@ -528,6 +621,13 @@ const FiltersPanel = ({
             {productTypes.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
+        <div className="col-span-2 sm:col-span-1">
+          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Course</label>
+          <select value={filters.courseId} onChange={e => onChange('courseId', e.target.value)} className={sel}>
+            <option value="all">All Courses</option>
+            {courses.map(c => <option key={c.productId} value={c.productId}>{trunc(c.productName, 30)}</option>)}
+          </select>
+        </div>
         <div>
           <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Date From</label>
           <input type="date" value={filters.dateFrom} onChange={e => onChange('dateFrom', e.target.value)} className={sel} />
@@ -545,6 +645,360 @@ const FiltersPanel = ({
           <input type="number" placeholder="∞" value={filters.amountMax} onChange={e => onChange('amountMax', e.target.value)} className={sel} />
         </div>
       </div>
+    </div>
+  );
+};
+
+// ─── Statistics Tab ───────────────────────────────────────────────────────────
+
+const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
+  const stats = useMemo(() => {
+    const success = transactions.filter(t => t.status === 'success');
+    const failed = transactions.filter(t => t.status === 'failed');
+    const pending = transactions.filter(t => t.status === 'pending');
+    const refunded = transactions.filter(t => t.status === 'refunded');
+    const cancelled = transactions.filter(t => t.status === 'cancelled');
+    const validating = transactions.filter(t => t.status === 'validating');
+
+    const totalRevenue = success.reduce((s, t) => s + t.amount, 0);
+    const avgOrder = success.length > 0 ? totalRevenue / success.length : 0;
+    const successRate = transactions.length > 0 ? (success.length / transactions.length) * 100 : 0;
+    const refundRate = success.length > 0 ? (refunded.length / success.length) * 100 : 0;
+
+    // Revenue by month (last 12 months)
+    const now = new Date();
+    const monthlyRevenue: { month: string; revenue: number; count: number }[] = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const label = new Intl.DateTimeFormat('en-BD', { month: 'short', year: '2-digit' }).format(d);
+      const monthTxns = success.filter(t => {
+        const td = t.createdAt;
+        return td.getFullYear() === d.getFullYear() && td.getMonth() === d.getMonth();
+      });
+      monthlyRevenue.push({ month: label, revenue: monthTxns.reduce((s, t) => s + t.amount, 0), count: monthTxns.length });
+    }
+
+    // Top products by revenue
+    const productRevenue = new Map<string, { name: string; revenue: number; count: number }>();
+    success.forEach(t => {
+      const existing = productRevenue.get(t.productId) ?? { name: t.productName, revenue: 0, count: 0 };
+      productRevenue.set(t.productId, { name: t.productName, revenue: existing.revenue + t.amount, count: existing.count + 1 });
+    });
+    const topProducts = Array.from(productRevenue.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+
+    // Revenue by gateway
+    const gatewayRevenue = new Map<string, { revenue: number; count: number; failed: number }>();
+    transactions.forEach(t => {
+      const gw = t.gateway || 'Unknown';
+      const existing = gatewayRevenue.get(gw) ?? { revenue: 0, count: 0, failed: 0 };
+      gatewayRevenue.set(gw, {
+        revenue: existing.revenue + (t.status === 'success' ? t.amount : 0),
+        count: existing.count + 1,
+        failed: existing.failed + (t.status === 'failed' ? 1 : 0),
+      });
+    });
+
+    // Revenue by day of week
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayRevenue = Array(7).fill(0).map((_, i) => ({
+      day: dayLabels[i],
+      revenue: success.filter(t => t.createdAt.getDay() === i).reduce((s, t) => s + t.amount, 0),
+      count: success.filter(t => t.createdAt.getDay() === i).length,
+    }));
+
+    return {
+      totalRevenue, avgOrder, successRate, refundRate,
+      counts: { success: success.length, failed: failed.length, pending: pending.length, refunded: refunded.length, cancelled: cancelled.length, validating: validating.length },
+      monthlyRevenue, topProducts, gatewayRevenue: Array.from(gatewayRevenue.entries()).map(([gw, d]) => ({ gateway: gw, ...d })),
+      dayRevenue, totalCount: transactions.length,
+    };
+  }, [transactions]);
+
+  const maxMonthRev = Math.max(...stats.monthlyRevenue.map(m => m.revenue), 1);
+  const maxDayRev = Math.max(...stats.dayRevenue.map(d => d.revenue), 1);
+
+  return (
+    <div className="space-y-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Revenue" value={`৳${stats.totalRevenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}`} sub="From successful payments" Icon={TrendingUp} accent="from-violet-500 to-purple-600" />
+        <StatCard label="Avg. Order Value" value={`৳${stats.avgOrder.toLocaleString('en-BD', { maximumFractionDigits: 0 })}`} sub="Successful txns only" Icon={DollarSign} accent="from-blue-500 to-cyan-500" />
+        <StatCard label="Success Rate" value={`${stats.successRate.toFixed(1)}%`} sub={`${stats.counts.success} of ${stats.totalCount} txns`} Icon={CheckCircle} accent="from-emerald-500 to-teal-500" />
+        <StatCard label="Refund Rate" value={`${stats.refundRate.toFixed(1)}%`} sub={`${stats.counts.refunded} refunds`} Icon={RotateCcw} accent="from-red-500 to-rose-500" />
+      </div>
+
+      {/* Status Distribution */}
+      <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
+        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><PieChart size={15} className="text-primary-400" /> Transaction Status Distribution</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {ALL_STATUSES.map(st => {
+            const count = stats.counts[st as keyof typeof stats.counts] ?? 0;
+            const pct = stats.totalCount > 0 ? (count / stats.totalCount * 100).toFixed(1) : '0.0';
+            return (
+              <div key={st} className="rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-2">
+                <StatusBadge status={st} />
+                <p className="text-xl font-bold text-white">{count.toLocaleString()}</p>
+                <p className="text-[11px] text-gray-500">{pct}% of total</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Monthly Revenue Chart */}
+      <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
+        <h3 className="text-sm font-semibold text-white mb-5 flex items-center gap-2"><BarChart2 size={15} className="text-primary-400" /> Monthly Revenue (Last 12 Months)</h3>
+        <div className="flex items-end gap-1.5 h-40">
+          {stats.monthlyRevenue.map((m) => {
+            const h = maxMonthRev > 0 ? (m.revenue / maxMonthRev) * 100 : 0;
+            return (
+              <div key={m.month} className="flex-1 flex flex-col items-center gap-1 group relative">
+                {/* Tooltip */}
+                <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center z-10">
+                  <div className="bg-[#1a1d27] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white whitespace-nowrap shadow-xl">
+                    <p className="font-semibold">৳{m.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
+                    <p className="text-gray-400">{m.count} txn{m.count !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div
+                  className="w-full rounded-t-md bg-gradient-to-t from-primary-600 to-primary-400 transition-all group-hover:from-primary-500 group-hover:to-primary-300"
+                  style={{ height: `${Math.max(h, m.revenue > 0 ? 4 : 0)}%` }}
+                />
+                <span className="text-[9px] text-gray-600 group-hover:text-gray-400 transition-colors">{m.month}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Day of Week Heatmap */}
+      <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
+        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Activity size={15} className="text-primary-400" /> Revenue by Day of Week</h3>
+        <div className="flex items-end gap-2 h-28">
+          {stats.dayRevenue.map((d) => {
+            const h = maxDayRev > 0 ? (d.revenue / maxDayRev) * 100 : 0;
+            return (
+              <div key={d.day} className="flex-1 flex flex-col items-center gap-1.5 group relative">
+                <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center z-10">
+                  <div className="bg-[#1a1d27] border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white whitespace-nowrap shadow-xl">
+                    <p className="font-semibold">৳{d.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
+                    <p className="text-gray-400">{d.count} txn{d.count !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div
+                  className="w-full rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all group-hover:opacity-90"
+                  style={{ height: `${Math.max(h, d.revenue > 0 ? 6 : 0)}%` }}
+                />
+                <span className="text-[10px] text-gray-500 font-medium">{d.day}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Top Products & Gateway Stats */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Top Products */}
+        <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp size={15} className="text-primary-400" /> Top Products by Revenue</h3>
+          {stats.topProducts.length === 0 ? (
+            <p className="text-gray-600 text-sm py-4 text-center">No successful transactions yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {stats.topProducts.map((p, i) => {
+                const pct = stats.totalRevenue > 0 ? (p.revenue / stats.totalRevenue * 100) : 0;
+                return (
+                  <div key={i} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-200 font-medium truncate flex-1 mr-2">{p.name}</span>
+                      <span className="text-white font-bold shrink-0">৳{p.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-primary-600 to-primary-400 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                    <p className="text-[10px] text-gray-600">{p.count} sale{p.count !== 1 ? 's' : ''} · {pct.toFixed(1)}% of revenue</p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Gateway Performance */}
+        <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><CreditCard size={15} className="text-primary-400" /> Gateway Performance</h3>
+          {stats.gatewayRevenue.length === 0 ? (
+            <p className="text-gray-600 text-sm py-4 text-center">No gateway data yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {stats.gatewayRevenue.map((g, i) => {
+                const successRate = g.count > 0 ? ((g.count - g.failed) / g.count * 100).toFixed(1) : '0.0';
+                return (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/[0.02]">
+                    <div>
+                      <p className="text-white font-semibold text-sm">{g.gateway}</p>
+                      <p className="text-[10px] text-gray-500">{g.count} txns · {successRate}% success</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-bold text-sm">৳{g.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
+                      <p className="text-[10px] text-gray-500">Revenue</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Conversion Funnel */}
+      <div className="rounded-xl border border-white/5 bg-[#0f1117] p-5">
+        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Activity size={15} className="text-primary-400" /> Payment Conversion Funnel</h3>
+        <div className="space-y-2">
+          {[
+            { label: 'Initiated (All)', count: stats.totalCount, color: 'bg-blue-500' },
+            { label: 'Validating', count: stats.counts.validating + stats.counts.success + stats.counts.refunded, color: 'bg-cyan-500' },
+            { label: 'Successful', count: stats.counts.success, color: 'bg-emerald-500' },
+          ].map((f) => {
+            const pct = stats.totalCount > 0 ? (f.count / stats.totalCount) * 100 : 0;
+            return (
+              <div key={f.label} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400">{f.label}</span>
+                  <span className="text-white font-semibold">{f.count.toLocaleString()} <span className="text-gray-500 font-normal">({pct.toFixed(1)}%)</span></span>
+                </div>
+                <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden">
+                  <div className={`h-full ${f.color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Trash Tab ────────────────────────────────────────────────────────────────
+
+const TrashTab = ({
+  trashRecords, loading, error, onRefresh, onRestore, canModify,
+}: {
+  trashRecords: TrashRecord[];
+  loading: boolean;
+  error: string;
+  onRefresh: () => void;
+  onRestore: (record: TrashRecord) => void;
+  canModify: boolean;
+}) => {
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return trashRecords;
+    return trashRecords.filter(r =>
+      r.transaction.transactionId?.toLowerCase().includes(q) ||
+      r.transaction.userName?.toLowerCase().includes(q) ||
+      r.deletedByName?.toLowerCase().includes(q)
+    );
+  }, [trashRecords, search]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Trash2 size={16} className="text-red-400" />
+          <h3 className="text-white font-semibold text-sm">Trash</h3>
+          <span className="text-xs text-gray-500 bg-white/[0.04] px-2 py-0.5 rounded-full">{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
+        </div>
+        <button onClick={onRefresh} disabled={loading} className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-gray-300 hover:text-white transition-colors disabled:opacity-50">
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/8 border border-amber-500/15 text-xs text-amber-400">
+        <History size={13} />
+        Records in trash are automatically purged 30 days after deletion. No manual cleanup is possible before the 30-day period. All deletions and purges are audit-logged.
+      </div>
+
+      <div className="relative">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        <input
+          type="text"
+          placeholder="Search by transaction ID, user, deleted by…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 text-sm bg-white/[0.04] border border-white/10 text-white rounded-xl focus:outline-none focus:ring-1 focus:ring-primary-500 placeholder-gray-600"
+        />
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+          <XCircle size={14} /> {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16 gap-3 text-gray-500">
+          <Loader size={20} className="animate-spin" /> Loading trash…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-gray-600">
+          <Trash2 size={32} className="mb-3 text-gray-700" />
+          <p className="text-sm">Trash is empty.</p>
+          <p className="text-xs mt-1">Deleted transactions will appear here for 30 days.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((record) => {
+            const daysLeft = Math.max(0, Math.ceil((record.expiresAt.getTime() - Date.now()) / 86400000));
+            const isExpiringSoon = daysLeft <= 5;
+            return (
+              <div key={record.id} className="rounded-xl border border-white/5 bg-[#0f1117] p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-white font-semibold text-sm">{record.transaction.userName}</p>
+                    <p className="text-gray-400 font-mono text-xs">{trunc(record.transaction.transactionId, 36)}</p>
+                    <p className="text-xs text-gray-500">{record.transaction.productName}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className="text-white font-bold text-sm">৳{record.transaction.amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}</span>
+                    <StatusBadge status={record.transaction.status} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-600">Deleted by</span>
+                    <p className="text-gray-300 font-medium">{record.deletedByName} <span className="text-gray-600">({record.deletedByRole})</span></p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Deleted at</span>
+                    <p className="text-gray-300">{fmtDate(record.deletedAt)}</p>
+                  </div>
+                </div>
+                {record.reason && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-white/[0.03] border border-white/5 text-xs text-gray-400">
+                    <AlertTriangle size={11} className="shrink-0 mt-0.5 text-amber-500" />
+                    <span><span className="text-gray-300 font-medium">Reason: </span>{record.reason}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs px-2 py-1 rounded-full border ${isExpiringSoon ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-gray-500 bg-white/[0.03] border-white/5'}`}>
+                    {daysLeft === 0 ? 'Purging soon…' : `Auto-purge in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`}
+                  </span>
+                  {canModify && (
+                    <button
+                      onClick={() => onRestore(record)}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                    >
+                      <Undo2 size={12} /> Restore
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -579,12 +1033,22 @@ const PaymentManagement = () => {
 
   // ── Readable userIds cache ──
   const [readableIds, setReadableIds] = useState<Record<string, string | null>>({});
+  const [phoneNumbers, setPhoneNumbers] = useState<Record<string, string | null>>({});
   const fetchingUids = useRef(new Set<string>());
+  const fetchingPhones = useRef(new Set<string>());
+
+  // ── Courses list for course filter ──
+  const [courses, setCourses] = useState<{ productId: string; productName: string }[]>([]);
 
   // ── Audit log ──
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState('');
+
+  // ── Trash ──
+  const [trashRecords, setTrashRecords] = useState<TrashRecord[]>([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [trashError, setTrashError] = useState('');
 
   // ── Toast ──
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -608,6 +1072,10 @@ const PaymentManagement = () => {
     try {
       const data = await paymentService.getAllTransactions();
       setTransactions(data);
+      // Build course list from transaction data
+      const seen = new Map<string, string>();
+      data.forEach(t => { if (t.productId && t.productName && !seen.has(t.productId)) seen.set(t.productId, t.productName); });
+      setCourses(Array.from(seen.entries()).map(([productId, productName]) => ({ productId, productName })));
     } catch (e: any) {
       setError(e.message || 'Failed to load transactions');
     } finally {
@@ -630,17 +1098,35 @@ const PaymentManagement = () => {
     }
   }, []);
 
+  // ── Load trash ──
+  const loadTrash = useCallback(async () => {
+    setTrashLoading(true);
+    setTrashError('');
+    try {
+      const records = await paymentService.getTrashTransactions();
+      setTrashRecords(records);
+    } catch (e: any) {
+      setTrashError(e.message || 'Failed to load trash');
+    } finally {
+      setTrashLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (hasAccess) {
       loadData();
+      // Silently purge expired trash on load
+      paymentService.purgeExpiredTrash().catch(() => {});
     }
   }, [hasAccess, loadData]);
 
   useEffect(() => {
-    if (hasAccess && activeTab === 'audit') {
-      loadAuditLogs();
-    }
+    if (hasAccess && activeTab === 'audit') loadAuditLogs();
   }, [hasAccess, activeTab, loadAuditLogs]);
+
+  useEffect(() => {
+    if (hasAccess && activeTab === 'trash') loadTrash();
+  }, [hasAccess, activeTab, loadTrash]);
 
   // ── Fetch readable userId for visible transactions ──
   useEffect(() => {
@@ -648,15 +1134,25 @@ const PaymentManagement = () => {
     if (uids.length === 0) return;
     uids.forEach(uid => fetchingUids.current.add(uid));
     Promise.allSettled(
-      uids.map(uid =>
-        paymentService.getReadableUserId(uid).then(rid => ({ uid, rid }))
-      )
+      uids.map(uid => paymentService.getReadableUserId(uid).then(rid => ({ uid, rid })))
     ).then(results => {
       const updates: Record<string, string | null> = {};
-      results.forEach(r => {
-        if (r.status === 'fulfilled') updates[r.value.uid] = r.value.rid;
-      });
+      results.forEach(r => { if (r.status === 'fulfilled') updates[r.value.uid] = r.value.rid; });
       setReadableIds(prev => ({ ...prev, ...updates }));
+    });
+  }, [transactions]);
+
+  // ── Fetch phone numbers for visible transactions ──
+  useEffect(() => {
+    const uids = transactions.map(t => t.userId).filter(uid => uid && !(uid in phoneNumbers) && !fetchingPhones.current.has(uid));
+    if (uids.length === 0) return;
+    uids.forEach(uid => fetchingPhones.current.add(uid));
+    Promise.allSettled(
+      uids.map(uid => paymentService.getUserPhone(uid).then(phone => ({ uid, phone })))
+    ).then(results => {
+      const updates: Record<string, string | null> = {};
+      results.forEach(r => { if (r.status === 'fulfilled') updates[r.value.uid] = r.value.phone; });
+      setPhoneNumbers(prev => ({ ...prev, ...updates }));
     });
   }, [transactions]);
 
@@ -678,6 +1174,7 @@ const PaymentManagement = () => {
     if (filters.status !== 'all') list = list.filter(t => t.status === filters.status);
     if (filters.gateway !== 'all') list = list.filter(t => t.gateway === filters.gateway);
     if (filters.productType !== 'all') list = list.filter(t => t.productType === filters.productType);
+    if (filters.courseId !== 'all') list = list.filter(t => t.productId === filters.courseId);
     if (filters.dateFrom) { const d = new Date(filters.dateFrom); list = list.filter(t => t.createdAt >= d); }
     if (filters.dateTo) { const d = new Date(filters.dateTo); d.setHours(23, 59, 59, 999); list = list.filter(t => t.createdAt <= d); }
     if (filters.amountMin) list = list.filter(t => t.amount >= Number(filters.amountMin));
@@ -701,16 +1198,22 @@ const PaymentManagement = () => {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
 
+  // Stats — always based on full transactions (no filter) for the global cards,
+  // OR filtered if filter is active
+  const filterActive = isFilterActive(filters);
+  const statsSource = filterActive ? filtered : transactions;
+
   const stats = useMemo(() => {
-    const success = transactions.filter(t => t.status === 'success');
+    const success = statsSource.filter(t => t.status === 'success');
     return {
-      total: transactions.length,
+      total: statsSource.length,
       success: success.length,
-      pending: transactions.filter(t => t.status === 'pending').length,
-      failed: transactions.filter(t => t.status === 'failed').length,
+      pending: statsSource.filter(t => t.status === 'pending').length,
+      failed: statsSource.filter(t => t.status === 'failed').length,
+      // Revenue = actual amount paid (not base price), same as before
       revenue: success.reduce((s, t) => s + t.amount, 0),
     };
-  }, [transactions]);
+  }, [statsSource]);
 
   // ── Handlers ──
   const handleFilter = (k: keyof Filters, v: string) => { setFilters(f => ({ ...f, [k]: v })); setPage(1); };
@@ -720,33 +1223,22 @@ const PaymentManagement = () => {
     setPage(1);
   };
 
-  // ── Delete ──
-  const handleDeleteConfirm = async () => {
+  // ── Delete → Trash ──
+  const handleDeleteConfirm = async (reason: string) => {
     if (!deleteTxn) return;
     setActionLoading(true);
     try {
-      // Write audit log BEFORE deleting (so we still have the data)
-      await paymentService.writeAuditLog({
-        transactionId: deleteTxn.transactionId,
-        transactionDocId: deleteTxn.id,
-        action: 'transaction_deleted',
-        ...actorInfo,
-        note: `Transaction permanently deleted`,
-        snapshotBefore: {
-          transactionId: deleteTxn.transactionId,
-          status: deleteTxn.status,
-          amount: deleteTxn.amount,
-          userName: deleteTxn.userName,
-          productName: deleteTxn.productName,
-        },
-      });
-      await paymentService.deleteTransactionById(deleteTxn.id);
+      await paymentService.moveTransactionToTrash(
+        deleteTxn,
+        { uid: actorInfo.performedBy, name: actorInfo.performedByName, role: actorInfo.performedByRole },
+        reason
+      );
       setTransactions(prev => prev.filter(t => t.id !== deleteTxn.id));
       setDeleteTxn(null);
       setSelectedTxn(null);
-      showToast('Transaction deleted and audit log written.', 'success');
-      // Refresh audit logs if that tab is active
+      showToast('Transaction moved to trash. Auto-purge in 30 days.', 'success');
       if (activeTab === 'audit') loadAuditLogs();
+      if (activeTab === 'trash') loadTrash();
     } catch (e: any) {
       showToast(e.message || 'Delete failed', 'error');
     } finally {
@@ -755,7 +1247,7 @@ const PaymentManagement = () => {
   };
 
   // ── Status change ──
-  const handleStatusConfirm = async (newStatus: Transaction['status']) => {
+  const handleStatusConfirm = async (newStatus: Transaction['status'], reason: string) => {
     if (!statusTxn) return;
     setActionLoading(true);
     try {
@@ -766,11 +1258,12 @@ const PaymentManagement = () => {
         action: 'status_changed',
         ...actorInfo,
         changes,
+        reason,
         snapshotBefore: { status: statusTxn.status },
+        note: `Status changed from "${statusTxn.status}" to "${newStatus}". Reason: ${reason}`,
       });
       await paymentService.updateTransactionStatusById(statusTxn.id, newStatus);
       setTransactions(prev => prev.map(t => t.id === statusTxn.id ? { ...t, status: newStatus, updatedAt: new Date() } : t));
-      // Also update the detail modal if open
       if (selectedTxn?.id === statusTxn.id) setSelectedTxn(prev => prev ? { ...prev, status: newStatus, updatedAt: new Date() } : null);
       setStatusTxn(null);
       showToast(`Status changed to "${STATUS_CFG[newStatus]?.label ?? newStatus}"`, 'success');
@@ -782,18 +1275,40 @@ const PaymentManagement = () => {
     }
   };
 
+  // ── Restore from trash ──
+  const handleRestore = async (record: TrashRecord) => {
+    setActionLoading(true);
+    try {
+      await paymentService.restoreTransactionFromTrash(
+        record,
+        { uid: actorInfo.performedBy, name: actorInfo.performedByName, role: actorInfo.performedByRole }
+      );
+      setTrashRecords(prev => prev.filter(r => r.id !== record.id));
+      showToast('Transaction restored successfully.', 'success');
+      loadData(true);
+      if (activeTab === 'audit') loadAuditLogs();
+    } catch (e: any) {
+      showToast(e.message || 'Restore failed', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // ── CSV Export ──
   const handleExport = () => {
-    const headers = ['Transaction ID', 'Doc ID', 'Status', 'Amount', 'Currency',
-      'User Name', 'User Email', 'Auth UID', 'Readable User ID',
+    const headers = ['Transaction ID', 'Doc ID', 'Status', 'Amount', 'Base Price', 'Currency',
+      'User Name', 'User Phone', 'Readable User ID',
       'Product Name', 'Product ID', 'Product Type',
       'Gateway', 'Payment Method', 'Bank Txn ID', 'Validation ID', 'Risk Level',
+      'Coupon Code', 'Coupon Discount %', 'Returning Student Disc %', 'Extra Disc %',
       'Created At', 'Updated At', 'Completed At'];
     const rows = filtered.map(t => [
-      t.transactionId, t.id, t.status, t.amount, t.currency,
-      t.userName, t.userEmail, t.userId, readableIds[t.userId] ?? '',
+      t.transactionId, t.id, t.status, t.amount, t.basePrice ?? '', t.currency,
+      t.userName, phoneNumbers[t.userId] ?? '', readableIds[t.userId] ?? '',
       t.productName, t.productId, t.productType,
       t.gateway ?? '', t.paymentMethod ?? '', t.bankTransactionId ?? '', t.validationId ?? '', t.riskLevel ?? '',
+      t.appliedDiscounts?.couponCode ?? '', t.appliedDiscounts?.couponDiscount ?? '',
+      t.appliedDiscounts?.previousStudentDiscount ?? '', t.appliedDiscounts?.extraDiscount ?? '',
       t.createdAt?.toISOString() ?? '', t.updatedAt?.toISOString() ?? '', t.completedAt?.toISOString() ?? '',
     ]);
     const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -867,17 +1382,19 @@ const PaymentManagement = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-white/5 gap-1">
+      <div className="flex border-b border-white/5 gap-1 overflow-x-auto">
         {([
           { id: 'transactions', label: 'Transactions', count: transactions.length },
           { id: 'gateways', label: 'Gateways', count: null },
           { id: 'reports', label: 'Reports', count: null },
+          { id: 'statistics', label: 'Statistics', count: null },
           { id: 'audit', label: 'Audit Log', count: auditLogs.length || null },
+          { id: 'trash', label: 'Trash', count: trashRecords.length || null },
         ] as { id: TabId; label: string; count: number | null }[]).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === tab.id
                 ? 'border-primary-500 text-primary-400'
                 : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -897,14 +1414,44 @@ const PaymentManagement = () => {
       {activeTab === 'transactions' && (
         <div className="space-y-5">
 
+          {/* Filter active banner */}
+          {filterActive && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary-500/10 border border-primary-500/20 text-xs text-primary-300">
+              <Filter size={12} />
+              Filter active — stats below reflect the current filtered view.
+              <button onClick={() => { setFilters(DEFAULT_FILTERS); setPage(1); }} className="ml-auto text-primary-400 hover:text-primary-200 font-medium">Clear filters</button>
+            </div>
+          )}
+
           {/* Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <StatCard label="Total" value={stats.total.toLocaleString()} Icon={Activity} accent="from-blue-500 to-cyan-500" />
-            <StatCard label="Successful" value={stats.success.toLocaleString()} Icon={CheckCircle} accent="from-emerald-500 to-teal-500" />
-            <StatCard label="Pending" value={stats.pending.toLocaleString()} Icon={Clock} accent="from-amber-500 to-orange-500" />
-            <StatCard label="Failed" value={stats.failed.toLocaleString()} Icon={XCircle} accent="from-red-500 to-rose-500" />
             <StatCard
-              label="Revenue"
+              label={filterActive ? 'Filtered Total' : 'Total'}
+              value={stats.total.toLocaleString()}
+              sub={filterActive ? `of ${transactions.length.toLocaleString()} total` : undefined}
+              Icon={Activity}
+              accent="from-blue-500 to-cyan-500"
+            />
+            <StatCard
+              label={filterActive ? 'Filtered Successful' : 'Successful'}
+              value={stats.success.toLocaleString()}
+              Icon={CheckCircle}
+              accent="from-emerald-500 to-teal-500"
+            />
+            <StatCard
+              label={filterActive ? 'Filtered Pending' : 'Pending'}
+              value={stats.pending.toLocaleString()}
+              Icon={Clock}
+              accent="from-amber-500 to-orange-500"
+            />
+            <StatCard
+              label={filterActive ? 'Filtered Failed' : 'Failed'}
+              value={stats.failed.toLocaleString()}
+              Icon={XCircle}
+              accent="from-red-500 to-rose-500"
+            />
+            <StatCard
+              label={filterActive ? 'Filtered Revenue' : 'Revenue'}
               value={`৳${stats.revenue.toLocaleString('en-BD', { minimumFractionDigits: 0 })}`}
               sub="Successful only"
               Icon={TrendingUp}
@@ -933,12 +1480,20 @@ const PaymentManagement = () => {
             >
               <Filter size={13} />
               Filters
+              {filterActive && <span className="w-1.5 h-1.5 rounded-full bg-primary-400" />}
               {showFilters ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             </button>
           </div>
 
           {showFilters && (
-            <FiltersPanel filters={filters} onChange={handleFilter} onReset={() => { setFilters(DEFAULT_FILTERS); setPage(1); }} gateways={gateways} productTypes={productTypes} />
+            <FiltersPanel
+              filters={filters}
+              onChange={handleFilter}
+              onReset={() => { setFilters(DEFAULT_FILTERS); setPage(1); }}
+              gateways={gateways}
+              productTypes={productTypes}
+              courses={courses}
+            />
           )}
 
           {/* Results bar */}
@@ -1003,10 +1558,14 @@ const PaymentManagement = () => {
                           )}
                         </td>
 
-                        {/* User */}
+                        {/* User (name + phone) */}
                         <td className="px-4 py-3.5">
                           <p className="text-gray-200 text-xs font-medium">{txn.userName || '—'}</p>
-                          <p className="text-gray-500 text-[10px]">{trunc(txn.userEmail || '', 22)}</p>
+                          <p className="text-gray-500 text-[10px] flex items-center gap-1">
+                            {phoneNumbers[txn.userId]
+                              ? <><Phone size={9} className="text-gray-600" />{phoneNumbers[txn.userId]}</>
+                              : <span className="text-gray-700">No phone</span>}
+                          </p>
                         </td>
 
                         {/* Product */}
@@ -1018,6 +1577,11 @@ const PaymentManagement = () => {
                         {/* Amount */}
                         <td className="px-4 py-3.5">
                           <span className="text-white font-bold text-xs">৳{txn.amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}</span>
+                          {txn.appliedDiscounts?.couponCode && (
+                            <p className="text-[10px] text-amber-500 flex items-center gap-0.5 mt-0.5">
+                              <Tag size={9} />{txn.appliedDiscounts.couponCode}
+                            </p>
+                          )}
                         </td>
 
                         {/* Status */}
@@ -1053,7 +1617,7 @@ const PaymentManagement = () => {
                                 <button
                                   onClick={() => setDeleteTxn(txn)}
                                   className="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
-                                  title="Delete"
+                                  title="Move to trash"
                                 >
                                   <Trash2 size={13} />
                                 </button>
@@ -1144,8 +1708,8 @@ const PaymentManagement = () => {
                 key={label}
                 onClick={() => {
                   const data = fn();
-                  const headers = ['Transaction ID', 'Status', 'Amount', 'Currency', 'User Name', 'User Email', 'Auth UID', 'Readable User ID', 'Product Name', 'Product ID', 'Product Type', 'Gateway', 'Created At', 'Completed At'];
-                  const rows = data.map(t => [t.transactionId, t.status, t.amount, t.currency, t.userName, t.userEmail, t.userId, readableIds[t.userId] ?? '', t.productName, t.productId, t.productType, t.gateway, t.createdAt?.toISOString() ?? '', t.completedAt?.toISOString() ?? '']);
+                  const headers = ['Transaction ID', 'Status', 'Amount', 'Base Price', 'Currency', 'User Name', 'User Phone', 'Readable User ID', 'Product Name', 'Product ID', 'Product Type', 'Gateway', 'Coupon Code', 'Coupon Discount %', 'Created At', 'Completed At'];
+                  const rows = data.map(t => [t.transactionId, t.status, t.amount, t.basePrice ?? '', t.currency, t.userName, phoneNumbers[t.userId] ?? '', readableIds[t.userId] ?? '', t.productName, t.productId, t.productType, t.gateway, t.appliedDiscounts?.couponCode ?? '', t.appliedDiscounts?.couponDiscount ?? '', t.createdAt?.toISOString() ?? '', t.completedAt?.toISOString() ?? '']);
                   const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
                   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: `${file}_${new Date().toISOString().slice(0, 10)}.csv` });
                   a.click();
@@ -1180,6 +1744,11 @@ const PaymentManagement = () => {
         </div>
       )}
 
+      {/* ══ STATISTICS TAB ══ */}
+      {activeTab === 'statistics' && (
+        <StatisticsTab transactions={transactions} />
+      )}
+
       {/* ══ AUDIT LOG TAB ══ */}
       {activeTab === 'audit' && (
         <AuditLogTab
@@ -1190,12 +1759,25 @@ const PaymentManagement = () => {
         />
       )}
 
+      {/* ══ TRASH TAB ══ */}
+      {activeTab === 'trash' && (
+        <TrashTab
+          trashRecords={trashRecords}
+          loading={trashLoading}
+          error={trashError}
+          onRefresh={loadTrash}
+          onRestore={handleRestore}
+          canModify={canModify}
+        />
+      )}
+
       {/* ══ MODALS ══ */}
 
       {selectedTxn && (
         <DetailModal
           txn={selectedTxn}
           readableUserId={readableIds[selectedTxn.userId] ?? null}
+          userPhone={phoneNumbers[selectedTxn.userId] ?? null}
           onClose={() => setSelectedTxn(null)}
           onDelete={() => { setDeleteTxn(selectedTxn); setSelectedTxn(null); }}
           onChangeStatus={() => { setStatusTxn(selectedTxn); setSelectedTxn(null); }}
