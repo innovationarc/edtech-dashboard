@@ -13,22 +13,15 @@ import { db } from '../config/firebase';
 // ==================== INTERFACES ====================
 
 export interface ReceiptData {
-  // Receipt meta
   receiptNumber: string;
   issuedAt: Date;
-
-  // Student
   studentName: string;
   studentEmail: string;
   studentUserId: string;
-
-  // Course
   courseTitle: string;
   courseClass: string;
   courseCategory: string;
   courseInstructor: string;
-
-  // Payment
   basePrice: number;
   amountPaid: number;
   totalDiscount: number;
@@ -37,8 +30,6 @@ export interface ReceiptData {
   transactionId: string;
   enrollmentId: string;
   isFree: boolean;
-
-  // Discount breakdown
   previousStudentDiscount: number;
   extraDiscount: number;
   couponDiscount: number;
@@ -68,31 +59,25 @@ function toDate(value: any): Date {
   return isNaN(p.getTime()) ? new Date() : p;
 }
 
-/**
- * Derives a human-readable receipt number from the Firestore enrollment doc ID.
- * Format: RCP-{first 8 chars of enrollmentId uppercased}
- * No extra storage needed — deterministic and reversible.
- */
 export function deriveReceiptNumber(enrollmentId: string): string {
   return 'RCP-' + enrollmentId.slice(0, 8).toUpperCase();
+}
+
+function parseCouponCodes(discounts: any): string[] {
+  const codes: string[] = [];
+  if (discounts.couponCode) codes.push(discounts.couponCode);
+  if (Array.isArray(discounts.appliedCoupons)) {
+    discounts.appliedCoupons.forEach((c: any) => {
+      if (c.couponCode && !codes.includes(c.couponCode)) codes.push(c.couponCode);
+    });
+  }
+  return codes;
 }
 
 // ==================== SERVICE ====================
 
 const receiptService = {
 
-  /**
-   * Fetches all data needed to render an enrollment receipt.
-   *
-   * Steps:
-   *  1. Fetch enrollment doc by enrollmentId
-   *  2. Verify ownership (studentId === currentUserId)
-   *  3. Fetch course doc for title/class/category/instructor
-   *  4. Fetch transaction doc for paymentMethod (if not already on enrollment)
-   *  5. Merge into ReceiptData
-   *
-   * Returns a ReceiptResult with status + data (or error message).
-   */
   async getReceiptData(
     enrollmentId: string,
     currentUserId: string
@@ -103,16 +88,13 @@ const receiptService = {
 
     try {
       // ── Step 1: Fetch enrollment ──────────────────────────────────────────
-      const enrollRef = doc(db, 'enrollments', enrollmentId);
-      const enrollSnap = await getDoc(enrollRef);
-
+      const enrollSnap = await getDoc(doc(db, 'enrollments', enrollmentId));
       if (!enrollSnap.exists()) {
         return {
           status: 'not_found',
           message: `Enrollment not found. Please contact support with ID: ${enrollmentId}`,
         };
       }
-
       const enroll = enrollSnap.data();
 
       // ── Step 2: Ownership check ───────────────────────────────────────────
@@ -123,35 +105,44 @@ const receiptService = {
         };
       }
 
-      // ── Step 3: Parse discounts ───────────────────────────────────────────
-      const discounts = enroll.appliedDiscounts || {};
-
-      const previousStudentDiscount: number = discounts.previousStudentDiscount || 0;
-      const extraDiscount: number           = discounts.extraDiscount || 0;
-      const couponDiscount: number          = discounts.couponDiscount || 0;
-      const totalDiscount                   = previousStudentDiscount + extraDiscount + couponDiscount;
-
-      // Reconstruct basePrice from amountPaid + all discounts
       const amountPaid: number = enroll.amountPaid || 0;
-      const basePrice          = Math.max(0, amountPaid + totalDiscount);
 
-      // Collect coupon codes
-      const couponCodes: string[] = [];
-      if (discounts.couponCode) couponCodes.push(discounts.couponCode);
-      if (Array.isArray(discounts.appliedCoupons)) {
-        discounts.appliedCoupons.forEach((c: any) => {
-          if (c.couponCode && !couponCodes.includes(c.couponCode)) {
-            couponCodes.push(c.couponCode);
+      // ── Step 3: Fetch transaction ─────────────────────────────────────────
+      // For PAID enrollments the payment webhook creates the enrollment doc but
+      // does NOT copy appliedDiscounts onto it — those only live on the
+      // transaction doc. So we always fetch the transaction and use its
+      // appliedDiscounts as the authoritative source, falling back to whatever
+      // is on the enrollment doc (free enrollments write discounts there).
+      let paymentMethod: string = enroll.paymentMethod || '';
+      let txAppliedDiscounts: any = null;
+
+      if (enroll.transactionId) {
+        try {
+          const txSnap = await getDocs(
+            query(collection(db, 'transactions'), where('transactionId', '==', enroll.transactionId))
+          );
+          if (!txSnap.empty) {
+            const txData = txSnap.docs[0].data();
+            if (!paymentMethod) paymentMethod = txData.paymentMethod || '';
+            if (txData.appliedDiscounts) txAppliedDiscounts = txData.appliedDiscounts;
           }
-        });
+        } catch (txErr: any) {
+          console.warn('[receiptService] Could not fetch transaction:', txErr.message);
+        }
       }
 
-      // ── Step 4: Fetch course ──────────────────────────────────────────────
-      let courseTitle      = '';
-      let courseClass      = '';
-      let courseCategory   = '';
-      let courseInstructor = '';
+      // Prefer transaction discounts (paid flow) → fall back to enrollment discounts (free flow)
+      const discounts = txAppliedDiscounts || enroll.appliedDiscounts || {};
 
+      const previousStudentDiscount: number = discounts.previousStudentDiscount || 0;
+      const extraDiscount: number           = discounts.extraDiscount           || 0;
+      const couponDiscount: number          = discounts.couponDiscount          || 0;
+      const totalDiscount                   = previousStudentDiscount + extraDiscount + couponDiscount;
+      const basePrice                       = Math.max(0, amountPaid + totalDiscount);
+      const couponCodes                     = parseCouponCodes(discounts);
+
+      // ── Step 4: Fetch course ──────────────────────────────────────────────
+      let courseTitle = '', courseClass = '', courseCategory = '', courseInstructor = '';
       if (enroll.courseId) {
         try {
           const courseSnap = await getDoc(doc(db, 'courses', enroll.courseId));
@@ -164,44 +155,20 @@ const receiptService = {
           }
         } catch (courseErr: any) {
           console.warn('[receiptService] Could not fetch course:', courseErr.message);
-          // Non-fatal — receipt still renders with enrollment data
         }
       }
 
-      // ── Step 5: Fetch transaction for paymentMethod ───────────────────────
-      let paymentMethod: string = enroll.paymentMethod || '';
-
-      if (!paymentMethod && enroll.transactionId) {
-        try {
-          const txSnap = await getDocs(
-            query(
-              collection(db, 'transactions'),
-              where('transactionId', '==', enroll.transactionId)
-            )
-          );
-          if (!txSnap.empty) {
-            paymentMethod = txSnap.docs[0].data().paymentMethod || '';
-          }
-        } catch (txErr: any) {
-          console.warn('[receiptService] Could not fetch transaction:', txErr.message);
-          // Non-fatal
-        }
-      }
-
-      // ── Step 6: Build ReceiptData ─────────────────────────────────────────
+      // ── Step 5: Build ReceiptData ─────────────────────────────────────────
       const data: ReceiptData = {
         receiptNumber:   deriveReceiptNumber(enrollmentId),
         issuedAt:        toDate(enroll.paymentDate || enroll.enrolledAt),
-
         studentName:     enroll.studentName   || '',
         studentEmail:    enroll.studentEmail  || '',
         studentUserId:   enroll.studentUserId || '',
-
         courseTitle,
         courseClass,
         courseCategory,
         courseInstructor,
-
         basePrice,
         amountPaid,
         totalDiscount,
@@ -210,7 +177,6 @@ const receiptService = {
         transactionId:   enroll.transactionId || '',
         enrollmentId,
         isFree:          amountPaid === 0,
-
         previousStudentDiscount,
         extraDiscount,
         couponDiscount,
