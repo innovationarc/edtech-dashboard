@@ -29,6 +29,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
       <div className="cr-header">
         <div className="cr-logo-area">
           <svg className="cr-logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="24" height="24" rx="4" fill="#1a56db"/>
             <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -232,7 +233,7 @@ const CRStyles = () => (
       flex-shrink: 0;
     }
     .cr-logo-area { display: flex; align-items: center; gap: 15px; }
-    .cr-logo-icon { width: 46px; height: 46px; background: #1a56db; border-radius: 8px; flex-shrink: 0; }
+    .cr-logo-icon { width: 46px; height: 46px; border-radius: 8px; flex-shrink: 0; }
     .cr-brand-name { font-size: 26px; font-weight: 800; color: #111827; letter-spacing: -1px; margin: 0; }
     .cr-receipt-label { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
     .cr-receipt-label h2 { margin: 0; font-size: 30px; color: #1a56db; letter-spacing: 2px; }
@@ -319,16 +320,32 @@ const CRStyles = () => (
     .cr-spin { animation: cr-spin .75s linear infinite; }
 
     @media print {
-      /* Hide everything on the entire page */
-      body * { visibility: hidden !important; }
+      /* Hide everything except the receipt */
+      body > *:not(#cr-print-root),
+      .cr-shell > *:not(.cr-page) { display: none !important; }
 
-      /* Then selectively show only the receipt page and all its children */
-      .cr-page,
-      .cr-page * { visibility: visible !important; }
+      /* Reset shell and body */
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        width: 210mm !important;
+        height: 297mm !important;
+      }
 
-      /* Position the receipt to fill the entire printed page */
+      .cr-shell {
+        background: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        min-height: unset !important;
+        display: block !important;
+        width: 210mm !important;
+      }
+
+      .cr-actions { display: none !important; }
+
       .cr-page {
-        position: fixed !important;
+        position: absolute !important;
         top: 0 !important;
         left: 0 !important;
         width: 210mm !important;
@@ -338,6 +355,34 @@ const CRStyles = () => (
         box-shadow: none !important;
         overflow: hidden !important;
         background: white !important;
+        display: flex !important;
+      }
+
+      /* Force background colors and images to print */
+      .cr-logo-icon {
+        background: #1a56db !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .cr-grand-total {
+        background: #1a56db !important;
+        color: white !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .cr-items-table th {
+        background: #f9fafb !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      /* Force all colors */
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
       }
     }
 
@@ -459,7 +504,7 @@ const CourseReceipt: React.FC = () => {
   return (
     <>
       <CRStyles />
-      <div className="cr-shell">
+      <div className="cr-shell" id="cr-print-root">
         <div className="cr-actions">
           <button className="cr-action-btn cr-action-btn--back" onClick={() => navigate('/course-enrollment')}>
             <ArrowLeft size={16} /> Back to Courses
