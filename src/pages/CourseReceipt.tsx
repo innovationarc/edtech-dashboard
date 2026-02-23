@@ -63,12 +63,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
               <span className="cr-value">{data.studentUserId}</span>
             </div>
           )}
-          {data.studentEmail && (
-            <div className="cr-field">
-              <span className="cr-label">Email</span>
-              <span className="cr-value">{data.studentEmail}</span>
-            </div>
-          )}
+
         </div>
         <div>
           <div className="cr-field">
@@ -81,22 +76,14 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
               <span className="cr-value">{[data.courseClass, data.courseCategory].filter(Boolean).join(' | ')}</span>
             </div>
           )}
-          {data.courseInstructor && (
-            <div className="cr-field">
-              <span className="cr-label">Instructor</span>
-              <span className="cr-value">{data.courseInstructor}</span>
-            </div>
-          )}
+
           {data.transactionId && (
             <div className="cr-field">
               <span className="cr-label">Transaction ID</span>
               <span className="cr-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>{data.transactionId}</span>
             </div>
           )}
-          <div className="cr-field">
-            <span className="cr-label">Enrollment ID</span>
-            <span className="cr-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>{data.enrollmentId}</span>
-          </div>
+
         </div>
       </div>
 
@@ -245,17 +232,19 @@ const CRStyles = () => (
     .cr-action-btn--back  { background: rgba(255,255,255,.15); color: #fff; }
     .cr-action-btn--print { background: #1a56db; color: #fff; }
 
-    /* Receipt page — matches HTML template exactly */
+    /* Receipt page — fixed A4 size, flex column so footer pins to bottom */
     .cr-page {
       width: 800px;
-      height: 1032px;
-      padding: 60px;
+      height: 1132px;
+      padding: 44px 56px 44px;
       margin: 0 auto;
       background: white;
       box-shadow: 0 0 20px rgba(0,0,0,0.3);
       position: relative;
       overflow: hidden;
       box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
     }
 
     .cr-watermark {
@@ -276,72 +265,79 @@ const CRStyles = () => (
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 3px solid #1a56db;
-      padding-bottom: 30px;
-      margin-bottom: 40px;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+      flex-shrink: 0;
     }
     .cr-logo-area { display: flex; align-items: center; gap: 15px; }
-    .cr-logo-icon { width: 50px; height: 50px; background: #1a56db; border-radius: 8px; flex-shrink: 0; }
-    .cr-brand-name { font-size: 28px; font-weight: 800; color: #111827; letter-spacing: -1px; margin: 0; }
+    .cr-logo-icon { width: 46px; height: 46px; background: #1a56db; border-radius: 8px; flex-shrink: 0; }
+    .cr-brand-name { font-size: 26px; font-weight: 800; color: #111827; letter-spacing: -1px; margin: 0; }
     .cr-receipt-label { text-align: right; }
-    .cr-receipt-label h2 { margin: 0; font-size: 32px; color: #1a56db; letter-spacing: 2px; }
+    .cr-receipt-label h2 { margin: 0; font-size: 30px; color: #1a56db; letter-spacing: 2px; }
 
     .cr-details-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 30px;
-      margin-bottom: 50px;
+      gap: 20px;
+      margin-bottom: 20px;
+      flex-shrink: 0;
     }
-    .cr-field { margin-bottom: 15px; }
+    .cr-field { margin-bottom: 10px; }
     .cr-label {
       font-size: 11px;
       text-transform: uppercase;
       color: #6b7280;
       font-weight: 700;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       display: block;
     }
-    .cr-value { font-size: 15px; color: #111827; font-weight: 600; }
+    .cr-value { font-size: 14px; color: #111827; font-weight: 600; }
 
-    .cr-items-table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+    .cr-items-table { width: 100%; border-collapse: collapse; margin-bottom: 0; flex-shrink: 0; }
     .cr-items-table th {
       background: #f9fafb;
       text-align: left;
-      padding: 12px 15px;
-      font-size: 12px;
+      padding: 10px 14px;
+      font-size: 11px;
       text-transform: uppercase;
       border-bottom: 2px solid #e5e7eb;
       color: #374151;
     }
-    .cr-items-table td { padding: 20px 15px; border-bottom: 1px solid #f3f4f6; font-size: 14px; }
+    .cr-items-table td { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
 
-    .cr-summary-container { display: flex; justify-content: space-between; margin-top: 20px; }
-    .cr-qr-box { border: 1px solid #e5e7eb; padding: 12px; border-radius: 8px; text-align: center; width: 130px; }
+    .cr-summary-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 16px;
+      flex-shrink: 0;
+    }
+    .cr-qr-box { border: 1px solid #e5e7eb; padding: 10px; border-radius: 8px; text-align: center; width: 120px; }
     .cr-qr-box img { width: 100%; height: auto; }
-    .cr-qr-box span { font-size: 9px; color: #9ca3af; margin-top: 5px; display: block; }
-    .cr-total-box { width: 300px; }
-    .cr-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+    .cr-qr-box span { font-size: 9px; color: #9ca3af; margin-top: 4px; display: block; }
+    .cr-total-box { width: 280px; }
+    .cr-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
     .cr-grand-total {
-      margin-top: 10px;
-      padding: 15px 10px;
+      margin-top: 8px;
+      padding: 12px 10px;
       background: #1a56db;
       color: white;
       border-radius: 6px;
       font-weight: 800;
-      font-size: 18px;
+      font-size: 17px;
     }
 
+    /* Footer always sits at the bottom of the A4 page */
     .cr-footer-note {
-      position: absolute;
-      bottom: 60px;
-      left: 60px;
-      right: 60px;
+      margin-top: auto;
+      padding-top: 16px;
       text-align: center;
-      font-size: 12px;
+      font-size: 11px;
       color: #9ca3af;
       border-top: 1px solid #eee;
-      padding-top: 20px;
+      flex-shrink: 0;
     }
-    .cr-footer-note p { margin: 4px 0; }
+    .cr-footer-note p { margin: 3px 0; }
 
     .cr-state {
       display: flex;
@@ -359,22 +355,28 @@ const CRStyles = () => (
     @media print {
       .cr-actions { display: none !important; }
       .cr-shell { background: none; padding: 0; }
-      .cr-page { box-shadow: none; margin: 0; }
+      .cr-page {
+        box-shadow: none;
+        margin: 0;
+        width: 210mm;
+        height: 297mm;
+        padding: 12mm 14mm;
+      }
     }
 
     @media (max-width: 860px) {
       .cr-actions { width: 100%; }
-      .cr-page { width: 100%; height: auto; min-height: 1032px; padding: 40px 24px; }
+      .cr-page { width: 100%; height: auto; min-height: 800px; padding: 32px 20px; }
       .cr-watermark { font-size: 80px; }
       .cr-brand-name { font-size: 20px; }
       .cr-receipt-label h2 { font-size: 24px; }
-      .cr-details-grid { gap: 16px; margin-bottom: 30px; }
-      .cr-footer-note { position: static; margin-top: 40px; }
+      .cr-details-grid { gap: 14px; margin-bottom: 16px; }
+      .cr-footer-note { margin-top: 24px; }
     }
 
     @media (max-width: 560px) {
       .cr-details-grid { grid-template-columns: 1fr; }
-      .cr-summary-container { flex-direction: column; gap: 24px; }
+      .cr-summary-container { flex-direction: column; gap: 20px; }
       .cr-total-box { width: 100%; }
       .cr-qr-box { width: 110px; }
     }
