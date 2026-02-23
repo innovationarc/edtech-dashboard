@@ -320,69 +320,34 @@ const CRStyles = () => (
     .cr-spin { animation: cr-spin .75s linear infinite; }
 
     @media print {
-      /* Hide everything except the receipt */
-      body > *:not(#cr-print-root),
-      .cr-shell > *:not(.cr-page) { display: none !important; }
-
-      /* Reset shell and body */
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: white !important;
-        width: 210mm !important;
-        height: 297mm !important;
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
       }
-
+      .cr-actions { display: none !important; }
       .cr-shell {
         background: none !important;
         padding: 0 !important;
         margin: 0 !important;
         min-height: unset !important;
-        display: block !important;
-        width: 210mm !important;
       }
-
-      .cr-actions { display: none !important; }
-
       .cr-page {
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
+        box-shadow: none !important;
+        margin: 0 !important;
         width: 210mm !important;
         height: 297mm !important;
         padding: 14mm 16mm !important;
-        margin: 0 !important;
-        box-shadow: none !important;
-        overflow: hidden !important;
-        background: white !important;
-        display: flex !important;
       }
 
-      /* Force background colors and images to print */
-      .cr-logo-icon {
-        background: #1a56db !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
+      /* Hide everything in the app that is NOT the receipt shell */
+      body.printing-receipt > *:not(#cr-print-root) {
+        display: none !important;
       }
-
-      .cr-grand-total {
-        background: #1a56db !important;
-        color: white !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      .cr-items-table th {
-        background: #f9fafb !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      /* Force all colors */
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        color-adjust: exact !important;
+      /* Also hide siblings inside whatever layout wrapper wraps cr-print-root */
+      body.printing-receipt #cr-print-root ~ *,
+      body.printing-receipt *:has(~ #cr-print-root) {
+        display: none !important;
       }
     }
 
@@ -420,6 +385,44 @@ const CourseReceipt: React.FC = () => {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Inject/remove a <style> that hides all app chrome when printing
+  useEffect(() => {
+    let styleEl: HTMLStyleElement | null = null;
+
+    const onBefore = () => {
+      styleEl = document.createElement('style');
+      styleEl.id = 'cr-print-style';
+      styleEl.innerHTML = `
+        @media print {
+          body * { visibility: hidden !important; }
+          #cr-print-root .cr-page,
+          #cr-print-root .cr-page * { visibility: visible !important; }
+          #cr-print-root .cr-page {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 210mm !important; height: 297mm !important;
+            padding: 14mm 16mm !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+          }
+        }
+      `;
+      document.head.appendChild(styleEl);
+    };
+
+    const onAfter = () => {
+      if (styleEl) { styleEl.remove(); styleEl = null; }
+    };
+
+    window.addEventListener('beforeprint', onBefore);
+    window.addEventListener('afterprint',  onAfter);
+    return () => {
+      window.removeEventListener('beforeprint', onBefore);
+      window.removeEventListener('afterprint',  onAfter);
+      if (styleEl) styleEl.remove();
+    };
+  }, []);
 
   const enrollmentId = new URLSearchParams(location.search).get('enrollment') || '';
   const cacheKey = `receipt_${enrollmentId}`;
