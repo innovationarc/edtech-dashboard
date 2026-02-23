@@ -25,7 +25,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
       {/* Watermark */}
       <div className="cr-watermark">{watermarkText}</div>
 
-      {/* Header — compact, no barcode here */}
+      {/* Header — logo left, RECEIPT + barcode right */}
       <div className="cr-header">
         <div className="cr-logo-area">
           <svg className="cr-logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -40,9 +40,9 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         </div>
         <div className="cr-receipt-label">
           <h2>RECEIPT</h2>
-          <div className="cr-field" style={{ marginTop: '8px' }}>
-            <span className="cr-label">Receipt No</span>
-            <span className="cr-value" style={{ color: '#1a56db' }}>#{data.receiptNumber}</span>
+          <div className="cr-header-barcode">
+            <img src={barcodeUrl} alt={`Barcode: ${data.receiptNumber}`} className="cr-header-barcode-img" />
+            <span className="cr-header-barcode-text">#{data.receiptNumber}</span>
           </div>
         </div>
       </div>
@@ -74,12 +74,6 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
               <span className="cr-value">{[data.courseClass, data.courseCategory].filter(Boolean).join(' | ')}</span>
             </div>
           )}
-          {data.courseId && (
-            <div className="cr-field">
-              <span className="cr-label">Course ID</span>
-              <span className="cr-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>{data.courseId}</span>
-            </div>
-          )}
           {data.transactionId && (
             <div className="cr-field">
               <span className="cr-label">Transaction ID</span>
@@ -89,7 +83,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         </div>
       </div>
 
-      {/* Items Table — only course enrollment fee, no discount rows */}
+      {/* Items Table — only course enrollment fee */}
       <table className="cr-items-table">
         <thead>
           <tr>
@@ -113,7 +107,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         </tbody>
       </table>
 
-      {/* Summary */}
+      {/* Summary — left-aligned to match table's left edge */}
       <div className="cr-summary-container">
         <div className="cr-qr-box">
           <img src={qrUrl} alt="Verification QR Code" />
@@ -152,13 +146,10 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         </div>
       </div>
 
-      {/* Footer — text note + barcode centered below */}
+      {/* Footer */}
       <div className="cr-footer-note">
         <p>This document is an official record of enrollment. Receipt No: <strong>#{data.receiptNumber}</strong></p>
         <p>For any queries, please contact support with your Enrollment ID or Transaction ID.</p>
-        <div className="cr-barcode-wrap">
-          <img src={barcodeUrl} alt={`Barcode: ${data.receiptNumber}`} className="cr-barcode-img" />
-        </div>
       </div>
     </div>
   );
@@ -243,8 +234,11 @@ const CRStyles = () => (
     .cr-logo-area { display: flex; align-items: center; gap: 15px; }
     .cr-logo-icon { width: 46px; height: 46px; background: #1a56db; border-radius: 8px; flex-shrink: 0; }
     .cr-brand-name { font-size: 26px; font-weight: 800; color: #111827; letter-spacing: -1px; margin: 0; }
-    .cr-receipt-label { text-align: right; }
+    .cr-receipt-label { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
     .cr-receipt-label h2 { margin: 0; font-size: 30px; color: #1a56db; letter-spacing: 2px; }
+    .cr-header-barcode { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .cr-header-barcode-img { height: 52px; width: auto; max-width: 220px; display: block; }
+    .cr-header-barcode-text { font-size: 10px; color: #9ca3af; font-family: monospace; letter-spacing: 0.05em; }
 
     .cr-details-grid {
       display: grid;
@@ -280,7 +274,8 @@ const CRStyles = () => (
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-top: 16px;
+      margin-top: 24px;
+      padding: 0 14px;
       flex-shrink: 0;
     }
     .cr-qr-box { border: 1px solid #e5e7eb; padding: 10px; border-radius: 8px; text-align: center; width: 120px; }
@@ -309,18 +304,6 @@ const CRStyles = () => (
       flex-shrink: 0;
     }
     .cr-footer-note p { margin: 3px 0; }
-    .cr-barcode-wrap {
-      margin-top: 12px;
-      display: flex;
-      justify-content: center;
-    }
-    .cr-barcode-img {
-      height: 44px;
-      width: auto;
-      max-width: 260px;
-      display: block;
-      opacity: 0.75;
-    }
 
     .cr-state {
       display: flex;
