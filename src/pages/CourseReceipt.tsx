@@ -127,7 +127,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
           )}
           {data.extraDiscount > 0 && (
             <div className="cr-row">
-              <span style={{ color: '#6b7280' }}>Promotional Discount:</span>
+              <span style={{ color: '#6b7280' }}>Limited Time Discount:</span>
               <span style={{ color: '#dc2626', fontWeight: 600 }}>-৳{data.extraDiscount.toLocaleString()}</span>
             </div>
           )}
@@ -237,8 +237,8 @@ const CRStyles = () => (
     .cr-receipt-label { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
     .cr-receipt-label h2 { margin: 0; font-size: 30px; color: #1a56db; letter-spacing: 2px; }
     .cr-header-barcode { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-    .cr-header-barcode-img { height: 52px; width: auto; max-width: 220px; display: block; }
-    .cr-header-barcode-text { font-size: 10px; color: #9ca3af; font-family: monospace; letter-spacing: 0.05em; }
+    .cr-header-barcode-img { height: 38px; width: auto; max-width: 180px; display: block; }
+    .cr-header-barcode-text { display: none; }
 
     .cr-details-grid {
       display: grid;
@@ -274,7 +274,7 @@ const CRStyles = () => (
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-top: 24px;
+      margin-top: 36px;
       padding: 0 14px;
       flex-shrink: 0;
     }
