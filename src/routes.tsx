@@ -29,6 +29,7 @@ import TermsOfService from './pages/TermsOfService';
 import VerifyProfile from './pages/VerifyProfile';
 import VerifyId from './pages/VerifyId'; // NEW: ID Card Verification
 import CourseReceipt from './pages/CourseReceipt'; // Receipt page
+import VerifyReceipt from './pages/VerifyReceipt'; // Public receipt verification
 
 // Import role-specific management pages (placeholders)
 import ManageStudent from './pages/ManageStudent';
@@ -154,6 +155,9 @@ const AppRoutes = () => {
       
       {/* NEW: Public ID Card Verification - OUTSIDE DashboardLayout */}
       <Route path="/verify-id" element={<VerifyId />} />
+
+      {/* Public receipt verification - OUTSIDE DashboardLayout, no auth required */}
+      <Route path="/verify-receipt" element={<VerifyReceipt />} />
       
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<Navigate to={getDefaultRoute()} replace />} />
