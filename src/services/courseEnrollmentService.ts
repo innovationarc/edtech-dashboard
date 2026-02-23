@@ -928,7 +928,7 @@ export const courseEnrollmentService = {
               courseTitle,
               courseId,
               isReplay: false, // Found by THIS transaction → always fresh success
-              message: `Payment verified! You are now enrolled in "${courseTitle || 'the course'}".`,
+              message: `Payment verified! You are now enrolled in ${courseTitle || 'the course'}.`,
             };
           }
 
@@ -959,8 +959,8 @@ export const courseEnrollmentService = {
                 courseId,
                 isReplay: isDefiniteReplay,
                 message: isDefiniteReplay
-                  ? `You are already enrolled in "${courseTitle || 'this course'}".`
-                  : `Payment verified! You are now enrolled in "${courseTitle || 'the course'}".`,
+                  ? `You are already enrolled in ${courseTitle || 'this course'}.`
+                  : `Payment verified! You are now enrolled in ${courseTitle || 'the course'}.`,
               };
             }
           }
