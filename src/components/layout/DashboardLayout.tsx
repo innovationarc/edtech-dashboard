@@ -38,6 +38,12 @@ const DashboardLayout = () => {
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
+      {/* Inject global scrollbar-hide rule for the main scroll area */}
+      <style>{`
+        .dl-main::-webkit-scrollbar { display: none !important; }
+        .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+      `}</style>
+
       {/* Navigation Component (Combined Sidebar + Header) - Both are now fixed positioned */}
       <Navigation />
       
@@ -45,8 +51,8 @@ const DashboardLayout = () => {
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
         !isMobile && sidebarOpen ? 'ml-64' : !isMobile ? 'ml-20' : 'ml-0'
       }`}>
-        {/* Main content area - Add top padding for fixed header */}
-        <main className="flex-1 overflow-auto pt-16 sm:pt-[68px] lg:pt-[72px]">
+        {/* Main content area - overflow-auto kept for scroll, scrollbar visually hidden */}
+        <main className="dl-main flex-1 overflow-auto pt-16 sm:pt-[68px] lg:pt-[72px]">
           <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
             <Outlet />
           </div>
