@@ -109,9 +109,15 @@ async function verifyReceipt(
       } catch (_) {}
     }
 
-    // Build full name: enrollment stores first name in studentName, surname in transaction metadata
-    const firstName       = enroll.studentName || '';
-    const studentFullName = studentSurname ? `${firstName} ${studentSurname}`.trim() : firstName;
+    // studentName on the enrollment doc is already the full name as entered during registration.
+    // Only append surname from transaction metadata if studentName appears to be a single word
+    // AND the surname isn't already included in it (avoids "John Doe Doe" duplication).
+    const studentNameRaw  = (enroll.studentName || '').trim();
+    const isSingleWord    = !studentNameRaw.includes(' ');
+    const surnameNotPresent = studentSurname && !studentNameRaw.toLowerCase().includes(studentSurname.toLowerCase());
+    const studentFullName = (isSingleWord && surnameNotPresent)
+      ? `${studentNameRaw} ${studentSurname}`.trim()
+      : studentNameRaw;
 
     const data: VerifiedReceipt = {
       receiptNumber:   expectedRef,
