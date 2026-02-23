@@ -17,6 +17,7 @@ function formatDate(d: Date): string {
 const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
   const verifyUrl = `${window.location.origin}/verify-receipt?id=${data.enrollmentId}&ref=${data.receiptNumber}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(verifyUrl)}`;
+  const barcodeUrl = `https://barcodeapi.org/api/128/${encodeURIComponent(data.receiptNumber)}`;
   const watermarkText = data.isFree ? 'FREE' : 'PAID';
 
   return (
@@ -42,6 +43,13 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
           <div className="cr-field" style={{ marginTop: '10px' }}>
             <span className="cr-label">Receipt No</span>
             <span className="cr-value" style={{ color: '#1a56db' }}>#{data.receiptNumber}</span>
+          </div>
+          <div style={{ marginTop: '10px' }}>
+            <img
+              src={barcodeUrl}
+              alt={`Barcode: ${data.receiptNumber}`}
+              style={{ height: '48px', width: 'auto', maxWidth: '200px', display: 'block', marginLeft: 'auto' }}
+            />
           </div>
         </div>
       </div>
@@ -97,46 +105,46 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         </thead>
         <tbody>
           <tr>
-            <td>
-              <strong>Course Enrollment Fee</strong>
+            <td style={{ color: '#111827' }}>
+              <strong style={{ color: '#111827' }}>Course Enrollment Fee</strong>
               <br />
               <small style={{ color: '#6b7280' }}>
                 {data.isFree ? 'Free Enrollment' : `Payment via ${data.paymentMethod || 'Online Gateway'}`}
               </small>
             </td>
-            <td style={{ textAlign: 'right', fontWeight: 600 }}>
+            <td style={{ textAlign: 'right', fontWeight: 600, color: '#111827' }}>
               {data.isFree ? 'Free' : `৳${data.basePrice.toLocaleString()}`}
             </td>
           </tr>
           {data.previousStudentDiscount > 0 && (
             <tr>
-              <td style={{ color: '#059669' }}>
-                <strong>Previous Student Discount</strong>
+              <td style={{ color: '#111827' }}>
+                <strong style={{ color: '#111827' }}>Discount Applied</strong>
                 <br /><small style={{ color: '#6b7280' }}>Returning student benefit</small>
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+              <td style={{ textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
                 -৳{data.previousStudentDiscount.toLocaleString()}
               </td>
             </tr>
           )}
           {data.extraDiscount > 0 && (
             <tr>
-              <td style={{ color: '#059669' }}>
-                <strong>Limited Time Discount</strong>
+              <td style={{ color: '#111827' }}>
+                <strong style={{ color: '#111827' }}>Discount Applied</strong>
                 <br /><small style={{ color: '#6b7280' }}>Special promotional offer</small>
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+              <td style={{ textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
                 -৳{data.extraDiscount.toLocaleString()}
               </td>
             </tr>
           )}
           {data.couponDiscount > 0 && (
             <tr>
-              <td style={{ color: '#059669' }}>
-                <strong>Coupon Discount{data.couponCodes.length > 0 ? ` — ${data.couponCodes.join(', ')}` : ''}</strong>
+              <td style={{ color: '#111827' }}>
+                <strong style={{ color: '#111827' }}>Discount Applied</strong>
                 <br /><small style={{ color: '#6b7280' }}>Promotional coupon applied</small>
               </td>
-              <td style={{ textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+              <td style={{ textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
                 -৳{data.couponDiscount.toLocaleString()}
               </td>
             </tr>
@@ -159,22 +167,22 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
           </div>
           {data.previousStudentDiscount > 0 && (
             <div className="cr-row">
-              <span style={{ color: '#059669', fontWeight: 600 }}>Previous Student Discount:</span>
-              <span style={{ color: '#059669' }}>-৳{data.previousStudentDiscount.toLocaleString()}</span>
+              <span style={{ color: '#6b7280' }}>Returning Student Discount:</span>
+              <span style={{ color: '#dc2626', fontWeight: 600 }}>-৳{data.previousStudentDiscount.toLocaleString()}</span>
             </div>
           )}
           {data.extraDiscount > 0 && (
             <div className="cr-row">
-              <span style={{ color: '#059669', fontWeight: 600 }}>Limited Time Discount:</span>
-              <span style={{ color: '#059669' }}>-৳{data.extraDiscount.toLocaleString()}</span>
+              <span style={{ color: '#6b7280' }}>Promotional Discount:</span>
+              <span style={{ color: '#dc2626', fontWeight: 600 }}>-৳{data.extraDiscount.toLocaleString()}</span>
             </div>
           )}
           {data.couponDiscount > 0 && (
             <div className="cr-row">
-              <span style={{ color: '#059669', fontWeight: 600 }}>
+              <span style={{ color: '#6b7280' }}>
                 Coupon{data.couponCodes.length > 0 ? ` (${data.couponCodes.join(', ')})` : ''}:
               </span>
-              <span style={{ color: '#059669' }}>-৳{data.couponDiscount.toLocaleString()}</span>
+              <span style={{ color: '#dc2626', fontWeight: 600 }}>-৳{data.couponDiscount.toLocaleString()}</span>
             </div>
           )}
           <div className="cr-row cr-grand-total">
