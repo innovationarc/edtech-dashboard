@@ -886,7 +886,7 @@ export const courseEnrollmentService = {
           courseTitle,
           courseId,
           isReplay: false,
-          message: 'Your payment is under manual review. You will be enrolled once approved.',
+          message: 'Your payment is under manual review. You will be enrolled once approved. Kindly contact support for confirmation.',
         };
       }
 
