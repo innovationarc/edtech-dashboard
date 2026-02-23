@@ -116,6 +116,8 @@ const receiptService = {
       let paymentMethod: string = enroll.paymentMethod || '';
       let txAppliedDiscounts: any = null;
 
+      let studentUserId: string = enroll.studentUserId || '';
+
       if (enroll.transactionId) {
         try {
           const txSnap = await getDocs(
@@ -125,6 +127,9 @@ const receiptService = {
             const txData = txSnap.docs[0].data();
             if (!paymentMethod) paymentMethod = txData.paymentMethod || '';
             if (txData.appliedDiscounts) txAppliedDiscounts = txData.appliedDiscounts;
+            // studentUserId lives in transaction metadata, not the enrollment doc
+            const meta = txData.metadata || {};
+            if (meta.studentUserId) studentUserId = meta.studentUserId;
           }
         } catch (txErr: any) {
           console.warn('[receiptService] Could not fetch transaction:', txErr.message);
@@ -164,7 +169,7 @@ const receiptService = {
         issuedAt:        toDate(enroll.paymentDate || enroll.enrolledAt),
         studentName:     enroll.studentName   || '',
         studentEmail:    enroll.studentEmail  || '',
-        studentUserId:   enroll.studentUserId || '',
+        studentUserId,
         courseTitle,
         courseClass,
         courseCategory,
