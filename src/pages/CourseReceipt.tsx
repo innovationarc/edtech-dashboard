@@ -274,7 +274,7 @@ const CRStyles = () => (
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-top: 36px;
+      margin-top: 48px;
       padding: 0 14px;
       flex-shrink: 0;
     }
@@ -319,15 +319,31 @@ const CRStyles = () => (
     .cr-spin { animation: cr-spin .75s linear infinite; }
 
     @media print {
-      .cr-actions { display: none !important; }
-      .cr-shell { background: none; padding: 0; }
+      /* Hide everything on the entire page */
+      body * { visibility: hidden !important; }
+
+      /* Then selectively show only the receipt page and all its children */
+      .cr-page,
+      .cr-page * { visibility: visible !important; }
+
+      /* Position the receipt to fill the entire printed page */
       .cr-page {
-        box-shadow: none;
-        margin: 0;
-        width: 210mm;
-        height: 297mm;
-        padding: 12mm 14mm;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        padding: 14mm 16mm !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+        background: white !important;
       }
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
     }
 
     @media (max-width: 860px) {
