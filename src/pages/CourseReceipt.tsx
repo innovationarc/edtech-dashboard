@@ -121,6 +121,40 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
               {data.isFree ? 'Free' : `৳${data.basePrice.toLocaleString()}`}
             </td>
           </tr>
+          {data.previousStudentDiscount > 0 && (
+            <tr>
+              <td style={{ color: '#059669' }}>
+                <strong>Previous Student Discount</strong>
+                <br /><small style={{ color: '#6b7280' }}>Returning student benefit</small>
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+                -৳{data.previousStudentDiscount.toLocaleString()}
+              </td>
+            </tr>
+          )}
+          {data.extraDiscount > 0 && (
+            <tr>
+              <td style={{ color: '#059669' }}>
+                <strong>Limited Time Discount</strong>
+                <br /><small style={{ color: '#6b7280' }}>Special promotional offer</small>
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+                -৳{data.extraDiscount.toLocaleString()}
+              </td>
+            </tr>
+          )}
+          {data.couponDiscount > 0 && (
+            <tr>
+              <td style={{ color: '#059669' }}>
+                <strong>Coupon Discount{data.couponCodes.length > 0 ? ` — ${data.couponCodes.join(', ')}` : ''}</strong>
+                <br /><small style={{ color: '#6b7280' }}>Promotional coupon applied</small>
+              </td>
+              <td style={{ textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+                -৳{data.couponDiscount.toLocaleString()}
+              </td>
+            </tr>
+          )}
+
         </tbody>
       </table>
 
