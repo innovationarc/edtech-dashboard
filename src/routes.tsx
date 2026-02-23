@@ -28,6 +28,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import VerifyProfile from './pages/VerifyProfile';
 import VerifyId from './pages/VerifyId'; // NEW: ID Card Verification
+import CourseReceipt from './pages/CourseReceipt'; // Receipt page
 
 // Import role-specific management pages (placeholders)
 import ManageStudent from './pages/ManageStudent';
@@ -317,6 +318,7 @@ const AppRoutes = () => {
         {/* Public routes (all authenticated users) */}
         <Route path="content-library" element={<ContentLibrary />} />
         <Route path="course-enrollment" element={<CourseEnrollment />} />
+        <Route path="receipt" element={<CourseReceipt />} />
         <Route path="mcq-practice" element={<MCQPractice />} />
         <Route path="achievements" element={<Achievements />} />
         <Route path="coming-soon" element={<ComingSoon />} />
