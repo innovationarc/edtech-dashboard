@@ -25,7 +25,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
       {/* Watermark */}
       <div className="cr-watermark">{watermarkText}</div>
 
-      {/* Header */}
+      {/* Header — compact, no barcode here */}
       <div className="cr-header">
         <div className="cr-logo-area">
           <svg className="cr-logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -40,16 +40,9 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         </div>
         <div className="cr-receipt-label">
           <h2>RECEIPT</h2>
-          <div className="cr-field" style={{ marginTop: '10px' }}>
+          <div className="cr-field" style={{ marginTop: '8px' }}>
             <span className="cr-label">Receipt No</span>
             <span className="cr-value" style={{ color: '#1a56db' }}>#{data.receiptNumber}</span>
-          </div>
-          <div style={{ marginTop: '10px' }}>
-            <img
-              src={barcodeUrl}
-              alt={`Barcode: ${data.receiptNumber}`}
-              style={{ height: '48px', width: 'auto', maxWidth: '200px', display: 'block', marginLeft: 'auto' }}
-            />
           </div>
         </div>
       </div>
@@ -65,13 +58,10 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
             <span className="cr-label">Student Name</span>
             <span className="cr-value">{data.studentName}</span>
           </div>
-          {data.studentUserId && (
-            <div className="cr-field">
-              <span className="cr-label">Student ID</span>
-              <span className="cr-value">{data.studentUserId}</span>
-            </div>
-          )}
-
+          <div className="cr-field">
+            <span className="cr-label">Student ID</span>
+            <span className="cr-value">{data.studentUserId || '—'}</span>
+          </div>
         </div>
         <div>
           <div className="cr-field">
@@ -84,18 +74,22 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
               <span className="cr-value">{[data.courseClass, data.courseCategory].filter(Boolean).join(' | ')}</span>
             </div>
           )}
-
+          {data.courseId && (
+            <div className="cr-field">
+              <span className="cr-label">Course ID</span>
+              <span className="cr-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>{data.courseId}</span>
+            </div>
+          )}
           {data.transactionId && (
             <div className="cr-field">
               <span className="cr-label">Transaction ID</span>
-              <span className="cr-value" style={{ fontFamily: 'monospace', fontSize: '13px' }}>{data.transactionId}</span>
+              <span className="cr-value" style={{ fontFamily: 'monospace', fontSize: '12px' }}>{data.transactionId}</span>
             </div>
           )}
-
         </div>
       </div>
 
-      {/* Items Table */}
+      {/* Items Table — only course enrollment fee, no discount rows */}
       <table className="cr-items-table">
         <thead>
           <tr>
@@ -116,40 +110,6 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
               {data.isFree ? 'Free' : `৳${data.basePrice.toLocaleString()}`}
             </td>
           </tr>
-          {data.previousStudentDiscount > 0 && (
-            <tr>
-              <td style={{ color: '#111827' }}>
-                <strong style={{ color: '#111827' }}>Discount Applied</strong>
-                <br /><small style={{ color: '#6b7280' }}>Returning student benefit</small>
-              </td>
-              <td style={{ textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
-                -৳{data.previousStudentDiscount.toLocaleString()}
-              </td>
-            </tr>
-          )}
-          {data.extraDiscount > 0 && (
-            <tr>
-              <td style={{ color: '#111827' }}>
-                <strong style={{ color: '#111827' }}>Discount Applied</strong>
-                <br /><small style={{ color: '#6b7280' }}>Special promotional offer</small>
-              </td>
-              <td style={{ textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
-                -৳{data.extraDiscount.toLocaleString()}
-              </td>
-            </tr>
-          )}
-          {data.couponDiscount > 0 && (
-            <tr>
-              <td style={{ color: '#111827' }}>
-                <strong style={{ color: '#111827' }}>Discount Applied</strong>
-                <br /><small style={{ color: '#6b7280' }}>Promotional coupon applied</small>
-              </td>
-              <td style={{ textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
-                -৳{data.couponDiscount.toLocaleString()}
-              </td>
-            </tr>
-          )}
-
         </tbody>
       </table>
 
@@ -163,7 +123,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         <div className="cr-total-box">
           <div className="cr-row">
             <span style={{ color: '#6b7280' }}>Course Amount:</span>
-            <span style={{ fontWeight: 600 }}>{data.isFree ? 'Free' : `৳${data.basePrice.toLocaleString()}`}</span>
+            <span style={{ fontWeight: 600, color: '#111827' }}>{data.isFree ? 'Free' : `৳${data.basePrice.toLocaleString()}`}</span>
           </div>
           {data.previousStudentDiscount > 0 && (
             <div className="cr-row">
@@ -192,10 +152,13 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer — text note + barcode centered below */}
       <div className="cr-footer-note">
         <p>This document is an official record of enrollment. Receipt No: <strong>#{data.receiptNumber}</strong></p>
         <p>For any queries, please contact support with your Enrollment ID or Transaction ID.</p>
+        <div className="cr-barcode-wrap">
+          <img src={barcodeUrl} alt={`Barcode: ${data.receiptNumber}`} className="cr-barcode-img" />
+        </div>
       </div>
     </div>
   );
@@ -273,8 +236,8 @@ const CRStyles = () => (
       justify-content: space-between;
       align-items: flex-start;
       border-bottom: 3px solid #1a56db;
-      padding-bottom: 20px;
-      margin-bottom: 24px;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
       flex-shrink: 0;
     }
     .cr-logo-area { display: flex; align-items: center; gap: 15px; }
@@ -338,7 +301,7 @@ const CRStyles = () => (
     /* Footer always sits at the bottom of the A4 page */
     .cr-footer-note {
       margin-top: auto;
-      padding-top: 16px;
+      padding-top: 14px;
       text-align: center;
       font-size: 11px;
       color: #9ca3af;
@@ -346,6 +309,18 @@ const CRStyles = () => (
       flex-shrink: 0;
     }
     .cr-footer-note p { margin: 3px 0; }
+    .cr-barcode-wrap {
+      margin-top: 12px;
+      display: flex;
+      justify-content: center;
+    }
+    .cr-barcode-img {
+      height: 44px;
+      width: auto;
+      max-width: 260px;
+      display: block;
+      opacity: 0.75;
+    }
 
     .cr-state {
       display: flex;
