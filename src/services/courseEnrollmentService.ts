@@ -152,9 +152,9 @@ export interface EnrollmentRequest {
   studentId: string;
   studentName: string;
   studentEmail?: string;
-  studentPhone?: string;
-  studentSurname?: string;
-  studentUserId?: string;
+  studentPhone?: string;    // For enrollment SMS notification
+  studentSurname?: string;  // For enrollment SMS notification
+  studentUserId?: string;   // Formatted Student ID (e.g. ST-2601-00001) for SMS
   calculation: EnrollmentCalculation;
 }
 
@@ -187,7 +187,7 @@ const COLLECTIONS = {
   COURSES: 'courses',
   COUPONS: 'coupons',
   COUPON_USAGE: 'couponUsage',
-  STUDENT_FLAGS: 'studentFlags', // NEW: stores isPreviousStudent flag per student
+  STUDENT_FLAGS: 'studentFlags', // stores isPreviousStudent flag per student
 } as const;
 
 const BACKEND_URL = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
@@ -198,6 +198,10 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Safely convert Firestore Timestamp to Date.
+ * Handles: Timestamp objects, plain objects with seconds, Date objects, undefined.
+ */
 function toDate(value: any): Date {
   if (!value) return new Date();
   if (value instanceof Date) return value;
@@ -207,6 +211,9 @@ function toDate(value: any): Date {
   return isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
+/**
+ * Remove undefined values from objects (Firestore compatibility).
+ */
 function sanitize(obj: any): any {
   if (obj === null || obj === undefined) return null;
   if (Array.isArray(obj)) return obj.filter(v => v !== undefined).map(sanitize);
@@ -239,8 +246,8 @@ function logError(operation: string, error: any, context?: any): void {
  * Returns true when a course is currently visible to students.
  * Rules:
  *  - isPublished must be true
- *  - visibilityDate (if set) must be <= now   (course has started appearing)
- *  - validity      (if set) must be >= now   (course has not expired)
+ *  - visibilityDate (if set) must be <= now  (course has started appearing)
+ *  - validity      (if set) must be >= now  (course has not expired)
  */
 function isCourseVisibleNow(data: any): boolean {
   const now = new Date();
@@ -269,6 +276,7 @@ function isCourseVisibleNow(data: any): boolean {
 /**
  * Check if a student is flagged as a "previous student" in Firestore.
  * This flag persists even after courses are deleted/expired.
+ * Fails silently — never throws.
  */
 async function getStudentPreviousFlag(studentId: string): Promise<boolean> {
   try {
@@ -283,8 +291,8 @@ async function getStudentPreviousFlag(studentId: string): Promise<boolean> {
 
 /**
  * Mark a student as a "previous student" in Firestore.
- * Called when a student successfully enrolls in any course.
- * This flag is permanent and survives course deletion/expiry.
+ * Called after successful enrollment. Fire-and-forget — never blocks enrollment.
+ * Fails silently if Firestore rules deny access.
  */
 async function markStudentAsPrevious(studentId: string): Promise<void> {
   try {
@@ -304,9 +312,11 @@ export const courseEnrollmentService = {
 
   // ─────────────────────────────────────────────────────────────────────────
   // getPublishedCourses
+  //
   // Returns only published courses that are currently visible:
   //   • not yet expired (validity >= today, or no validity set)
   //   • already past their visibility start (visibilityDate <= today, or not set)
+  // Uses spread operator to capture ALL Firestore fields automatically.
   // ─────────────────────────────────────────────────────────────────────────
 
   async getPublishedCourses(): Promise<Course[]> {
@@ -389,13 +399,12 @@ export const courseEnrollmentService = {
   // ─────────────────────────────────────────────────────────────────────────
   // calculateEnrollmentPrice
   //
-  // FIX: previousStudentDiscount and extraDiscount are stored in Firestore as
+  // previousStudentDiscount and extraDiscount are stored in Firestore as
   // flat BDT AMOUNTS (set in CourseCreation as "Amount in BDT"), NOT percentages.
-  // Previous code was doing:  Math.floor(basePrice * (discount / 100))  ← WRONG
-  // Corrected code:           discount value is used directly            ← RIGHT
   //
-  // NEW (point 11): hasPreviousEnrollments now checks BOTH live enrollments
-  // AND the persistent isPreviousStudent flag in studentFlags collection.
+  // hasPreviousEnrollments checks BOTH live enrollments AND the persistent
+  // isPreviousStudent flag in studentFlags collection — so the discount
+  // persists even after old courses are deleted/expired.
   // ─────────────────────────────────────────────────────────────────────────
 
   async calculateEnrollmentPrice(
@@ -412,8 +421,8 @@ export const courseEnrollmentService = {
       const courseData = courseDoc.data();
       const basePrice = courseData.price || 0;
 
-      // Check if student has previous enrollments (any course) OR is flagged as previous student
-      // The flag persists even after courses are deleted/expired — this implements point 11.
+      // Check if student has previous enrollments (any course) OR is flagged as previous student.
+      // The flag persists even after courses are deleted/expired.
       const [enrollmentsSnap, isPreviousFlagged] = await Promise.all([
         getDocs(query(
           collection(db, COLLECTIONS.ENROLLMENTS),
@@ -427,7 +436,7 @@ export const courseEnrollmentService = {
       // Stored as flat BDT amount. Only applied if student has prior enrollment.
       const rawPrevDiscount = courseData.previousStudentDiscount || 0;
       const previousStudentDiscount = hasPreviousEnrollments && rawPrevDiscount > 0
-        ? Math.min(rawPrevDiscount, basePrice)  // cap at basePrice
+        ? Math.min(rawPrevDiscount, basePrice) // cap at basePrice
         : 0;
 
       // ── Extra (time-limited) discount ─────────────────────────────────────
@@ -448,6 +457,7 @@ export const courseEnrollmentService = {
       let couponError: string | undefined;
 
       if (couponCodes.length > 0) {
+        // Fetch student's already-enrolled course IDs for nextPurchaseEligibility checks
         let enrolledCourseIds: string[] = [];
         try {
           const enrolledSnap = await getDocs(query(
@@ -463,12 +473,14 @@ export const courseEnrollmentService = {
           const upper = code.trim().toUpperCase();
           if (!upper) continue;
 
+          // Skip if already applied (duplicate guard)
           if (appliedCoupons.some(c => c.couponCode === upper)) {
             couponError = `Coupon "${upper}" is already applied.`;
             continue;
           }
 
           try {
+            // Price after all discounts applied so far (including earlier coupons in this loop)
             const priceForValidation = Math.max(0, basePrice - previousStudentDiscount - extraDiscount - couponDiscount);
 
             const result = await couponService.validateCoupon(
@@ -487,7 +499,7 @@ export const courseEnrollmentService = {
             const discount = result.discount ?? 0;
             couponDiscount += discount;
             appliedCoupons.push({
-              couponId: '',
+              couponId: '', // back-filled below
               couponCode: upper,
               discount,
               successMessage: result.successMessage || `Coupon "${upper}" applied! ৳${discount} off.`,
@@ -499,7 +511,7 @@ export const courseEnrollmentService = {
           }
         }
 
-        // Back-fill coupon doc IDs
+        // Back-fill coupon doc IDs for recordCouponUsage later
         if (appliedCoupons.length > 0) {
           try {
             for (const ac of appliedCoupons) {
@@ -531,6 +543,7 @@ export const courseEnrollmentService = {
         isExtraDiscountValid,
         appliedCoupons,
         couponError,
+        // Backward compat: expose first coupon
         couponId: appliedCoupons[0]?.couponId,
         couponCode: appliedCoupons[0]?.couponCode,
         couponSuccessMessage: appliedCoupons[0]?.successMessage,
@@ -545,12 +558,20 @@ export const courseEnrollmentService = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // enrollStudent — handles free and paid enrollments
+  // enrollStudent
+  //
+  // Handles both free and paid enrollments.
+  // FREE:  writes enrollment doc directly, fires SMS, marks student as previous.
+  // PAID:  creates transaction record, calls /api/payment?action=initiate,
+  //        returns gatewayUrl for redirect — exactly as old working version.
   // ─────────────────────────────────────────────────────────────────────────
 
   async enrollStudent(request: EnrollmentRequest): Promise<EnrollmentResponse> {
     try {
-      const { courseId, studentId, studentName, studentEmail, studentPhone, studentSurname, studentUserId, calculation } = request;
+      const {
+        courseId, studentId, studentName, studentEmail,
+        studentPhone, studentSurname, studentUserId, calculation
+      } = request;
 
       console.log('📝 Processing enrollment:', { courseId, studentId, finalPrice: calculation.finalPrice });
 
@@ -564,6 +585,7 @@ export const courseEnrollmentService = {
         return { success: false, error: 'Already enrolled', userMessage: 'You are already enrolled in this course' };
       }
 
+      // Get course info
       const courseDoc = await getDoc(doc(db, COLLECTIONS.COURSES, courseId));
       if (!courseDoc.exists()) {
         return { success: false, error: 'Course not found', userMessage: 'Course not found' };
@@ -581,13 +603,14 @@ export const courseEnrollmentService = {
           studentId,
           studentName,
           studentEmail: studentEmail || '',
-          enrolledAt: Timestamp.now(),
           progress: 0,
           completedLessons: [],
+          enrolledAt: Timestamp.now(),
           lastAccessedAt: Timestamp.now(),
           paymentStatus: 'completed',
           amountPaid: 0,
-          paymentMethod: 'free',
+          paymentMethod: 'FREE',
+          paymentDate: Timestamp.now(),
           appliedDiscounts: {
             previousStudentDiscount: calculation.previousStudentDiscount,
             extraDiscount: calculation.extraDiscount,
@@ -599,25 +622,28 @@ export const courseEnrollmentService = {
         });
 
         const enrollmentRef = await addDoc(collection(db, COLLECTIONS.ENROLLMENTS), enrollmentData);
+        console.log('✅ Free enrollment created:', enrollmentRef.id);
 
-        // NEW (point 11): Mark student as previous student after successful enrollment
-        // This persists even after course deletion/expiry
-        markStudentAsPrevious(studentId); // fire-and-forget
+        // Mark student as previous student — fire-and-forget, never blocks enrollment
+        markStudentAsPrevious(studentId);
 
-        // Record coupon usage
+        // Record coupon usage for statistics — fire-and-forget, never blocks enrollment
         if (calculation.appliedCoupons && calculation.appliedCoupons.length > 0) {
-          try {
-            for (const ac of calculation.appliedCoupons) {
-              if (ac.couponId) {
-                await couponService.recordCouponUsage(ac.couponId, studentId, courseId, enrollmentRef.id);
-              }
-            }
-          } catch (couponErr) {
-            console.warn('Failed to record coupon usage (non-fatal):', couponErr);
+          for (const ac of calculation.appliedCoupons) {
+            if (!ac.couponId) continue;
+            couponService.recordCouponUsage({
+              couponId: ac.couponId,
+              userId: studentId,
+              courseId,
+              userName: studentName,
+              courseName,
+              discountApplied: ac.discount,
+              amountPaid: 0,
+            }).catch(err => console.error('Failed to record coupon usage (non-fatal):', err));
           }
         }
 
-        // Update course student count
+        // Increment course student count — fire-and-forget
         try {
           const { updateDoc, increment } = await import('firebase/firestore');
           await updateDoc(doc(db, COLLECTIONS.COURSES, courseId), {
@@ -627,77 +653,126 @@ export const courseEnrollmentService = {
           console.warn('Failed to increment studentCount (non-fatal):', e);
         }
 
-        // Send enrollment OTP/notification
-        try {
-          if (studentPhone && otpService?.sendEnrollmentNotification) {
-            await otpService.sendEnrollmentNotification({
+        // Send enrollment confirmation SMS — fire-and-forget, never blocks enrollment
+        if (studentPhone) {
+          // Try new notification method first, fall back to old SMS method
+          if (otpService?.sendEnrollmentNotification) {
+            otpService.sendEnrollmentNotification({
               phone: studentPhone,
               studentName,
               studentSurname: studentSurname || '',
               studentUserId: studentUserId || '',
               courseName,
               amountPaid: 0,
-            });
+            }).catch(err => console.error('Enrollment notification error (non-fatal):', err));
+          } else if (otpService?.sendEnrollmentSuccessSMS) {
+            otpService.sendEnrollmentSuccessSMS(
+              studentPhone,
+              studentSurname || studentName.split(' ')[0],
+              studentUserId || studentId,
+              courseName,
+            ).catch(err => console.error('Enrollment SMS error (non-fatal):', err));
           }
-        } catch (notifErr) {
-          console.warn('Failed to send enrollment notification (non-fatal):', notifErr);
         }
 
-        return { success: true, enrollmentId: enrollmentRef.id, message: 'Successfully enrolled!' };
-      }
-
-      // ── PAID ENROLLMENT — initiate payment gateway ────────────────────────
-      const { default: paymentService } = await import('./paymentService');
-
-      const callbackBase = `${BACKEND_URL}/courses`;
-      const paymentRequest = {
-        amount: calculation.finalPrice,
-        currency: 'BDT',
-        productName: courseName,
-        productId: courseId,
-        userId: studentId,
-        customerName: studentName,
-        customerEmail: studentEmail || '',
-        customerPhone: studentPhone || '',
-        successUrl: `${callbackBase}?status=success`,
-        failUrl: `${callbackBase}?status=failed`,
-        cancelUrl: `${callbackBase}?status=cancelled`,
-        metadata: {
-          courseId,
-          courseTitle: courseName,
-          studentId,
-          calculationSnapshot: JSON.stringify(sanitize(calculation)),
-        },
-      };
-
-      const paymentResponse = await paymentService.initiatePayment(paymentRequest);
-
-      if (!paymentResponse.success || !paymentResponse.gatewayUrl) {
         return {
-          success: false,
-          error: paymentResponse.error || 'Failed to initiate payment',
-          userMessage: 'Payment initiation failed. Please try again.',
+          success: true,
+          enrollmentId: enrollmentRef.id,
+          message: `Successfully enrolled in ${courseName}!`,
+          userMessage: `Successfully enrolled in ${courseName}!`,
         };
       }
 
-      return {
-        success: true,
-        transactionId: paymentResponse.transactionId,
-        gatewayUrl: paymentResponse.gatewayUrl,
-        message: 'Redirecting to payment gateway...',
-      };
+      // ── PAID ENROLLMENT — initiate payment gateway ────────────────────────
+      console.log('💳 Initiating payment for ৳', calculation.finalPrice);
+
+      const transactionId = `TXN_${courseId.substring(0, 5).toUpperCase()}_${studentId.substring(0, 12).toUpperCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+      // Create transaction record in Firestore BEFORE calling payment API
+      const transactionData = sanitize({
+        userId: studentId,
+        userName: studentName,
+        userEmail: studentEmail || `${studentId}@noemail.local`,
+        amount: calculation.finalPrice,
+        currency: 'BDT',
+        status: 'pending',
+        gateway: 'SSLCOMMERZ',
+        productName: courseName,
+        productId: courseId,
+        productType: 'course',
+        transactionId,
+        appliedDiscounts: {
+          previousStudentDiscount: calculation.previousStudentDiscount,
+          extraDiscount: calculation.extraDiscount,
+          couponDiscount: calculation.couponDiscount,
+        },
+        metadata: {
+          studentName,
+          studentEmail: studentEmail || '',
+          studentPhone: studentPhone || '',
+          studentSurname: studentSurname || '',
+          studentUserId: studentUserId || '',
+          courseName,
+          courseId,
+          finalPrice: calculation.finalPrice,
+          basePrice: calculation.basePrice,
+          isPreviousStudent: calculation.hasPreviousEnrollments,
+          appliedCoupons: JSON.stringify(calculation.appliedCoupons),
+        },
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+
+      await addDoc(collection(db, COLLECTIONS.TRANSACTIONS), transactionData);
+
+      // Call payment API — same approach as working old version
+      const response = await fetch(`${BACKEND_URL}/api/payment?action=initiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId,
+          userId: studentId,
+          userName: studentName,
+          userEmail: studentEmail,
+          amount: calculation.finalPrice,
+          productId: courseId,
+          productName: courseName,
+          productType: 'course',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Payment API returned ${response.status}`);
+      }
+
+      const paymentResult = await response.json();
+
+      if (paymentResult.success && paymentResult.gatewayUrl) {
+        console.log('✅ Payment initiated:', transactionId);
+        return {
+          success: true,
+          gatewayUrl: paymentResult.gatewayUrl,
+          transactionId,
+        };
+      } else {
+        throw new Error(paymentResult.error || 'Failed to initiate payment');
+      }
+
     } catch (error: any) {
       logError('enrollStudent', error, { courseId: request.courseId, studentId: request.studentId });
       return {
         success: false,
         error: error.message,
-        userMessage: `Enrollment failed: ${error.message}`,
+        userMessage: 'Failed to process enrollment. Please try again.',
       };
     }
   },
 
   // ─────────────────────────────────────────────────────────────────────────
   // verifyPaymentAndGetEnrollment
+  //
+  // Payment verification with one-time token consumption.
+  // Marks student as previous after successful paid enrollment.
   // ─────────────────────────────────────────────────────────────────────────
 
   async verifyPaymentAndGetEnrollment(
@@ -708,7 +783,12 @@ export const courseEnrollmentService = {
     console.log(`${TAG} Starting`, { tranId, currentUserId });
 
     if (!tranId || !currentUserId) {
-      return { verified: false, status: 'not_found', isReplay: false, message: 'Invalid payment reference. Please contact support.' };
+      return {
+        verified: false,
+        status: 'not_found',
+        isReplay: false,
+        message: 'Invalid payment reference. Please contact support.',
+      };
     }
 
     try {
@@ -718,18 +798,42 @@ export const courseEnrollmentService = {
       ));
 
       if (txnSnap.empty) {
-        return { verified: false, status: 'not_found', isReplay: false, message: `Payment record not found. Contact support with ref: ${tranId}` };
+        console.error(`${TAG} Transaction not found:`, tranId);
+        return {
+          verified: false,
+          status: 'not_found',
+          isReplay: false,
+          message: `Payment record not found. Contact support with ref: ${tranId}`,
+        };
       }
 
       const txnDoc = txnSnap.docs[0];
       const txn = txnDoc.data();
 
       if (txn.userId !== currentUserId) {
-        return { verified: false, status: 'ownership_error', isReplay: false, message: 'This payment reference does not belong to your account.' };
+        console.error(`${TAG} SECURITY: Ownership mismatch`);
+        return {
+          verified: false,
+          status: 'ownership_error',
+          isReplay: false,
+          message: 'This payment reference does not belong to your account.',
+        };
       }
 
       const courseTitle: string = txn.productName || txn.metadata?.courseTitle || '';
       const courseId: string = txn.productId || txn.metadata?.courseId || '';
+
+      // ── One-time token consumption ────────────────────────────────────────
+      // PURPOSE: Prevent URL replay attacks (user opening callback URL in new tab).
+      //
+      // Three cases:
+      //   (A) tokenConsumed = false → token present, we consume it → legitimate first visit
+      //   (B) tokenConsumed = true  → token already null → could be server-side consumed or replay
+      //   (C) tokenMissing  = true  → token was never written (IPN/callback timing race)
+      //       → treat as legitimate (enrollment by transactionId will confirm)
+      //
+      // We use isDefiniteReplay only when token was null AND enrollment was already
+      // found by a DIFFERENT transaction (proving prior enrollment exists independently).
 
       let tokenConsumed = false;
       let tokenWasNull = false;
@@ -756,6 +860,8 @@ export const courseEnrollmentService = {
         tokenWasNull = true;
       }
 
+      console.log(`${TAG} Token state: tokenConsumed=${tokenConsumed} tokenWasNull=${tokenWasNull}`);
+
       const freshTxnSnap = await getDocs(query(
         collection(db, COLLECTIONS.TRANSACTIONS),
         where('transactionId', '==', tranId)
@@ -763,23 +869,48 @@ export const courseEnrollmentService = {
       const freshTxn = freshTxnSnap.empty ? txn : freshTxnSnap.docs[0].data();
 
       if (freshTxn.status === 'failed' || freshTxn.status === 'cancelled') {
-        return { verified: false, status: freshTxn.status, courseTitle, courseId, isReplay: false, message: `Payment was ${freshTxn.status}. Please try again or contact support.` };
+        return {
+          verified: false,
+          status: freshTxn.status,
+          courseTitle,
+          courseId,
+          isReplay: false,
+          message: `Payment was ${freshTxn.status}. Please try again or contact support.`,
+        };
       }
 
       if (freshTxn.status === 'validating') {
-        return { verified: false, status: 'validating', courseTitle, courseId, isReplay: false, message: 'Your payment is under manual review. You will be enrolled once approved.' };
+        return {
+          verified: false,
+          status: 'validating',
+          courseTitle,
+          courseId,
+          isReplay: false,
+          message: 'Your payment is under manual review. You will be enrolled once approved.',
+        };
       }
 
       if (freshTxn.status !== 'success' && freshTxn.status !== 'pending') {
-        return { verified: false, status: 'not_found', courseTitle, courseId, isReplay: false, message: `Unexpected payment status: ${freshTxn.status}. Contact support with ref: ${tranId}` };
+        return {
+          verified: false,
+          status: 'not_found',
+          courseTitle,
+          courseId,
+          isReplay: false,
+          message: `Unexpected payment status: ${freshTxn.status}. Contact support with ref: ${tranId}`,
+        };
       }
 
       const delays = [500, 800, 1200, 1500, 1500, 2000, 2000, 2500];
 
       for (let attempt = 0; attempt <= delays.length; attempt++) {
-        if (attempt > 0) await sleep(delays[attempt - 1]);
+        if (attempt > 0) {
+          await sleep(delays[attempt - 1]);
+        }
 
         try {
+          // PRIMARY: find enrollment by this exact transactionId
+          // If found → always SUCCESS (this payment created this enrollment)
           const byTxn = await getDocs(query(
             collection(db, COLLECTIONS.ENROLLMENTS),
             where('transactionId', '==', tranId)
@@ -787,11 +918,22 @@ export const courseEnrollmentService = {
 
           if (!byTxn.empty) {
             const enrollDoc = byTxn.docs[0];
-            // NEW (point 11): Mark student as previous after successful paid enrollment verification
-            markStudentAsPrevious(currentUserId); // fire-and-forget
-            return { verified: true, status: 'success', enrollmentId: enrollDoc.id, courseTitle, courseId, isReplay: false, message: `Payment verified! You are now enrolled in "${courseTitle || 'the course'}".` };
+            console.log(`${TAG} Enrollment found by transactionId on attempt ${attempt + 1}`);
+            // Mark student as previous after successful paid enrollment — fire-and-forget
+            markStudentAsPrevious(currentUserId);
+            return {
+              verified: true,
+              status: 'success',
+              enrollmentId: enrollDoc.id,
+              courseTitle,
+              courseId,
+              isReplay: false, // Found by THIS transaction → always fresh success
+              message: `Payment verified! You are now enrolled in "${courseTitle || 'the course'}".`,
+            };
           }
 
+          // FALLBACK: find by studentId+courseId
+          // Only treat as "replay" if token was null AND enrollment belongs to different transaction.
           if (courseId) {
             const byCourse = await getDocs(query(
               collection(db, COLLECTIONS.ENROLLMENTS),
@@ -802,12 +944,19 @@ export const courseEnrollmentService = {
             if (!byCourse.empty) {
               const enrollDoc = byCourse.docs[0];
               const enrollData = enrollDoc.data();
+              console.log(`${TAG} Enrollment found by courseId on attempt ${attempt + 1}, enrollTxnId=${enrollData.transactionId}`);
+
               const isFromDifferentTxn = enrollData.transactionId && enrollData.transactionId !== tranId;
               const isDefiniteReplay = tokenWasNull && isFromDifferentTxn;
-              // NEW (point 11): Mark student as previous after successful paid enrollment verification
-              markStudentAsPrevious(currentUserId); // fire-and-forget
+
+              // Mark student as previous — fire-and-forget
+              markStudentAsPrevious(currentUserId);
               return {
-                verified: true, status: 'success', enrollmentId: enrollDoc.id, courseTitle, courseId,
+                verified: true,
+                status: 'success',
+                enrollmentId: enrollDoc.id,
+                courseTitle,
+                courseId,
                 isReplay: isDefiniteReplay,
                 message: isDefiniteReplay
                   ? `You are already enrolled in "${courseTitle || 'this course'}".`
@@ -820,10 +969,24 @@ export const courseEnrollmentService = {
         }
       }
 
-      return { verified: false, status: 'pending', courseTitle, courseId, isReplay: false, message: 'Payment confirmed! Your enrollment is being activated. Please refresh in a moment.' };
+      console.warn(`${TAG} Enrollment not found after retries`);
+      return {
+        verified: false,
+        status: 'pending',
+        courseTitle,
+        courseId,
+        isReplay: false,
+        message: 'Payment confirmed! Your enrollment is being activated. Please refresh in a moment.',
+      };
+
     } catch (err: any) {
       logError('verifyPaymentAndGetEnrollment', err);
-      return { verified: false, status: 'not_found', isReplay: false, message: `An unexpected error occurred. Contact support with ref: ${tranId}` };
+      return {
+        verified: false,
+        status: 'not_found',
+        isReplay: false,
+        message: `An unexpected error occurred. Contact support with ref: ${tranId}`,
+      };
     }
   },
 
@@ -839,7 +1002,10 @@ export const courseEnrollmentService = {
         where('studentId', '==', studentId)
       ));
       const ids = new Set<string>();
-      snap.docs.forEach(d => { const cid = d.data().courseId; if (cid) ids.add(cid); });
+      snap.docs.forEach(d => {
+        const courseId = d.data().courseId;
+        if (courseId) ids.add(courseId);
+      });
       return ids;
     } catch (err: any) {
       logError('getStudentEnrolledCourseIds', err);
