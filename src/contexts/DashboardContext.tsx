@@ -84,11 +84,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  // CRITICAL FIX: Keep loading true until Firebase auth state is confirmed
-  // This prevents the login modal from flashing on page reload
+  // CRITICAL FIX: Keep loading true until Firebase confirms auth state
   const [loading, setLoading] = useState(true);
-  // SECURITY: Track if initial auth check has completed to prevent premature UI rendering
-  const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(false);
   
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '#6366f1');
@@ -130,22 +127,14 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    // CRITICAL FIX: This ensures loading stays true until Firebase confirms auth state
-    let authCheckTimeout: NodeJS.Timeout;
-    
-    // Safety timeout: If Firebase takes too long (>3 seconds), consider it failed and stop loading
-    // This prevents infinite loading state in case of Firebase connection issues
-    authCheckTimeout = setTimeout(() => {
-      if (!initialAuthCheckComplete) {
-        setInitialAuthCheckComplete(true);
-        setLoading(false);
-        setIsAuthenticated(false);
-        setUser(null);
-      }
+    // CRITICAL FIX: Safety timeout to prevent infinite loading
+    // If Firebase takes longer than 3 seconds, stop loading
+    const authCheckTimeout = setTimeout(() => {
+      setLoading(false);
     }, 3000);
 
     const unsubscribe = authService.onAuthStateChanged(async (firebaseUser: User | null) => {
-      // Clear the safety timeout since Firebase responded
+      // Clear timeout since Firebase responded
       clearTimeout(authCheckTimeout);
       
       if (firebaseUser) {
@@ -174,8 +163,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
               // The authService already handles multi-device session management properly
             }
             
-            // CRITICAL FIX: Set auth states BEFORE setting loading to false
-            // This ensures the UI doesn't render login modal before user state is set
+            // CRITICAL FIX: Set ALL auth states in correct order BEFORE clearing loading
+            // This prevents login modal from flashing
             setUser(userProfile);
             setIsAuthenticated(true);
             
@@ -246,15 +235,14 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           setSidebarOpen(false);
         }
       } else {
-        // No authenticated user - set states accordingly
+        // No authenticated user
         setUser(null);
         setIsAuthenticated(false);
         setSidebarOpen(false);
       }
       
-      // CRITICAL FIX: Only set loading to false AFTER all auth states are properly set
-      // This prevents the login modal from flashing during page reload
-      setInitialAuthCheckComplete(true);
+      // CRITICAL FIX: Set loading to false ONLY after all states are set
+      // This ensures DashboardLayout doesn't render until auth is confirmed
       setLoading(false);
     });
 
