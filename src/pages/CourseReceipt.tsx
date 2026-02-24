@@ -383,6 +383,15 @@ const CourseReceipt: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Go back to previous page, falling back to /course-enrollment if no history
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/course-enrollment');
+    }
+  };
+
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -511,8 +520,8 @@ const CourseReceipt: React.FC = () => {
           <div className="cr-state">
             <AlertCircle size={36} style={{ color: '#f87171' }} />
             <p>{error || 'Something went wrong.'}</p>
-            <button className="cr-action-btn cr-action-btn--back" onClick={() => navigate('/course-enrollment')}>
-              <ArrowLeft size={16} /> Back to Courses
+            <button className="cr-action-btn cr-action-btn--back" onClick={goBack}>
+              <ArrowLeft size={16} /> Back
             </button>
           </div>
         </div>
@@ -525,8 +534,8 @@ const CourseReceipt: React.FC = () => {
       <CRStyles />
       <div className="cr-shell" id="cr-print-root">
         <div className="cr-actions">
-          <button className="cr-action-btn cr-action-btn--back" onClick={() => navigate('/course-enrollment')}>
-            <ArrowLeft size={16} /> Back to Courses
+          <button className="cr-action-btn cr-action-btn--back" onClick={goBack}>
+            <ArrowLeft size={16} /> Back
           </button>
           <button className="cr-action-btn cr-action-btn--print" onClick={() => window.print()}>
             <Printer size={16} /> Print / Save PDF
