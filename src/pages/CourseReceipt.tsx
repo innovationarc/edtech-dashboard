@@ -246,6 +246,7 @@ const CRStyles = () => (
       grid-template-columns: repeat(2, 1fr);
       gap: 20px;
       margin-bottom: 20px;
+      margin-top: 10px;
       flex-shrink: 0;
     }
     .cr-field { margin-bottom: 10px; }
