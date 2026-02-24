@@ -62,7 +62,27 @@ function toDate(value: any): Date {
 }
 
 export function deriveReceiptNumber(enrollmentId: string): string {
-  return 'RCP-' + enrollmentId.slice(0, 8).toUpperCase();
+  // Format: RCP-LLNNNNNN (2 uppercase letters + 6 digits)
+  // Derive deterministically from enrollmentId so it is always reproducible.
+  const id = enrollmentId.replace(/[^a-zA-Z0-9]/g, '');
+
+  // Extract 2 letters from alphabetic chars in the id
+  const letters = id.replace(/[^a-zA-Z]/g, '').toUpperCase();
+  const l1 = letters[0] || 'A';
+  const l2 = letters[1] || 'B';
+
+  // Extract 6 digits — use char codes of remaining chars if not enough raw digits
+  const rawDigits = id.replace(/[^0-9]/g, '');
+  let digits = rawDigits;
+  if (digits.length < 6) {
+    // Pad with char-code-derived digits from the id string
+    for (let i = 0; digits.length < 6; i++) {
+      digits += (id.charCodeAt(i % id.length) % 10).toString();
+    }
+  }
+  const sixDigits = digits.slice(0, 6).padStart(6, '0');
+
+  return `RCP-${l1}${l2}${sixDigits}`;
 }
 
 function parseCouponCodes(discounts: any): string[] {
