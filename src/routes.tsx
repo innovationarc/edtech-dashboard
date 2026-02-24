@@ -135,8 +135,98 @@ const AdminManagerRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AppRoutes = () => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
 
+  // CRITICAL FIX: Optimistic rendering while Firebase confirms auth
+  // Eliminates 3-5 second blank screen on page reload
+  // Security: Firebase still validates in background and will force logout if invalid
+  if (loading) {
+    // Check localStorage for auth tokens
+    const hasAuthToken = localStorage.getItem('token') || localStorage.getItem('user_id');
+    
+    if (hasAuthToken) {
+      // User likely authenticated - render routes optimistically
+      // Firebase will validate in background and redirect if invalid
+      // This prevents blank screen during auth check
+      return (
+        <Routes>
+          {/* Public routes - OUTSIDE DashboardLayout for clean display */}
+          <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/verify-profile" element={<VerifyProfile />} />
+          
+          {/* NEW: Public ID Card Verification - OUTSIDE DashboardLayout */}
+          <Route path="/verify-id" element={<VerifyId />} />
+
+          {/* Public receipt verification - OUTSIDE DashboardLayout, no auth required */}
+          <Route path="/verify-receipt" element={<VerifyReceipt />} />
+          
+          <Route path="/" element={<DashboardLayout />}>
+            {/* Show a loading state for the main route while Firebase confirms */}
+            <Route index element={
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                  <p className="text-gray-400">Loading dashboard...</p>
+                </div>
+              </div>
+            } />
+            
+            {/* All other routes render normally - Firebase will redirect if needed */}
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="student-dashboard" element={<StudentDashboard />} />
+            <Route path="student-qa" element={<StudentQA />} />
+            <Route path="student-tasks" element={<StudentTaskDashboard />} />
+            <Route path="student-study-plan" element={<StudentStudyPlan />} />
+            <Route path="teacher-dashboard" element={<TeacherDashboard />} />
+            <Route path="teacher-qa" element={<TeacherQA />} />
+            <Route path="teacher-tasks" element={<TeacherTaskManagement />} />
+            <Route path="payments" element={<PaymentManagement />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="announcements" element={<AllAnnouncements />} />
+            <Route path="manage-coupon" element={<CouponManagement />} />
+            <Route path="users" element={<ManageUsers />} />
+            <Route path="manage/students" element={<ManageStudent />} />
+            <Route path="manage/parents" element={<ManageParent />} />
+            <Route path="manage/teachers" element={<ManageTeacher />} />
+            <Route path="manage/coordinators" element={<ManageCoordinator />} />
+            <Route path="manage/managers" element={<ManageManager />} />
+            <Route path="manage/admins" element={<ManageAdmin />} />
+            <Route path="content" element={<ContentUpload />} />
+            <Route path="course-creation" element={<CourseCreation />} />
+            <Route path="course-creation/:courseId" element={<CourseCreation />} />
+            <Route path="study-plan" element={<StudyPlan />} />
+            <Route path="progress" element={<Progress />} />
+            <Route path="content-library" element={<ContentLibrary />} />
+            <Route path="course-enrollment" element={<CourseEnrollment />} />
+            <Route path="receipt" element={<CourseReceipt />} />
+            <Route path="mcq-practice" element={<MCQPractice />} />
+            <Route path="achievements" element={<Achievements />} />
+            <Route path="coming-soon" element={<ComingSoon />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="question/:questionId" element={<QuestionDetail />} />
+          </Route>
+        </Routes>
+      );
+    }
+    
+    // No auth tokens - stay on public routes or show blank
+    // The DashboardLayout will handle showing login modal
+    return (
+      <Routes>
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms-of-service" element={<TermsOfService />} />
+        <Route path="/verify-profile" element={<VerifyProfile />} />
+        <Route path="/verify-id" element={<VerifyId />} />
+        <Route path="/verify-receipt" element={<VerifyReceipt />} />
+        <Route path="*" element={<DashboardLayout />} />
+      </Routes>
+    );
+  }
+
+  // Firebase auth check complete - render with proper role-based protection
   // Redirect users to their appropriate dashboard by default
   const getDefaultRoute = () => {
     if (!isAuthenticated) return '/dashboard';
