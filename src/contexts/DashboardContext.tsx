@@ -79,13 +79,27 @@ const generateDeviceId = (): string => {
   return 'device_' + Math.abs(hash).toString(36);
 };
 
+// CRITICAL FIX: Check if user has auth tokens immediately
+const hasAuthTokens = (): boolean => {
+  try {
+    return !!(localStorage.getItem('token') || localStorage.getItem('auth_user_id'));
+  } catch {
+    return false;
+  }
+};
+
 export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // CRITICAL FIX: Initialize based on localStorage for instant rendering
+  // This eliminates the blank screen while Firebase is checking
+  const [isAuthenticated, setIsAuthenticated] = useState(() => hasAuthTokens());
   const [user, setUser] = useState<UserProfile | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  // CRITICAL FIX: Keep loading true until Firebase confirms auth state
-  const [loading, setLoading] = useState(true);
+  
+  // CRITICAL FIX: Start with loading = false if we have tokens
+  // This allows instant rendering while Firebase validates in background
+  const [loading, setLoading] = useState(() => !hasAuthTokens());
   
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '#6366f1');
@@ -127,11 +141,14 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    // CRITICAL FIX: Safety timeout to prevent infinite loading
-    // If Firebase takes longer than 3 seconds, stop loading
+    // CRITICAL FIX: Shorter timeout (1.5s instead of 3s) for faster failure
     const authCheckTimeout = setTimeout(() => {
       setLoading(false);
-    }, 3000);
+      // If Firebase didn't respond, assume not authenticated
+      if (!user) {
+        setIsAuthenticated(false);
+      }
+    }, 1500);
 
     const unsubscribe = authService.onAuthStateChanged(async (firebaseUser: User | null) => {
       // Clear timeout since Firebase responded
@@ -163,8 +180,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
               // The authService already handles multi-device session management properly
             }
             
-            // CRITICAL FIX: Set ALL auth states in correct order BEFORE clearing loading
-            // This prevents login modal from flashing
+            // CRITICAL FIX: Set ALL auth states BEFORE clearing loading
             setUser(userProfile);
             setIsAuthenticated(true);
             
@@ -241,8 +257,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setSidebarOpen(false);
       }
       
-      // CRITICAL FIX: Set loading to false ONLY after all states are set
-      // This ensures DashboardLayout doesn't render until auth is confirmed
+      // CRITICAL FIX: Set loading to false AFTER all states are set
       setLoading(false);
     });
 
