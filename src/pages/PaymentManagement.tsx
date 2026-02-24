@@ -1939,7 +1939,7 @@ const PaymentManagement = () => {
 const handleViewReceipt = async (transactionId: string) => {
     const result = await receiptService.getReceiptByTransactionId(transactionId);
     if (result.status === 'success' && result.data) {
-      navigate(`/course-receipt?enrollment=${result.data.enrollmentId}&admin=true`);
+      navigate(`/receipt?enrollment=${result.data.enrollmentId}&admin=true`);
     } else {
       alert('Receipt not found. The student may need to open their receipt first.');
     }
