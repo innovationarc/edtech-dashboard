@@ -506,6 +506,82 @@ async function addCourseToLibrary(courseId: string, studentId: string, fallbackT
   console.log('[addCourseToLibrary] ✅ Added');
 }
 
+// ==================== RECEIPT SAVER ====================
+// Saves receipt data to receipts/{receiptNumber} immediately after enrollment
+// is confirmed — so receipt exists even if the student never opens the receipt page.
+// Non-fatal: if this fails the receipt can still be generated on first page open.
+
+async function saveReceipt(enrollmentId: string, transaction: any): Promise<void> {
+  const TAG = '[saveReceipt]';
+  try {
+    const db = getFirestore();
+
+    // Derive receipt number the same way the client does
+    const receiptNumber = 'RCP-' + enrollmentId.slice(0, 8).toUpperCase();
+
+    // Don't overwrite if already exists
+    const existing = await db.collection('receipts').doc(receiptNumber).get();
+    if (existing.exists) {
+      console.log(`${TAG} Already exists: ${receiptNumber}`);
+      return;
+    }
+
+    const meta              = transaction.metadata || {};
+    const appliedDiscounts  = transaction.appliedDiscounts || {};
+    const previousStudentDiscount = Number(appliedDiscounts.previousStudentDiscount || meta.previousStudentDiscount || 0);
+    const extraDiscount           = Number(appliedDiscounts.extraDiscount           || meta.extraDiscount           || 0);
+    const couponDiscount          = Number(appliedDiscounts.couponDiscount          || meta.couponDiscount          || 0);
+    const totalDiscount           = previousStudentDiscount + extraDiscount + couponDiscount;
+    const amountPaid              = Number(meta.finalPrice ?? transaction.amount ?? 0);
+    const basePrice               = Math.max(0, amountPaid + totalDiscount);
+
+    // Parse coupon codes from metadata
+    const couponCodes: string[] = [];
+    if (meta.couponCode) couponCodes.push(meta.couponCode);
+    if (meta.appliedCoupons) {
+      try {
+        const parsed = JSON.parse(meta.appliedCoupons);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((c: any) => {
+            if (c.couponCode && !couponCodes.includes(c.couponCode)) couponCodes.push(c.couponCode);
+          });
+        }
+      } catch (_) {}
+    }
+
+    const receiptData = sanitizeForFirestore({
+      receiptNumber,
+      enrollmentId,
+      studentId:        transaction.userId          || '',
+      studentName:      meta.studentName            || transaction.userName   || '',
+      studentEmail:     meta.studentEmail           || transaction.userEmail  || '',
+      studentUserId:    meta.studentUserId          || '',
+      courseTitle:      meta.courseName             || transaction.productName || '',
+      courseClass:      meta.courseClass            || '',
+      courseCategory:   meta.courseCategory         || '',
+      courseInstructor: meta.courseInstructor       || '',
+      basePrice,
+      amountPaid,
+      totalDiscount,
+      paymentStatus:    'completed',
+      paymentMethod:    transaction.paymentMethod   || '',
+      transactionId:    transaction.transactionId   || '',
+      isFree:           amountPaid === 0,
+      previousStudentDiscount,
+      extraDiscount,
+      couponDiscount,
+      couponCodes,
+      issuedAt:  admin.firestore.FieldValue.serverTimestamp(),
+      savedAt:   admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('receipts').doc(receiptNumber).set(receiptData);
+    console.log(`${TAG} ✅ Receipt saved: ${receiptNumber}`);
+  } catch (e: any) {
+    console.warn(`${TAG} Failed (non-fatal):`, e.message);
+  }
+}
+
 // ==================== SSL VALIDATION HELPER ====================
 // ─────────────────────────────────────────────────────────────────────────────
 // FIX: Centralized SSL validation using WHATWG URL (no url.parse deprecation).
@@ -717,6 +793,13 @@ async function handleCallback(req: VercelRequest, res: VercelResponse) {
         }
 
         console.log(`${TAG} ✅ Enrollment success: ${enrollResult.enrollmentId}`);
+
+        // Non-critical: save receipt immediately so it exists without student opening it
+        if (enrollResult.enrollmentId) {
+          saveReceipt(enrollResult.enrollmentId, transaction).catch(e =>
+            console.warn(`${TAG} saveReceipt fire-and-forget error:`, e.message)
+          );
+        }
 
         // Step 4: Write one-time return token
         try {
@@ -930,6 +1013,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 bankTransactionId: bank_tran_id
               }, getBaseUrl(req));
               console.log('IPN enrollment result:', enrollResult);
+
+              // Non-critical: save receipt immediately after IPN enrollment
+              if (enrollResult.enrollmentId) {
+                saveReceipt(enrollResult.enrollmentId, freshTxn).catch(e =>
+                  console.warn('[IPN] saveReceipt fire-and-forget error:', e.message)
+                );
+              }
 
               if (!freshTxn.returnToken) {
                 try {
