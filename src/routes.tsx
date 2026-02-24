@@ -137,10 +137,11 @@ const AdminManagerRoute = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   const { user, isAuthenticated } = useDashboard();
 
-  // CRITICAL FIX: No more checking loading state here!
-  // DashboardContext now initializes instantly based on localStorage
-  // So we can render routes immediately
-  
+  // CRITICAL FIX: Removed loading check completely
+  // DashboardContext now initializes isAuthenticated from localStorage instantly
+  // So we can render routes immediately without waiting for Firebase
+  // Firebase validates in background and will redirect if needed
+
   // Redirect users to their appropriate dashboard by default
   const getDefaultRoute = () => {
     if (!isAuthenticated) return '/dashboard';
