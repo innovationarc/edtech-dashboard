@@ -272,7 +272,7 @@ const receiptService = {
       if (!snap.exists()) {
         return {
           status: 'not_found',
-          message: 'No receipt found for this number. The student may need to open their receipt once first.',
+          message: 'No receipt was found for the provided reference. This receipt may be invalid or tampered with.',
         };
       }
       return {
