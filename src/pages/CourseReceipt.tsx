@@ -439,10 +439,16 @@ const CourseReceipt: React.FC = () => {
       setLoading(false);
       return;
     }
+
+    // Wait for auth to initialize — user?.uid may be undefined on first render
     if (!user?.uid) {
-      setError('You must be logged in to view this receipt.');
-      setLoading(false);
-      return;
+      // Keep showing the spinner; this effect will re-run once uid is available.
+      // Add a timeout so we don't wait forever if the user truly isn't logged in.
+      const timer = setTimeout(() => {
+        setError('You must be logged in to view this receipt.');
+        setLoading(false);
+      }, 5000);
+      return () => clearTimeout(timer);
     }
 
     // Try sessionStorage cache first (skip for admin to always get fresh data)
