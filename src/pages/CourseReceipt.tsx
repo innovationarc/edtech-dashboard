@@ -15,7 +15,7 @@ function formatDate(d: Date): string {
 // ==================== RECEIPT DOCUMENT (matches HTML template exactly) ====================
 
 const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
-  const verifyUrl = `${window.location.origin}/verify-receipt?id=${data.enrollmentId}&ref=${data.receiptNumber}`;
+  const verifyUrl = `${window.location.origin}/verify-receipt?r=${data.receiptNumber}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(verifyUrl)}`;
   const barcodeUrl = `https://barcodeapi.org/api/128/${encodeURIComponent(data.receiptNumber)}`;
   const watermarkText = data.isFree ? 'FREE' : 'PAID';
