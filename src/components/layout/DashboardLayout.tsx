@@ -9,7 +9,7 @@ import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated } = useDashboard();
+  const { sidebarOpen, isAuthenticated, loading } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
@@ -23,18 +23,24 @@ const DashboardLayout = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Show authentication modal when user is not authenticated
+  // CRITICAL FIX: Only show authentication modal when:
+  // 1. Initial loading is complete (loading = false)
+  // 2. User is NOT authenticated
+  // This prevents the modal from flashing during page reload
   useEffect(() => {
+    // Don't show modal while still loading (checking auth state)
+    if (loading) {
+      setShowAuthModal(false);
+      return;
+    }
+
+    // Only show modal if loading is complete AND user is not authenticated
     if (!isAuthenticated) {
-      // Small delay for smoother UX
-      const timer = setTimeout(() => {
-        setShowAuthModal(true);
-      }, 300);
-      return () => clearTimeout(timer);
+      setShowAuthModal(true);
     } else {
       setShowAuthModal(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, loading]); // CRITICAL: Also depend on loading state
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
@@ -65,8 +71,8 @@ const DashboardLayout = () => {
       {/* Chatbot Widget - Only show when authenticated */}
       {isAuthenticated && <ChatbotWidget />}
 
-      {/* Authentication Modal - Show when not authenticated */}
-      {showAuthModal && !isAuthenticated && (
+      {/* Authentication Modal - Show ONLY when loading complete and not authenticated */}
+      {showAuthModal && !isAuthenticated && !loading && (
         <AuthenticationModal onClose={() => setShowAuthModal(false)} />
       )}
     </div>
