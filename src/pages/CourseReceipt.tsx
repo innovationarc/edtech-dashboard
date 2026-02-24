@@ -430,6 +430,7 @@ const CourseReceipt: React.FC = () => {
   }, []);
 
   const enrollmentId = new URLSearchParams(location.search).get('enrollment') || '';
+  const isAdmin      = new URLSearchParams(location.search).get('admin') === 'true';
   const cacheKey = `receipt_${enrollmentId}`;
 
   useEffect(() => {
@@ -444,29 +445,33 @@ const CourseReceipt: React.FC = () => {
       return;
     }
 
-    // Try sessionStorage cache first
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        parsed.issuedAt = new Date(parsed.issuedAt);
-        setReceiptData(parsed);
-        setLoading(false);
-        return;
-      }
-    } catch (_) {}
+    // Try sessionStorage cache first (skip for admin to always get fresh data)
+    if (!isAdmin) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          parsed.issuedAt = new Date(parsed.issuedAt);
+          setReceiptData(parsed);
+          setLoading(false);
+          return;
+        }
+      } catch (_) {}
+    }
 
-    // Fetch via service
-    receiptService.getReceiptData(enrollmentId, user.uid)
+    // Fetch via service — skip ownership check when admin=true
+    receiptService.getReceiptData(enrollmentId, user.uid, isAdmin)
       .then(result => {
         if (result.status === 'success' && result.data) {
           setReceiptData(result.data);
-          try {
-            sessionStorage.setItem(cacheKey, JSON.stringify({
-              ...result.data,
-              issuedAt: result.data.issuedAt.toISOString(),
-            }));
-          } catch (_) {}
+          if (!isAdmin) {
+            try {
+              sessionStorage.setItem(cacheKey, JSON.stringify({
+                ...result.data,
+                issuedAt: result.data.issuedAt.toISOString(),
+              }));
+            } catch (_) {}
+          }
         } else {
           setError(result.message);
         }
@@ -476,7 +481,7 @@ const CourseReceipt: React.FC = () => {
         setError('Failed to load receipt. Please try again.');
       })
       .finally(() => setLoading(false));
-  }, [enrollmentId, user?.uid]);
+  }, [enrollmentId, user?.uid, isAdmin]);
 
   if (loading) {
     return (
