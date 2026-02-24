@@ -259,7 +259,7 @@ const CRStyles = () => (
     }
     .cr-value { font-size: 14px; color: #111827; font-weight: 600; }
 
-    .cr-items-table { width: 100%; border-collapse: collapse; margin-bottom: 0; flex-shrink: 0; }
+    .cr-items-table { width: 100%; border-collapse: collapse; margin-bottom: 0; flex-shrink: 0; margin-top: 20px; }
     .cr-items-table th {
       background: #f9fafb;
       text-align: left;
@@ -399,12 +399,16 @@ const CourseReceipt: React.FC = () => {
           #cr-print-root .cr-page,
           #cr-print-root .cr-page * { visibility: visible !important; }
           #cr-print-root .cr-page {
-            position: fixed !important;
+            position: absolute !important;
             top: 0 !important; left: 0 !important;
             width: 210mm !important; height: 297mm !important;
             padding: 14mm 16mm !important;
             margin: 0 !important;
             box-shadow: none !important;
+          }
+          html, body {
+            height: 297mm !important;
+            overflow: hidden !important;
           }
         }
       `;
