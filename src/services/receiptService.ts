@@ -139,6 +139,20 @@ const receiptService = {
       // Prefer transaction discounts (paid flow) → fall back to enrollment discounts (free flow)
       const discounts = txAppliedDiscounts || enroll.appliedDiscounts || {};
 
+      // ── Step 3b: Fallback — fetch studentUserId from users collection ──────
+      // For free enrollments there is no transaction metadata, so we look it up
+      // directly from the user's profile doc using enroll.studentId.
+      if (!studentUserId && enroll.studentId) {
+        try {
+          const userSnap = await getDoc(doc(db, 'users', enroll.studentId));
+          if (userSnap.exists()) {
+            studentUserId = userSnap.data().userId || '';
+          }
+        } catch (userErr: any) {
+          console.warn('[receiptService] Could not fetch user for studentUserId:', userErr.message);
+        }
+      }
+
       const previousStudentDiscount: number = discounts.previousStudentDiscount || 0;
       const extraDiscount: number           = discounts.extraDiscount           || 0;
       const couponDiscount: number          = discounts.couponDiscount          || 0;
