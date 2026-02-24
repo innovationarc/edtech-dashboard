@@ -248,7 +248,7 @@ const VerifyReceipt: React.FC = () => {
 
               <div className="vr-stamp">
                 <CheckCircle size={16} />
-                Authentic receipt issued by the institution
+                Platform-issued authentic receipt
               </div>
             </div>
           )}
