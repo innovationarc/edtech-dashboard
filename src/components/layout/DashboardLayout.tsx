@@ -1,5 +1,5 @@
 // src/components/layout/DashboardLayout.tsx
-// Updated to use combined Navigation component - FIXED VERSION
+// Updated to use combined Navigation component - OPTIMIZED VERSION
 import { Outlet } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
@@ -9,7 +9,7 @@ import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated, loading } = useDashboard();
+  const { sidebarOpen, isAuthenticated } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
@@ -23,24 +23,12 @@ const DashboardLayout = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // CRITICAL FIX: Only show authentication modal when:
-  // 1. Initial loading is complete (loading = false)
-  // 2. User is NOT authenticated
-  // This prevents the modal from flashing during page reload
+  // CRITICAL FIX: Removed loading dependency - show modal immediately based on auth state
+  // Since DashboardContext now initializes isAuthenticated from localStorage instantly,
+  // we don't need to wait for loading to complete
   useEffect(() => {
-    // Don't show modal while still loading (checking auth state)
-    if (loading) {
-      setShowAuthModal(false);
-      return;
-    }
-
-    // Only show modal if loading is complete AND user is not authenticated
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-    } else {
-      setShowAuthModal(false);
-    }
-  }, [isAuthenticated, loading]); // CRITICAL: Also depend on loading state
+    setShowAuthModal(!isAuthenticated);
+  }, [isAuthenticated]);
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
@@ -71,8 +59,8 @@ const DashboardLayout = () => {
       {/* Chatbot Widget - Only show when authenticated */}
       {isAuthenticated && <ChatbotWidget />}
 
-      {/* Authentication Modal - Show ONLY when loading complete and not authenticated */}
-      {showAuthModal && !isAuthenticated && !loading && (
+      {/* Authentication Modal - Show immediately when not authenticated */}
+      {showAuthModal && !isAuthenticated && (
         <AuthenticationModal onClose={() => setShowAuthModal(false)} />
       )}
     </div>
