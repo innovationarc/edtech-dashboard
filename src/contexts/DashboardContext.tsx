@@ -84,7 +84,12 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  // CRITICAL FIX: Keep loading true until Firebase auth state is confirmed
+  // This prevents the login modal from flashing on page reload
   const [loading, setLoading] = useState(true);
+  // SECURITY: Track if initial auth check has completed to prevent premature UI rendering
+  const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(false);
+  
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
   const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '#6366f1');
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#10b981');
@@ -125,7 +130,24 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   }, [sidebarOpen]);
 
   useEffect(() => {
+    // CRITICAL FIX: This ensures loading stays true until Firebase confirms auth state
+    let authCheckTimeout: NodeJS.Timeout;
+    
+    // Safety timeout: If Firebase takes too long (>3 seconds), consider it failed and stop loading
+    // This prevents infinite loading state in case of Firebase connection issues
+    authCheckTimeout = setTimeout(() => {
+      if (!initialAuthCheckComplete) {
+        setInitialAuthCheckComplete(true);
+        setLoading(false);
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+    }, 3000);
+
     const unsubscribe = authService.onAuthStateChanged(async (firebaseUser: User | null) => {
+      // Clear the safety timeout since Firebase responded
+      clearTimeout(authCheckTimeout);
+      
       if (firebaseUser) {
         try {
           // Get user profile from Firestore using the user's ID
@@ -152,8 +174,11 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
               // The authService already handles multi-device session management properly
             }
             
+            // CRITICAL FIX: Set auth states BEFORE setting loading to false
+            // This ensures the UI doesn't render login modal before user state is set
             setUser(userProfile);
             setIsAuthenticated(true);
+            
             // Only auto-open sidebar on desktop
             if (isDesktop) {
               setSidebarOpen(true);
@@ -221,14 +246,22 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           setSidebarOpen(false);
         }
       } else {
+        // No authenticated user - set states accordingly
         setUser(null);
         setIsAuthenticated(false);
         setSidebarOpen(false);
       }
+      
+      // CRITICAL FIX: Only set loading to false AFTER all auth states are properly set
+      // This prevents the login modal from flashing during page reload
+      setInitialAuthCheckComplete(true);
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(authCheckTimeout);
+      unsubscribe();
+    };
   }, [isDesktop]);
 
   // Apply theme changes to document
