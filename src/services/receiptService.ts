@@ -6,6 +6,8 @@ import {
   getDoc,
   getDocs,
   query,
+  setDoc,
+  serverTimestamp,
   where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -74,13 +76,31 @@ function parseCouponCodes(discounts: any): string[] {
   return codes;
 }
 
+// Serialize ReceiptData for Firestore (Date → ISO string)
+function serializeForFirestore(data: ReceiptData, studentId: string) {
+  return {
+    ...data,
+    issuedAt: data.issuedAt.toISOString(),
+    studentId,        // for admin lookup / permission checks
+    savedAt: serverTimestamp(),
+  };
+}
+
+// Deserialize from Firestore (ISO string / Timestamp → Date)
+function deserializeFromFirestore(raw: any): ReceiptData {
+  return { ...raw, issuedAt: toDate(raw.issuedAt) } as ReceiptData;
+}
+
 // ==================== SERVICE ====================
 
 const receiptService = {
 
+  // ── Generate + persist receipt from enrollment ────────────────────────────
+  // Used by: student receipt page, admin panel (set skipOwnershipCheck=true)
   async getReceiptData(
     enrollmentId: string,
-    currentUserId: string
+    currentUserId: string,
+    skipOwnershipCheck = false
   ): Promise<ReceiptResult> {
     if (!enrollmentId || !currentUserId) {
       return { status: 'not_found', message: 'Invalid enrollment reference.' };
@@ -98,7 +118,7 @@ const receiptService = {
       const enroll = enrollSnap.data();
 
       // ── Step 2: Ownership check ───────────────────────────────────────────
-      if (enroll.studentId !== currentUserId) {
+      if (!skipOwnershipCheck && enroll.studentId !== currentUserId) {
         return {
           status: 'permission_denied',
           message: 'This receipt does not belong to your account.',
@@ -108,15 +128,9 @@ const receiptService = {
       const amountPaid: number = enroll.amountPaid || 0;
 
       // ── Step 3: Fetch transaction ─────────────────────────────────────────
-      // For PAID enrollments the payment webhook creates the enrollment doc but
-      // does NOT copy appliedDiscounts onto it — those only live on the
-      // transaction doc. So we always fetch the transaction and use its
-      // appliedDiscounts as the authoritative source, falling back to whatever
-      // is on the enrollment doc (free enrollments write discounts there).
-      let paymentMethod: string = enroll.paymentMethod || '';
+      let paymentMethod: string   = enroll.paymentMethod || '';
       let txAppliedDiscounts: any = null;
-
-      let studentUserId: string = enroll.studentUserId || '';
+      let studentUserId: string   = enroll.studentUserId || '';
 
       if (enroll.transactionId) {
         try {
@@ -127,7 +141,6 @@ const receiptService = {
             const txData = txSnap.docs[0].data();
             if (!paymentMethod) paymentMethod = txData.paymentMethod || '';
             if (txData.appliedDiscounts) txAppliedDiscounts = txData.appliedDiscounts;
-            // studentUserId lives in transaction metadata, not the enrollment doc
             const meta = txData.metadata || {};
             if (meta.studentUserId) studentUserId = meta.studentUserId;
           }
@@ -136,12 +149,11 @@ const receiptService = {
         }
       }
 
-      // Prefer transaction discounts (paid flow) → fall back to enrollment discounts (free flow)
+      // Prefer transaction discounts → fall back to enrollment discounts (free flow)
       const discounts = txAppliedDiscounts || enroll.appliedDiscounts || {};
 
       // ── Step 3b: Fallback — fetch studentUserId from users collection ──────
-      // For free enrollments there is no transaction metadata, so we look it up
-      // directly from the user's profile doc using enroll.studentId.
+      // Free enrollments have no transaction metadata, so look up from user doc.
       if (!studentUserId && enroll.studentId) {
         try {
           const userSnap = await getDoc(doc(db, 'users', enroll.studentId));
@@ -178,8 +190,10 @@ const receiptService = {
       }
 
       // ── Step 5: Build ReceiptData ─────────────────────────────────────────
+      const receiptNumber = deriveReceiptNumber(enrollmentId);
+
       const data: ReceiptData = {
-        receiptNumber:   deriveReceiptNumber(enrollmentId),
+        receiptNumber,
         issuedAt:        toDate(enroll.paymentDate || enroll.enrolledAt),
         studentName:     enroll.studentName   || '',
         studentEmail:    enroll.studentEmail  || '',
@@ -202,6 +216,20 @@ const receiptService = {
         couponCodes,
       };
 
+      // ── Step 6: Persist to receipts/{receiptNumber} ───────────────────────
+      // Doc ID = receiptNumber → enables direct QR lookup.
+      // Only writes on first generation — never overwrites existing receipt.
+      try {
+        const receiptRef = doc(db, 'receipts', receiptNumber);
+        const existing   = await getDoc(receiptRef);
+        if (!existing.exists()) {
+          await setDoc(receiptRef, serializeForFirestore(data, enroll.studentId || ''));
+        }
+      } catch (saveErr: any) {
+        // Non-fatal — receipt still renders even if save fails
+        console.warn('[receiptService] Could not persist receipt:', saveErr.message);
+      }
+
       return { status: 'success', data, message: 'Receipt loaded successfully.' };
 
     } catch (err: any) {
@@ -212,6 +240,55 @@ const receiptService = {
       };
     }
   },
+
+  // ── Lookup by receipt number — used by QR verify page ────────────────────
+  // URL: /verify-receipt?r=RCP-XXXXXXXX
+  async getReceiptByNumber(receiptNumber: string): Promise<ReceiptResult> {
+    if (!receiptNumber) {
+      return { status: 'not_found', message: 'No receipt number provided.' };
+    }
+    try {
+      const snap = await getDoc(doc(db, 'receipts', receiptNumber.toUpperCase()));
+      if (!snap.exists()) {
+        return {
+          status: 'not_found',
+          message: 'No receipt found for this number. The student may need to open their receipt once first.',
+        };
+      }
+      return {
+        status: 'success',
+        data: deserializeFromFirestore(snap.data()),
+        message: 'This receipt is authentic and verified.',
+      };
+    } catch (err: any) {
+      console.error('[receiptService] getReceiptByNumber failed:', err.message);
+      return { status: 'error', message: 'Verification service unavailable. Please try again later.' };
+    }
+  },
+
+  // ── Lookup by transaction ID — used by admin panel ────────────────────────
+  async getReceiptByTransactionId(transactionId: string): Promise<ReceiptResult> {
+    if (!transactionId) {
+      return { status: 'not_found', message: 'No transaction ID provided.' };
+    }
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'receipts'), where('transactionId', '==', transactionId))
+      );
+      if (snap.empty) {
+        return { status: 'not_found', message: 'No receipt found for this transaction ID.' };
+      }
+      return {
+        status: 'success',
+        data: deserializeFromFirestore(snap.docs[0].data()),
+        message: 'Receipt found.',
+      };
+    } catch (err: any) {
+      console.error('[receiptService] getReceiptByTransactionId failed:', err.message);
+      return { status: 'error', message: 'Could not look up receipt. Please try again.' };
+    }
+  },
+
 };
 
 export default receiptService;
