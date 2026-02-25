@@ -14,6 +14,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
+import admin from 'firebase-admin';
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
 // In production set these as Vercel env vars. The fallback strings are for
@@ -30,22 +31,20 @@ const CONFIG = {
   ALLOWED_ORIGIN: process.env.VIDEO_ALLOWED_ORIGIN || '*',
 };
 
-// ─── Firebase Admin (dynamic import so it works in Vercel serverless) ──────────
+// ─── Firebase Admin ────────────────────────────────────────────────────────────
+// Uses static import of firebase-admin (same pattern as payment.ts) to avoid
+// the gRPC OpenSSL DECODER routines::unsupported error caused by dynamic imports
+// of the modular firebase-admin/firestore subpackage on Node 18+.
 
-let _db: any = null;
+let _db: admin.firestore.Firestore | null = null;
 
-async function getFirestoreDb() {
+function getFirestoreDb(): admin.firestore.Firestore {
   if (_db) return _db;
 
-  const { initializeApp, getApps, cert } = await import('firebase-admin/app');
-  const { getFirestore } = await import('firebase-admin/firestore');
-
-  if (!getApps().length) {
-    // Vercel env vars: FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL,
-    // FIREBASE_ADMIN_PRIVATE_KEY (with literal \n as newlines)
+  if (!admin.apps.length) {
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
     if (!projectId || !clientEmail || !privateKey) {
       throw new Error(
@@ -54,12 +53,15 @@ async function getFirestoreDb() {
       );
     }
 
-    initializeApp({
-      credential: cert({ projectId, clientEmail, privateKey }),
+    privateKey = privateKey.trim().replace(/^["']|["']$/g, '');
+    privateKey = privateKey.replace(/\\n/g, '\n');
+
+    admin.initializeApp({
+      credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
     });
   }
 
-  _db = getFirestore();
+  _db = admin.app().firestore();
   return _db;
 }
 
@@ -289,7 +291,7 @@ async function handleSubmit(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, message: converted.message });
   }
 
-  const db = await getFirestoreDb();
+  const db = getFirestoreDb();
 
   const record = {
     originalUrl: sourceUrl,
@@ -334,7 +336,7 @@ async function handleMeta(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, message: 'videoId is required' });
   }
 
-  const db = await getFirestoreDb();
+  const db = getFirestoreDb();
   const docSnap = await db.collection('securedVideos').doc(videoId).get();
 
   if (!docSnap.exists) {
@@ -386,7 +388,7 @@ async function handleInfo(req: VercelRequest, res: VercelResponse) {
   }
   if (!isAllowedUA(req)) return res.status(403).json({ success: false, message: 'Forbidden: blocked client' });
 
-  const db = await getFirestoreDb();
+  const db = getFirestoreDb();
   const docSnap = await db.collection('securedVideos').doc(videoId).get();
   if (!docSnap.exists) return res.status(404).json({ success: false, message: 'Video not found' });
 
@@ -434,7 +436,7 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
   if (!isAllowedUA(req)) return res.status(403).send('Forbidden: blocked client');
   if (!isAllowedReferer(req)) return res.status(403).send('Forbidden: invalid origin');
 
-  const db = await getFirestoreDb();
+  const db = getFirestoreDb();
   const docSnap = await db.collection('securedVideos').doc(videoId).get();
   if (!docSnap.exists) return res.status(404).send('Video not found');
 
@@ -508,7 +510,7 @@ async function handleEmbed(req: VercelRequest, res: VercelResponse) {
     return res.status(403).send('Forbidden');
   }
 
-  const db = await getFirestoreDb();
+  const db = getFirestoreDb();
   const docSnap = await db.collection('securedVideos').doc(videoId).get();
   if (!docSnap.exists) return res.status(404).send('Not found');
 
