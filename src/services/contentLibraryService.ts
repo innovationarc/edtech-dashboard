@@ -182,7 +182,7 @@ export const contentLibraryService = {
    */
   async fetchContentData(contentId: string): Promise<LibraryContent | null> {
     try {
-      const contentDoc = await getDoc(doc(db, 'contents', contentId));
+      const contentDoc = await getDoc(doc(db, 'content', contentId));
       if (!contentDoc.exists()) return null;
 
       const d = contentDoc.data();
