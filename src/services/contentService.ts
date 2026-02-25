@@ -191,7 +191,7 @@ export const parseGDriveLink = (shareLink: string): { previewUrl: string; downlo
   }
 };
 
-
+export const contentService = {
   async uploadFile(
     file: File, 
     folder: string,
