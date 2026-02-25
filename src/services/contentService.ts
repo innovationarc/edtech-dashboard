@@ -62,6 +62,9 @@ export interface Content {
   videoFileName?: string;
   noteUrl?: string;
   noteFileName?: string;
+  noteSource?: 'local' | 'gdrive';
+  noteGDrivePreviewUrl?: string;
+  noteGDriveDownloadUrl?: string;
   
   examType?: 'mcq' | 'written' | 'mixed';
   totalQuestions?: number;
@@ -171,7 +174,24 @@ const removeUndefinedFields = (obj: any): any => {
   return obj;
 };
 
-export const contentService = {
+// HELPER: Parse a Google Drive share link and return preview + download URLs
+export const parseGDriveLink = (shareLink: string): { previewUrl: string; downloadUrl: string; fileId: string } | null => {
+  try {
+    // Match patterns like: https://drive.google.com/file/d/FILE_ID/view?...
+    const match = shareLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (!match) return null;
+    const fileId = match[1];
+    return {
+      fileId,
+      previewUrl: `https://drive.google.com/file/d/${fileId}/preview`,
+      downloadUrl: `https://drive.google.com/uc?export=download&id=${fileId}`
+    };
+  } catch {
+    return null;
+  }
+};
+
+
   async uploadFile(
     file: File, 
     folder: string,
@@ -254,6 +274,9 @@ export const contentService = {
       if (content.videoFileName) contentData.videoFileName = content.videoFileName;
       if (content.noteUrl) contentData.noteUrl = content.noteUrl;
       if (content.noteFileName) contentData.noteFileName = content.noteFileName;
+      if (content.noteSource) contentData.noteSource = content.noteSource;
+      if (content.noteGDrivePreviewUrl) contentData.noteGDrivePreviewUrl = content.noteGDrivePreviewUrl;
+      if (content.noteGDriveDownloadUrl) contentData.noteGDriveDownloadUrl = content.noteGDriveDownloadUrl;
 
       if (content.type === 'exam') {
         if (content.examType) contentData.examType = content.examType;
@@ -428,6 +451,9 @@ export const contentService = {
       if (updates.videoFileName !== undefined) updateData.videoFileName = updates.videoFileName;
       if (updates.noteUrl !== undefined) updateData.noteUrl = updates.noteUrl;
       if (updates.noteFileName !== undefined) updateData.noteFileName = updates.noteFileName;
+      if (updates.noteSource !== undefined) updateData.noteSource = updates.noteSource;
+      if (updates.noteGDrivePreviewUrl !== undefined) updateData.noteGDrivePreviewUrl = updates.noteGDrivePreviewUrl;
+      if (updates.noteGDriveDownloadUrl !== undefined) updateData.noteGDriveDownloadUrl = updates.noteGDriveDownloadUrl;
 
       if (updates.type === 'exam') {
         if (updates.examType !== undefined) updateData.examType = updates.examType;
