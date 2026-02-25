@@ -42,6 +42,11 @@ import ManageAdmin from './pages/ManageAdmin';
 // NEW: Coupon Management
 import CouponManagement from './pages/CouponManagement';
 
+// NEW: Content Library Viewer Pages
+import LessonViewer from './pages/LessonViewer';
+import NoteViewer from './pages/NoteViewer';
+import ExamViewer from './pages/ExamViewer';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Protected Route Component for Admin-only pages
@@ -333,6 +338,15 @@ const AppRoutes = () => {
         <Route path="coming-soon" element={<ComingSoon />} />
         <Route path="settings" element={<Settings />} />
         <Route path="question/:questionId" element={<QuestionDetail />} />
+
+        {/* ── NEW: Content Library Viewer Routes ── */}
+        {/* Lesson & Trick share the same viewer page */}
+        <Route path="content-library/lesson/:courseId/:contentId" element={<LessonViewer />} />
+        {/* Note viewer */}
+        <Route path="content-library/note/:courseId/:contentId" element={<NoteViewer />} />
+        {/* Exam viewer */}
+        <Route path="content-library/exam/:courseId/:contentId" element={<ExamViewer />} />
+
       </Route>
     </Routes>
   );
