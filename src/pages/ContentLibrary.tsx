@@ -1,627 +1,579 @@
-import { useState, useEffect } from 'react';
-import { Search, Filter, Download, Eye, Edit, Trash2, BookOpen, FileText, PenTool, BrainCircuit, Calendar, User, Tag, CheckCircle, Play, Clock, Video } from 'lucide-react';
-import Card from '../components/ui/Card';
-import { contentService, Content } from '../services/contentService';
-import { mcqService, MCQQuestion } from '../services/mcqService';
-import { courseService } from '../services/courseService';
+// src/pages/ContentLibrary.tsx
+// Content Library — Students browse & open enrolled course content
+// Routes to specific content viewer pages (lesson/exam/note views — built separately)
+
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  BookOpen,
+  FileText,
+  Zap,
+  ClipboardList,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
+  Search,
+  Clock,
+  BarChart2,
+  Play,
+  ArrowLeft,
+  Loader,
+  AlertCircle,
+  BookMarked,
+  GraduationCap,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../contexts/DashboardContext';
+import {
+  contentLibraryService,
+  LibraryCourse,
+  ContentNode,
+  LibraryContent,
+} from '../services/contentLibraryService';
 
-const ContentLibrary = () => {
-  const { user } = useDashboard();
-  const [contents, setContents] = useState<Content[]>([]);
-  const [mcqs, setMcqs] = useState<MCQQuestion[]>([]);
-  const [enrolledCourseContent, setEnrolledCourseContent] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('all');
-  const [selectedType, setSelectedType] = useState('all');
-  const [selectedDifficulty, setSelectedDifficulty] = useState('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [error, setError] = useState('');
+// ==================== TYPES ====================
 
-  const subjects = ['Mathematics', 'Physics', 'Biology', 'Computer Science', 'History', 'Chemistry', 'English', 'Geography', 'Programming', 'Data Science', 'Business', 'Design'];
+type ContentType = 'lesson' | 'note' | 'trick' | 'exam';
+type ViewState = 'courses' | 'course-detail';
 
-  useEffect(() => {
-    loadContent();
-  }, [user]);
+// ==================== HELPERS ====================
 
-  const loadContent = async () => {
-    try {
-      setLoading(true);
-      
-      // Load regular content and MCQs
-      const [contentData, mcqData] = await Promise.all([
-        contentService.getAllContent(),
-        mcqService.getAllMCQQuestions()
-      ]);
-      
-      setContents(contentData);
-      setMcqs(mcqData);
-      
-      // Load enrolled course content if user is logged in
-      if (user) {
-        await loadEnrolledCourseContent();
-      }
-    } catch (error: any) {
-      console.error('Failed to load content:', error);
-      setError('Failed to load content: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+function getContentIcon(type: ContentType) {
+  switch (type) {
+    case 'lesson': return <Play size={14} className="text-indigo-400" />;
+    case 'trick':  return <Zap  size={14} className="text-amber-400" />;
+    case 'note':   return <FileText size={14} className="text-emerald-400" />;
+    case 'exam':   return <ClipboardList size={14} className="text-rose-400" />;
+    default:       return <BookOpen size={14} className="text-slate-400" />;
+  }
+}
 
-  const loadEnrolledCourseContent = async () => {
-    if (!user) return;
-    
-    try {
-      const studentContent = await courseService.getStudentCourseContent(user.uid);
-      console.log('Loaded student course content:', studentContent.length);
-      setEnrolledCourseContent(studentContent);
-    } catch (error: any) {
-      console.error('Failed to load enrolled course content:', error);
-    }
-  };
+function getContentBadgeClass(type: ContentType): string {
+  switch (type) {
+    case 'lesson': return 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30';
+    case 'trick':  return 'bg-amber-500/15 text-amber-300 border border-amber-500/30';
+    case 'note':   return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+    case 'exam':   return 'bg-rose-500/15 text-rose-300 border border-rose-500/30';
+    default:       return 'bg-slate-500/15 text-slate-300 border border-slate-500/30';
+  }
+}
 
-  const filteredContents = [...contents, ...mcqs, ...enrolledCourseContent].filter(item => {
-    const matchesSearch = (item.title?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) || 
-                          (item.description?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) || 
-                          (item.question?.toLowerCase() ?? '').includes(searchTerm.toLowerCase()) ||
-                          item.tags?.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesSubject = selectedSubject === 'all' || 
-                          item.category === selectedSubject || 
-                          item.subject === selectedSubject;
-    
-    const matchesType = selectedType === 'all' || item.type === selectedType;
-    const matchesDifficulty = selectedDifficulty === 'all' || item.difficulty === selectedDifficulty;
-    
-    return matchesSearch && matchesSubject && matchesType && matchesDifficulty;
-  });
+function getContentTypeLabel(type: ContentType): string {
+  switch (type) {
+    case 'lesson': return 'Lesson';
+    case 'trick':  return 'Trick';
+    case 'note':   return 'Note';
+    case 'exam':   return 'Exam';
+    default:       return type;
+  }
+}
 
-  const handleDownload = (item: Content | MCQQuestion | any) => {
-    if ('fileUrl' in item && item.fileUrl) {
-      window.open(item.fileUrl, '_blank');
-    } else if ('pdfUrl' in item && item.pdfUrl) {
-      window.open(item.pdfUrl, '_blank');
-    } else if ('videoUrl' in item && item.videoUrl) {
-      window.open(item.videoUrl, '_blank');
-    } else {
-      alert('No downloadable file available for this content.');
-    }
-  };
+/**
+ * Returns the route path for a given content type.
+ * Lesson & Trick share the same viewer page.
+ * Note and Exam each have their own page.
+ * (Actual route definitions to be created separately.)
+ */
+function getContentRoute(content: LibraryContent, courseId: string): string {
+  switch (content.type) {
+    case 'lesson':
+    case 'trick':
+      return `/library/lesson/${courseId}/${content.id}`;
+    case 'note':
+      return `/library/note/${courseId}/${content.id}`;
+    case 'exam':
+      return `/library/exam/${courseId}/${content.id}`;
+    default:
+      return `/library/lesson/${courseId}/${content.id}`;
+  }
+}
 
-  const handleView = (item: Content | MCQQuestion | any) => {
-    if (item.isFromCourse) {
-      if (item.videoUrl) {
-        window.open(item.videoUrl, '_blank');
-      } else if (item.pdfUrl) {
-        window.open(item.pdfUrl, '_blank');
-      } else if (item.content) {
-        alert(`Text Content for ${item.title}:\n\n${item.content}`);
-      } else if (item.type === 'course') {
-        const message = `Course: ${item.title}\n\nTotal Lessons: ${item.totalLessons || 0}\nDuration: ${item.duration || 'N/A'}\nInstructor: ${item.instructor || 'N/A'}${item.hasQnA ? '\n✓ Q&A Available' : ''}${item.hasStudyPlanner ? '\n✓ Study Planner Available' : ''}`;
-        alert(message);
-      } else {
-        alert(`No direct preview available for: ${item.title}`);
-      }
-    } else if ('fileUrl' in item && item.fileUrl) {
-      window.open(item.fileUrl, '_blank');
-    } else if (item.type === 'mcq') {
-      const correctChoice = item.choices?.find((c: any) => c.id === item.correctAnswer);
-      alert(`MCQ Question: ${item.question}\n\nCorrect Answer: ${correctChoice?.text || 'N/A'}\n\nSubject: ${item.category || item.subject}`);
-    } else {
-      alert(`Viewing details for: ${item.title}`);
-    }
-  };
+function countContentsInNodes(nodes: ContentNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (node.type === 'content') count++;
+    if (node.children?.length) count += countContentsInNodes(node.children);
+  }
+  return count;
+}
 
-  const handleEdit = (content: Content | MCQQuestion | any) => {
-    if (content.isFromCourse) {
-      alert('Course content cannot be edited from the library. Please edit from the original course.');
-      return;
-    }
-    console.log('Editing content:', content.title);
-    alert('Edit functionality coming soon!');
-  };
+// ==================== CONTENT NODE ITEM ====================
 
-  const contentBySubject = subjects.reduce((acc, subject) => {
-    acc[subject] = filteredContents.filter(item => 
-      item.category === subject || item.subject === subject
-    );
-    return acc;
-  }, {} as Record<string, any[]>);
+interface ContentNodeItemProps {
+  node: ContentNode;
+  courseId: string;
+  depth: number;
+  onContentClick: (content: LibraryContent, courseId: string) => void;
+}
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'lesson': return <BookOpen size={16} className="text-primary-400" />;
-      case 'note': return <FileText size={16} className="text-secondary-400" />;
-      case 'trick': return <PenTool size={16} className="text-accent-400" />;
-      case 'mcq': return <BrainCircuit size={16} className="text-warning-DEFAULT" />;
-      case 'course': return <BookOpen size={16} className="text-success-DEFAULT" />;
-      case 'video': return <Video size={16} className="text-primary-400" />;
-      case 'text': return <FileText size={16} className="text-secondary-400" />;
-      default: return <FileText size={16} className="text-gray-400" />;
-    }
-  };
+const ContentNodeItem: React.FC<ContentNodeItemProps> = ({
+  node,
+  courseId,
+  depth,
+  onContentClick,
+}) => {
+  const [expanded, setExpanded] = useState(true);
 
-  const getDifficultyColor = (difficulty?: string) => {
-    switch (difficulty) {
-      case 'easy': 
-      case 'beginner': 
-        return 'bg-success-dark text-success-light';
-      case 'medium': 
-      case 'intermediate': 
-        return 'bg-warning-dark text-warning-light';
-      case 'hard': 
-      case 'advanced': 
-        return 'bg-error-dark text-error-light';
-      default: 
-        return 'bg-background-700 text-gray-300';
-    }
-  };
+  const paddingLeft = depth * 20;
 
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return 'N/A';
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  if (loading) {
+  if (node.type === 'folder') {
+    const childCount = countContentsInNodes(node.children);
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+      <div>
+        {/* Folder Row */}
+        <button
+          onClick={() => setExpanded(prev => !prev)}
+          className="w-full flex items-center gap-2 py-2.5 px-3 rounded-lg hover:bg-white/5 transition-colors text-left group"
+          style={{ paddingLeft: `${paddingLeft + 12}px` }}
+        >
+          <span className="text-slate-400 group-hover:text-slate-200 transition-colors">
+            {expanded ? <FolderOpen size={16} /> : <Folder size={16} />}
+          </span>
+          <span className="flex-1 text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
+            {node.name}
+          </span>
+          <span className="text-xs text-slate-500 mr-2">{childCount} items</span>
+          <span className="text-slate-500 group-hover:text-slate-300 transition-colors">
+            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+        </button>
+
+        {/* Children */}
+        {expanded && node.children?.length > 0 && (
+          <div className="border-l border-white/5 ml-6" style={{ marginLeft: `${paddingLeft + 26}px` }}>
+            {node.children.map(child => (
+              <ContentNodeItem
+                key={child.id}
+                node={child}
+                courseId={courseId}
+                depth={depth + 1}
+                onContentClick={onContentClick}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Content Item
+  const content = node.contentData;
+  if (!content) {
+    // Fallback if content data wasn't hydrated
+    return (
+      <div
+        className="flex items-center gap-2 py-2.5 px-3 text-sm text-slate-500 italic"
+        style={{ paddingLeft: `${paddingLeft + 12}px` }}
+      >
+        <BookOpen size={14} />
+        <span>{node.name || 'Unknown content'}</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Content Library</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Browse and manage your educational content organized by subject
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-2 rounded ${viewMode === 'grid' ? 'bg-primary-600 text-white' : 'bg-background-800 text-gray-400'}`}
-          >
-            <div className="grid grid-cols-2 gap-0.5 w-4 h-4">
-              <div className="bg-current rounded-sm"></div>
-              <div className="bg-current rounded-sm"></div>
-              <div className="bg-current rounded-sm"></div>
-              <div className="bg-current rounded-sm"></div>
-            </div>
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-2 rounded ${viewMode === 'list' ? 'bg-primary-600 text-white' : 'bg-background-800 text-gray-400'}`}
-          >
-            <div className="space-y-1 w-4 h-4">
-              <div className="bg-current h-0.5 rounded"></div>
-              <div className="bg-current h-0.5 rounded"></div>
-              <div className="bg-current h-0.5 rounded"></div>
-              <div className="bg-current h-0.5 rounded"></div>
-            </div>
-          </button>
+    <button
+      onClick={() => onContentClick(content, courseId)}
+      className="w-full flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-white/5 active:bg-white/10 transition-all text-left group"
+      style={{ paddingLeft: `${paddingLeft + 12}px` }}
+    >
+      {/* Type icon */}
+      <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-md bg-white/5">
+        {getContentIcon(content.type)}
+      </span>
+
+      {/* Title */}
+      <span className="flex-1 text-sm text-slate-300 group-hover:text-white transition-colors truncate">
+        {content.title}
+      </span>
+
+      {/* Meta */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {content.durationFormatted && (
+          <span className="flex items-center gap-1 text-xs text-slate-500">
+            <Clock size={11} />
+            {content.durationFormatted}
+          </span>
+        )}
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getContentBadgeClass(content.type)}`}>
+          {getContentTypeLabel(content.type)}
+        </span>
+        <ChevronRight
+          size={14}
+          className="text-slate-600 group-hover:text-slate-300 group-hover:translate-x-0.5 transition-all"
+        />
+      </div>
+    </button>
+  );
+};
+
+// ==================== COURSE CARD ====================
+
+interface CourseCardProps {
+  course: LibraryCourse;
+  onClick: (course: LibraryCourse) => void;
+}
+
+const CourseCard: React.FC<CourseCardProps> = ({ course, onClick }) => {
+  const totalContent = countContentsInNodes(course.contentStructure);
+  const progressPct = Math.min(100, Math.round(course.progress));
+
+  return (
+    <button
+      onClick={() => onClick(course)}
+      className="group w-full text-left bg-white/4 hover:bg-white/7 border border-white/8 hover:border-white/15 rounded-2xl overflow-hidden transition-all duration-200 hover:shadow-xl hover:shadow-black/30 hover:-translate-y-0.5"
+    >
+      {/* Thumbnail */}
+      <div className="relative h-40 bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
+        {course.thumbnailUrl || course.thumbnail ? (
+          <img
+            src={course.thumbnailUrl || course.thumbnail}
+            alt={course.title}
+            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <GraduationCap size={48} className="text-slate-600" />
+          </div>
+        )}
+        {/* Progress overlay */}
+        <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40">
+          <div
+            className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
       </div>
 
-      {error && (
-        <div className="bg-error-dark text-error-light px-4 py-2 rounded">
-          {error}
-        </div>
-      )}
+      {/* Info */}
+      <div className="p-4 space-y-3">
+        <h3 className="font-semibold text-white text-sm leading-snug line-clamp-2 group-hover:text-indigo-200 transition-colors">
+          {course.title}
+        </h3>
 
-      {/* Filters */}
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search content..."
-              className="w-full bg-background-800 text-white rounded-lg py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <Search size={18} className="absolute left-3 top-2.5 text-gray-400" />
-          </div>
-
-          <select
-            value={selectedSubject}
-            onChange={(e) => setSelectedSubject(e.target.value)}
-            className="bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">All Subjects</option>
-            {subjects.map(subject => (
-              <option key={subject} value={subject}>{subject}</option>
+        {/* Subjects */}
+        {course.subjects?.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {course.subjects.slice(0, 3).map(s => (
+              <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white/6 text-slate-400 border border-white/8">
+                {s}
+              </span>
             ))}
-          </select>
-
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">All Types</option>
-            <option value="lesson">Lessons</option>
-            <option value="note">Notes</option>
-            <option value="trick">Tricks & Hacks</option>
-            <option value="mcq">MCQ Questions</option>
-            <option value="course">Enrolled Courses</option>
-            <option value="video">Videos</option>
-            <option value="text">Text Content</option>
-          </select>
-
-          <select
-            value={selectedDifficulty}
-            onChange={(e) => setSelectedDifficulty(e.target.value)}
-            className="bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="all">All Difficulties</option>
-            <option value="easy">Easy / Beginner</option>
-            <option value="medium">Medium / Intermediate</option>
-            <option value="hard">Hard / Advanced</option>
-          </select>
-
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-400" />
-            <span className="text-sm text-gray-400">
-              {filteredContents.length} items
-            </span>
+            {course.subjects.length > 3 && (
+              <span className="text-xs text-slate-500">+{course.subjects.length - 3}</span>
+            )}
           </div>
+        )}
+
+        {/* Stats row */}
+        <div className="flex items-center justify-between text-xs text-slate-500">
+          <span className="flex items-center gap-1">
+            <BookMarked size={11} />
+            {totalContent} items
+          </span>
+          <span className="flex items-center gap-1">
+            <BarChart2 size={11} />
+            {progressPct}% complete
+          </span>
         </div>
-      </Card>
+      </div>
+    </button>
+  );
+};
 
-      {/* Content by Subject */}
-      <div className="space-y-8">
-        {subjects.map(subject => {
-          const subjectContent = contentBySubject[subject];
-          if (!subjectContent || subjectContent.length === 0) return null;
+// ==================== COURSE DETAIL VIEW ====================
 
-          return (
-            <div key={subject} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-primary-600 flex items-center justify-center">
-                    <BookOpen size={16} className="text-white" />
-                  </div>
-                  {subject}
-                  <span className="text-sm text-gray-400 font-normal">
-                    ({subjectContent.length} items)
-                  </span>
-                </h2>
-              </div>
+interface CourseDetailViewProps {
+  course: LibraryCourse;
+  onBack: () => void;
+  onContentClick: (content: LibraryContent, courseId: string) => void;
+}
 
-              {viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {subjectContent.map(content => (
-                    <ContentCard
-                      key={content.id}
-                      content={content}
-                      onDownload={handleDownload}
-                      onView={handleView}
-                      onEdit={handleEdit}
-                      getTypeIcon={getTypeIcon}
-                      getDifficultyColor={getDifficultyColor}
-                      formatFileSize={formatFileSize}
-                      canEdit={(user?.role === 'admin' || user?.role === 'teacher') && !('isFromCourse' in content && content.isFromCourse)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {subjectContent.map(content => (
-                    <ContentListItem
-                      key={content.id}
-                      content={content}
-                      onDownload={handleDownload}
-                      onView={handleView}
-                      onEdit={handleEdit}
-                      getTypeIcon={getTypeIcon}
-                      getDifficultyColor={getDifficultyColor}
-                      formatFileSize={formatFileSize}
-                      canEdit={(user?.role === 'admin' || user?.role === 'teacher') && !('isFromCourse' in content && content.isFromCourse)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+const CourseDetailView: React.FC<CourseDetailViewProps> = ({ course, onBack, onContentClick }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Filter content nodes by search term (flattened match)
+  const filterNodes = (nodes: ContentNode[], term: string): ContentNode[] => {
+    if (!term) return nodes;
+    return nodes.reduce<ContentNode[]>((acc, node) => {
+      if (node.type === 'content') {
+        const title = node.contentData?.title || node.name || '';
+        if (title.toLowerCase().includes(term.toLowerCase())) acc.push(node);
+      } else if (node.type === 'folder') {
+        const filteredChildren = filterNodes(node.children, term);
+        if (filteredChildren.length > 0) {
+          acc.push({ ...node, children: filteredChildren });
+        }
+      }
+      return acc;
+    }, []);
+  };
+
+  const displayNodes = filterNodes(course.contentStructure, searchTerm);
+  const totalContent = countContentsInNodes(course.contentStructure);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={16} />
+          Back
+        </button>
+        <span className="text-slate-600">/</span>
+        <span className="text-sm font-medium text-white truncate">{course.title}</span>
       </div>
 
-      {filteredContents.length === 0 && (
-        <div className="text-center py-12">
-          <BookOpen size={48} className="mx-auto text-gray-500 mb-4" />
-          <h3 className="text-lg font-medium text-white mb-2">No content found</h3>
-          <p className="text-gray-400">
-            {searchTerm || selectedSubject !== 'all' || selectedType !== 'all' || selectedDifficulty !== 'all'
-              ? 'Try adjusting your search criteria or filters.'
-              : user 
-                ? 'Enroll in courses to see content here, or upload standalone content.'
-                : 'Login to access your enrolled course content.'}
-          </p>
+      {/* Course header card */}
+      <div className="flex gap-4 p-4 rounded-2xl bg-white/4 border border-white/8 mb-6">
+        {(course.thumbnailUrl || course.thumbnail) && (
+          <img
+            src={course.thumbnailUrl || course.thumbnail}
+            alt={course.title}
+            className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base font-semibold text-white mb-1 truncate">{course.title}</h2>
+          <div className="flex flex-wrap gap-1 mb-2">
+            {course.subjects?.map(s => (
+              <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-white/6 text-slate-400 border border-white/8">
+                {s}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-4 text-xs text-slate-500">
+            <span className="flex items-center gap-1"><BookMarked size={11} />{totalContent} items</span>
+            <span className="flex items-center gap-1"><BarChart2 size={11} />{Math.round(course.progress)}% done</span>
+            {course.validity && (
+              <span className="flex items-center gap-1">
+                <Clock size={11} />
+                Valid till {new Date(course.validity).toLocaleDateString()}
+              </span>
+            )}
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-4">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        <input
+          type="text"
+          placeholder="Search in this course..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 text-sm bg-white/5 border border-white/10 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 focus:bg-white/7 transition-all"
+        />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Content tree */}
+      <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
+        {displayNodes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <BookOpen size={32} className="text-slate-600 mb-3" />
+            <p className="text-slate-500 text-sm">
+              {searchTerm ? 'No content matches your search.' : 'No content in this course yet.'}
+            </p>
+          </div>
+        ) : (
+          displayNodes.map(node => (
+            <ContentNodeItem
+              key={node.id}
+              node={node}
+              courseId={course.courseId}
+              depth={0}
+              onContentClick={onContentClick}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 };
 
-interface ContentCardProps {
-  content: any;
-  onDownload: (content: any) => void;
-  onView: (content: any) => void;
-  onEdit: (content: any) => void;
-  getTypeIcon: (type: string) => JSX.Element;
-  getDifficultyColor: (difficulty?: string) => string;
-  formatFileSize: (bytes?: number) => string;
-  canEdit: boolean;
-}
+// ==================== MAIN PAGE ====================
 
-const ContentCard = ({
-  content,
-  onDownload,
-  onView,
-  onEdit,
-  getTypeIcon,
-  getDifficultyColor,
-  formatFileSize,
-  canEdit
-}: ContentCardProps) => {
-  const isFromCourse = 'isFromCourse' in content && content.isFromCourse;
-  const courseId = 'courseId' in content ? content.courseId : null;
-  
-  return (
-    <Card className="p-0 hover:shadow-card-hover transition-all duration-300 group">
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            {getTypeIcon(content.type)}
-            <span className="text-xs uppercase text-gray-400 font-medium">
-              {content.type}
-            </span>
-            {isFromCourse && (
-              <span className="text-xs bg-primary-900 text-primary-300 px-2 py-1 rounded">
-                Course
-              </span>
-            )}
-          </div>
-          {content.difficulty && (
-            <span className={`px-2 py-1 rounded-full text-xs ${getDifficultyColor(content.difficulty)}`}>
-              {content.difficulty}
-            </span>
-          )}
-        </div>
+const ContentLibrary: React.FC = () => {
+  const { user } = useDashboard();
+  const navigate = useNavigate();
 
-        <h3 className="text-white font-medium mb-2 line-clamp-2 group-hover:text-primary-300 transition-colors">
-          {content.title}
-        </h3>
-        
-        <p className="text-gray-400 text-sm mb-3 line-clamp-2">
-          {content.description}
-        </p>
+  const [viewState, setViewState] = useState<ViewState>('courses');
+  const [courses, setCourses] = useState<LibraryCourse[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<LibraryCourse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <BookOpen size={12} />
-            <span>{content.course || 'No course assigned'}</span>
-          </div>
-          
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <Calendar size={12} />
-            <span>{content.createdAt?.toLocaleDateString() || 'N/A'}</span>
-          </div>
+  // ==================== LOAD DATA ====================
 
-          {isFromCourse && 'instructor' in content && content.instructor && (
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <User size={12} />
-              <span>Instructor: {content.instructor}</span>
-            </div>
-          )}
+  useEffect(() => {
+    if (user?.uid) {
+      loadLibrary();
+    }
+  }, [user?.uid]);
 
-          {'duration' in content && content.duration && (
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <Clock size={12} />
-              <span>Duration: {content.duration}</span>
-            </div>
-          )}
+  const loadLibrary = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const data = await contentLibraryService.getStudentLibrary(user!.uid);
+      setCourses(data);
+    } catch (err: any) {
+      console.error('Error loading content library:', err);
+      setError('Failed to load your content library. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-          {'fileSize' in content && content.fileSize && (
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <FileText size={12} />
-              <span>{formatFileSize(content.fileSize)}</span>
-            </div>
-          )}
+  // ==================== HANDLERS ====================
 
-          {content.type === 'course' && content.totalLessons && (
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <BookOpen size={12} />
-              <span>{content.totalLessons} lessons</span>
-            </div>
-          )}
+  const handleCourseClick = useCallback((course: LibraryCourse) => {
+    setSelectedCourse(course);
+    setViewState('course-detail');
+  }, []);
 
-          {/* Course Features */}
-          {content.hasQnA && (
-            <div className="flex items-center gap-2 text-xs text-primary-400">
-              <CheckCircle size={12} />
-              <span>Q&A Available</span>
-            </div>
-          )}
-          {content.hasStudyPlanner && (
-            <div className="flex items-center gap-2 text-xs text-secondary-400">
-              <CheckCircle size={12} />
-              <span>Study Planner</span>
-            </div>
-          )}
-        </div>
+  const handleBack = useCallback(() => {
+    setSelectedCourse(null);
+    setViewState('courses');
+    setSearchTerm('');
+  }, []);
 
-        {content.tags && content.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-4">
-            {content.tags.slice(0, 3).map((tag: string) => (
-              <span key={tag} className="px-2 py-1 bg-background-800 text-xs text-gray-300 rounded">
-                {tag}
-              </span>
-            ))}
-            {content.tags.length > 3 && (
-              <span className="px-2 py-1 bg-background-800 text-xs text-gray-300 rounded">
-                +{content.tags.length - 3}
-              </span>
-            )}
-          </div>
-        )}
+  const handleContentClick = useCallback((content: LibraryContent, courseId: string) => {
+    const route = getContentRoute(content, courseId);
+    navigate(route);
+  }, [navigate]);
 
-        {/* Topics */}
-        {content.topics && content.topics.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-4">
-            {content.topics.slice(0, 2).map((topic: string) => (
-              <span key={topic} className="px-2 py-1 bg-secondary-900 text-secondary-300 text-xs rounded">
-                {topic}
-              </span>
-            ))}
-            {content.topics.length > 2 && (
-              <span className="px-2 py-1 bg-secondary-900 text-secondary-300 text-xs rounded">
-                +{content.topics.length - 2}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+  // ==================== FILTERED COURSES ====================
 
-      <div className="px-4 py-3 border-t border-background-800 bg-card-dark">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onView(content)}
-              className="p-1.5 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-white rounded transition-colors"
-              title={isFromCourse ? "Open course content" : "View content"}
-            >
-              {isFromCourse ? <Play size={14} /> : <Eye size={14} />}
-            </button>
-            
-            {(content.fileUrl || content.videoUrl || content.pdfUrl) && (
-              <button
-                onClick={() => onDownload(content)}
-                className="p-1.5 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-white rounded transition-colors"
-                title="Download content"
-              >
-                <Download size={14} />
-              </button>
-            )}
-          </div>
-
-          {canEdit && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onEdit(content)}
-                className="p-1.5 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-white rounded transition-colors"
-                title="Edit content"
-                disabled={isFromCourse}
-              >
-                <Edit size={14} />
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
+  const filteredCourses = courses.filter(c =>
+    !searchTerm || c.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
-};
 
-interface ContentListItemProps extends ContentCardProps {}
+  // ==================== RENDER ====================
 
-const ContentListItem = ({
-  content,
-  onDownload,
-  onView,
-  onEdit,
-  getTypeIcon,
-  getDifficultyColor,
-  formatFileSize,
-  canEdit
-}: ContentListItemProps) => {
-  const isFromCourse = 'isFromCourse' in content && content.isFromCourse;
-  
   return (
-    <Card className="p-4 hover:bg-background-800/50 transition-colors">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4 flex-1">
-          <div className="flex items-center gap-2">
-            {getTypeIcon(content.type)}
-            {isFromCourse && (
-              <span className="text-xs bg-primary-900 text-primary-300 px-2 py-1 rounded">
-                Course
-              </span>
-            )}
-          </div>
-          
-          <div className="flex-1 min-w-0">
+    <div className="min-h-screen bg-[#0d0f17] text-white">
+      {/* Background texture */}
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.12) 0%, transparent 70%)',
+        }}
+      />
+
+      <div className="relative max-w-6xl mx-auto px-4 py-8">
+
+        {/* ===== PAGE HEADER ===== */}
+        {viewState === 'courses' && (
+          <div className="mb-8">
             <div className="flex items-center gap-3 mb-1">
-              <h3 className="text-white font-medium truncate">{content.title}</h3>
-              {content.difficulty && (
-                <span className={`px-2 py-1 rounded-full text-xs ${getDifficultyColor(content.difficulty)}`}>
-                  {content.difficulty}
-                </span>
-              )}
-              {content.hasQnA && (
-                <span className="text-xs text-primary-400">Q&A</span>
-              )}
-              {content.hasStudyPlanner && (
-                <span className="text-xs text-secondary-400">Planner</span>
-              )}
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                <BookMarked size={16} className="text-indigo-400" />
+              </div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Content Library</h1>
             </div>
-            <p className="text-gray-400 text-sm truncate mb-1">{content.description}</p>
-            <div className="flex items-center gap-4 text-xs text-gray-400">
-              <span>{content.course || 'No course assigned'}</span>
-              <span>{content.createdAt?.toLocaleDateString() || 'N/A'}</span>
-              {isFromCourse && content.instructor && (
-                <span>Instructor: {content.instructor}</span>
-              )}
-              {'duration' in content && content.duration && (
-                <span>Duration: {content.duration}</span>
-              )}
-              {'fileSize' in content && content.fileSize && (
-                <span>{formatFileSize(content.fileSize)}</span>
-              )}
-            </div>
+            <p className="text-slate-500 text-sm ml-11">
+              Browse and study content from your enrolled courses.
+            </p>
           </div>
-        </div>
+        )}
 
-        <div className="flex items-center gap-2 ml-4">
-          <button
-            onClick={() => onView(content)}
-            className="p-2 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-white rounded transition-colors"
-            title={isFromCourse ? "Open course content" : "View content"}
-          >
-            {isFromCourse ? <Play size={16} /> : <Eye size={16} />}
-          </button>
-          
-          {(content.fileUrl || content.videoUrl || content.pdfUrl) && (
-            <button
-              onClick={() => onDownload(content)}
-              className="p-2 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-white rounded transition-colors"
-              title="Download content"
-            >
-              <Download size={16} />
-            </button>
-          )}
+        {/* ===== LOADING ===== */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <Loader size={28} className="text-indigo-400 animate-spin" />
+            <p className="text-slate-500 text-sm">Loading your library…</p>
+          </div>
+        )}
 
-          {canEdit && (
+        {/* ===== ERROR ===== */}
+        {!loading && error && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-sm">
+            <AlertCircle size={16} className="flex-shrink-0" />
+            <span>{error}</span>
             <button
-              onClick={() => onEdit(content)}
-              className="p-2 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-white rounded transition-colors"
-              title="Edit content"
-              disabled={isFromCourse}
+              onClick={loadLibrary}
+              className="ml-auto text-xs underline hover:no-underline"
             >
-              <Edit size={16} />
+              Retry
             </button>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* ===== COURSES LIST VIEW ===== */}
+        {!loading && !error && viewState === 'courses' && (
+          <>
+            {/* Search + Stats */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="relative flex-1 max-w-sm">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search courses…"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 text-sm bg-white/5 border border-white/10 rounded-xl text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition-all"
+                />
+              </div>
+              <span className="text-xs text-slate-600 whitespace-nowrap">
+                {filteredCourses.length} course{filteredCourses.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {/* Empty state */}
+            {filteredCourses.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-white/4 flex items-center justify-center mb-4">
+                  <GraduationCap size={28} className="text-slate-600" />
+                </div>
+                <h3 className="text-base font-medium text-slate-400 mb-1">
+                  {searchTerm ? 'No courses found' : 'No enrolled courses yet'}
+                </h3>
+                <p className="text-sm text-slate-600 max-w-xs">
+                  {searchTerm
+                    ? 'Try a different search term.'
+                    : 'Enroll in a course to access its content here.'}
+                </p>
+              </div>
+            )}
+
+            {/* Course grid */}
+            {filteredCourses.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredCourses.map(course => (
+                  <CourseCard key={course.courseId} course={course} onClick={handleCourseClick} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ===== COURSE DETAIL VIEW ===== */}
+        {!loading && !error && viewState === 'course-detail' && selectedCourse && (
+          <CourseDetailView
+            course={selectedCourse}
+            onBack={handleBack}
+            onContentClick={handleContentClick}
+          />
+        )}
       </div>
-    </Card>
+    </div>
   );
 };
 
