@@ -25,8 +25,11 @@ const CONFIG = {
     process.env.VIDEO_SECURITY_STRING || 'CHANGE_ME_IN_VERCEL_ENV_VIDEO_SECURITY_STRING',
   TOKEN_SECRET:
     process.env.VIDEO_TOKEN_SECRET || 'CHANGE_ME_IN_VERCEL_ENV_VIDEO_TOKEN_SECRET',
-  /** 8 MB chunks — large enough for smooth buffering, small enough IDM can't use partials */
-  CHUNK_SIZE: 8 * 1024 * 1024,
+  /** 1 MB chunks — small enough that even a 1 Mbps mobile connection downloads
+   *  each chunk in ~8 seconds, well within the 5-minute token window.
+   *  Previously 8MB caused 403 token-expired errors on slow connections because
+   *  the old 30-second token expired before the chunk finished downloading. */
+  CHUNK_SIZE: 1 * 1024 * 1024,
   /** Allowed origins for CORS (set VIDEO_ALLOWED_ORIGIN in Vercel env) */
   ALLOWED_ORIGIN: process.env.VIDEO_ALLOWED_ORIGIN || '*',
 };
@@ -119,7 +122,9 @@ function validateStreamToken(token: string, videoId: string): boolean {
 }
 
 function generateChunkToken(videoId: string, chunkIndex: number): string {
-  const expiry = Date.now() + 30 * 1000; // 30 sec
+  // 5-minute expiry (was 30s). With 1MB chunks a slow mobile connection
+  // (1 Mbps) takes ~8s per chunk — 5 min gives ample headroom.
+  const expiry = Date.now() + 5 * 60 * 1000;
   const payload = `chunk:${videoId}:${chunkIndex}:${expiry}`;
   const sig = crypto.createHmac('sha256', CONFIG.TOKEN_SECRET).update(payload).digest('hex');
   return Buffer.from(`${payload}:${sig}`).toString('base64url');
@@ -415,7 +420,7 @@ async function handleInfo(req: VercelRequest, res: VercelResponse) {
     totalSize,
     totalChunks,
     chunkSize:   CONFIG.CHUNK_SIZE,
-    contentType: 'video/mp4',   // always force — Dropbox/GDrive return 'application/octet-stream'
+    contentType: 'video/mp4',
   });
 }
 
@@ -468,7 +473,6 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
   const contentRange  = upstream.headers.get('content-range');
   const contentLength = upstream.headers.get('content-length');
 
-  // isLastChunk: standard case via Content-Range, plus handle 200 (no range support)
   let isLastChunk = false;
   if (contentRange) {
     const match = contentRange.match(/bytes (\d+)-(\d+)\/(\d+)/);
@@ -477,15 +481,11 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
       isLastChunk = byteEnd >= totalSize - 1;
     }
   } else if (upstream.status === 200) {
-    isLastChunk = true; // full file returned — only one chunk
+    isLastChunk = true;
   }
 
   const nextChunkToken = isLastChunk ? '' : generateChunkToken(videoId, chunkIndex + 1);
 
-  // Force video/mp4: Dropbox/GDrive return 'application/octet-stream' which
-  // would break any browser that inspects Content-Type for video handling.
-  // Strip ETag + Last-Modified so Vercel edge / browser never sends a
-  // conditional 304 request with an empty body back to the client.
   res.setHeader('Content-Type', 'video/mp4');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
@@ -501,7 +501,8 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
   if (contentRange)  res.setHeader('Content-Range', contentRange);
 
   res.status(206);
-  (upstream.body as any).pipe(res);
+  // Pipe upstream body directly to response for memory efficiency
+  upstream.body.pipe(res as any);
 }
 
 /**
