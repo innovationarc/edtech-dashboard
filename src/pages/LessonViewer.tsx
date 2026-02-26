@@ -1,4 +1,4 @@
-// src/pages/LessonViewer.tsx — v8: Production media player
+// src/pages/LessonViewer.tsx — v9: Refined player controls
 //
 // STREAMING LOGIC: 100% identical to v7 (proven working, unchanged).
 // NEW in v8: Full production-grade player UI replacing the basic controls.
@@ -126,8 +126,9 @@ async function downloadAllChunks(
   return chunks;
 }
 
-// ─── Speed options ────────────────────────────────────────────────────────────
-const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+const MIN_SPEED = 0.25;
+const MAX_SPEED = 3.0;
+const SPEED_STEP = 0.05;
 
 // ==================== COMPONENT ==============================================
 
@@ -167,6 +168,7 @@ const LessonViewer: React.FC = () => {
   const [isVideoHidden, setIsVideoHidden] = useState(false);
   const [ctrlVisible,   setCtrlVisible]   = useState(true);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [showVolPanel,  setShowVolPanel]  = useState(false);
   const [isDragging,    setIsDragging]    = useState(false);
   const [hoverInfo,     setHoverInfo]     = useState<{ pct: number; time: number } | null>(null);
   const [skipFlash,     setSkipFlash]     = useState<'fwd' | 'back' | null>(null);
@@ -176,6 +178,7 @@ const LessonViewer: React.FC = () => {
   const playerWrapRef = useRef<HTMLDivElement>(null);
   const progressRef   = useRef<HTMLDivElement>(null);
   const volumeBarRef  = useRef<HTMLDivElement>(null);
+  const volumeWrapRef = useRef<HTMLDivElement>(null);
   const speedMenuRef  = useRef<HTMLDivElement>(null);
   const blobUrlRef    = useRef('');
   const streamUrlRef  = useRef('');
@@ -220,11 +223,13 @@ const LessonViewer: React.FC = () => {
     }
   }, [playerState, showControls]);
 
-  // ── Close speed menu on outside click ─────────────────────────────────────
+  // ── Close speed menu and volume panel on outside click ────────────────────
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (speedMenuRef.current && !speedMenuRef.current.contains(e.target as Node))
         setShowSpeedMenu(false);
+      if (volumeWrapRef.current && !volumeWrapRef.current.contains(e.target as Node))
+        setShowVolPanel(false);
     };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -468,8 +473,9 @@ const LessonViewer: React.FC = () => {
   };
 
   const setSpeedTo = (s: number) => {
-    const v = videoRef.current; if (v) v.playbackRate = s;
-    setSpeed(s); setShowSpeedMenu(false);
+    const clamped = Math.round(clamp(s, MIN_SPEED, MAX_SPEED) / SPEED_STEP) * SPEED_STEP;
+    const v = videoRef.current; if (v) v.playbackRate = clamped;
+    setSpeed(parseFloat(clamped.toFixed(2)));
   };
 
   const toggleFullscreen = () => {
@@ -480,7 +486,9 @@ const LessonViewer: React.FC = () => {
 
   const handleRetry = () => { initLockRef.current = ''; if (content?.videoUrl) initPlayer(content.videoUrl); };
 
-  // ── Progress bar interaction ───────────────────────────────────────────────
+  // ── Progress bar interaction ──────────────────────────────────────────────
+  // Key: during drag we directly mutate video.currentTime and update React state
+  // only via requestAnimationFrame to avoid batching lag.
   const pctFromMouse = (clientX: number): number => {
     const el = progressRef.current; if (!el) return 0;
     const r = el.getBoundingClientRect();
@@ -488,8 +496,10 @@ const LessonViewer: React.FC = () => {
   };
   const seekToPct = (pct: number) => {
     const v = videoRef.current; if (!v || !duration) return;
-    v.currentTime = pct * duration;
-    setCurrentTime(pct * duration);
+    const t = pct * duration;
+    v.currentTime = t;
+    // Immediately update React state so the fill moves without waiting for timeupdate
+    setCurrentTime(t);
   };
 
   const onProgressMouseDown = (e: React.MouseEvent) => {
@@ -549,7 +559,7 @@ const LessonViewer: React.FC = () => {
   const playPct          = duration > 0 ? (currentTime / duration) * 100 : 0;
   const showLoadOverlay  = playerState === 'streaming' || playerState === 'downloading';
   const showPlayerCtrls  = (playerState === 'playing' || playerState === 'paused' || playerState === 'ended') && !isVideoHidden;
-  const ctrlsHidden      = playerState === 'playing' && !ctrlVisible && !isDragging && !showSpeedMenu;
+  const ctrlsHidden      = playerState === 'playing' && !ctrlVisible && !isDragging && !showSpeedMenu && !showVolPanel;
 
   const loadLabel = playerState === 'streaming'
     ? 'Preparing secure stream…'
@@ -580,68 +590,129 @@ const LessonViewer: React.FC = () => {
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&display=swap');
+
         /* ── Video element ─────────────────────────────────────── */
         .sv { -webkit-user-select:none; user-select:none; -webkit-user-drag:none; }
         .sv video { display:block; width:100%; height:100%; object-fit:contain; pointer-events:none; }
         .sv video::-webkit-media-controls,
         .sv video::-webkit-media-controls-enclosure { display:none !important; }
 
-        /* ── Progress bar ──────────────────────────────────────── */
-        .prg { position:relative; height:4px; cursor:pointer; transition:height .15s; }
-        .prg:hover, .prg.drag { height:6px; }
+        /* ── Watermark ─────────────────────────────────────────── */
+        .wm {
+          position:absolute; top:14px; right:16px; z-index:30;
+          font-family:'Space Grotesk', 'DM Sans', system-ui, sans-serif;
+          font-size:13px; font-weight:700; letter-spacing:.12em;
+          text-transform:uppercase;
+          color:rgba(255,255,255,.18);
+          text-shadow: 0 1px 4px rgba(0,0,0,.5);
+          pointer-events:none; user-select:none;
+        }
+
+        /* ── Progress bar — NO transition on fill during drag ──── */
+        .prg { position:relative; height:5px; cursor:pointer; transition:height .15s; touch-action:none; }
+        .prg:hover, .prg.drag { height:7px; }
         .prg-track { position:absolute; inset:0; background:rgba(255,255,255,.18); border-radius:99px; overflow:visible; }
-        .prg-buf   { position:absolute; inset-y-0; left:0; background:rgba(255,255,255,.3); border-radius:99px; height:100%; pointer-events:none; transition:width .3s; }
-        .prg-fill  { position:absolute; inset-y-0; left:0; background:#7c3aed; border-radius:99px; height:100%; pointer-events:none; }
-        .prg-dot   { position:absolute; top:50%; width:14px; height:14px; border-radius:50%;
+        .prg-buf   { position:absolute; top:0; left:0; height:100%; background:rgba(255,255,255,.28); border-radius:99px; pointer-events:none; }
+        .prg-fill  { position:absolute; top:0; left:0; height:100%; background:#7c3aed; border-radius:99px; pointer-events:none; }
+        .prg-fill.smooth { transition:width .08s linear; }
+        .prg-dot   { position:absolute; top:50%; width:15px; height:15px; border-radius:50%;
                      background:#fff; transform:translateX(-50%) translateY(-50%);
-                     box-shadow:0 0 0 3px rgba(124,58,237,.5); opacity:0;
+                     box-shadow:0 0 0 3px rgba(124,58,237,.55); opacity:0;
                      transition:opacity .15s; pointer-events:none; }
         .prg:hover .prg-dot, .prg.drag .prg-dot { opacity:1; }
-        .prg-tip { position:absolute; bottom:calc(100% + 8px); background:rgba(0,0,0,.85) ;
-                   color:#fff; font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px;
-                   transform:translateX(-50%); pointer-events:none; white-space:nowrap; }
-
-        /* ── Volume bar ────────────────────────────────────────── */
-        .vol-track { position:relative; height:4px; border-radius:99px; background:rgba(255,255,255,.2); cursor:pointer; }
-        .vol-fill  { position:absolute; left:0; top:0; height:100%; border-radius:99px; background:#7c3aed; pointer-events:none; }
-        .vol-dot   { position:absolute; top:50%; width:12px; height:12px; border-radius:50%;
-                     background:#fff; transform:translateX(-50%) translateY(-50%); pointer-events:none; }
+        .prg-tip { position:absolute; bottom:calc(100% + 9px); background:rgba(10,10,20,.92);
+                   border:1px solid rgba(255,255,255,.1);
+                   color:#fff; font-size:11px; font-weight:600; padding:3px 9px;
+                   border-radius:7px; transform:translateX(-50%);
+                   pointer-events:none; white-space:nowrap; }
 
         /* ── Control button ────────────────────────────────────── */
         .cb { display:inline-flex; align-items:center; justify-content:center;
-              background:transparent; border:none; color:rgba(255,255,255,.75);
-              border-radius:8px; padding:6px; cursor:pointer; flex-shrink:0;
-              transition:color .12s, background .12s; }
+              background:transparent; border:none; color:rgba(255,255,255,.72);
+              border-radius:8px; padding:7px; cursor:pointer; flex-shrink:0;
+              transition:color .1s, background .1s; -webkit-tap-highlight-color:transparent; }
         .cb:hover { color:#fff; background:rgba(255,255,255,.1); }
+        .cb:active { background:rgba(255,255,255,.16); }
         .cb.on { color:#a78bfa; }
 
-        /* ── Speed menu ────────────────────────────────────────── */
-        .spd-menu { position:absolute; bottom:calc(100% + 6px); right:0; min-width:100px;
-                    background:#181825; border:1px solid rgba(255,255,255,.1);
-                    border-radius:12px; overflow:hidden; box-shadow:0 12px 40px rgba(0,0,0,.7); z-index:200; }
-        .spd-item { padding:9px 16px; font-size:13px; color:rgba(255,255,255,.65);
-                    cursor:pointer; transition:background .1s, color .1s; white-space:nowrap; }
-        .spd-item:hover { background:rgba(255,255,255,.07); color:#fff; }
-        .spd-item.active { color:#a78bfa; font-weight:700; }
-        .spd-hdr  { padding:6px 16px 4px; font-size:10px; text-transform:uppercase;
-                    letter-spacing:.08em; color:rgba(255,255,255,.3); font-weight:600;
-                    border-bottom:1px solid rgba(255,255,255,.07); }
+        /* ── Floating volume panel ─────────────────────────────── */
+        .vol-panel {
+          position:absolute; bottom:calc(100% + 10px); left:50%;
+          transform:translateX(-50%);
+          background:#12121e; border:1px solid rgba(255,255,255,.12);
+          border-radius:14px; padding:14px 10px 10px;
+          display:flex; flex-direction:column; align-items:center; gap:10px;
+          box-shadow:0 16px 48px rgba(0,0,0,.75);
+          z-index:300; min-width:44px;
+          animation:volFadeIn .15s ease;
+        }
+        @keyframes volFadeIn {
+          from { opacity:0; transform:translateX(-50%) translateY(6px); }
+          to   { opacity:1; transform:translateX(-50%) translateY(0); }
+        }
+        .vol-pct { font-size:11px; font-weight:700; color:rgba(255,255,255,.5);
+                   font-variant-numeric:tabular-nums; min-width:32px; text-align:center; }
+        /* Vertical slider track */
+        .vol-vert-wrap { position:relative; width:4px; height:90px;
+                         background:rgba(255,255,255,.15); border-radius:99px;
+                         cursor:pointer; touch-action:none; }
+        .vol-vert-fill { position:absolute; bottom:0; left:0; width:100%;
+                         background:#7c3aed; border-radius:99px; pointer-events:none; }
+        .vol-vert-dot  { position:absolute; left:50%; width:13px; height:13px; border-radius:50%;
+                         background:#fff; transform:translateX(-50%) translateY(50%);
+                         box-shadow:0 0 0 2px rgba(124,58,237,.5);
+                         pointer-events:none; }
+
+        /* ── Speed panel ───────────────────────────────────────── */
+        .spd-panel {
+          position:absolute; bottom:calc(100% + 10px); right:0;
+          background:#12121e; border:1px solid rgba(255,255,255,.12);
+          border-radius:14px; padding:12px;
+          display:flex; flex-direction:column; gap:8px; align-items:center;
+          box-shadow:0 16px 48px rgba(0,0,0,.75);
+          z-index:300; min-width:130px;
+          animation:volFadeIn .15s ease;
+        }
+        .spd-label { font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+                     color:rgba(255,255,255,.3); font-weight:600; }
+        .spd-value { font-size:22px; font-weight:800; color:#fff;
+                     font-variant-numeric:tabular-nums; line-height:1; }
+        .spd-row { display:flex; align-items:center; gap:8px; width:100%; }
+        .spd-btn { display:flex; align-items:center; justify-content:center;
+                   width:32px; height:32px; border-radius:9px; border:none; cursor:pointer;
+                   background:rgba(255,255,255,.08); color:rgba(255,255,255,.8);
+                   font-size:18px; font-weight:700; transition:background .1s, color .1s;
+                   flex-shrink:0; -webkit-tap-highlight-color:transparent; }
+        .spd-btn:hover { background:rgba(255,255,255,.15); color:#fff; }
+        .spd-btn:active { background:rgba(124,58,237,.3); }
+        .spd-bar-wrap { flex:1; height:4px; background:rgba(255,255,255,.15);
+                        border-radius:99px; overflow:hidden; }
+        .spd-bar-fill { height:100%; background:#7c3aed; border-radius:99px;
+                        transition:width .1s; }
+        .spd-presets { display:flex; gap:5px; flex-wrap:wrap; justify-content:center; }
+        .spd-preset { font-size:11px; font-weight:600; padding:4px 8px; border-radius:7px;
+                      border:1px solid rgba(255,255,255,.1); background:transparent;
+                      color:rgba(255,255,255,.5); cursor:pointer;
+                      transition:all .1s; -webkit-tap-highlight-color:transparent; }
+        .spd-preset:hover { background:rgba(255,255,255,.08); color:#fff; }
+        .spd-preset.active { background:rgba(124,58,237,.25); border-color:#7c3aed; color:#a78bfa; }
 
         /* ── Controls fade ─────────────────────────────────────── */
-        .ctrl-wrap { transition:opacity .25s ease, transform .2s ease; }
-        .ctrl-wrap.hidden { opacity:0 !important; transform:translateY(6px); pointer-events:none; }
+        .ctrl-wrap { transition:opacity .22s ease, transform .18s ease; }
+        .ctrl-wrap.hide { opacity:0 !important; transform:translateY(5px); pointer-events:none; }
 
         /* ── Skip flash ────────────────────────────────────────── */
         .skip-flash { position:absolute; top:50%; left:50%;
                       transform:translate(-50%,-50%);
                       display:flex; align-items:center; gap:6px;
-                      background:rgba(0,0,0,.6); border-radius:12px;
+                      background:rgba(0,0,0,.58); border-radius:12px;
                       padding:10px 20px; color:#fff; font-size:14px; font-weight:600;
                       pointer-events:none; animation:sfade .65s ease-out forwards; }
         @keyframes sfade {
           0%   { opacity:1; transform:translate(-50%,-50%) scale(1); }
-          60%  { opacity:.9; }
-          100% { opacity:0; transform:translate(-50%,-65%) scale(.92); }
+          60%  { opacity:.85; }
+          100% { opacity:0; transform:translate(-50%,-62%) scale(.91); }
         }
 
         /* ── Buffering spinner ─────────────────────────────────── */
@@ -702,6 +773,9 @@ const LessonViewer: React.FC = () => {
                 onMouseLeave={() => { if (playerState === 'playing') setCtrlVisible(false); }}
                 onTouchStart={showControls}
               >
+                {/* Watermark — always visible over video */}
+                <div className="wm">Edtech</div>
+
                 {/* Video element — always mounted */}
                 <video
                   ref={videoRef}
@@ -785,7 +859,7 @@ const LessonViewer: React.FC = () => {
 
                 {/* ════ CONTROLS ════════════════════════════════════════════ */}
                 {showPlayerCtrls && (
-                  <div className={`ctrl-wrap absolute inset-x-0 bottom-0 ${ctrlsHidden ? 'hidden' : ''}`}>
+                  <div className={`ctrl-wrap absolute inset-x-0 bottom-0 ${ctrlsHidden ? 'hide' : ''}`}>
                     {/* Gradient */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent pointer-events-none" />
 
@@ -802,7 +876,8 @@ const LessonViewer: React.FC = () => {
                       >
                         <div className="prg-track">
                           <div className="prg-buf" style={{ width: `${bufferedPct}%` }} />
-                          <div className="prg-fill" style={{ width: `${playPct}%` }} />
+                          {/* No transition during drag for instant feel */}
+                          <div className={`prg-fill${isDragging ? '' : ' smooth'}`} style={{ width: `${playPct}%` }} />
                           <div className="prg-dot" style={{ left: `${playPct}%` }} />
                         </div>
                         {hoverInfo !== null && (
@@ -835,59 +910,131 @@ const LessonViewer: React.FC = () => {
                           <SkipForward size={17} />
                         </button>
 
-                        {/* Volume: icon + slider */}
-                        <div className="flex items-center gap-1.5 group/vol ml-0.5">
-                          <button className="cb" onClick={toggleMute} title="Mute (M)">
+                        {/* ── Volume button → floating panel ── */}
+                        <div className="relative flex-shrink-0" ref={volumeWrapRef}>
+                          <button
+                            className={`cb ${showVolPanel ? 'on' : ''}`}
+                            onClick={() => setShowVolPanel(v => !v)}
+                            title="Volume (M to mute)"
+                          >
                             <VolumeIcon size={18} />
                           </button>
-                          {/* Slider — expands on hover */}
-                          <div className="w-0 overflow-hidden group-hover/vol:w-[72px] transition-all duration-200 flex-shrink-0">
-                            <div
-                              ref={volumeBarRef}
-                              className="vol-track w-[72px]"
-                              onMouseDown={onVolumeBarMouseDown}
-                            >
-                              <div className="vol-fill" style={{ width: `${(muted ? 0 : volume) * 100}%` }} />
-                              <div className="vol-dot" style={{ left: `${(muted ? 0 : volume) * 100}%` }} />
-                            </div>
-                          </div>
+
+                          {showVolPanel && (() => {
+                            // Vertical slider interaction
+                            const TRACK_H = 90;
+                            const volPct  = muted ? 0 : volume;
+                            const fillH   = volPct * TRACK_H;
+                            const dotBot  = fillH;
+
+                            const applyVol = (clientY: number) => {
+                              const el = document.getElementById('vol-vert-track');
+                              if (!el) return;
+                              const r = el.getBoundingClientRect();
+                              const val = clamp(1 - (clientY - r.top) / r.height, 0, 1);
+                              const v = videoRef.current; if (!v) return;
+                              v.volume = val; v.muted = val === 0;
+                              setVolume(val); setMuted(val === 0);
+                            };
+                            const onTrackDown = (e: React.MouseEvent) => {
+                              e.preventDefault(); e.stopPropagation();
+                              applyVol(e.clientY);
+                              const mm = (ev: MouseEvent) => applyVol(ev.clientY);
+                              const mu = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); };
+                              window.addEventListener('mousemove', mm);
+                              window.addEventListener('mouseup', mu);
+                            };
+                            const onTrackTouch = (e: React.TouchEvent) => {
+                              e.preventDefault(); e.stopPropagation();
+                              applyVol(e.touches[0].clientY);
+                              const tm = (ev: TouchEvent) => { ev.preventDefault(); applyVol(ev.touches[0].clientY); };
+                              const tu = () => { window.removeEventListener('touchmove', tm); window.removeEventListener('touchend', tu); };
+                              window.addEventListener('touchmove', tm, { passive: false });
+                              window.addEventListener('touchend', tu);
+                            };
+
+                            return (
+                              <div className="vol-panel">
+                                <span className="vol-pct">{Math.round(volPct * 100)}%</span>
+                                {/* Vertical track */}
+                                <div id="vol-vert-track" className="vol-vert-wrap"
+                                  onMouseDown={onTrackDown}
+                                  onTouchStart={onTrackTouch}
+                                >
+                                  <div className="vol-vert-fill" style={{ height: fillH }} />
+                                  <div className="vol-vert-dot" style={{ bottom: dotBot }} />
+                                </div>
+                                {/* Mute button */}
+                                <button className="cb" style={{ padding: 4 }} onClick={toggleMute} title="Mute (M)">
+                                  <VolumeIcon size={16} />
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Time */}
-                        <span className="text-xs text-white/45 font-mono tabular-nums ml-2 flex-shrink-0">
+                        <span className="text-xs text-white/45 font-mono tabular-nums ml-1.5 flex-shrink-0">
                           {fmtTime(currentTime)}
-                          <span className="text-white/20 mx-1">/</span>
+                          <span className="text-white/22 mx-1">/</span>
                           {fmtTime(duration)}
                         </span>
 
                         <div className="flex-1" />
 
                         {/* Secure badge */}
-                        <div className="hidden sm:flex items-center gap-1 text-green-400/40 mr-2 flex-shrink-0">
+                        <div className="hidden sm:flex items-center gap-1 text-green-400/35 mr-1.5 flex-shrink-0">
                           <Shield size={10} /><span className="text-[10px]">Secure</span>
                         </div>
 
-                        {/* Speed */}
+                        {/* ── Speed control ── */}
                         <div className="relative flex-shrink-0" ref={speedMenuRef}>
                           <button
-                            className={`cb text-xs font-bold min-w-[38px] px-1.5 ${showSpeedMenu ? 'on' : ''}`}
+                            className={`cb text-[11px] font-bold px-1.5 min-w-[40px] ${showSpeedMenu ? 'on' : ''}`}
                             onClick={() => setShowSpeedMenu(s => !s)}
                             title="Playback speed"
                           >
                             {speed === 1 ? '1×' : `${speed}×`}
                           </button>
-                          {showSpeedMenu && (
-                            <div className="spd-menu">
-                              <div className="spd-hdr">Speed</div>
-                              {SPEEDS.map(s => (
-                                <div key={s}
-                                  className={`spd-item ${s === speed ? 'active' : ''}`}
-                                  onClick={() => setSpeedTo(s)}>
-                                  {s === 1 ? 'Normal (1×)' : `${s}×`}
+
+                          {showSpeedMenu && (() => {
+                            const presets = [0.5, 1, 1.5, 2, 2.5, 3];
+                            const pct     = ((speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100;
+                            return (
+                              <div className="spd-panel">
+                                <span className="spd-label">Speed</span>
+                                <span className="spd-value">{speed.toFixed(2)}×</span>
+
+                                {/* +/- buttons with bar */}
+                                <div className="spd-row">
+                                  <button className="spd-btn"
+                                    onClick={() => setSpeedTo(speed - SPEED_STEP)}>−</button>
+                                  <div className="spd-bar-wrap">
+                                    <div className="spd-bar-fill" style={{ width: `${pct}%` }} />
+                                  </div>
+                                  <button className="spd-btn"
+                                    onClick={() => setSpeedTo(speed + SPEED_STEP)}>+</button>
                                 </div>
-                              ))}
-                            </div>
-                          )}
+
+                                {/* Preset chips */}
+                                <div className="spd-presets">
+                                  {presets.map(p => (
+                                    <button key={p}
+                                      className={`spd-preset ${speed === p ? 'active' : ''}`}
+                                      onClick={() => setSpeedTo(p)}>
+                                      {p === 1 ? '1×' : `${p}×`}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Reset */}
+                                {speed !== 1 && (
+                                  <button className="spd-preset" style={{ width: '100%', marginTop: 2 }}
+                                    onClick={() => setSpeedTo(1)}>Reset to 1×</button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         {/* Fullscreen */}
