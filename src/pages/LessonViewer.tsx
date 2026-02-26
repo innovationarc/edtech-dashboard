@@ -35,15 +35,14 @@ import { videoStreamService } from '../services/videoStreamService';
 import { useDashboard } from '../contexts/DashboardContext';
 
 // ─── Security string — must match VIDEO_SECURITY_STRING in Vercel env ─────────
-// Pulled from Vite env var; set VITE_VIDEO_SECURITY_STRING in your .env
 const SECURITY_STRING =
   (import.meta as any).env?.VITE_VIDEO_SECURITY_STRING ||
   'CHANGE_ME_IN_VITE_ENV_VITE_VIDEO_SECURITY_STRING';
 
 // ─── MSE constants ────────────────────────────────────────────────────────────
-const BUFFER_AHEAD_PAUSE   = 60;   // seconds — stop pre-fetching beyond this
-const BUFFER_AHEAD_RESUME  = 15;   // seconds — resume pre-fetching below this
-const INITIAL_BUFFER_SECS  = 8;    // seconds before allowing playback
+const BUFFER_AHEAD_PAUSE  = 60;   // seconds — stop pre-fetching beyond this
+const BUFFER_AHEAD_RESUME = 15;   // seconds — resume pre-fetching below this
+const INITIAL_BUFFER_SECS = 8;    // seconds before allowing playback
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDuration(secs: number): string {
@@ -63,12 +62,13 @@ function formatMinutes(mins: number): string {
   return `${m}m`;
 }
 
-// ─── Anti-piracy injection — runs once on mount ────────────────────────────────
-function injectAntiPiracy() {
-  // Block right-click globally on the player container
-  document.addEventListener('contextmenu', (e) => e.preventDefault(), true);
+function sleep(ms: number) {
+  return new Promise<void>(r => setTimeout(r, ms));
+}
 
-  // Block dangerous keyboard shortcuts
+// ─── Anti-piracy injection — runs once on mount ───────────────────────────────
+function injectAntiPiracy() {
+  document.addEventListener('contextmenu', (e) => e.preventDefault(), true);
   document.addEventListener('keydown', (e) => {
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === 'F12') { e.preventDefault(); return; }
@@ -80,18 +80,13 @@ function injectAntiPiracy() {
     }
     if (e.key === 'PrintScreen') { e.preventDefault(); return; }
   }, true);
-
-  // Kill MediaRecorder (screen/tab recording)
   try { (window as any).MediaRecorder = undefined; } catch {}
-
-  // Block getDisplayMedia (screen capture)
   try {
     const nav = navigator as any;
     if (nav.mediaDevices?.getDisplayMedia) {
       nav.mediaDevices.getDisplayMedia = () =>
         Promise.reject(new Error('Screen capture is disabled.'));
     }
-    // Block getUserMedia video track
     const origGetUserMedia = nav.mediaDevices?.getUserMedia?.bind(nav.mediaDevices);
     if (origGetUserMedia) {
       nav.mediaDevices.getUserMedia = (constraints: any) => {
@@ -123,44 +118,51 @@ function useDevToolsDetection(onDetected: () => void, onClear: () => void) {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PlayerState = 'idle' | 'loading' | 'buffering' | 'playing' | 'paused' | 'error' | 'devtools';
 
+// ─── MSE session object — single source of truth for one streaming session ────
+// Bundling all MSE state into one ref prevents stale-closure bugs where
+// pump() or flushPendingChunks() hold onto an old sbRef / msRef value.
+interface MSESession {
+  ms: MediaSource;
+  sb: SourceBuffer;
+  blobUrl: string;            // kept alive until session is torn down
+  destroyed: boolean;         // set to true by teardown()
+  pendingChunks: ArrayBuffer[];
+  appending: boolean;
+  nextToken: string;
+  chunkIndex: number;
+  streamToken: string;
+  videoId: string;
+}
+
 // ==================== MAIN COMPONENT ====================
 
 const LessonViewer: React.FC = () => {
   const { courseId, contentId } = useParams<{ courseId: string; contentId: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = useDashboard();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const { user }  = useDashboard();
 
   // ─── Content state ─────────────────────────────────────────────────────────
-  const [content, setContent] = useState<LibraryContent | null>(null);
+  const [content, setContent]           = useState<LibraryContent | null>(null);
   const [loadingContent, setLoadingContent] = useState(true);
   const [contentError, setContentError] = useState('');
 
   // ─── Player state ──────────────────────────────────────────────────────────
-  const [playerState, setPlayerState] = useState<PlayerState>('idle');
-  const [playerError, setPlayerError] = useState('');
-  const [isEmbed, setIsEmbed] = useState(false);
-  const [embedUrl, setEmbedUrl] = useState('');
-  const [loadingPercent, setLoadingPercent] = useState(0);
-  const [bufferedPercent, setBufferedPercent] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [totalChunks, setTotalChunks] = useState<number | null>(null);
+  const [playerState, setPlayerState]   = useState<PlayerState>('idle');
+  const [playerError, setPlayerError]   = useState('');
+  const [isEmbed, setIsEmbed]           = useState(false);
+  const [embedUrl, setEmbedUrl]         = useState('');
+  const [currentTime, setCurrentTime]   = useState(0);
+  const [duration, setDuration]         = useState(0);
+  const [totalChunks, setTotalChunks]   = useState<number | null>(null);
   const [loadedChunks, setLoadedChunks] = useState(0);
+  const [bufferedPercent, setBufferedPercent] = useState(0);
   const [isVideoHidden, setIsVideoHidden] = useState(false);
 
   // ─── Refs ──────────────────────────────────────────────────────────────────
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const msRef       = useRef<MediaSource | null>(null);
-  const sbRef       = useRef<SourceBuffer | null>(null);
-  const pumpRef     = useRef<boolean>(false);        // pump running flag
-  const destroyRef  = useRef<boolean>(false);        // cleanup flag
-  const nextTokenRef = useRef<string>('');
-  const streamTokenRef = useRef<string>('');
-  const videoIdRef  = useRef<string>('');
-  const chunkIndexRef = useRef<number>(0);
-  const pendingChunksRef = useRef<ArrayBuffer[]>([]); // queue for SourceBuffer appends
-  const appendingRef = useRef<boolean>(false);
+  const videoRef      = useRef<HTMLVideoElement>(null);
+  const sessionRef    = useRef<MSESession | null>(null);  // current MSE session
+  const componentAlive = useRef(true);                    // false after component unmounts
 
   // ─── Anti-piracy setup ────────────────────────────────────────────────────
   useEffect(() => {
@@ -175,60 +177,306 @@ const LessonViewer: React.FC = () => {
     }, []),
     useCallback(() => {
       setIsVideoHidden(false);
-      if (playerState === 'devtools') setPlayerState('playing');
-    }, [playerState])
+      setPlayerState(prev => prev === 'devtools' ? 'playing' : prev);
+    }, [])
   );
 
-  // ─── Load content metadata ────────────────────────────────────────────────
-  // Primary: use content data passed via router state (already hydrated by ContentLibrary)
-  // Fallback: fetch from Firestore if navigated directly (e.g. bookmark / refresh)
-  useEffect(() => {
-    if (!contentId) return;
-    destroyRef.current = false;
+  // ─── Tear down any active MSE session ────────────────────────────────────
+  // Safe to call multiple times. Does NOT touch React state (can be called
+  // from cleanup callbacks after unmount).
+  const teardownSession = useCallback(() => {
+    const session = sessionRef.current;
+    if (!session) return;
+    session.destroyed = true;
+    sessionRef.current = null;
 
-    const passedContent = (location.state as any)?.contentData;
-    if (passedContent) {
-      // Data already available — no fetch needed
-      setContent(passedContent);
-      setLoadingContent(false);
-    } else {
-      // Direct navigation (bookmark, refresh) — fetch from Firestore
-      loadContent();
+    const video = videoRef.current;
+    if (video) {
+      try { video.pause(); } catch {}
+      // Remove all SourceBuffer event listeners by replacing the sb reference
+      // (we can't call removeEventListener without the original handler refs,
+      //  but marking session.destroyed = true is enough to gate all callbacks)
     }
 
-    return () => { destroyRef.current = true; };
-  }, [contentId]);
-
-  const loadContent = async () => {
+    // End the MediaSource stream cleanly
     try {
-      setLoadingContent(true);
-      setContentError('');
-      const data = await contentLibraryService.fetchContentData(contentId!);
-      if (!data) { setContentError('Content not found.'); return; }
-      setContent(data);
-    } catch (err: any) {
-      setContentError(err.message || 'Failed to load content.');
-    } finally {
-      setLoadingContent(false);
-    }
-  };
+      if (session.ms.readyState === 'open') {
+        session.ms.endOfStream();
+      }
+    } catch {}
 
-  // ─── Initialize player when content is loaded ─────────────────────────────
-  useEffect(() => {
-    if (!content) return;
-    if (content.videoUrl) {
-      initPlayer(content.videoUrl);
-    }
-  }, [content]);
+    // Revoke the blob URL now that MSE is done
+    try {
+      URL.revokeObjectURL(session.blobUrl);
+    } catch {}
 
-  const initPlayer = async (videoUrl: string) => {
+    // Clear video src ONLY if the component is still mounted
+    // (calling video.load() after unmount causes React warnings)
+    if (componentAlive.current && video) {
+      try {
+        video.removeAttribute('src');
+        video.load();
+      } catch {}
+    }
+  }, []);
+
+  // ─── Flush pending chunks into the SourceBuffer ───────────────────────────
+  // Always receives the session object directly — no stale closure risk.
+  const flushPendingChunks = useCallback((session: MSESession) => {
+    // Guard: session must still be alive and SB must be idle
+    if (session.destroyed) return;
+    if (session.appending) return;
+    if (session.pendingChunks.length === 0) return;
+    if (session.sb.updating) return;
+
+    // Check SourceBuffer is still attached
+    try {
+      // Accessing .updating on a detached SB throws — use as a liveness check
+      void session.ms.readyState;
+    } catch {
+      return;
+    }
+
+    const chunk = session.pendingChunks.shift()!;
+    session.appending = true;
+
+    // Evict stale buffered data to prevent QuotaExceededError
+    const video = videoRef.current;
+    if (video && session.sb.buffered.length > 0) {
+      const evictBefore = video.currentTime - 30;
+      if (evictBefore > 0 && session.sb.buffered.start(0) < evictBefore) {
+        try {
+          session.pendingChunks.unshift(chunk); // re-queue before remove
+          session.appending = false;
+          session.sb.remove(0, evictBefore);
+          // updateend will re-trigger flushPendingChunks
+          return;
+        } catch {}
+      }
+    }
+
+    try {
+      session.sb.appendBuffer(chunk);
+    } catch (e: any) {
+      session.appending = false;
+      if (e.name === 'QuotaExceededError') {
+        session.pendingChunks.unshift(chunk); // retry on next updateend
+      }
+      // Any other error: chunk is dropped but stream continues
+    }
+  }, []);
+
+  // ─── Safe bufferedAhead helper ────────────────────────────────────────────
+  // Returns 0 instead of throwing if SourceBuffer is detached.
+  function getBufferedAhead(session: MSESession): number {
+    const video = videoRef.current;
+    if (!video) return 0;
+    try {
+      const buf = session.sb.buffered;
+      if (buf.length === 0) return 0;
+      const ct = video.currentTime;
+      for (let i = 0; i < buf.length; i++) {
+        if (buf.start(i) <= ct + 0.5 && buf.end(i) > ct) {
+          return buf.end(i) - ct;
+        }
+      }
+    } catch {
+      // SourceBuffer removed from MediaSource — treat as no buffer
+    }
+    return 0;
+  }
+
+  // ─── Main pump loop ───────────────────────────────────────────────────────
+  const pump = useCallback(async (session: MSESession) => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    let initialPlaybackTriggered = false;
+
+    const tryTriggerPlayback = () => {
+      if (initialPlaybackTriggered) return;
+      const ahead = getBufferedAhead(session);
+      if (ahead >= INITIAL_BUFFER_SECS) {
+        initialPlaybackTriggered = true;
+        if (componentAlive.current) {
+          setPlayerState('playing');
+          video.play().catch(() => {});
+        }
+      }
+    };
+
+    while (!session.destroyed) {
+      const token    = session.nextToken;
+      const videoId  = session.videoId;
+      const chunkIdx = session.chunkIndex;
+
+      // No token = end of stream
+      if (!token) break;
+
+      // Buffer throttle
+      const ahead = getBufferedAhead(session);
+      if (ahead >= BUFFER_AHEAD_PAUSE) {
+        await sleep(500);
+        if (session.destroyed) return;
+        continue;
+      }
+
+      tryTriggerPlayback();
+
+      try {
+        const { blob, nextChunkToken, isLastChunk } = await videoStreamService.fetchChunk(
+          videoId, chunkIdx, token
+        );
+
+        // Check again after the async fetch — component may have unmounted
+        if (session.destroyed) return;
+
+        if (blob.byteLength > 0) {
+          session.pendingChunks.push(blob);
+          flushPendingChunks(session);
+
+          if (componentAlive.current) {
+            setLoadedChunks(c => c + 1);
+
+            // Update buffer progress bar
+            try {
+              const buf = video.buffered;
+              if (buf.length > 0 && video.duration > 0) {
+                const buffEnd = buf.end(buf.length - 1);
+                setBufferedPercent(Math.min(100, (buffEnd / video.duration) * 100));
+              }
+            } catch {}
+          }
+        }
+
+        session.nextToken  = nextChunkToken;
+        session.chunkIndex = chunkIdx + 1;
+        tryTriggerPlayback();
+
+        if (isLastChunk || !nextChunkToken) {
+          // Wait for pending chunks to drain before calling endOfStream
+          const waitAndFinish = () => {
+            if (session.destroyed) return;
+            if (session.pendingChunks.length > 0 || session.sb.updating) {
+              setTimeout(waitAndFinish, 150);
+              return;
+            }
+            try {
+              if (session.ms.readyState === 'open') session.ms.endOfStream();
+            } catch {}
+          };
+          waitAndFinish();
+
+          if (!initialPlaybackTriggered && componentAlive.current) {
+            initialPlaybackTriggered = true;
+            setPlayerState('playing');
+            video.play().catch(() => {});
+          }
+          break;
+        }
+
+      } catch (err: any) {
+        if (!session.destroyed && componentAlive.current) {
+          setPlayerError(`Stream interrupted: ${err.message}`);
+          setPlayerState('error');
+        }
+        return;
+      }
+    }
+  }, [flushPendingChunks]);
+
+  // ─── Start an MSE streaming session ──────────────────────────────────────
+  const startMSEStream = useCallback((
+    videoId: string,
+    firstChunkToken: string,
+    streamToken: string,
+    mimeHint: string
+  ): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const video = videoRef.current;
+      if (!video) return reject(new Error('Video element not available'));
+
+      // Tear down any previous session first
+      teardownSession();
+
+      const ms = new MediaSource();
+
+      // Create blob URL and assign to video BEFORE anything else
+      const blobUrl = URL.createObjectURL(ms);
+      video.src = blobUrl;
+      // NOTE: do NOT revoke blobUrl here — keep it alive for the session lifetime
+
+      ms.addEventListener('sourceopen', () => {
+        // Detect supported codec
+        const codecs = [
+          `video/mp4; codecs="avc1.42E01E, mp4a.40.2"`,
+          `video/mp4; codecs="avc1.640028, mp4a.40.2"`,
+          `video/mp4; codecs="avc1.64001f, mp4a.40.2"`,
+          `video/mp4`,
+          `video/webm; codecs="vp8, vorbis"`,
+          `video/webm; codecs="vp9"`,
+          mimeHint,
+        ];
+        const supported = codecs.find(c => {
+          try { return MediaSource.isTypeSupported(c); } catch { return false; }
+        }) || 'video/mp4';
+
+        let sb: SourceBuffer;
+        try {
+          sb = ms.addSourceBuffer(supported);
+        } catch (e: any) {
+          URL.revokeObjectURL(blobUrl);
+          return reject(new Error(`SourceBuffer error: ${e.message}`));
+        }
+
+        // Build the session object — all MSE state lives here
+        const session: MSESession = {
+          ms,
+          sb,
+          blobUrl,
+          destroyed: false,
+          pendingChunks: [],
+          appending: false,
+          nextToken: firstChunkToken,
+          chunkIndex: 0,
+          streamToken,
+          videoId,
+        };
+        sessionRef.current = session;
+
+        // Wire updateend → flush queue
+        sb.addEventListener('updateend', () => {
+          session.appending = false;
+          if (!session.destroyed) flushPendingChunks(session);
+        });
+
+        sb.addEventListener('error', (e) => {
+          console.error('SourceBuffer error event:', e);
+        });
+
+        // Start the pump
+        pump(session);
+        resolve();
+
+      }, { once: true });
+
+      ms.addEventListener('error', () => {
+        URL.revokeObjectURL(blobUrl);
+        reject(new Error('MediaSource error'));
+      }, { once: true });
+    });
+  }, [teardownSession, flushPendingChunks, pump]);
+
+  // ─── Initialize player ────────────────────────────────────────────────────
+  const initPlayer = useCallback(async (videoUrl: string) => {
     setPlayerState('loading');
     setPlayerError('');
-    destroyRef.current = false;
+    setLoadedChunks(0);
+    setBufferedPercent(0);
+    setTotalChunks(null);
 
-    // Determine if secured or plain URL
+    // Plain URL (legacy / local)
     if (!videoUrl.startsWith('secured://')) {
-      // Plain direct URL — just set src (legacy / local uploads)
       if (videoRef.current) {
         videoRef.current.src = videoUrl;
         videoRef.current.load();
@@ -244,239 +492,77 @@ const LessonViewer: React.FC = () => {
       return;
     }
 
-    videoIdRef.current = videoId;
-
     try {
-      // Step 1: Get metadata (stream tokens or embed URL)
+      // Step 1: metadata (tokens or embed URL)
       const meta = await videoStreamService.getVideoMetadata(videoId, SECURITY_STRING);
-
-      if (destroyRef.current) return;
+      if (!componentAlive.current) return;
 
       if (meta.type === 'embed') {
-        // Embed: YouTube, Vimeo, Dailymotion — served via proxied iframe
         setIsEmbed(true);
         setEmbedUrl(meta.embedUrl);
         setPlayerState('playing');
         return;
       }
 
-      // Direct video: MSE chunked streaming
-      streamTokenRef.current = meta.streamToken;
-      nextTokenRef.current   = meta.firstChunkToken;
-      chunkIndexRef.current  = 0;
-
-      // Step 2: Get file info for progress bar
+      // Step 2: file info for progress bar (non-fatal if it fails)
       const info = await videoStreamService.getVideoInfo(videoId, meta.streamToken);
-      if (!destroyRef.current && info.totalChunks) {
-        setTotalChunks(info.totalChunks);
-      }
+      if (!componentAlive.current) return;
+      if (info.totalChunks) setTotalChunks(info.totalChunks);
 
-      // Step 3: Start MSE session
-      await startMSEStream(info.contentType || 'video/mp4');
+      // Step 3: start MSE stream
+      setPlayerState('buffering');
+      await startMSEStream(
+        videoId,
+        meta.firstChunkToken,
+        meta.streamToken,
+        info.contentType || 'video/mp4'
+      );
 
     } catch (err: any) {
-      if (!destroyRef.current) {
+      if (componentAlive.current) {
         setPlayerError(err.message || 'Failed to initialize video.');
         setPlayerState('error');
       }
     }
-  };
+  }, [startMSEStream]);
 
-  // ─── MSE streaming ────────────────────────────────────────────────────────
-  const startMSEStream = (mimeType: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      const video = videoRef.current;
-      if (!video) return reject(new Error('Video element not available'));
+  // ─── Load content metadata ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!contentId) return;
+    componentAlive.current = true;
 
-      // Clean up any previous MSE session
-      if (msRef.current && msRef.current.readyState === 'open') {
-        try { msRef.current.endOfStream(); } catch {}
-      }
-      if (video.src && video.src.startsWith('blob:')) {
-        URL.revokeObjectURL(video.src);
-        video.removeAttribute('src');
-      }
-
-      const ms = new MediaSource();
-      msRef.current = ms;
-      const blobUrl = URL.createObjectURL(ms);
-      video.src = blobUrl;
-
-      ms.addEventListener('sourceopen', async () => {
-        URL.revokeObjectURL(blobUrl); // revoke immediately — no longer needed
-
-        // Detect supported codec
-        const codecs = [
-          `video/mp4; codecs="avc1.42E01E, mp4a.40.2"`,
-          `video/mp4; codecs="avc1.640028, mp4a.40.2"`,
-          `video/webm; codecs="vp8, vorbis"`,
-          `video/webm; codecs="vp9"`,
-          mimeType,
-        ];
-        const supported = codecs.find(c => MediaSource.isTypeSupported(c)) || mimeType;
-
+    const passedContent = (location.state as any)?.contentData;
+    if (passedContent) {
+      setContent(passedContent);
+      setLoadingContent(false);
+    } else {
+      (async () => {
         try {
-          const sb = ms.addSourceBuffer(supported);
-          sbRef.current = sb;
-
-          // Flush pending chunks into SourceBuffer
-          sb.addEventListener('updateend', () => {
-            appendingRef.current = false;
-            flushPendingChunks();
-          });
-
-          setPlayerState('buffering');
-          pumpRef.current = true;
-          pump();
-          resolve();
-        } catch (e: any) {
-          reject(new Error(`SourceBuffer error: ${e.message}`));
+          setLoadingContent(true);
+          setContentError('');
+          const data = await contentLibraryService.fetchContentData(contentId);
+          if (!componentAlive.current) return;
+          if (!data) { setContentError('Content not found.'); return; }
+          setContent(data);
+        } catch (err: any) {
+          if (componentAlive.current) setContentError(err.message || 'Failed to load content.');
+        } finally {
+          if (componentAlive.current) setLoadingContent(false);
         }
-      }, { once: true });
-
-      ms.addEventListener('error', () => reject(new Error('MediaSource error')), { once: true });
-    });
-  };
-
-  // ─── Append queue flusher ─────────────────────────────────────────────────
-  const flushPendingChunks = useCallback(() => {
-    const sb = sbRef.current;
-    if (!sb || sb.updating || appendingRef.current) return;
-    if (pendingChunksRef.current.length === 0) return;
-
-    const chunk = pendingChunksRef.current.shift()!;
-    appendingRef.current = true;
-
-    // Evict old buffered data to avoid QuotaExceededError
-    const video = videoRef.current;
-    if (video && sb.buffered.length > 0) {
-      const bufferedEnd = sb.buffered.end(sb.buffered.length - 1);
-      const playhead = video.currentTime;
-      const evictBefore = playhead - 30;
-      if (evictBefore > 0 && sb.buffered.start(0) < evictBefore) {
-        try {
-          sb.remove(0, evictBefore);
-          // remove() will trigger updateend → flushPendingChunks again
-          pendingChunksRef.current.unshift(chunk); // re-queue
-          appendingRef.current = false;
-          return;
-        } catch {}
-      }
+      })();
     }
 
-    try {
-      sb.appendBuffer(chunk);
-    } catch (e: any) {
-      appendingRef.current = false;
-      if (e.name === 'QuotaExceededError') {
-        // Re-queue and wait for next updateend
-        pendingChunksRef.current.unshift(chunk);
-      } else {
-        console.error('appendBuffer error:', e);
-      }
-    }
-  }, []);
+    return () => {
+      componentAlive.current = false;
+      teardownSession();
+    };
+  }, [contentId, teardownSession]);
 
-  // ─── Main pump loop ───────────────────────────────────────────────────────
-  const pump = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    let initialBuffered = false;
-
-    while (pumpRef.current && !destroyRef.current) {
-      const token     = nextTokenRef.current;
-      const videoId   = videoIdRef.current;
-      const chunkIdx  = chunkIndexRef.current;
-
-      if (!token) break; // no more tokens → end of stream
-
-      // Buffer throttle: if we're way ahead of playhead, wait
-      if (video.buffered.length > 0) {
-        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-        const aheadBy = bufferedEnd - video.currentTime;
-
-        if (aheadBy >= BUFFER_AHEAD_PAUSE) {
-          await sleep(500);
-          continue;
-        }
-
-        // Track initial buffer threshold for autoplay
-        if (!initialBuffered && aheadBy >= INITIAL_BUFFER_SECS && playerState === 'buffering') {
-          initialBuffered = true;
-          setPlayerState('playing');
-          video.play().catch(() => {});
-        }
-      }
-
-      try {
-        const { blob, nextChunkToken, isLastChunk } = await videoStreamService.fetchChunk(
-          videoId, chunkIdx, token
-        );
-
-        if (destroyRef.current) return;
-
-        if (blob.byteLength > 0) {
-          pendingChunksRef.current.push(blob);
-          flushPendingChunks();
-
-          setLoadedChunks(c => c + 1);
-
-          // Update buffer progress
-          if (video.buffered.length > 0) {
-            const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-            setBufferedPercent(
-              video.duration > 0
-                ? Math.min(100, (bufferedEnd / video.duration) * 100)
-                : 0
-            );
-
-            if (!initialBuffered) {
-              const aheadBy = bufferedEnd - video.currentTime;
-              if (aheadBy >= INITIAL_BUFFER_SECS) {
-                initialBuffered = true;
-                setPlayerState('playing');
-                video.play().catch(() => {});
-              }
-            }
-          }
-        }
-
-        nextTokenRef.current   = nextChunkToken;
-        chunkIndexRef.current  = chunkIdx + 1;
-
-        if (isLastChunk || !nextChunkToken) {
-          // Signal end of stream
-          if (msRef.current && msRef.current.readyState === 'open') {
-            const waitForEmpty = () => {
-              if (pendingChunksRef.current.length === 0 && sbRef.current && !sbRef.current.updating) {
-                try { msRef.current!.endOfStream(); } catch {}
-              } else {
-                setTimeout(waitForEmpty, 200);
-              }
-            };
-            waitForEmpty();
-          }
-          if (!initialBuffered) {
-            setPlayerState('playing');
-            video.play().catch(() => {});
-          }
-          break;
-        }
-
-      } catch (err: any) {
-        if (!destroyRef.current) {
-          setPlayerError(`Stream interrupted: ${err.message}`);
-          setPlayerState('error');
-        }
-        break;
-      }
-    }
-  }, [flushPendingChunks]);
-
-  function sleep(ms: number) {
-    return new Promise(r => setTimeout(r, ms));
-  }
+  // ─── Initialize player when content is loaded ─────────────────────────────
+  useEffect(() => {
+    if (!content?.videoUrl) return;
+    initPlayer(content.videoUrl);
+  }, [content, initPlayer]);
 
   // ─── Video element events ─────────────────────────────────────────────────
   const handleTimeUpdate = () => {
@@ -485,37 +571,29 @@ const LessonViewer: React.FC = () => {
   const handleDurationChange = () => {
     if (videoRef.current) setDuration(videoRef.current.duration);
   };
-  const handleWaiting = () => { if (playerState === 'playing') setPlayerState('buffering'); };
-  const handleCanPlay = () => { if (playerState === 'buffering') setPlayerState('playing'); };
+  const handleWaiting = () => {
+    setPlayerState(prev => prev === 'playing' ? 'buffering' : prev);
+  };
+  const handleCanPlay = () => {
+    setPlayerState(prev => prev === 'buffering' ? 'playing' : prev);
+  };
   const handlePlay    = () => setPlayerState('playing');
-  const handlePause   = () => { if (!destroyRef.current) setPlayerState('paused'); };
+  const handlePause   = () => { if (componentAlive.current) setPlayerState('paused'); };
   const handleEnded   = () => setPlayerState('idle');
   const handleVideoError = () => {
-    setPlayerError('Playback error. Please try reloading.');
-    setPlayerState('error');
+    // Only report error if it's a real playback failure, not a src="" reset
+    const video = videoRef.current;
+    if (video && video.error && video.src) {
+      setPlayerError('Playback error. Please try reloading.');
+      setPlayerState('error');
+    }
   };
-
-  // ─── Cleanup on unmount ───────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      destroyRef.current = true;
-      pumpRef.current    = false;
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.removeAttribute('src');
-        videoRef.current.load();
-      }
-      if (msRef.current && msRef.current.readyState === 'open') {
-        try { msRef.current.endOfStream(); } catch {}
-      }
-    };
-  }, []);
 
   // ─── Seek handler ──────────────────────────────────────────────────────────
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current;
     if (!video || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect  = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
     video.currentTime = ratio * duration;
   };
@@ -525,25 +603,28 @@ const LessonViewer: React.FC = () => {
     if (content?.videoUrl) initPlayer(content.videoUrl);
   };
 
-  // ─── Note file link ───────────────────────────────────────────────────────
+  // ─── Note helpers ─────────────────────────────────────────────────────────
   const getNoteHref = (): string | null => {
     if (!content) return null;
-    if (content.noteSource === 'gdrive') return content.noteGDriveDownloadUrl || null;
-    return content.noteUrl || null;
+    return content.noteSource === 'gdrive'
+      ? content.noteGDriveDownloadUrl || null
+      : content.noteUrl || null;
   };
   const getNotePreviewHref = (): string | null => {
     if (!content) return null;
-    if (content.noteSource === 'gdrive') return content.noteGDrivePreviewUrl || null;
-    return content.noteUrl || null;
+    return content.noteSource === 'gdrive'
+      ? content.noteGDrivePreviewUrl || null
+      : content.noteUrl || null;
   };
 
-  // ─── Progress bar ──────────────────────────────────────────────────────────
-  const playPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const chunkPercent = totalChunks ? Math.min(100, (loadedChunks / totalChunks) * 100) : bufferedPercent;
+  // ─── Progress ─────────────────────────────────────────────────────────────
+  const playPercent  = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const chunkPercent = totalChunks
+    ? Math.min(100, (loadedChunks / totalChunks) * 100)
+    : bufferedPercent;
 
   // ==================== RENDER ====================
 
-  // Loading content
   if (loadingContent) {
     return (
       <div className="min-h-screen bg-[#080a10] flex items-center justify-center">
@@ -555,7 +636,6 @@ const LessonViewer: React.FC = () => {
     );
   }
 
-  // Content error
   if (contentError) {
     return (
       <div className="min-h-screen bg-[#080a10] flex items-center justify-center px-4">
@@ -575,7 +655,6 @@ const LessonViewer: React.FC = () => {
 
   return (
     <>
-      {/* ── Global anti-piracy CSS ── */}
       <style>{`
         .secure-video-wrap {
           -webkit-user-select: none;
@@ -585,17 +664,17 @@ const LessonViewer: React.FC = () => {
           pointer-events: auto;
         }
         .secure-video-wrap video {
-          pointer-events: none;   /* Prevent right-click on video element itself */
+          pointer-events: none;
         }
         .secure-video-wrap video::-webkit-media-controls-download-button { display: none !important; }
-        .secure-video-wrap video::-webkit-media-controls-timeline { display: none !important; }
-        .secure-video-wrap video::-webkit-media-controls-enclosure { display: none !important; }
+        .secure-video-wrap video::-webkit-media-controls-timeline        { display: none !important; }
+        .secure-video-wrap video::-webkit-media-controls-enclosure       { display: none !important; }
         .player-controls { pointer-events: auto; }
         @keyframes fadeSlideUp {
           from { opacity: 0; transform: translateY(14px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .anim-up { animation: fadeSlideUp 0.4s cubic-bezier(.22,1,.36,1) both; }
+        .anim-up   { animation: fadeSlideUp 0.4s cubic-bezier(.22,1,.36,1) both; }
         .anim-up-1 { animation: fadeSlideUp 0.4s 0.06s cubic-bezier(.22,1,.36,1) both; }
         .anim-up-2 { animation: fadeSlideUp 0.4s 0.12s cubic-bezier(.22,1,.36,1) both; }
         .anim-up-3 { animation: fadeSlideUp 0.4s 0.18s cubic-bezier(.22,1,.36,1) both; }
@@ -638,9 +717,7 @@ const LessonViewer: React.FC = () => {
               </div>
             )}
 
-            {/* ──────────────────────────────────────────────── */}
-            {/* EMBED PLAYER (YouTube / Vimeo / Dailymotion)     */}
-            {/* ──────────────────────────────────────────────── */}
+            {/* EMBED PLAYER */}
             {isEmbed && embedUrl && (
               <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                 <iframe
@@ -653,7 +730,6 @@ const LessonViewer: React.FC = () => {
                   title={content?.title || 'Video'}
                   style={{ border: 'none', pointerEvents: 'auto' }}
                 />
-                {/* Invisible overlay to intercept right-click on iframe edge */}
                 <div
                   className="absolute inset-0 pointer-events-none"
                   onContextMenu={e => e.preventDefault()}
@@ -661,13 +737,10 @@ const LessonViewer: React.FC = () => {
               </div>
             )}
 
-            {/* ──────────────────────────────────────────────── */}
-            {/* MSE CHUNKED STREAM PLAYER (Dropbox / GDrive)    */}
-            {/* ──────────────────────────────────────────────── */}
+            {/* MSE CHUNKED STREAM PLAYER */}
             {!isEmbed && content?.videoUrl && (
               <div className="relative secure-video-wrap bg-black">
 
-                {/* Video element — controlsList prevents native download button */}
                 <video
                   ref={videoRef}
                   className="w-full block"
@@ -691,7 +764,7 @@ const LessonViewer: React.FC = () => {
                   onContextMenu={e => e.preventDefault()}
                 />
 
-                {/* ── Overlay states ── */}
+                {/* Loading / buffering overlay */}
                 {(playerState === 'loading' || playerState === 'buffering') && !isVideoHidden && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
                     <Loader2 size={36} className="text-violet-400 animate-spin mb-3" />
@@ -706,6 +779,7 @@ const LessonViewer: React.FC = () => {
                   </div>
                 )}
 
+                {/* Error overlay */}
                 {playerState === 'error' && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center p-6">
                     <AlertCircle size={32} className="text-rose-400 mb-3" />
@@ -719,7 +793,7 @@ const LessonViewer: React.FC = () => {
                   </div>
                 )}
 
-                {/* ── Custom controls overlay (bottom) ── */}
+                {/* Custom controls */}
                 {(playerState === 'playing' || playerState === 'paused') && !isVideoHidden && (
                   <div className="player-controls absolute bottom-0 left-0 right-0 px-4 pb-3 pt-6
                                   bg-gradient-to-t from-black/90 via-black/40 to-transparent">
@@ -729,19 +803,16 @@ const LessonViewer: React.FC = () => {
                       className="scrubber relative h-1 bg-white/15 rounded-full cursor-pointer mb-3 group"
                       onClick={handleSeek}
                     >
-                      {/* Buffered bar */}
                       <div
                         className="absolute top-0 left-0 h-full bg-white/20 rounded-full pointer-events-none"
                         style={{ width: `${chunkPercent}%` }}
                       />
-                      {/* Played bar */}
                       <div
                         className="absolute top-0 left-0 h-full bg-violet-400 rounded-full pointer-events-none transition-all duration-100"
                         style={{ width: `${playPercent}%` }}
                       />
-                      {/* Thumb */}
                       <div
-                        className="scrubber-thumb absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg pointer-events-none transition-all duration-150"
+                        className="scrubber-thumb absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg pointer-events-none"
                         style={{
                           left: `${playPercent}%`,
                           transform: 'translateX(-50%) translateY(-50%)',
@@ -751,7 +822,6 @@ const LessonViewer: React.FC = () => {
                       />
                     </div>
 
-                    {/* Time + shield badge */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <button
@@ -779,7 +849,7 @@ const LessonViewer: React.FC = () => {
               </div>
             )}
 
-            {/* No video at all */}
+            {/* No video */}
             {!content?.videoUrl && !loadingContent && (
               <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center">
                 <Play size={36} className="text-white/15 mb-3" />
@@ -794,20 +864,17 @@ const LessonViewer: React.FC = () => {
             {/* Left: title + description */}
             <div className="lg:col-span-2 space-y-4">
 
-              {/* Title block */}
               <div className="anim-up-2 rounded-2xl border border-white/6 bg-[#0d0f1a] p-5 sm:p-6">
                 <div className="flex items-start gap-3 mb-3">
-                  {/* Type badge */}
                   <span className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border mt-0.5
                     ${content?.type === 'lesson'
                       ? 'bg-violet-500/15 text-violet-300 border-violet-500/20'
                       : 'bg-amber-500/15 text-amber-300 border-amber-500/20'}`}>
                     {content?.type === 'lesson' ? <Play size={10} /> : null}
-                    {content?.type === 'trick' ? <BookOpen size={10} /> : null}
+                    {content?.type === 'trick'  ? <BookOpen size={10} /> : null}
                     {content?.type === 'lesson' ? 'Lesson' : 'Trick'}
                   </span>
 
-                  {/* Security badge */}
                   {content?.videoUrl?.startsWith('secured://') && (
                     <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400/80 border border-green-500/15 mt-1">
                       <Shield size={9} />
@@ -831,7 +898,7 @@ const LessonViewer: React.FC = () => {
                 )}
               </div>
 
-              {/* Stats row */}
+              {/* Stats */}
               <div className="anim-up-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {content?.duration ? (
                   <div className="rounded-xl border border-white/6 bg-[#0d0f1a] px-4 py-3 flex items-center gap-3">
@@ -865,7 +932,7 @@ const LessonViewer: React.FC = () => {
               </div>
             </div>
 
-            {/* Right: Note attachment */}
+            {/* Right: notes + security info */}
             <div className="anim-up-3 space-y-3">
               {(content?.noteUrl || content?.noteGDrivePreviewUrl) ? (
                 <div className="rounded-2xl border border-white/6 bg-[#0d0f1a] p-5">
@@ -873,9 +940,7 @@ const LessonViewer: React.FC = () => {
                     <FileText size={15} className="text-emerald-400/70" />
                     <span className="text-sm font-semibold text-white/70">Class Notes</span>
                   </div>
-
                   <div className="space-y-2">
-                    {/* Preview */}
                     {getNotePreviewHref() && (
                       <a
                         href={getNotePreviewHref()!}
@@ -893,8 +958,6 @@ const LessonViewer: React.FC = () => {
                         <span className="text-emerald-400/30 text-xs group-hover:translate-x-0.5 transition-transform">→</span>
                       </a>
                     )}
-
-                    {/* Download */}
                     {getNoteHref() && (
                       <a
                         href={getNoteHref()!}
@@ -912,7 +975,6 @@ const LessonViewer: React.FC = () => {
                         <span className="text-white/20 text-xs group-hover:translate-x-0.5 transition-transform">→</span>
                       </a>
                     )}
-
                     {content?.noteSource === 'gdrive' && (
                       <p className="text-[10px] text-white/20 text-center pt-1">via Google Drive</p>
                     )}
@@ -925,7 +987,6 @@ const LessonViewer: React.FC = () => {
                 </div>
               )}
 
-              {/* Security info box */}
               <div className="rounded-2xl border border-white/5 bg-white/2 p-4 space-y-2">
                 <p className="text-[10px] uppercase tracking-widest text-white/20 font-semibold mb-2">
                   Content Protection
