@@ -410,10 +410,8 @@ async function handleInfo(req: VercelRequest, res: VercelResponse) {
   const totalSize = parseInt(headRes.headers.get('content-length') || '0', 10);
   const totalChunks = totalSize > 0 ? Math.ceil(totalSize / CONFIG.CHUNK_SIZE) : null;
 
-  // FIX: Always return 'video/mp4' — never forward the upstream content-type.
-  // Dropbox and GDrive return 'application/octet-stream' for raw file downloads.
-  // That string is NOT a valid MSE codec — passing it to addSourceBuffer() causes
-  // an immediate SourceBuffer error event in the browser.
+  // FIX: Always return 'video/mp4'. Dropbox/GDrive return 'application/octet-stream'
+  // which is not a valid MSE codec — passing it to addSourceBuffer() causes a crash.
   return res.status(200).json({
     success: true,
     totalSize,
@@ -472,39 +470,46 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
   const contentRange  = upstream.headers.get('content-range');
   const contentLength = upstream.headers.get('content-length');
 
-  // FIX: Always set Content-Type to 'video/mp4'.
+  // FIX 1: Always force Content-Type to 'video/mp4'.
   // Dropbox/GDrive return 'application/octet-stream' which is NOT a valid MSE
-  // MIME type. The browser's addSourceBuffer() will throw a SourceBuffer error
-  // event if the Content-Type doesn't match a supported video codec string.
-  // We always serve mp4 bytes so 'video/mp4' is always correct here.
+  // MIME type — addSourceBuffer() crashes immediately when it sees this.
 
+  // FIX 2: Detect isLastChunk when upstream returns 200 (no Content-Range header).
+  // Small GDrive files and some CDNs skip range responses and return the full
+  // file as a single 200. Without this, endOfStream() never fires and video hangs.
   let isLastChunk = false;
   if (contentRange) {
-    // Standard case: upstream supports range requests and returns Content-Range
     const match = contentRange.match(/bytes (\d+)-(\d+)\/(\d+)/);
     if (match) {
       const totalSize = parseInt(match[3], 10);
       isLastChunk = byteEnd >= totalSize - 1;
     }
   } else if (upstream.status === 200) {
-    // FIX: Some sources (small GDrive files, some CDNs) return HTTP 200 with the
-    // full file body instead of 206 + Content-Range. In that case there is only
-    // one chunk — mark it as last so endOfStream() gets called correctly.
+    // Full file returned in one response — there will be no more chunks
     isLastChunk = true;
   }
 
   const nextChunkToken = isLastChunk ? '' : generateChunkToken(videoId, chunkIndex + 1);
 
+  // FIX 3: Strip ETag and Last-Modified before forwarding to client.
+  // Without this, the browser caches the chunk response and on a subsequent
+  // request (e.g. React StrictMode double-invoke, retry, or seek) it sends
+  // If-None-Match / If-Modified-Since. Dropbox honours these with HTTP 304
+  // "Not Modified" — an empty body — which the client tries to appendBuffer()
+  // causing the SourceBuffer detach / corruption errors you saw in the logs.
   res.setHeader('Content-Type', 'video/mp4');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Vary', '*');
   res.setHeader('Content-Disposition', 'inline');
   res.setHeader('X-Next-Chunk-Token', nextChunkToken);
   res.setHeader('X-Chunk-Index', String(chunkIndex));
   res.setHeader('X-Is-Last-Chunk', String(isLastChunk));
-  if (contentLength) res.setHeader('Content-Length', contentLength);
-  if (contentRange) res.setHeader('Content-Range', contentRange);
+  res.removeHeader('ETag');
+  res.removeHeader('Last-Modified');
   res.removeHeader('X-Powered-By');
+  if (contentLength) res.setHeader('Content-Length', contentLength);
+  if (contentRange)  res.setHeader('Content-Range', contentRange);
 
   res.status(206);
   // Pipe upstream body directly to response for memory efficiency
