@@ -1,48 +1,47 @@
-// src/pages/LessonViewer.tsx
-// Full Platform C secure video player
-// Handles: lesson | trick content types
-// Route: /content-library/lesson/:courseId/:contentId
+// src/pages/LessonViewer.tsx — FIXED VERSION
 //
-// SECURITY MODEL (Platform C):
-//   - All video URLs are stored as secured://<videoId> — never the raw source
-//   - Stream tokens expire in 5 min, chunk tokens expire in 30 sec (HMAC-SHA256)
-//   - Video delivered via MediaSource Extensions — no blob/src URL ever exposed
-//   - Right-click, DevTools, screen capture, IDM, keyboard shortcuts all blocked
-//   - Embed videos (YouTube/Vimeo/Dailymotion) delivered via sandbox iframe proxy
+// ROOT CAUSE OF "SourceBuffer error event":
+//   Dropbox & GDrive return Content-Type: application/octet-stream for raw downloads.
+//   The previous code passed this directly into addSourceBuffer().
+//   'application/octet-stream' is NOT a valid MSE type → immediate SourceBuffer error.
+//
+// ALL FIXES APPLIED:
+//   FIX 1 (server) — videoStream.ts handleChunk: Content-Type forced to 'video/mp4'
+//   FIX 2 (server) — videoStream.ts handleInfo:  contentType response forced to 'video/mp4'
+//   FIX 3 (server) — videoStream.ts handleChunk: isLastChunk=true when upstream returns 200
+//   FIX 4 (client) — addSourceBuffer: ALWAYS use 'video/mp4' codec list, NEVER server content-type
+//   FIX 5 (client) — sb.mode = 'sequence' set immediately after addSourceBuffer (was missing!)
+//   FIX 6 (client) — Removed webm from codec fallback list (file is mp4; wrong codec = SB error)
+//   FIX 7 (client) — MSESession object owns all MSE state; no stale-closure bugs across retries
+//   FIX 8 (client) — handleVideoError only fires for real errors, not for src="" reset
+//
+// DEBUG LOGGING: Set DEBUG=true below to see every step in the browser console.
+// When it works, set DEBUG=false for production.
 
-import React, {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-} from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft,
-  FileText,
-  ExternalLink,
-  Download,
-  Shield,
-  AlertCircle,
-  Loader2,
-  Play,
-  Clock,
-  BookOpen,
-  Lock,
+  ArrowLeft, FileText, ExternalLink, Download, Shield,
+  AlertCircle, Loader2, Play, Clock, BookOpen, Lock,
 } from 'lucide-react';
 import { contentLibraryService, LibraryContent } from '../services/contentLibraryService';
 import { videoStreamService } from '../services/videoStreamService';
 import { useDashboard } from '../contexts/DashboardContext';
 
-// ─── Security string — must match VIDEO_SECURITY_STRING in Vercel env ─────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 const SECURITY_STRING =
   (import.meta as any).env?.VITE_VIDEO_SECURITY_STRING ||
   'CHANGE_ME_IN_VITE_ENV_VITE_VIDEO_SECURITY_STRING';
 
-// ─── MSE constants ────────────────────────────────────────────────────────────
-const BUFFER_AHEAD_PAUSE  = 60;   // seconds — stop pre-fetching beyond this
-const BUFFER_AHEAD_RESUME = 15;   // seconds — resume pre-fetching below this
-const INITIAL_BUFFER_SECS = 8;    // seconds before allowing playback
+const BUFFER_AHEAD_PAUSE  = 60;   // stop fetching when buffered this far ahead (seconds)
+const BUFFER_AHEAD_RESUME = 15;   // resume fetching when buffered-ahead drops below this
+const INITIAL_BUFFER_SECS = 8;    // start playback after this many seconds are buffered
+
+// ─── Debug logger ─────────────────────────────────────────────────────────────
+// Set to false in production to silence console output
+const DEBUG = true;
+const log    = (...a: any[]) => { if (DEBUG) console.log('[LessonViewer]', ...a); };
+const logErr = (...a: any[]) => console.error('[LessonViewer ERROR]', ...a);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatDuration(secs: number): string {
@@ -50,91 +49,72 @@ function formatDuration(secs: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = Math.floor(secs % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
 }
-
 function formatMinutes(mins: number): string {
   if (!mins) return '—';
-  const h = Math.floor(mins / 60);
-  const m = Math.round(mins % 60);
+  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
   if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
   return `${m}m`;
 }
+function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)); }
 
-function sleep(ms: number) {
-  return new Promise<void>(r => setTimeout(r, ms));
-}
-
-// ─── Anti-piracy injection — runs once on mount ───────────────────────────────
+// ─── Anti-piracy ──────────────────────────────────────────────────────────────
 function injectAntiPiracy() {
-  document.addEventListener('contextmenu', (e) => e.preventDefault(), true);
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('contextmenu', e => e.preventDefault(), true);
+  document.addEventListener('keydown', e => {
     const ctrl = e.ctrlKey || e.metaKey;
     if (e.key === 'F12') { e.preventDefault(); return; }
-    if (ctrl && ['s','u','p','i','j','c','S','U','P','I','J','C'].includes(e.key)) {
-      e.preventDefault(); return;
-    }
-    if (ctrl && e.shiftKey && ['I','J','C','i','j','c'].includes(e.key)) {
-      e.preventDefault(); return;
-    }
+    if (ctrl && ['s','u','p','i','j','c'].includes(e.key.toLowerCase())) { e.preventDefault(); return; }
+    if (ctrl && e.shiftKey && ['i','j','c'].includes(e.key.toLowerCase())) { e.preventDefault(); return; }
     if (e.key === 'PrintScreen') { e.preventDefault(); return; }
   }, true);
   try { (window as any).MediaRecorder = undefined; } catch {}
   try {
     const nav = navigator as any;
-    if (nav.mediaDevices?.getDisplayMedia) {
-      nav.mediaDevices.getDisplayMedia = () =>
-        Promise.reject(new Error('Screen capture is disabled.'));
-    }
-    const origGetUserMedia = nav.mediaDevices?.getUserMedia?.bind(nav.mediaDevices);
-    if (origGetUserMedia) {
-      nav.mediaDevices.getUserMedia = (constraints: any) => {
-        if (constraints?.video) return Promise.reject(new Error('Video capture is disabled.'));
-        return origGetUserMedia(constraints);
-      };
-    }
+    if (nav.mediaDevices?.getDisplayMedia)
+      nav.mediaDevices.getDisplayMedia = () => Promise.reject(new Error('Screen capture disabled.'));
+    const origGUM = nav.mediaDevices?.getUserMedia?.bind(nav.mediaDevices);
+    if (origGUM)
+      nav.mediaDevices.getUserMedia = (c: any) =>
+        c?.video ? Promise.reject(new Error('Video capture disabled.')) : origGUM(c);
   } catch {}
 }
 
 // ─── DevTools detector ────────────────────────────────────────────────────────
-function useDevToolsDetection(onDetected: () => void, onClear: () => void) {
+function useDevToolsDetection(onOpen: () => void, onClose: () => void) {
   useEffect(() => {
-    let detected = false;
+    let open = false;
     const check = () => {
-      const threshold = 160;
-      const open =
-        window.outerWidth - window.innerWidth > threshold ||
-        window.outerHeight - window.innerHeight > threshold;
-      if (open && !detected) { detected = true; onDetected(); }
-      else if (!open && detected) { detected = false; onClear(); }
+      const isOpen = window.outerWidth - window.innerWidth > 160 || window.outerHeight - window.innerHeight > 160;
+      if (isOpen && !open)  { open = true;  onOpen();  }
+      if (!isOpen && open)  { open = false; onClose(); }
     };
     const id = setInterval(check, 1000);
     window.addEventListener('resize', check);
     return () => { clearInterval(id); window.removeEventListener('resize', check); };
-  }, [onDetected, onClear]);
+  }, [onOpen, onClose]);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PlayerState = 'idle' | 'loading' | 'buffering' | 'playing' | 'paused' | 'error' | 'devtools';
 
-// ─── MSE session object — single source of truth for one streaming session ────
-// Bundling all MSE state into one ref prevents stale-closure bugs where
-// pump() or flushPendingChunks() hold onto an old sbRef / msRef value.
+// All MSE volatile state lives here — passed by reference into pump() and
+// flushPendingChunks() so there are zero stale-closure bugs across retries.
 interface MSESession {
-  ms: MediaSource;
-  sb: SourceBuffer;
-  blobUrl: string;            // kept alive until session is torn down
-  destroyed: boolean;         // set to true by teardown()
+  ms:            MediaSource;
+  sb:            SourceBuffer;
+  blobUrl:       string;
+  destroyed:     boolean;
   pendingChunks: ArrayBuffer[];
-  appending: boolean;
-  nextToken: string;
-  chunkIndex: number;
-  streamToken: string;
-  videoId: string;
+  appending:     boolean;
+  nextToken:     string;
+  chunkIndex:    number;
+  videoId:       string;
 }
 
-// ==================== MAIN COMPONENT ====================
+// ==================== COMPONENT ====================
 
 const LessonViewer: React.FC = () => {
   const { courseId, contentId } = useParams<{ courseId: string; contentId: string }>();
@@ -142,870 +122,583 @@ const LessonViewer: React.FC = () => {
   const location  = useLocation();
   const { user }  = useDashboard();
 
-  // ─── Content state ─────────────────────────────────────────────────────────
-  const [content, setContent]           = useState<LibraryContent | null>(null);
+  // Content state
+  const [content,        setContent]        = useState<LibraryContent | null>(null);
   const [loadingContent, setLoadingContent] = useState(true);
-  const [contentError, setContentError] = useState('');
+  const [contentError,   setContentError]   = useState('');
 
-  // ─── Player state ──────────────────────────────────────────────────────────
-  const [playerState, setPlayerState]   = useState<PlayerState>('idle');
-  const [playerError, setPlayerError]   = useState('');
-  const [isEmbed, setIsEmbed]           = useState(false);
-  const [embedUrl, setEmbedUrl]         = useState('');
-  const [currentTime, setCurrentTime]   = useState(0);
-  const [duration, setDuration]         = useState(0);
-  const [totalChunks, setTotalChunks]   = useState<number | null>(null);
-  const [loadedChunks, setLoadedChunks] = useState(0);
-  const [bufferedPercent, setBufferedPercent] = useState(0);
-  const [isVideoHidden, setIsVideoHidden] = useState(false);
+  // Player state
+  const [playerState,    setPlayerState]    = useState<PlayerState>('idle');
+  const [playerError,    setPlayerError]    = useState('');
+  const [isEmbed,        setIsEmbed]        = useState(false);
+  const [embedUrl,       setEmbedUrl]       = useState('');
+  const [currentTime,    setCurrentTime]    = useState(0);
+  const [duration,       setDuration]       = useState(0);
+  const [totalChunks,    setTotalChunks]    = useState<number | null>(null);
+  const [loadedChunks,   setLoadedChunks]   = useState(0);
+  const [bufferedPct,    setBufferedPct]    = useState(0);
+  const [isVideoHidden,  setIsVideoHidden]  = useState(false);
 
-  // ─── Refs ──────────────────────────────────────────────────────────────────
-  const videoRef      = useRef<HTMLVideoElement>(null);
-  const sessionRef    = useRef<MSESession | null>(null);  // current MSE session
-  const componentAlive = useRef(true);                    // false after component unmounts
+  // Refs
+  const videoRef       = useRef<HTMLVideoElement>(null);
+  const sessionRef     = useRef<MSESession | null>(null);
+  const alive          = useRef(true);   // false after component unmounts
 
-  // ─── Anti-piracy setup ────────────────────────────────────────────────────
-  useEffect(() => {
-    injectAntiPiracy();
-  }, []);
+  // Anti-piracy setup
+  useEffect(() => { injectAntiPiracy(); }, []);
 
   useDevToolsDetection(
-    useCallback(() => {
-      setIsVideoHidden(true);
-      setPlayerState('devtools');
-      if (videoRef.current) videoRef.current.pause();
-    }, []),
-    useCallback(() => {
-      setIsVideoHidden(false);
-      setPlayerState(prev => prev === 'devtools' ? 'playing' : prev);
-    }, [])
+    useCallback(() => { setIsVideoHidden(true);  setPlayerState('devtools'); videoRef.current?.pause(); }, []),
+    useCallback(() => { setIsVideoHidden(false); setPlayerState(p => p === 'devtools' ? 'playing' : p); }, []),
   );
 
-  // ─── Tear down any active MSE session ────────────────────────────────────
-  // Safe to call multiple times. Does NOT touch React state (can be called
-  // from cleanup callbacks after unmount).
+  // ── Tear down active MSE session ─────────────────────────────────────────
+  // Safe to call any time, including from useEffect cleanup after unmount.
   const teardownSession = useCallback(() => {
-    const session = sessionRef.current;
-    if (!session) return;
-    session.destroyed = true;
+    const s = sessionRef.current;
+    if (!s) return;
+    log('teardownSession — videoId:', s.videoId);
+    s.destroyed = true;
     sessionRef.current = null;
-
-    const video = videoRef.current;
-    if (video) {
-      try { video.pause(); } catch {}
-      // Remove all SourceBuffer event listeners by replacing the sb reference
-      // (we can't call removeEventListener without the original handler refs,
-      //  but marking session.destroyed = true is enough to gate all callbacks)
-    }
-
-    // End the MediaSource stream cleanly
-    try {
-      if (session.ms.readyState === 'open') {
-        session.ms.endOfStream();
-      }
-    } catch {}
-
-    // Revoke the blob URL now that MSE is done
-    try {
-      URL.revokeObjectURL(session.blobUrl);
-    } catch {}
-
-    // Clear video src ONLY if the component is still mounted
-    // (calling video.load() after unmount causes React warnings)
-    if (componentAlive.current && video) {
-      try {
-        video.removeAttribute('src');
-        video.load();
-      } catch {}
+    try { if (s.ms.readyState === 'open') s.ms.endOfStream(); } catch {}
+    try { URL.revokeObjectURL(s.blobUrl); } catch {}
+    if (alive.current && videoRef.current) {
+      try { videoRef.current.pause(); videoRef.current.removeAttribute('src'); videoRef.current.load(); } catch {}
     }
   }, []);
 
-  // ─── Flush pending chunks into the SourceBuffer ───────────────────────────
-  // Always receives the session object directly — no stale closure risk.
-  const flushPendingChunks = useCallback((session: MSESession) => {
-    // Guard: session must still be alive and SB must be idle
-    if (session.destroyed) return;
-    if (session.appending) return;
-    if (session.pendingChunks.length === 0) return;
-    if (session.sb.updating) return;
-
-    // Check SourceBuffer is still attached
+  // ── Safe bufferedAhead — returns 0 instead of throwing ───────────────────
+  function getBufferedAhead(s: MSESession): number {
+    const v = videoRef.current;
+    if (!v) return 0;
     try {
-      // Accessing .updating on a detached SB throws — use as a liveness check
-      void session.ms.readyState;
-    } catch {
-      return;
-    }
-
-    const chunk = session.pendingChunks.shift()!;
-    session.appending = true;
-
-    // Evict stale buffered data to prevent QuotaExceededError
-    const video = videoRef.current;
-    if (video && session.sb.buffered.length > 0) {
-      const evictBefore = video.currentTime - 30;
-      if (evictBefore > 0 && session.sb.buffered.start(0) < evictBefore) {
-        try {
-          session.pendingChunks.unshift(chunk); // re-queue before remove
-          session.appending = false;
-          session.sb.remove(0, evictBefore);
-          // updateend will re-trigger flushPendingChunks
-          return;
-        } catch {}
-      }
-    }
-
-    try {
-      session.sb.appendBuffer(chunk);
-    } catch (e: any) {
-      session.appending = false;
-      if (e.name === 'QuotaExceededError') {
-        session.pendingChunks.unshift(chunk); // retry on next updateend
-      }
-      // Any other error: chunk is dropped but stream continues
-    }
-  }, []);
-
-  // ─── Safe bufferedAhead helper ────────────────────────────────────────────
-  // Returns 0 instead of throwing if SourceBuffer is detached.
-  function getBufferedAhead(session: MSESession): number {
-    const video = videoRef.current;
-    if (!video) return 0;
-    try {
-      const buf = session.sb.buffered;
-      if (buf.length === 0) return 0;
-      const ct = video.currentTime;
-      for (let i = 0; i < buf.length; i++) {
-        if (buf.start(i) <= ct + 0.5 && buf.end(i) > ct) {
-          return buf.end(i) - ct;
-        }
-      }
-    } catch {
-      // SourceBuffer removed from MediaSource — treat as no buffer
-    }
+      const buf = s.sb.buffered;
+      if (!buf.length) return 0;
+      const ct = v.currentTime;
+      for (let i = 0; i < buf.length; i++)
+        if (buf.start(i) <= ct + 0.5 && buf.end(i) > ct) return buf.end(i) - ct;
+    } catch {}
     return 0;
   }
 
-  // ─── Main pump loop ───────────────────────────────────────────────────────
-  const pump = useCallback(async (session: MSESession) => {
-    const video = videoRef.current;
-    if (!video) return;
+  // ── Flush pending chunks into SourceBuffer ────────────────────────────────
+  const flushPendingChunks = useCallback((s: MSESession) => {
+    if (s.destroyed || s.appending || !s.pendingChunks.length || s.sb.updating) return;
 
-    let initialPlaybackTriggered = false;
-
-    const tryTriggerPlayback = () => {
-      if (initialPlaybackTriggered) return;
-      const ahead = getBufferedAhead(session);
-      if (ahead >= INITIAL_BUFFER_SECS) {
-        initialPlaybackTriggered = true;
-        if (componentAlive.current) {
-          setPlayerState('playing');
-          video.play().catch(() => {});
+    // Evict old buffered data to prevent QuotaExceededError
+    const v = videoRef.current;
+    if (v) {
+      try {
+        if (s.sb.buffered.length > 0) {
+          const evict = v.currentTime - 30;
+          if (evict > 0 && s.sb.buffered.start(0) < evict) {
+            const chunk = s.pendingChunks.shift()!;
+            s.pendingChunks.unshift(chunk);   // re-queue; updateend will retry
+            s.sb.remove(0, evict);
+            return;
+          }
         }
+      } catch {}
+    }
+
+    const chunk = s.pendingChunks.shift()!;
+    s.appending = true;
+    try {
+      s.sb.appendBuffer(chunk);
+    } catch (e: any) {
+      s.appending = false;
+      if (e.name === 'QuotaExceededError') {
+        log('QuotaExceededError — re-queuing chunk');
+        s.pendingChunks.unshift(chunk);
+      } else {
+        logErr('appendBuffer error:', e);
+      }
+    }
+  }, []);
+
+  // ── Main pump loop ────────────────────────────────────────────────────────
+  const pump = useCallback(async (s: MSESession) => {
+    log('pump() start, videoId:', s.videoId);
+    const v = videoRef.current;
+    if (!v) return;
+    let playTriggered = false;
+
+    const tryPlay = () => {
+      if (playTriggered) return;
+      if (getBufferedAhead(s) >= INITIAL_BUFFER_SECS) {
+        playTriggered = true;
+        log('triggering playback');
+        if (alive.current) { setPlayerState('playing'); v.play().catch(() => {}); }
       }
     };
 
-    while (!session.destroyed) {
-      const token    = session.nextToken;
-      const videoId  = session.videoId;
-      const chunkIdx = session.chunkIndex;
+    while (!s.destroyed) {
+      if (!s.nextToken) { log('pump: no next token — end of stream'); break; }
 
-      // No token = end of stream
-      if (!token) break;
+      if (getBufferedAhead(s) >= BUFFER_AHEAD_PAUSE) { await sleep(500); continue; }
 
-      // Buffer throttle
-      const ahead = getBufferedAhead(session);
-      if (ahead >= BUFFER_AHEAD_PAUSE) {
-        await sleep(500);
-        if (session.destroyed) return;
-        continue;
-      }
+      tryPlay();
 
-      tryTriggerPlayback();
-
+      log(`pump: fetching chunk ${s.chunkIndex}`);
       try {
         const { blob, nextChunkToken, isLastChunk } = await videoStreamService.fetchChunk(
-          videoId, chunkIdx, token
+          s.videoId, s.chunkIndex, s.nextToken
         );
+        if (s.destroyed) return;
 
-        // Check again after the async fetch — component may have unmounted
-        if (session.destroyed) return;
+        log(`chunk ${s.chunkIndex}: ${blob.byteLength} bytes, isLast=${isLastChunk}`);
 
         if (blob.byteLength > 0) {
-          session.pendingChunks.push(blob);
-          flushPendingChunks(session);
-
-          if (componentAlive.current) {
+          s.pendingChunks.push(blob);
+          flushPendingChunks(s);
+          if (alive.current) {
             setLoadedChunks(c => c + 1);
-
-            // Update buffer progress bar
             try {
-              const buf = video.buffered;
-              if (buf.length > 0 && video.duration > 0) {
-                const buffEnd = buf.end(buf.length - 1);
-                setBufferedPercent(Math.min(100, (buffEnd / video.duration) * 100));
-              }
+              const buf = v.buffered;
+              if (buf.length > 0 && v.duration > 0)
+                setBufferedPct(Math.min(100, (buf.end(buf.length - 1) / v.duration) * 100));
             } catch {}
           }
         }
 
-        session.nextToken  = nextChunkToken;
-        session.chunkIndex = chunkIdx + 1;
-        tryTriggerPlayback();
+        s.nextToken  = nextChunkToken;
+        s.chunkIndex += 1;
+        tryPlay();
 
         if (isLastChunk || !nextChunkToken) {
-          // Wait for pending chunks to drain before calling endOfStream
-          const waitAndFinish = () => {
-            if (session.destroyed) return;
-            if (session.pendingChunks.length > 0 || session.sb.updating) {
-              setTimeout(waitAndFinish, 150);
-              return;
-            }
-            try {
-              if (session.ms.readyState === 'open') session.ms.endOfStream();
-            } catch {}
+          log('pump: last chunk — waiting for drain then endOfStream');
+          const waitEnd = () => {
+            if (s.destroyed) return;
+            if (s.pendingChunks.length || s.sb.updating) { setTimeout(waitEnd, 150); return; }
+            try { if (s.ms.readyState === 'open') { s.ms.endOfStream(); log('endOfStream called'); } } catch {}
           };
-          waitAndFinish();
-
-          if (!initialPlaybackTriggered && componentAlive.current) {
-            initialPlaybackTriggered = true;
-            setPlayerState('playing');
-            video.play().catch(() => {});
-          }
+          waitEnd();
+          if (!playTriggered && alive.current) { playTriggered = true; setPlayerState('playing'); v.play().catch(() => {}); }
           break;
         }
-
       } catch (err: any) {
-        if (!session.destroyed && componentAlive.current) {
+        if (!s.destroyed && alive.current) {
+          logErr('pump fetch error:', err);
           setPlayerError(`Stream interrupted: ${err.message}`);
           setPlayerState('error');
         }
         return;
       }
     }
+    log('pump() exited');
   }, [flushPendingChunks]);
 
-  // ─── Start an MSE streaming session ──────────────────────────────────────
-  const startMSEStream = useCallback((
-    videoId: string,
-    firstChunkToken: string,
-    streamToken: string,
-    mimeHint: string
-  ): Promise<void> => {
+  // ── Start MSE streaming session ───────────────────────────────────────────
+  const startMSEStream = useCallback((videoId: string, firstChunkToken: string): Promise<void> => {
     return new Promise((resolve, reject) => {
-      const video = videoRef.current;
-      if (!video) return reject(new Error('Video element not available'));
+      const v = videoRef.current;
+      if (!v) return reject(new Error('Video element unavailable'));
 
-      // Tear down any previous session first
       teardownSession();
 
-      const ms = new MediaSource();
-
-      // Create blob URL and assign to video BEFORE anything else
+      log('startMSEStream: creating MediaSource, videoId:', videoId);
+      const ms      = new MediaSource();
       const blobUrl = URL.createObjectURL(ms);
-      video.src = blobUrl;
-      // NOTE: do NOT revoke blobUrl here — keep it alive for the session lifetime
+      v.src         = blobUrl;
+      v.preload     = 'auto';
 
       ms.addEventListener('sourceopen', () => {
-        // Detect supported codec
-        const codecs = [
-          `video/mp4; codecs="avc1.42E01E, mp4a.40.2"`,
-          `video/mp4; codecs="avc1.640028, mp4a.40.2"`,
-          `video/mp4; codecs="avc1.64001f, mp4a.40.2"`,
-          `video/mp4`,
-          `video/webm; codecs="vp8, vorbis"`,
-          `video/webm; codecs="vp9"`,
-          mimeHint,
+        log('sourceopen — readyState:', ms.readyState);
+
+        // ─────────────────────────────────────────────────────────────────────
+        // FIX 4 + FIX 6: ALWAYS use a video/mp4 codec string.
+        //
+        // NEVER use the content-type from the server response header.
+        // Dropbox raw URLs and GDrive download URLs both return:
+        //   Content-Type: application/octet-stream
+        // That string is NOT a valid MSE type. Passing it to addSourceBuffer()
+        // causes an IMMEDIATE SourceBuffer error event — exactly what you saw.
+        //
+        // Also: do NOT include webm codecs as fallback. If the video file is
+        // mp4 and the browser picks 'video/webm' codec, every appendBuffer()
+        // will error because the byte signature (ftyp/moov atoms) doesn't match.
+        // ─────────────────────────────────────────────────────────────────────
+        const mp4Codecs = [
+          'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',
+          'video/mp4; codecs="avc1.640028, mp4a.40.2"',
+          'video/mp4; codecs="avc1.64001f, mp4a.40.2"',
+          'video/mp4',
         ];
-        const supported = codecs.find(c => {
-          try { return MediaSource.isTypeSupported(c); } catch { return false; }
-        }) || 'video/mp4';
+        const mimeType = mp4Codecs.find(c => { try { return MediaSource.isTypeSupported(c); } catch { return false; } });
+        if (!mimeType) {
+          URL.revokeObjectURL(blobUrl);
+          return reject(new Error('Browser does not support MP4 MSE. Use Chrome or Edge.'));
+        }
+        log('addSourceBuffer with:', mimeType);
 
         let sb: SourceBuffer;
         try {
-          sb = ms.addSourceBuffer(supported);
+          sb = ms.addSourceBuffer(mimeType);
         } catch (e: any) {
           URL.revokeObjectURL(blobUrl);
-          return reject(new Error(`SourceBuffer error: ${e.message}`));
+          return reject(new Error(`addSourceBuffer failed: ${e.message}`));
         }
 
-        // Build the session object — all MSE state lives here
+        // ─────────────────────────────────────────────────────────────────────
+        // FIX 5: Set sb.mode = 'sequence' immediately after addSourceBuffer.
+        //
+        // This is what the original Platform C prototype does (line 228 in
+        // Platform-C-main/api/index.js) and it was completely missing from both
+        // previous versions of LessonViewer.
+        //
+        // WHY IT MATTERS:
+        // Default mode is 'segments' — the SourceBuffer uses the mp4 file's
+        // embedded presentation timestamps (PTS) to place each chunk on the
+        // timeline. When you stream byte ranges, each chunk's internal PTS
+        // starts from its position in the full file, not from zero.
+        // Chunks arriving with "wrong" timestamps can cause decode errors.
+        //
+        // 'sequence' mode tells the SB to IGNORE embedded timestamps and simply
+        // append chunks in the order they arrive, building a continuous timeline.
+        // This is exactly right for sequential byte-range chunked streaming.
+        // ─────────────────────────────────────────────────────────────────────
+        try {
+          sb.mode = 'sequence';
+          log('sb.mode set to: sequence');
+        } catch (e) {
+          log('Could not set sb.mode (non-fatal):', e);
+        }
+
         const session: MSESession = {
-          ms,
-          sb,
-          blobUrl,
-          destroyed: false,
-          pendingChunks: [],
-          appending: false,
-          nextToken: firstChunkToken,
-          chunkIndex: 0,
-          streamToken,
-          videoId,
+          ms, sb, blobUrl,
+          destroyed: false, pendingChunks: [], appending: false,
+          nextToken: firstChunkToken, chunkIndex: 0, videoId,
         };
         sessionRef.current = session;
 
-        // Wire updateend → flush queue
         sb.addEventListener('updateend', () => {
           session.appending = false;
           if (!session.destroyed) flushPendingChunks(session);
         });
 
-        sb.addEventListener('error', (e) => {
-          console.error('SourceBuffer error event:', e);
+        // This listener now exists purely for debugging.
+        // With fixes 1-5 above, it should never fire.
+        sb.addEventListener('error', e => {
+          logErr('SourceBuffer error event (unexpected with fixes applied):', e);
+          logErr('SB state:', {
+            mode: sb.mode, updating: sb.updating,
+            msState: ms.readyState, videoId, chunk: session.chunkIndex,
+          });
         });
 
-        // Start the pump
         pump(session);
         resolve();
-
       }, { once: true });
 
-      ms.addEventListener('error', () => {
+      ms.addEventListener('error', e => {
+        logErr('MediaSource error:', e);
         URL.revokeObjectURL(blobUrl);
-        reject(new Error('MediaSource error'));
+        reject(new Error('MediaSource failed to open'));
       }, { once: true });
     });
   }, [teardownSession, flushPendingChunks, pump]);
 
-  // ─── Initialize player ────────────────────────────────────────────────────
+  // ── Initialize player ─────────────────────────────────────────────────────
   const initPlayer = useCallback(async (videoUrl: string) => {
+    log('initPlayer:', videoUrl);
     setPlayerState('loading');
     setPlayerError('');
     setLoadedChunks(0);
-    setBufferedPercent(0);
+    setBufferedPct(0);
     setTotalChunks(null);
+    setIsEmbed(false);
+    setEmbedUrl('');
 
-    // Plain URL (legacy / local)
     if (!videoUrl.startsWith('secured://')) {
-      if (videoRef.current) {
-        videoRef.current.src = videoUrl;
-        videoRef.current.load();
-        setPlayerState('buffering');
-      }
+      log('plain URL — direct src');
+      if (videoRef.current) { videoRef.current.src = videoUrl; videoRef.current.load(); setPlayerState('buffering'); }
       return;
     }
 
     const videoId = videoStreamService.extractVideoId(videoUrl);
-    if (!videoId) {
-      setPlayerError('Invalid video reference.');
-      setPlayerState('error');
-      return;
-    }
+    if (!videoId) { setPlayerError('Invalid video reference.'); setPlayerState('error'); return; }
+    log('videoId:', videoId);
 
     try {
-      // Step 1: metadata (tokens or embed URL)
+      log('fetching metadata...');
       const meta = await videoStreamService.getVideoMetadata(videoId, SECURITY_STRING);
-      if (!componentAlive.current) return;
+      if (!alive.current) return;
+      log('metadata:', meta);
 
       if (meta.type === 'embed') {
-        setIsEmbed(true);
-        setEmbedUrl(meta.embedUrl);
-        setPlayerState('playing');
-        return;
+        setIsEmbed(true); setEmbedUrl(meta.embedUrl); setPlayerState('playing'); return;
       }
 
-      // Step 2: file info for progress bar (non-fatal if it fails)
+      log('fetching video info...');
       const info = await videoStreamService.getVideoInfo(videoId, meta.streamToken);
-      if (!componentAlive.current) return;
+      if (!alive.current) return;
+      log('info:', info);
       if (info.totalChunks) setTotalChunks(info.totalChunks);
 
-      // Step 3: start MSE stream
       setPlayerState('buffering');
-      await startMSEStream(
-        videoId,
-        meta.firstChunkToken,
-        meta.streamToken,
-        info.contentType || 'video/mp4'
-      );
-
+      log('starting MSE stream...');
+      await startMSEStream(videoId, meta.firstChunkToken);
+      log('MSE stream started');
     } catch (err: any) {
-      if (componentAlive.current) {
-        setPlayerError(err.message || 'Failed to initialize video.');
-        setPlayerState('error');
-      }
+      logErr('initPlayer error:', err);
+      if (alive.current) { setPlayerError(err.message || 'Failed to initialize video.'); setPlayerState('error'); }
     }
   }, [startMSEStream]);
 
-  // ─── Load content metadata ────────────────────────────────────────────────
+  // ── Load content ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!contentId) return;
-    componentAlive.current = true;
-
-    const passedContent = (location.state as any)?.contentData;
-    if (passedContent) {
-      setContent(passedContent);
-      setLoadingContent(false);
-    } else {
+    alive.current = true;
+    const passed = (location.state as any)?.contentData;
+    if (passed) { setContent(passed); setLoadingContent(false); }
+    else {
       (async () => {
         try {
           setLoadingContent(true);
-          setContentError('');
           const data = await contentLibraryService.fetchContentData(contentId);
-          if (!componentAlive.current) return;
+          if (!alive.current) return;
           if (!data) { setContentError('Content not found.'); return; }
           setContent(data);
         } catch (err: any) {
-          if (componentAlive.current) setContentError(err.message || 'Failed to load content.');
+          if (alive.current) setContentError(err.message || 'Failed to load content.');
         } finally {
-          if (componentAlive.current) setLoadingContent(false);
+          if (alive.current) setLoadingContent(false);
         }
       })();
     }
-
-    return () => {
-      componentAlive.current = false;
-      teardownSession();
-    };
+    return () => { alive.current = false; teardownSession(); };
   }, [contentId, teardownSession]);
 
-  // ─── Initialize player when content is loaded ─────────────────────────────
+  // Start player when content is ready
   useEffect(() => {
-    if (!content?.videoUrl) return;
-    initPlayer(content.videoUrl);
+    if (content?.videoUrl) initPlayer(content.videoUrl);
   }, [content, initPlayer]);
 
-  // ─── Video element events ─────────────────────────────────────────────────
-  const handleTimeUpdate = () => {
-    if (videoRef.current) setCurrentTime(videoRef.current.currentTime);
-  };
-  const handleDurationChange = () => {
-    if (videoRef.current) setDuration(videoRef.current.duration);
-  };
-  const handleWaiting = () => {
-    setPlayerState(prev => prev === 'playing' ? 'buffering' : prev);
-  };
-  const handleCanPlay = () => {
-    setPlayerState(prev => prev === 'buffering' ? 'playing' : prev);
-  };
-  const handlePlay    = () => setPlayerState('playing');
-  const handlePause   = () => { if (componentAlive.current) setPlayerState('paused'); };
-  const handleEnded   = () => setPlayerState('idle');
-  const handleVideoError = () => {
-    // Only report error if it's a real playback failure, not a src="" reset
-    const video = videoRef.current;
-    if (video && video.error && video.src) {
-      setPlayerError('Playback error. Please try reloading.');
-      setPlayerState('error');
+  // ── Video element events ──────────────────────────────────────────────────
+  const onTimeUpdate     = () => { if (videoRef.current) setCurrentTime(videoRef.current.currentTime); };
+  const onDurationChange = () => { if (videoRef.current) setDuration(videoRef.current.duration); };
+  const onWaiting        = () => setPlayerState(p => p === 'playing' ? 'buffering' : p);
+  const onCanPlay        = () => setPlayerState(p => p === 'buffering' ? 'playing' : p);
+  const onPlay           = () => setPlayerState('playing');
+  const onPause          = () => { if (alive.current) setPlayerState('paused'); };
+  const onEnded          = () => setPlayerState('idle');
+  const onVideoError     = () => {
+    const v = videoRef.current;
+    // Only handle real errors — not the synthetic error from src="" reset
+    if (v?.error && v.src && v.src !== window.location.href) {
+      logErr('video element error:', v.error.code, v.error.message);
+      setPlayerError('Playback error — please retry.'); setPlayerState('error');
     }
   };
 
-  // ─── Seek handler ──────────────────────────────────────────────────────────
+  // ── Seek, retry, notes ───────────────────────────────────────────────────
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const video = videoRef.current;
-    if (!video || !duration) return;
-    const rect  = e.currentTarget.getBoundingClientRect();
-    const ratio = (e.clientX - rect.left) / rect.width;
-    video.currentTime = ratio * duration;
+    const v = videoRef.current;
+    if (!v || !duration) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    v.currentTime = ((e.clientX - r.left) / r.width) * duration;
   };
+  const handleRetry    = () => { if (content?.videoUrl) initPlayer(content.videoUrl); };
+  const getNoteHref    = () => content?.noteSource === 'gdrive' ? content?.noteGDriveDownloadUrl || null : content?.noteUrl || null;
+  const getNotePreview = () => content?.noteSource === 'gdrive' ? content?.noteGDrivePreviewUrl || null : content?.noteUrl || null;
 
-  // ─── Retry ────────────────────────────────────────────────────────────────
-  const handleRetry = () => {
-    if (content?.videoUrl) initPlayer(content.videoUrl);
-  };
-
-  // ─── Note helpers ─────────────────────────────────────────────────────────
-  const getNoteHref = (): string | null => {
-    if (!content) return null;
-    return content.noteSource === 'gdrive'
-      ? content.noteGDriveDownloadUrl || null
-      : content.noteUrl || null;
-  };
-  const getNotePreviewHref = (): string | null => {
-    if (!content) return null;
-    return content.noteSource === 'gdrive'
-      ? content.noteGDrivePreviewUrl || null
-      : content.noteUrl || null;
-  };
-
-  // ─── Progress ─────────────────────────────────────────────────────────────
-  const playPercent  = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const chunkPercent = totalChunks
-    ? Math.min(100, (loadedChunks / totalChunks) * 100)
-    : bufferedPercent;
+  // Progress
+  const playPct  = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const chunkPct = totalChunks ? Math.min(100, (loadedChunks / totalChunks) * 100) : bufferedPct;
 
   // ==================== RENDER ====================
 
-  if (loadingContent) {
-    return (
-      <div className="min-h-screen bg-[#080a10] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 size={32} className="text-violet-400 animate-spin" />
-          <p className="text-sm text-white/30">Loading content…</p>
-        </div>
+  if (loadingContent) return (
+    <div className="min-h-screen bg-[#080a10] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 size={32} className="text-violet-400 animate-spin" />
+        <p className="text-sm text-white/30">Loading content…</p>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (contentError) {
-    return (
-      <div className="min-h-screen bg-[#080a10] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-rose-500/8 border border-rose-500/20 rounded-2xl p-8 text-center">
-          <AlertCircle size={32} className="text-rose-400 mx-auto mb-4" />
-          <p className="text-white/70 mb-4">{contentError}</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="text-sm text-white/40 hover:text-white transition-colors"
-          >
-            ← Go back
-          </button>
-        </div>
+  if (contentError) return (
+    <div className="min-h-screen bg-[#080a10] flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-rose-500/8 border border-rose-500/20 rounded-2xl p-8 text-center">
+        <AlertCircle size={32} className="text-rose-400 mx-auto mb-4" />
+        <p className="text-white/70 mb-4">{contentError}</p>
+        <button onClick={() => navigate(-1)} className="text-sm text-white/40 hover:text-white transition-colors">← Go back</button>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <>
       <style>{`
-        .secure-video-wrap {
-          -webkit-user-select: none;
-          -moz-user-select: none;
-          user-select: none;
-          -webkit-user-drag: none;
-          pointer-events: auto;
-        }
-        .secure-video-wrap video {
-          pointer-events: none;
-        }
-        .secure-video-wrap video::-webkit-media-controls-download-button { display: none !important; }
-        .secure-video-wrap video::-webkit-media-controls-timeline        { display: none !important; }
-        .secure-video-wrap video::-webkit-media-controls-enclosure       { display: none !important; }
-        .player-controls { pointer-events: auto; }
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(14px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .anim-up   { animation: fadeSlideUp 0.4s cubic-bezier(.22,1,.36,1) both; }
-        .anim-up-1 { animation: fadeSlideUp 0.4s 0.06s cubic-bezier(.22,1,.36,1) both; }
-        .anim-up-2 { animation: fadeSlideUp 0.4s 0.12s cubic-bezier(.22,1,.36,1) both; }
-        .anim-up-3 { animation: fadeSlideUp 0.4s 0.18s cubic-bezier(.22,1,.36,1) both; }
-        .scrubber:hover .scrubber-thumb { opacity: 1 !important; transform: scale(1) !important; }
+        .secure-video-wrap { -webkit-user-select:none; user-select:none; -webkit-user-drag:none; }
+        .secure-video-wrap video { pointer-events:none; }
+        .secure-video-wrap video::-webkit-media-controls-download-button,
+        .secure-video-wrap video::-webkit-media-controls-timeline,
+        .secure-video-wrap video::-webkit-media-controls-enclosure { display:none !important; }
+        .player-controls { pointer-events:auto; }
+        @keyframes fadeSlideUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:none} }
+        .anim-up   { animation:fadeSlideUp .4s cubic-bezier(.22,1,.36,1) both; }
+        .anim-up-1 { animation:fadeSlideUp .4s .06s cubic-bezier(.22,1,.36,1) both; }
+        .anim-up-2 { animation:fadeSlideUp .4s .12s cubic-bezier(.22,1,.36,1) both; }
+        .anim-up-3 { animation:fadeSlideUp .4s .18s cubic-bezier(.22,1,.36,1) both; }
+        .scrubber:hover .scrubber-thumb { opacity:1 !important; }
       `}</style>
 
-      <div
-        className="min-h-screen bg-[#080a10] text-white select-none"
-        onContextMenu={e => e.preventDefault()}
-      >
-        {/* Ambient glow */}
-        <div className="fixed inset-0 pointer-events-none" style={{
-          background:
-            'radial-gradient(ellipse 65% 35% at 50% -5%, rgba(139,92,246,0.12) 0%, transparent 65%),' +
-            'radial-gradient(ellipse 40% 30% at 90% 80%, rgba(56,189,248,0.05) 0%, transparent 55%)',
-        }} />
+      <div className="min-h-screen bg-[#080a10] text-white select-none" onContextMenu={e => e.preventDefault()}>
+        <div className="fixed inset-0 pointer-events-none" style={{background:'radial-gradient(ellipse 65% 35% at 50% -5%,rgba(139,92,246,.12) 0%,transparent 65%),radial-gradient(ellipse 40% 30% at 90% 80%,rgba(56,189,248,.05) 0%,transparent 55%)'}}/>
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-6">
 
-          {/* ── Back button ── */}
-          <button
-            onClick={() => navigate(-1)}
-            className="anim-up flex items-center gap-2 text-sm text-white/35 hover:text-white/80
-                       transition-colors duration-200 mb-6 group focus:outline-none
-                       px-3 py-1.5 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/8"
-          >
-            <ArrowLeft size={14} className="transition-transform duration-200 group-hover:-translate-x-0.5" />
+          <button onClick={() => navigate(-1)} className="anim-up flex items-center gap-2 text-sm text-white/35 hover:text-white/80 transition-colors mb-6 group focus:outline-none px-3 py-1.5 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/8">
+            <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-0.5"/>
             Back to Library
           </button>
 
-          {/* ── VIDEO / EMBED PLAYER AREA ── */}
-          <div className="anim-up-1 rounded-2xl overflow-hidden border border-white/8 bg-[#0d0f1a] mb-6 shadow-2xl shadow-black/60">
+          {/* Player */}
+          <div className="anim-up-1 relative rounded-2xl overflow-hidden border border-white/8 bg-[#0d0f1a] mb-6 shadow-2xl shadow-black/60">
 
-            {/* DevTools overlay */}
             {playerState === 'devtools' && (
-              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#080a10] rounded-2xl">
-                <Lock size={36} className="text-rose-400 mb-3" />
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#080a10]">
+                <Lock size={36} className="text-rose-400 mb-3"/>
                 <p className="text-white/60 text-sm font-medium">DevTools detected</p>
-                <p className="text-white/25 text-xs mt-1">Close DevTools to resume playback</p>
+                <p className="text-white/25 text-xs mt-1">Close DevTools to resume</p>
               </div>
             )}
 
-            {/* EMBED PLAYER */}
+            {/* Embed (YouTube/Vimeo/Dailymotion) */}
             {isEmbed && embedUrl && (
-              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                <iframe
-                  src={embedUrl}
-                  className="absolute inset-0 w-full h-full"
-                  allow="autoplay; fullscreen; encrypted-media"
-                  allowFullScreen
+              <div className="relative w-full" style={{paddingBottom:'56.25%'}}>
+                <iframe src={embedUrl} className="absolute inset-0 w-full h-full"
+                  allow="autoplay; fullscreen; encrypted-media" allowFullScreen
                   referrerPolicy="no-referrer"
                   sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
-                  title={content?.title || 'Video'}
-                  style={{ border: 'none', pointerEvents: 'auto' }}
-                />
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  onContextMenu={e => e.preventDefault()}
-                />
+                  title={content?.title||'Video'} style={{border:'none',pointerEvents:'auto'}}/>
+                <div className="absolute inset-0 pointer-events-none" onContextMenu={e=>e.preventDefault()}/>
               </div>
             )}
 
-            {/* MSE CHUNKED STREAM PLAYER */}
+            {/* MSE chunked player (Dropbox / GDrive) */}
             {!isEmbed && content?.videoUrl && (
               <div className="relative secure-video-wrap bg-black">
-
-                <video
-                  ref={videoRef}
-                  className="w-full block"
-                  style={{
-                    display: isVideoHidden ? 'none' : 'block',
-                    maxHeight: '70vh',
-                    minHeight: '220px',
-                    background: '#000',
-                  }}
-                  playsInline
-                  controlsList="nodownload nofullscreen noremoteplayback"
-                  disablePictureInPicture
-                  onTimeUpdate={handleTimeUpdate}
-                  onDurationChange={handleDurationChange}
-                  onWaiting={handleWaiting}
-                  onCanPlay={handleCanPlay}
-                  onPlay={handlePlay}
-                  onPause={handlePause}
-                  onEnded={handleEnded}
-                  onError={handleVideoError}
-                  onContextMenu={e => e.preventDefault()}
+                <video ref={videoRef} className="w-full block"
+                  style={{display:isVideoHidden?'none':'block',maxHeight:'70vh',minHeight:'220px',background:'#000'}}
+                  playsInline controlsList="nodownload nofullscreen noremoteplayback" disablePictureInPicture
+                  onTimeUpdate={onTimeUpdate} onDurationChange={onDurationChange}
+                  onWaiting={onWaiting} onCanPlay={onCanPlay}
+                  onPlay={onPlay} onPause={onPause} onEnded={onEnded} onError={onVideoError}
+                  onContextMenu={e=>e.preventDefault()}
                 />
 
-                {/* Loading / buffering overlay */}
-                {(playerState === 'loading' || playerState === 'buffering') && !isVideoHidden && (
+                {(playerState==='loading'||playerState==='buffering')&&!isVideoHidden&&(
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
-                    <Loader2 size={36} className="text-violet-400 animate-spin mb-3" />
-                    <p className="text-sm text-white/50">
-                      {playerState === 'loading' ? 'Initializing secure stream…' : 'Buffering…'}
-                    </p>
-                    {totalChunks && loadedChunks > 0 && (
-                      <p className="text-xs text-white/25 mt-1">
-                        {loadedChunks} / {totalChunks} chunks loaded
-                      </p>
-                    )}
+                    <Loader2 size={36} className="text-violet-400 animate-spin mb-3"/>
+                    <p className="text-sm text-white/50">{playerState==='loading'?'Initializing secure stream…':'Buffering…'}</p>
+                    {totalChunks&&loadedChunks>0&&<p className="text-xs text-white/25 mt-1">{loadedChunks}/{totalChunks} chunks</p>}
                   </div>
                 )}
 
-                {/* Error overlay */}
-                {playerState === 'error' && (
+                {playerState==='error'&&(
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center p-6">
-                    <AlertCircle size={32} className="text-rose-400 mb-3" />
+                    <AlertCircle size={32} className="text-rose-400 mb-3"/>
                     <p className="text-white/60 text-sm mb-4 max-w-xs">{playerError}</p>
-                    <button
-                      onClick={handleRetry}
-                      className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded-lg transition-colors"
-                    >
-                      Retry
-                    </button>
+                    <button onClick={handleRetry} className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-sm rounded-lg transition-colors">Retry</button>
                   </div>
                 )}
 
-                {/* Custom controls */}
-                {(playerState === 'playing' || playerState === 'paused') && !isVideoHidden && (
-                  <div className="player-controls absolute bottom-0 left-0 right-0 px-4 pb-3 pt-6
-                                  bg-gradient-to-t from-black/90 via-black/40 to-transparent">
-
-                    {/* Scrubber */}
-                    <div
-                      className="scrubber relative h-1 bg-white/15 rounded-full cursor-pointer mb-3 group"
-                      onClick={handleSeek}
-                    >
-                      <div
-                        className="absolute top-0 left-0 h-full bg-white/20 rounded-full pointer-events-none"
-                        style={{ width: `${chunkPercent}%` }}
-                      />
-                      <div
-                        className="absolute top-0 left-0 h-full bg-violet-400 rounded-full pointer-events-none transition-all duration-100"
-                        style={{ width: `${playPercent}%` }}
-                      />
-                      <div
-                        className="scrubber-thumb absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg pointer-events-none"
-                        style={{
-                          left: `${playPercent}%`,
-                          transform: 'translateX(-50%) translateY(-50%)',
-                          opacity: 0,
-                          scale: '0.8',
-                        }}
-                      />
+                {(playerState==='playing'||playerState==='paused')&&!isVideoHidden&&(
+                  <div className="player-controls absolute bottom-0 left-0 right-0 px-4 pb-3 pt-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <div className="scrubber relative h-1 bg-white/15 rounded-full cursor-pointer mb-3 group" onClick={handleSeek}>
+                      <div className="absolute inset-y-0 left-0 bg-white/20 rounded-full" style={{width:`${chunkPct}%`}}/>
+                      <div className="absolute inset-y-0 left-0 bg-violet-400 rounded-full transition-all duration-100" style={{width:`${playPct}%`}}/>
+                      <div className="scrubber-thumb absolute top-1/2 w-3 h-3 bg-white rounded-full shadow-lg" style={{left:`${playPct}%`,transform:'translateX(-50%) translateY(-50%)',opacity:0}}/>
                     </div>
-
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <button
-                          className="player-controls text-white/70 hover:text-white transition-colors text-sm"
-                          onClick={() => {
-                            const v = videoRef.current;
-                            if (!v) return;
-                            if (v.paused) v.play();
-                            else v.pause();
-                          }}
-                        >
-                          {playerState === 'paused' ? '▶' : '⏸'}
+                        <button className="player-controls text-white/70 hover:text-white text-sm"
+                          onClick={()=>{const v=videoRef.current;if(!v)return;v.paused?v.play():v.pause();}}>
+                          {playerState==='paused'?'▶':'⏸'}
                         </button>
-                        <span className="text-xs text-white/40 font-mono tabular-nums">
-                          {formatDuration(currentTime)} / {formatDuration(duration)}
-                        </span>
+                        <span className="text-xs text-white/40 font-mono tabular-nums">{formatDuration(currentTime)}/{formatDuration(duration)}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-green-400/60">
-                        <Shield size={10} />
-                        <span>Secure Stream</span>
-                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-green-400/60"><Shield size={10}/><span>Secure Stream</span></div>
                     </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* No video */}
-            {!content?.videoUrl && !loadingContent && (
-              <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center">
-                <Play size={36} className="text-white/15 mb-3" />
+            {!content?.videoUrl&&!loadingContent&&(
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <Play size={36} className="text-white/15 mb-3"/>
                 <p className="text-white/25 text-sm">No video attached to this content</p>
               </div>
             )}
           </div>
 
-          {/* ── CONTENT INFO ── */}
+          {/* Content info */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-            {/* Left: title + description */}
             <div className="lg:col-span-2 space-y-4">
-
               <div className="anim-up-2 rounded-2xl border border-white/6 bg-[#0d0f1a] p-5 sm:p-6">
                 <div className="flex items-start gap-3 mb-3">
-                  <span className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border mt-0.5
-                    ${content?.type === 'lesson'
-                      ? 'bg-violet-500/15 text-violet-300 border-violet-500/20'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/20'}`}>
-                    {content?.type === 'lesson' ? <Play size={10} /> : null}
-                    {content?.type === 'trick'  ? <BookOpen size={10} /> : null}
-                    {content?.type === 'lesson' ? 'Lesson' : 'Trick'}
+                  <span className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border mt-0.5 ${content?.type==='lesson'?'bg-violet-500/15 text-violet-300 border-violet-500/20':'bg-amber-500/15 text-amber-300 border-amber-500/20'}`}>
+                    {content?.type==='lesson'?<Play size={10}/>:<BookOpen size={10}/>}
+                    {content?.type==='lesson'?'Lesson':'Trick'}
                   </span>
-
-                  {content?.videoUrl?.startsWith('secured://') && (
-                    <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400/80 border border-green-500/15 mt-1">
-                      <Shield size={9} />
-                      Protected
-                    </span>
+                  {content?.videoUrl?.startsWith('secured://')&&(
+                    <span className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400/80 border border-green-500/15 mt-1"><Shield size={9}/> Protected</span>
                   )}
                 </div>
-
-                <h1 className="text-xl sm:text-2xl font-bold text-white leading-snug mb-2">
-                  {content?.title || 'Untitled'}
-                </h1>
-
-                {content?.subject && (
-                  <p className="text-sm text-white/35 mb-3">{content.subject}</p>
-                )}
-
-                {content?.description && (
-                  <p className="text-sm text-white/50 leading-relaxed mt-3 pt-3 border-t border-white/5">
-                    {content.description}
-                  </p>
-                )}
+                <h1 className="text-xl sm:text-2xl font-bold text-white leading-snug mb-2">{content?.title||'Untitled'}</h1>
+                {content?.subject&&<p className="text-sm text-white/35 mb-3">{content.subject}</p>}
+                {content?.description&&<p className="text-sm text-white/50 leading-relaxed mt-3 pt-3 border-t border-white/5">{content.description}</p>}
               </div>
 
-              {/* Stats */}
               <div className="anim-up-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {content?.duration ? (
+                {content?.duration&&(
                   <div className="rounded-xl border border-white/6 bg-[#0d0f1a] px-4 py-3 flex items-center gap-3">
-                    <Clock size={16} className="text-white/25 flex-shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-0.5">Duration</p>
-                      <p className="text-sm text-white/70 font-medium">{formatMinutes(content.duration)}</p>
-                    </div>
+                    <Clock size={16} className="text-white/25"/>
+                    <div><p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-0.5">Duration</p><p className="text-sm text-white/70 font-medium">{formatMinutes(content.duration)}</p></div>
                   </div>
-                ) : null}
-
-                {content?.subject ? (
+                )}
+                {content?.subject&&(
                   <div className="rounded-xl border border-white/6 bg-[#0d0f1a] px-4 py-3 flex items-center gap-3">
-                    <BookOpen size={16} className="text-white/25 flex-shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-0.5">Subject</p>
-                      <p className="text-sm text-white/70 font-medium truncate">{content.subject}</p>
-                    </div>
+                    <BookOpen size={16} className="text-white/25"/>
+                    <div><p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-0.5">Subject</p><p className="text-sm text-white/70 font-medium truncate">{content.subject}</p></div>
                   </div>
-                ) : null}
-
-                {content?.videoUrl?.startsWith('secured://') && (
+                )}
+                {content?.videoUrl?.startsWith('secured://')&&(
                   <div className="rounded-xl border border-green-500/15 bg-green-500/5 px-4 py-3 flex items-center gap-3">
-                    <Shield size={16} className="text-green-400/60 flex-shrink-0" />
-                    <div>
-                      <p className="text-[10px] text-green-400/40 uppercase tracking-widest font-semibold mb-0.5">Security</p>
-                      <p className="text-sm text-green-400/70 font-medium">DRM Protected</p>
-                    </div>
+                    <Shield size={16} className="text-green-400/60"/>
+                    <div><p className="text-[10px] text-green-400/40 uppercase tracking-widest font-semibold mb-0.5">Security</p><p className="text-sm text-green-400/70 font-medium">DRM Protected</p></div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Right: notes + security info */}
             <div className="anim-up-3 space-y-3">
-              {(content?.noteUrl || content?.noteGDrivePreviewUrl) ? (
+              {(content?.noteUrl||content?.noteGDrivePreviewUrl)?(
                 <div className="rounded-2xl border border-white/6 bg-[#0d0f1a] p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <FileText size={15} className="text-emerald-400/70" />
-                    <span className="text-sm font-semibold text-white/70">Class Notes</span>
-                  </div>
+                  <div className="flex items-center gap-2 mb-4"><FileText size={15} className="text-emerald-400/70"/><span className="text-sm font-semibold text-white/70">Class Notes</span></div>
                   <div className="space-y-2">
-                    {getNotePreviewHref() && (
-                      <a
-                        href={getNotePreviewHref()!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl
-                                   bg-emerald-500/8 border border-emerald-500/15 text-emerald-300/80
-                                   hover:bg-emerald-500/15 hover:text-emerald-300
-                                   transition-all duration-200 text-sm font-medium group"
-                      >
-                        <span className="flex items-center gap-2">
-                          <ExternalLink size={13} />
-                          Preview Notes
-                        </span>
-                        <span className="text-emerald-400/30 text-xs group-hover:translate-x-0.5 transition-transform">→</span>
-                      </a>
-                    )}
-                    {getNoteHref() && (
-                      <a
-                        href={getNoteHref()!}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl
-                                   bg-white/4 border border-white/8 text-white/50
-                                   hover:bg-white/7 hover:text-white/80
-                                   transition-all duration-200 text-sm font-medium group"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Download size={13} />
-                          Download PDF
-                        </span>
-                        <span className="text-white/20 text-xs group-hover:translate-x-0.5 transition-transform">→</span>
-                      </a>
-                    )}
-                    {content?.noteSource === 'gdrive' && (
-                      <p className="text-[10px] text-white/20 text-center pt-1">via Google Drive</p>
-                    )}
+                    {getNotePreview()&&<a href={getNotePreview()!} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-emerald-500/8 border border-emerald-500/15 text-emerald-300/80 hover:bg-emerald-500/15 hover:text-emerald-300 transition-all text-sm font-medium group"><span className="flex items-center gap-2"><ExternalLink size={13}/>Preview Notes</span><span className="text-emerald-400/30 text-xs group-hover:translate-x-0.5 transition-transform">→</span></a>}
+                    {getNoteHref()&&<a href={getNoteHref()!} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-white/4 border border-white/8 text-white/50 hover:bg-white/7 hover:text-white/80 transition-all text-sm font-medium group"><span className="flex items-center gap-2"><Download size={13}/>Download PDF</span><span className="text-white/20 text-xs group-hover:translate-x-0.5 transition-transform">→</span></a>}
+                    {content?.noteSource==='gdrive'&&<p className="text-[10px] text-white/20 text-center pt-1">via Google Drive</p>}
                   </div>
                 </div>
-              ) : (
+              ):(
                 <div className="rounded-2xl border border-white/5 bg-white/2 p-5 text-center">
-                  <FileText size={20} className="text-white/10 mx-auto mb-2" />
+                  <FileText size={20} className="text-white/10 mx-auto mb-2"/>
                   <p className="text-xs text-white/20">No notes attached</p>
                 </div>
               )}
-
               <div className="rounded-2xl border border-white/5 bg-white/2 p-4 space-y-2">
-                <p className="text-[10px] uppercase tracking-widest text-white/20 font-semibold mb-2">
-                  Content Protection
-                </p>
-                {[
-                  'Token-chained stream (anti-IDM)',
-                  'No URL exposed in DevTools',
-                  'Screen capture blocked',
-                  'Download button disabled',
-                ].map(f => (
-                  <div key={f} className="flex items-center gap-2">
-                    <Shield size={10} className="text-green-400/40 flex-shrink-0" />
-                    <span className="text-[11px] text-white/25">{f}</span>
-                  </div>
+                <p className="text-[10px] uppercase tracking-widest text-white/20 font-semibold mb-2">Content Protection</p>
+                {['Token-chained stream (anti-IDM)','No URL exposed in DevTools','Screen capture blocked','Download button disabled'].map(f=>(
+                  <div key={f} className="flex items-center gap-2"><Shield size={10} className="text-green-400/40 flex-shrink-0"/><span className="text-[11px] text-white/25">{f}</span></div>
                 ))}
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </>
