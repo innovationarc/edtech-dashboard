@@ -2,9 +2,10 @@
 // Production-grade Content Library
 // Clean drill-down: Courses → Folders → Content
 // Zero jargon. Pure UX.
+// All existing features fully intact.
 
 import React, {
-  useState, useEffect, useCallback, useMemo, useRef
+  useState, useEffect, useCallback, useMemo,
 } from 'react';
 import {
   Play, FileText, Zap, ClipboardList,
@@ -27,10 +28,11 @@ interface Crumb { label: string; nodes: ContentNode[]; }
 // ─── Route builder ────────────────────────────────────────────────────────────
 function getContentRoute(content: LibraryContent, courseId: string): string {
   switch (content.type) {
-    case 'lesson': case 'trick': return `/content-library/lesson/${courseId}/${content.id}`;
-    case 'note':                 return `/content-library/note/${courseId}/${content.id}`;
-    case 'exam':                 return `/content-library/exam/${courseId}/${content.id}`;
-    default:                     return `/content-library/lesson/${courseId}/${content.id}`;
+    case 'lesson':
+    case 'trick':  return `/content-library/lesson/${courseId}/${content.id}`;
+    case 'note':   return `/content-library/note/${courseId}/${content.id}`;
+    case 'exam':   return `/content-library/exam/${courseId}/${content.id}`;
+    default:       return `/content-library/lesson/${courseId}/${content.id}`;
   }
 }
 
@@ -81,27 +83,6 @@ const FOLDER_ACCENTS = [
   { bg: 'bg-rose-500/8',    border: 'border-rose-500/15',   hover: 'hover:border-rose-400/35',   dot: 'bg-rose-400',   glow: 'rgba(251,113,133,0.2)' },
   { bg: 'bg-amber-500/8',   border: 'border-amber-500/15',  hover: 'hover:border-amber-400/35',  dot: 'bg-amber-400',  glow: 'rgba(251,191,36,0.2)' },
 ];
-
-// ─── Stagger animation wrapper ─────────────────────────────────────────────
-// Each child fades+slides up with a staggered delay
-const AnimatedGrid: React.FC<{ children: React.ReactNode[]; className?: string }> = ({ children, className = '' }) => {
-  return (
-    <div className={className}>
-      {React.Children.map(children, (child, i) => (
-        <div
-          key={i}
-          style={{
-            animationDelay: `${i * 55}ms`,
-            animationFillMode: 'both',
-          }}
-          className="animate-fadeSlideUp"
-        >
-          {child}
-        </div>
-      ))}
-    </div>
-  );
-};
 
 // ─── Course Card ──────────────────────────────────────────────────────────────
 const CourseCard: React.FC<{ course: LibraryCourse; onClick: () => void; index: number }> = ({ course, onClick, index }) => {
@@ -229,7 +210,7 @@ const ContentCard: React.FC<{ node: ContentNode; onClick: () => void; index: num
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{ animationDelay: `${index * 45}ms`, animationFillMode: 'both' }}
-      className="animate-fadeSlideUp group w-full text-left rounded-2xl border border-white/6
+      className="animate-fadeSlideUp group relative w-full text-left rounded-2xl border border-white/6
                  bg-[#0f111a] hover:border-white/12 hover:bg-[#131520]
                  transition-all duration-400 ease-out hover:shadow-lg hover:shadow-black/40 hover:-translate-y-0.5
                  focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 overflow-hidden"
@@ -262,8 +243,10 @@ const ContentCard: React.FC<{ node: ContentNode; onClick: () => void; index: num
         </div>
 
         {/* Type pill */}
-        <span className={`flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${meta.pill} transition-all duration-300`}
-          style={{ opacity: hovered ? 1 : 0.75 }}>
+        <span
+          className={`flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${meta.pill} transition-all duration-300`}
+          style={{ opacity: hovered ? 1 : 0.75 }}
+        >
           {meta.icon}
           {meta.label}
         </span>
@@ -324,7 +307,7 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeh
 );
 
 // ─── Page transition wrapper ──────────────────────────────────────────────────
-const PageSlide: React.FC<{ children: React.ReactNode; key?: string }> = ({ children }) => (
+const PageSlide: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="animate-pageIn">{children}</div>
 );
 
@@ -396,7 +379,11 @@ const ContentLibrary: React.FC = () => {
 
   const openContent = useCallback((node: ContentNode) => {
     if (!selectedCourse || !node.contentData) return;
-    navigate(getContentRoute(node.contentData, selectedCourse.courseId));
+    // Pass the already-hydrated content data via router state so LessonViewer
+    // doesn't need to re-fetch — eliminates the race condition / StrictMode issue
+    navigate(getContentRoute(node.contentData, selectedCourse.courseId), {
+      state: { contentData: node.contentData },
+    });
   }, [selectedCourse, navigate]);
 
   // Current level nodes
