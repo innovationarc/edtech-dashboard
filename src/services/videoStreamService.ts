@@ -53,6 +53,35 @@ export interface SubmitVideoResult {
   platform: VideoSourcePlatform;
 }
 
+/** Returned by getVideoMetadata for embed-type videos */
+export interface VideoMetaEmbed {
+  success: true;
+  type: 'embed';
+  embedUrl: string;
+  platform: string;
+}
+
+/** Returned by getVideoMetadata for direct-stream videos */
+export interface VideoMetaStream {
+  success: true;
+  type: 'video';
+  chunkUrl: string;
+  streamToken: string;
+  firstChunkToken: string;
+  platform: string;
+}
+
+export type VideoMeta = VideoMetaEmbed | VideoMetaStream;
+
+/** Returned by getVideoInfo */
+export interface VideoInfo {
+  success: boolean;
+  totalSize: number;
+  totalChunks: number | null;
+  chunkSize: number;
+  contentType: string;
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /** Derives the API base URL from the current window location so the service
@@ -156,11 +185,6 @@ export const videoStreamService = {
    * Submit a source video URL to the Platform B backend.
    * The backend converts it, stores it in Firebase, and returns a secure proxy URL.
    * That proxy URL is what you store in `content.videoUrl` instead of the raw source URL.
-   *
-   * @param sourceUrl   The original Dropbox / GDrive / YouTube / etc. URL
-   * @param platform    Which platform the URL is from
-   * @param label       Human-readable label (e.g. content title) for the record
-   * @param createdBy   User UID
    */
   async submitVideo(
     sourceUrl: string,
@@ -192,7 +216,7 @@ export const videoStreamService = {
     if (!url || !url.trim()) return 'URL is required';
 
     try {
-      new URL(url); // basic URL check
+      new URL(url);
     } catch {
       return 'Invalid URL format';
     }
@@ -217,22 +241,43 @@ export const videoStreamService = {
         break;
     }
 
-    return null; // valid
+    return null;
   },
 
   /**
    * Get metadata for a secured video by its Firestore video ID.
-   * Returns stream tokens (for Dropbox/GDrive) or a proxyUrl (for embeds).
-   * Called by the ContentLibrary / player component.
+   * Returns stream tokens (for Dropbox/GDrive) or embedUrl (for embeds).
+   * Called by the LessonViewer player component.
    */
-  async getVideoMetadata(videoId: string, securityString: string) {
-    const response = await fetch(`${getApiBase()}/api/videoStream?action=meta&videoId=${videoId}`, {
-      headers: { 'x-security-string': securityString },
-    });
+  async getVideoMetadata(videoId: string, securityString: string): Promise<VideoMeta> {
+    const response = await fetch(
+      `${getApiBase()}/api/videoStream?action=meta&videoId=${encodeURIComponent(videoId)}`,
+      { headers: { 'x-security-string': securityString } }
+    );
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({ message: 'Network error' }));
       throw new Error(err.message || `Server error ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || 'Failed to get video metadata');
+    return data as VideoMeta;
+  },
+
+  /**
+   * NEW: Fetch total size and chunk count for progress bar display.
+   * Called by the MSE pump loop before starting playback.
+   */
+  async getVideoInfo(videoId: string, streamToken: string): Promise<VideoInfo> {
+    const response = await fetch(
+      `${getApiBase()}/api/videoStream?action=info&videoId=${encodeURIComponent(videoId)}`,
+      { headers: { 'x-stream-token': streamToken } }
+    );
+
+    if (!response.ok) {
+      // Non-fatal — caller can proceed without total chunk info
+      return { success: false, totalSize: 0, totalChunks: null, chunkSize: 8388608, contentType: 'video/mp4' };
     }
 
     return response.json();
@@ -240,7 +285,7 @@ export const videoStreamService = {
 
   /**
    * Fetch a single chunk from the Platform B chunk proxy.
-   * Called by the MediaSource pump loop in the ContentLibrary player.
+   * Called by the MediaSource pump loop in the LessonViewer player.
    */
   async fetchChunk(
     videoId: string,
@@ -253,7 +298,6 @@ export const videoStreamService = {
     );
 
     if (response.status === 204) {
-      // Past end of file
       return { blob: new ArrayBuffer(0), nextChunkToken: '', isLastChunk: true };
     }
 
@@ -281,7 +325,6 @@ export const videoStreamService = {
 
   /**
    * List all secured video records created by a user.
-   * Useful for admin inspection / cleanup.
    */
   async getSecuredVideosByUser(userId: string): Promise<SecuredVideo[]> {
     const q = query(
@@ -294,9 +337,8 @@ export const videoStreamService = {
   },
 
   /**
-   * Extract a videoId from a proxy URL produced by submitVideo.
-   * Proxy URLs look like: https://yourdomain.com/api/videoStream?action=meta&videoId=<id>
-   * or the content-facing format stored in Firestore: secured://<videoId>
+   * Extract a videoId from a proxy URL.
+   * Stored format in Firestore: secured://<videoId>
    */
   extractVideoId(proxyUrl: string): string | null {
     if (proxyUrl.startsWith('secured://')) {
@@ -339,10 +381,7 @@ export const videoStreamService = {
     return EMBED_PLATFORMS.includes(platform);
   },
 
-  // ─── Client-side URL conversion helpers (exposed for the API route) ──────────
-  // These are used server-side in api/videoStream.ts via re-export,
-  // but also exposed here so any consumer can use them.
-
+  // ─── Client-side URL conversion helpers ──────────────────────────────────────
   _convertDropboxUrl: convertDropboxUrl,
   _convertGoogleDriveUrl: convertGoogleDriveUrl,
   _convertYouTubeUrl: convertYouTubeUrl,
