@@ -36,8 +36,15 @@ export interface LibraryContent {
   examType?: 'mcq' | 'written' | 'mixed';
   totalQuestions?: number;
   totalMarks?: number;
+  // Video — may be a secured:// proxy URL or a direct storage URL
   videoUrl?: string;
+  videoFileName?: string;
+  // Note — may be local storage URL or GDrive
   noteUrl?: string;
+  noteFileName?: string;
+  noteSource?: 'local' | 'gdrive';
+  noteGDrivePreviewUrl?: string;
+  noteGDriveDownloadUrl?: string;
 }
 
 export interface LibraryCourse {
@@ -111,7 +118,7 @@ export const contentLibraryService = {
           // Check validity — skip if course expired
           if (courseData.validity) {
             const validUntil = new Date(courseData.validity);
-            if (validUntil < new Date()) return; // expired
+            if (validUntil < new Date()) return;
           }
 
           // 3. Hydrate contentNodes with actual content data
@@ -152,7 +159,6 @@ export const contentLibraryService = {
     const hydrated = await Promise.all(
       nodes.map(async (node) => {
         if (node.type === 'content' && node.contentId) {
-          // Fetch content data
           const contentData = await contentLibraryService.fetchContentData(node.contentId);
           return {
             ...node,
@@ -178,7 +184,8 @@ export const contentLibraryService = {
   },
 
   /**
-   * Fetch minimal content data needed for display in library.
+   * Fetch full content data needed for the library and player.
+   * Now includes all video/note fields for the LessonViewer.
    */
   async fetchContentData(contentId: string): Promise<LibraryContent | null> {
     try {
@@ -197,8 +204,15 @@ export const contentLibraryService = {
         examType: d.examType,
         totalQuestions: d.totalQuestions,
         totalMarks: d.totalMarks,
+        // Video fields — videoUrl may be secured:// proxy or direct URL
         videoUrl: d.videoUrl,
+        videoFileName: d.videoFileName,
+        // Note fields — full set for the viewer
         noteUrl: d.noteUrl,
+        noteFileName: d.noteFileName,
+        noteSource: d.noteSource,
+        noteGDrivePreviewUrl: d.noteGDrivePreviewUrl,
+        noteGDriveDownloadUrl: d.noteGDriveDownloadUrl,
       };
     } catch (err) {
       console.error(`Error fetching content ${contentId}:`, err);
@@ -208,7 +222,6 @@ export const contentLibraryService = {
 
   /**
    * Get a single course's content structure for the library view.
-   * Useful when navigating into a specific course.
    */
   async getCourseLibraryData(courseId: string, studentId: string): Promise<LibraryCourse | null> {
     try {
