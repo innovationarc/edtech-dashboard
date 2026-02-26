@@ -16,7 +16,7 @@ import React, {
   useState,
   useCallback,
 } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   FileText,
@@ -128,6 +128,7 @@ type PlayerState = 'idle' | 'loading' | 'buffering' | 'playing' | 'paused' | 'er
 const LessonViewer: React.FC = () => {
   const { courseId, contentId } = useParams<{ courseId: string; contentId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useDashboard();
 
   // ─── Content state ─────────────────────────────────────────────────────────
@@ -179,9 +180,22 @@ const LessonViewer: React.FC = () => {
   );
 
   // ─── Load content metadata ────────────────────────────────────────────────
+  // Primary: use content data passed via router state (already hydrated by ContentLibrary)
+  // Fallback: fetch from Firestore if navigated directly (e.g. bookmark / refresh)
   useEffect(() => {
     if (!contentId) return;
-    loadContent();
+    destroyRef.current = false;
+
+    const passedContent = (location.state as any)?.contentData;
+    if (passedContent) {
+      // Data already available — no fetch needed
+      setContent(passedContent);
+      setLoadingContent(false);
+    } else {
+      // Direct navigation (bookmark, refresh) — fetch from Firestore
+      loadContent();
+    }
+
     return () => { destroyRef.current = true; };
   }, [contentId]);
 
