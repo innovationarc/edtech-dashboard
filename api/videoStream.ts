@@ -408,15 +408,18 @@ async function handleInfo(req: VercelRequest, res: VercelResponse) {
   });
 
   const totalSize = parseInt(headRes.headers.get('content-length') || '0', 10);
-  const contentType = headRes.headers.get('content-type') || 'video/mp4';
   const totalChunks = totalSize > 0 ? Math.ceil(totalSize / CONFIG.CHUNK_SIZE) : null;
 
+  // FIX: Always return 'video/mp4' — never forward the upstream content-type.
+  // Dropbox and GDrive return 'application/octet-stream' for raw file downloads.
+  // That string is NOT a valid MSE codec — passing it to addSourceBuffer() causes
+  // an immediate SourceBuffer error event in the browser.
   return res.status(200).json({
     success: true,
     totalSize,
     totalChunks,
     chunkSize: CONFIG.CHUNK_SIZE,
-    contentType,
+    contentType: 'video/mp4',
   });
 }
 
@@ -466,22 +469,33 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
     return res.status(upstream.status).send('Upstream source error');
   }
 
-  const contentRange = upstream.headers.get('content-range');
+  const contentRange  = upstream.headers.get('content-range');
   const contentLength = upstream.headers.get('content-length');
-  const contentType = upstream.headers.get('content-type') || 'video/mp4';
+
+  // FIX: Always set Content-Type to 'video/mp4'.
+  // Dropbox/GDrive return 'application/octet-stream' which is NOT a valid MSE
+  // MIME type. The browser's addSourceBuffer() will throw a SourceBuffer error
+  // event if the Content-Type doesn't match a supported video codec string.
+  // We always serve mp4 bytes so 'video/mp4' is always correct here.
 
   let isLastChunk = false;
   if (contentRange) {
+    // Standard case: upstream supports range requests and returns Content-Range
     const match = contentRange.match(/bytes (\d+)-(\d+)\/(\d+)/);
     if (match) {
       const totalSize = parseInt(match[3], 10);
       isLastChunk = byteEnd >= totalSize - 1;
     }
+  } else if (upstream.status === 200) {
+    // FIX: Some sources (small GDrive files, some CDNs) return HTTP 200 with the
+    // full file body instead of 206 + Content-Range. In that case there is only
+    // one chunk — mark it as last so endOfStream() gets called correctly.
+    isLastChunk = true;
   }
 
   const nextChunkToken = isLastChunk ? '' : generateChunkToken(videoId, chunkIndex + 1);
 
-  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Type', 'video/mp4');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Content-Disposition', 'inline');
