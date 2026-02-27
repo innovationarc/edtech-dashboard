@@ -365,18 +365,23 @@ async function handlePlay(req: VercelRequest, res: VercelResponse) {
   const fetchHeaders: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': '*/*',
+    'Connection': 'keep-alive',  // reuse TCP connection to Dropbox/GDrive for faster TTFB
   };
   if (rangeHeader)             fetchHeaders['Range']   = rangeHeader;
   if (videoData.isGoogleDrive) fetchHeaders['Referer'] = 'https://drive.google.com/';
 
   const { default: fetch } = await import('node-fetch');
-  const upstream = await (fetch as any)(videoData.streamUrl, { headers: fetchHeaders, redirect: 'follow' });
+  const upstream = await (fetch as any)(videoData.streamUrl, {
+    headers: fetchHeaders,
+    redirect: 'follow',
+    compress: false, // don't decompress — pipe raw bytes for lowest latency
+  });
 
   if (!upstream.ok && upstream.status !== 206)
     return res.status(upstream.status).send('Upstream error');
 
   res.status(upstream.status);
-  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Content-Type', upstream.headers.get('content-type') || 'video/mp4');
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Cache-Control', 'no-store, private');
   res.setHeader('Content-Disposition', 'inline');
