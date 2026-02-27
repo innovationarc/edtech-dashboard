@@ -1,18 +1,23 @@
-// src/pages/LessonViewer.tsx — v10: Fast seek, custom loader, user watermark
+// src/pages/LessonViewer.tsx — v11: Smooth-seek edition
 //
-// STREAMING LOGIC: 100% identical to v7 (proven working, unchanged).
-// NEW in v8: Full production-grade player UI replacing the basic controls.
-//   - Play/Pause with icon
-//   - Skip back/forward: 5s / 10s / 30s
-//   - Progress bar: clickable, draggable, buffered indicator, hover time tooltip
-//   - Volume slider + Mute/Unmute
-//   - Current time / Total duration
-//   - Playback speed: 0.5× – 2×
-//   - Fullscreen toggle
-//   - Auto-hide controls (3s after last interaction)
-//   - Keyboard shortcuts: Space, K, J, L, ArrowLeft/Right, M, F
-//   - Double-tap left/right third to seek ±10s (mobile)
-//   - Mid-playback buffering spinner
+// FIXES vs v10:
+//   1. Debounced buffering spinner (300 ms delay)
+//      onWaiting used to fire setIsSeeking(true) instantly on every micro-stall.
+//      Now the spinner only appears if buffering lasts > 300 ms, eliminating
+//      the jarring flicker on fast seeks.
+//
+//   2. Position-preserving token refresh
+//      If the video errors during playback (e.g. network hiccup), handleRetry
+//      now saves the current playhead position and restores it after the new
+//      token is issued and the video reloads. No more restarting from 0:00.
+//
+//   3. Auto-retry on playback errors (transparent token refresh)
+//      onVideoError now distinguishes between startup errors (show error UI)
+//      and mid-playback errors (silently refresh token + resume).
+//      With the server-side 6-hour token this path rarely triggers, but it
+//      acts as a bulletproof fallback.
+//
+//   All streaming, security, and anti-piracy logic is unchanged from v10.
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
@@ -34,7 +39,7 @@ const DEBUG  = true;
 const log    = (...a: any[]) => { if (DEBUG) console.log('[LessonViewer]', ...a); };
 const logErr = (...a: any[]) => console.error('[LessonViewer ERROR]', ...a);
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// ─── Utilities ─────────────────────────────────────────────────────────────────
 function fmtTime(s: number): string {
   if (!s || isNaN(s) || !isFinite(s)) return '0:00';
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = Math.floor(s % 60);
@@ -52,7 +57,7 @@ function fmtBytes(bytes: number): string {
 }
 function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)); }
 
-// ─── Anti-piracy (unchanged from v7) ─────────────────────────────────────────
+// ─── Anti-piracy ────────────────────────────────────────────────────────────────
 function injectAntiPiracy() {
   document.addEventListener('contextmenu', e => e.preventDefault(), true);
   document.addEventListener('keydown', e => {
@@ -87,10 +92,10 @@ function useDevToolsDetection(onOpen: () => void, onClose: () => void) {
   }, [onOpen, onClose]);
 }
 
-// ─── Player state ─────────────────────────────────────────────────────────────
+// ─── Player state ───────────────────────────────────────────────────────────────
 type PlayerState = 'idle' | 'streaming' | 'downloading' | 'playing' | 'paused' | 'ended' | 'error' | 'devtools';
 
-// ─── Chunk fetch (blob fallback — unchanged from v7) ─────────────────────────
+// ─── Chunk fetch (blob fallback — unchanged) ────────────────────────────────────
 async function fetchChunk(videoId: string, idx: number, token: string) {
   const url = `${window.location.origin}/api/videoStream?action=chunk&videoId=${encodeURIComponent(videoId)}&chunk=${idx}&_t=${Date.now()}`;
   const res = await fetch(url, { headers: { 'x-chunk-token': token }, cache: 'no-store' });
@@ -126,9 +131,13 @@ async function downloadAllChunks(
   return chunks;
 }
 
-const MIN_SPEED = 0.25;
-const MAX_SPEED = 3.0;
+const MIN_SPEED  = 0.25;
+const MAX_SPEED  = 3.0;
 const SPEED_STEP = 0.05;
+
+// FIX 3 — how long (ms) buffering must last before the spinner appears.
+// Fast seeks that resolve quickly won't show the spinner at all.
+const WAITING_SPINNER_DELAY_MS = 300;
 
 // ==================== COMPONENT ==============================================
 
@@ -138,18 +147,18 @@ const LessonViewer: React.FC = () => {
   const location  = useLocation();
   const { user }  = useDashboard();
 
-  // ── Content ────────────────────────────────────────────────────────────────
+  // ── Content ─────────────────────────────────────────────────────────────────
   const [content,        setContent]        = useState<LibraryContent | null>(null);
   const [loadingContent, setLoadingContent] = useState(true);
   const [contentError,   setContentError]   = useState('');
 
-  // ── Player ─────────────────────────────────────────────────────────────────
+  // ── Player ──────────────────────────────────────────────────────────────────
   const [playerState,    setPlayerState]    = useState<PlayerState>('idle');
   const [playerError,    setPlayerError]    = useState('');
   const [isEmbed,        setIsEmbed]        = useState(false);
   const [embedUrl,       setEmbedUrl]       = useState('');
 
-  // ── Playback values ────────────────────────────────────────────────────────
+  // ── Playback values ──────────────────────────────────────────────────────────
   const [currentTime, setCurrentTime] = useState(0);
   const [duration,    setDuration]    = useState(0);
   const [bufferedPct, setBufferedPct] = useState(0);
@@ -157,24 +166,24 @@ const LessonViewer: React.FC = () => {
   const [muted,       setMuted]       = useState(false);
   const [speed,       setSpeed]       = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isSeeking,   setIsSeeking]   = useState(false); // mid-play stall
+  const [isSeeking,   setIsSeeking]   = useState(false);
 
-  // ── Download fallback ──────────────────────────────────────────────────────
-  const [dlChunks,   setDlChunks]   = useState(0);
-  const [dlBytes,    setDlBytes]    = useState(0);
+  // ── Download fallback ────────────────────────────────────────────────────────
+  const [dlChunks,    setDlChunks]    = useState(0);
+  const [dlBytes,     setDlBytes]     = useState(0);
   const [totalChunks, setTotalChunks] = useState<number | null>(null);
 
-  // ── UI ─────────────────────────────────────────────────────────────────────
+  // ── UI ───────────────────────────────────────────────────────────────────────
   const [isVideoHidden, setIsVideoHidden] = useState(false);
   const [ctrlVisible,   setCtrlVisible]   = useState(true);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showVolPanel,  setShowVolPanel]  = useState(false);
   const [isDragging,    setIsDragging]    = useState(false);
-  const [dragVisualPct, setDragVisualPct] = useState(0); // visual-only position while dragging
+  const [dragVisualPct, setDragVisualPct] = useState(0);
   const [hoverInfo,     setHoverInfo]     = useState<{ pct: number; time: number } | null>(null);
   const [skipFlash,     setSkipFlash]     = useState<'fwd' | 'back' | null>(null);
 
-  // ── Refs ───────────────────────────────────────────────────────────────────
+  // ── Refs ─────────────────────────────────────────────────────────────────────
   const videoRef      = useRef<HTMLVideoElement>(null);
   const playerWrapRef = useRef<HTMLDivElement>(null);
   const progressRef   = useRef<HTMLDivElement>(null);
@@ -188,7 +197,13 @@ const LessonViewer: React.FC = () => {
   const devToolsRef   = useRef(false);
   const hideTimerRef  = useRef<ReturnType<typeof setTimeout>>();
 
-  // ── Init ───────────────────────────────────────────────────────────────────
+  // FIX 3 — debounce timer for the buffering spinner
+  const waitingTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // FIX 2 — save playhead position before token refresh so we can restore it
+  const savedTimeRef = useRef(0);
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
   useEffect(() => { injectAntiPiracy(); }, []);
 
   useDevToolsDetection(
@@ -205,16 +220,13 @@ const LessonViewer: React.FC = () => {
     }, []),
   );
 
-  // ── Controls auto-hide ─────────────────────────────────────────────────────
+  // ── Controls auto-hide ───────────────────────────────────────────────────────
   const showControls = useCallback(() => {
     setCtrlVisible(true);
     clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = setTimeout(() => {
-      setCtrlVisible(false);
-    }, 3000);
+    hideTimerRef.current = setTimeout(() => { setCtrlVisible(false); }, 3000);
   }, []);
 
-  // Keep controls visible when paused or ended
   useEffect(() => {
     if (playerState === 'paused' || playerState === 'ended' || playerState !== 'playing') {
       clearTimeout(hideTimerRef.current);
@@ -224,7 +236,7 @@ const LessonViewer: React.FC = () => {
     }
   }, [playerState, showControls]);
 
-  // ── Close speed menu and volume panel on outside click ────────────────────
+  // ── Close menus on outside click ─────────────────────────────────────────────
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (speedMenuRef.current && !speedMenuRef.current.contains(e.target as Node))
@@ -236,14 +248,14 @@ const LessonViewer: React.FC = () => {
     return () => document.removeEventListener('mousedown', h);
   }, []);
 
-  // ── Fullscreen listener ────────────────────────────────────────────────────
+  // ── Fullscreen listener ──────────────────────────────────────────────────────
   useEffect(() => {
     const h = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', h);
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
 
-  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────────
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const tag = (document.activeElement as HTMLElement)?.tagName;
@@ -264,8 +276,9 @@ const LessonViewer: React.FC = () => {
     return () => window.removeEventListener('keydown', h);
   }, [playerState]); // eslint-disable-line
 
-  // ── Cleanup ────────────────────────────────────────────────────────────────
+  // ── Cleanup ──────────────────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
+    clearTimeout(waitingTimerRef.current);
     if (blobUrlRef.current)   { URL.revokeObjectURL(blobUrlRef.current);   blobUrlRef.current   = ''; }
     if (streamUrlRef.current) { URL.revokeObjectURL(streamUrlRef.current); streamUrlRef.current = ''; }
     if (alive.current && videoRef.current) {
@@ -274,7 +287,8 @@ const LessonViewer: React.FC = () => {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // initPlayer — IDENTICAL to v7, zero changes to streaming/fallback logic
+  // initPlayer — streaming logic identical to v10
+  // FIX 2: after new token is issued, restore savedTimeRef position
   // ─────────────────────────────────────────────────────────────────────────────
   const initPlayer = useCallback(async (videoUrl: string) => {
     if (initLockRef.current === videoUrl) { log('duplicate init — skipping'); return; }
@@ -318,17 +332,29 @@ const LessonViewer: React.FC = () => {
       const v = videoRef.current;
       if (!v || !alive.current) { initLockRef.current = ''; return; }
 
-      // PRIMARY: streaming URL (works for 350MB+, instant play, native seeking)
-      if (meta.playToken) {
-        const proxyUrl = `${window.location.origin}/api/videoStream?action=play&videoId=${encodeURIComponent(videoId)}&token=${encodeURIComponent(meta.playToken)}`;
+      // PRIMARY: streaming URL — native Range-based seeking
+      if ((meta as any).playToken) {
+        const playToken = (meta as any).playToken as string;
+        const proxyUrl  = `${window.location.origin}/api/videoStream?action=play&videoId=${encodeURIComponent(videoId)}&token=${encodeURIComponent(playToken)}`;
         log('streaming mode');
         let streamWorked = false;
+
+        // Capture restore time before wiping state
+        const restoreTime = savedTimeRef.current;
+        savedTimeRef.current = 0;
 
         await new Promise<void>(resolve => {
           const onCanPlay = () => {
             streamWorked = true;
             if (!alive.current || devToolsRef.current) { resolve(); return; }
             log('canplay — streaming works!');
+
+            // FIX 2 — restore playhead if this is a token refresh retry
+            if (restoreTime > 0) {
+              log('restoring position to', restoreTime);
+              v.currentTime = restoreTime;
+            }
+
             setPlayerState('playing');
             setTimeout(() => {
               if (alive.current && v.paused && !devToolsRef.current)
@@ -339,7 +365,7 @@ const LessonViewer: React.FC = () => {
           const onMetaLoaded = () => { if (alive.current) setDuration(v.duration || 0); };
           const onError = () => {
             log('streaming failed — trying blob fallback');
-            v.removeEventListener('canplay', onCanPlay);
+            v.removeEventListener('canplay',        onCanPlay);
             v.removeEventListener('loadedmetadata', onMetaLoaded);
             resolve();
           };
@@ -357,13 +383,15 @@ const LessonViewer: React.FC = () => {
         try { v.pause(); v.removeAttribute('src'); v.load(); } catch {}
       }
 
-      // FALLBACK: blob-concat (v5 approach)
+      // FALLBACK: blob-concat
       setPlayerState('downloading');
-      const meta2 = meta.firstChunkToken ? meta : await videoStreamService.getVideoMetadata(videoId, SECURITY_STRING);
+      const meta2 = (meta as any).firstChunkToken ? meta : await videoStreamService.getVideoMetadata(videoId, SECURITY_STRING);
       if (!alive.current) { initLockRef.current = ''; return; }
 
-      const chunks = await downloadAllChunks(videoId, meta2.firstChunkToken, () => alive.current,
-        (n, b) => { if (alive.current) { setDlChunks(n); setDlBytes(b); } });
+      const chunks = await downloadAllChunks(
+        videoId, (meta2 as any).firstChunkToken, () => alive.current,
+        (n, b) => { if (alive.current) { setDlChunks(n); setDlBytes(b); } },
+      );
 
       initLockRef.current = '';
       if (!chunks || !alive.current) return;
@@ -395,7 +423,7 @@ const LessonViewer: React.FC = () => {
     }
   }, [cleanup]);
 
-  // ── Content loading ────────────────────────────────────────────────────────
+  // ── Content loading ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!contentId) return;
     alive.current = true;
@@ -419,7 +447,7 @@ const LessonViewer: React.FC = () => {
 
   useEffect(() => { if (content?.videoUrl) initPlayer(content.videoUrl); }, [content, initPlayer]);
 
-  // ── Video element events ───────────────────────────────────────────────────
+  // ── Video element events ──────────────────────────────────────────────────────
   const onTimeUpdate = () => {
     const v = videoRef.current; if (!v) return;
     setCurrentTime(v.currentTime);
@@ -430,22 +458,48 @@ const LessonViewer: React.FC = () => {
   const onPlay    = () => { if (alive.current && !devToolsRef.current) { setPlayerState('playing'); setIsSeeking(false); } };
   const onPause   = () => { if (alive.current && playerState !== 'devtools') setPlayerState('paused'); };
   const onEnded   = () => { setPlayerState('ended'); };
-  const onWaiting = () => setIsSeeking(true);
-  const onPlaying = () => setIsSeeking(false);
+
+  // FIX 3 — debounced spinner: only show after WAITING_SPINNER_DELAY_MS ms of waiting
+  const onWaiting = () => {
+    clearTimeout(waitingTimerRef.current);
+    waitingTimerRef.current = setTimeout(() => {
+      if (alive.current) setIsSeeking(true);
+    }, WAITING_SPINNER_DELAY_MS);
+  };
+  const onPlaying = () => {
+    clearTimeout(waitingTimerRef.current);
+    setIsSeeking(false);
+  };
+
   const onVolChange = () => {
     const v = videoRef.current; if (!v) return;
     setVolume(v.volume); setMuted(v.muted);
   };
+
+  // FIX 2 — smart error handler:
+  //   • During active playback → save position, silently refresh token, resume
+  //   • On initial load failure → show error UI
   const onVideoError = () => {
     const v = videoRef.current;
-    if (v?.error && v.src && v.src !== window.location.href) {
-      logErr('video error:', v.error.code, v.error.message);
-      setPlayerError('Playback error. Please retry.');
-      setPlayerState('error');
+    if (!v?.error || !v.src || v.src === window.location.href) return;
+
+    const isActivePlaying = playerState === 'playing' || playerState === 'paused';
+
+    if (isActivePlaying && alive.current) {
+      // Mid-playback error (e.g. expired network session) — transparent recovery
+      log('mid-playback error, refreshing token and resuming...');
+      savedTimeRef.current = v.currentTime; // save position before reinit
+      initLockRef.current  = '';
+      if (content?.videoUrl) initPlayer(content.videoUrl);
+      return;
     }
+
+    logErr('video error:', v.error.code, v.error.message);
+    setPlayerError('Playback error. Please retry.');
+    setPlayerState('error');
   };
 
-  // ── Player control functions ───────────────────────────────────────────────
+  // ── Player control functions ──────────────────────────────────────────────────
   const togglePlayPause = () => {
     const v = videoRef.current; if (!v) return;
     showControls();
@@ -485,27 +539,28 @@ const LessonViewer: React.FC = () => {
     else document.exitFullscreen().catch(() => {});
   };
 
-  const handleRetry = () => { initLockRef.current = ''; if (content?.videoUrl) initPlayer(content.videoUrl); };
+  // FIX 2 — handleRetry saves position for manual retry button too
+  const handleRetry = () => {
+    savedTimeRef.current = videoRef.current?.currentTime || 0;
+    initLockRef.current = '';
+    if (content?.videoUrl) initPlayer(content.videoUrl);
+  };
 
-  // ── Progress bar interaction ─────────────────────────────────────────────
-  // FAST SEEK DESIGN:
-  //   During drag  → only update dragVisualPct (moves the bar instantly, zero lag)
-  //                  NO video.currentTime writes during drag = no buffer thrash
-  //   On mouseUp   → commit ONE seek to video.currentTime
-  //                  Use fastSeek() if available (imprecise but instant)
-  //   This makes both forward AND backward drag feel instant on streaming video.
+  // ── Progress bar interaction ──────────────────────────────────────────────────
+  // SEEK DESIGN (unchanged, already optimal):
+  //   Drag   → only update visual bar (dragVisualPct), zero video seeks during drag
+  //   MouseUp → one single commitSeek() call using fastSeek() for keyframe alignment
   const pctFromMouse = (clientX: number): number => {
     const el = progressRef.current; if (!el) return 0;
     const r = el.getBoundingClientRect();
     return clamp((clientX - r.left) / r.width, 0, 1);
   };
 
-  // Commit the final seek — called only once on drag end
   const commitSeek = (pct: number) => {
     const v = videoRef.current; if (!v || !duration) return;
     const t = pct * duration;
-    // fastSeek() is imprecise but MUCH faster for large files (keyframe-aligned)
-    // Falls back to currentTime assignment for browsers that don't support it
+    // fastSeek() snaps to nearest keyframe — much faster than exact-frame seek
+    // for large files; zero buffering on already-downloaded segments
     if (typeof (v as any).fastSeek === 'function') {
       (v as any).fastSeek(t);
     } else {
@@ -521,14 +576,12 @@ const LessonViewer: React.FC = () => {
     setDragVisualPct(startPct * 100);
 
     const onMove = (ev: MouseEvent) => {
-      // Only update visual bar — no video seek during drag
-      const p = pctFromMouse(ev.clientX);
-      setDragVisualPct(p * 100);
+      setDragVisualPct(pctFromMouse(ev.clientX) * 100);
     };
     const onUp = (ev: MouseEvent) => {
       const finalPct = pctFromMouse(ev.clientX);
       setDragVisualPct(finalPct * 100);
-      commitSeek(finalPct);      // single seek on release
+      commitSeek(finalPct);
       setIsDragging(false);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
@@ -568,7 +621,7 @@ const LessonViewer: React.FC = () => {
     setHoverInfo({ pct: pct * 100, time: pct * duration });
   };
 
-  // ── Volume bar interaction ─────────────────────────────────────────────────
+  // ── Volume bar interaction ────────────────────────────────────────────────────
   const onVolumeBarMouseDown = (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     const getV = (clientX: number) => {
@@ -587,20 +640,18 @@ const LessonViewer: React.FC = () => {
     window.addEventListener('mouseup', onUp);
   };
 
-  // ── Derived values ─────────────────────────────────────────────────────────
-  const playPct          = isDragging ? dragVisualPct : (duration > 0 ? (currentTime / duration) * 100 : 0);
-  const showLoadOverlay  = playerState === 'streaming' || playerState === 'downloading';
-  const showPlayerCtrls  = (playerState === 'playing' || playerState === 'paused' || playerState === 'ended') && !isVideoHidden;
-  const ctrlsHidden      = playerState === 'playing' && !ctrlVisible && !isDragging && !showSpeedMenu && !showVolPanel;
-
-  // loadLabel removed — loading overlay now shows simple "Loading…" text
+  // ── Derived values ────────────────────────────────────────────────────────────
+  const playPct         = isDragging ? dragVisualPct : (duration > 0 ? (currentTime / duration) * 100 : 0);
+  const showLoadOverlay = playerState === 'streaming' || playerState === 'downloading';
+  const showPlayerCtrls = (playerState === 'playing' || playerState === 'paused' || playerState === 'ended') && !isVideoHidden;
+  const ctrlsHidden     = playerState === 'playing' && !ctrlVisible && !isDragging && !showSpeedMenu && !showVolPanel;
 
   const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
 
   const getNoteHref    = () => content?.noteSource === 'gdrive' ? content?.noteGDriveDownloadUrl || null : content?.noteUrl || null;
   const getNotePreview = () => content?.noteSource === 'gdrive' ? content?.noteGDrivePreviewUrl || null : content?.noteUrl || null;
 
-  // ── Loading screen ─────────────────────────────────────────────────────────
+  // ── Loading screen ────────────────────────────────────────────────────────────
   if (loadingContent) return (
     <div className="min-h-screen bg-[#080a10] flex items-center justify-center">
       <Loader2 size={28} className="text-violet-400 animate-spin" />
@@ -616,7 +667,7 @@ const LessonViewer: React.FC = () => {
     </div>
   );
 
-  // ==================== RENDER ================================================
+  // ==================== RENDER =================================================
   return (
     <>
       <style>{`
@@ -641,7 +692,7 @@ const LessonViewer: React.FC = () => {
         .wm-right { right:14px; }
         .wm-left  { left:14px; }
 
-        /* ── Progress bar — NO transition on fill during drag ──── */
+        /* ── Progress bar ──────────────────────────────────────── */
         .prg { position:relative; height:5px; cursor:pointer; transition:height .15s; touch-action:none; }
         .prg:hover, .prg.drag { height:7px; }
         .prg-track { position:absolute; inset:0; background:rgba(255,255,255,.18); border-radius:99px; overflow:visible; }
@@ -685,7 +736,6 @@ const LessonViewer: React.FC = () => {
         }
         .vol-pct { font-size:11px; font-weight:700; color:rgba(255,255,255,.5);
                    font-variant-numeric:tabular-nums; min-width:32px; text-align:center; }
-        /* Vertical slider track */
         .vol-vert-wrap { position:relative; width:4px; height:90px;
                          background:rgba(255,255,255,.15); border-radius:99px;
                          cursor:pointer; touch-action:none; }
@@ -805,13 +855,11 @@ const LessonViewer: React.FC = () => {
                 onMouseLeave={() => { if (playerState === 'playing') setCtrlVisible(false); }}
                 onTouchStart={showControls}
               >
-                {/* Watermarks — always visible, pointer-events off */}
-                {user?.userId && (
-                  <div className="wm wm-left">{user.userId}</div>
-                )}
+                {/* Watermarks */}
+                {user?.userId && <div className="wm wm-left">{user.userId}</div>}
                 <div className="wm wm-right">Edtech</div>
 
-                {/* Video element — always mounted */}
+                {/* Video element */}
                 <video
                   ref={videoRef}
                   className="absolute inset-0 w-full h-full"
@@ -832,30 +880,21 @@ const LessonViewer: React.FC = () => {
                 {/* Loading overlay */}
                 {showLoadOverlay && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-5">
-                    {/* Flagship loading icon — open book with play pulse */}
                     <div className="relative w-20 h-20 flex items-center justify-center">
-                      {/* Outer spinning ring */}
                       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 80 80" fill="none">
                         <circle cx="40" cy="40" r="34" stroke="rgba(124,58,237,.15)" strokeWidth="3.5" />
                         <circle cx="40" cy="40" r="34" stroke="#7c3aed" strokeWidth="3.5"
-                          strokeDasharray="50 163" strokeLinecap="round"
-                          className="spin-ring" />
+                          strokeDasharray="50 163" strokeLinecap="round" className="spin-ring" />
                       </svg>
-                      {/* Inner static ring */}
                       <svg className="absolute inset-0 w-full h-full" viewBox="0 0 80 80" fill="none"
                         style={{ animation: 'spin360 3s linear infinite reverse', transformOrigin: 'center' }}>
                         <circle cx="40" cy="40" r="26" stroke="rgba(124,58,237,.1)" strokeWidth="2" strokeDasharray="8 6" strokeLinecap="round" />
                       </svg>
-                      {/* Book + play icon */}
                       <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style={{ position: 'relative', zIndex: 1 }}>
-                        {/* Book pages */}
                         <path d="M4 6C4 4.9 4.9 4 6 4H13V20H6C4.9 20 4 19.1 4 18V6Z" fill="rgba(124,58,237,.6)" />
                         <path d="M15 4H22C23.1 4 24 4.9 24 6V18C24 19.1 23.1 20 22 20H15V4Z" fill="rgba(124,58,237,.4)" />
-                        {/* Spine */}
                         <rect x="13" y="4" width="2" height="16" fill="rgba(167,139,250,.8)" />
-                        {/* Bottom page curl */}
                         <path d="M6 20C6 21.1 6.9 22 8 22H20C21.1 22 22 21.1 22 20H6Z" fill="rgba(124,58,237,.3)" />
-                        {/* Play triangle overlay */}
                         <circle cx="14" cy="14" r="5.5" fill="rgba(0,0,0,.35)" />
                         <path d="M12.3 11.5L17.2 14L12.3 16.5V11.5Z" fill="white" />
                       </svg>
@@ -868,7 +907,7 @@ const LessonViewer: React.FC = () => {
                   </div>
                 )}
 
-                {/* Mid-play buffering */}
+                {/* Mid-play buffering — FIX 3: only shown after 300 ms debounce */}
                 {isSeeking && !showLoadOverlay && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <svg className="w-12 h-12" viewBox="0 0 48 48" fill="none">
@@ -882,7 +921,9 @@ const LessonViewer: React.FC = () => {
                 {/* Skip flash */}
                 {skipFlash && (
                   <div className="skip-flash">
-                    {skipFlash === 'fwd' ? <><RotateCw size={16} /><span>+10s</span></> : <><RotateCcw size={16} /><span>–10s</span></>}
+                    {skipFlash === 'fwd'
+                      ? <><RotateCw size={16} /><span>+10s</span></>
+                      : <><RotateCcw size={16} /><span>–10s</span></>}
                   </div>
                 )}
 
@@ -898,7 +939,7 @@ const LessonViewer: React.FC = () => {
                   </div>
                 )}
 
-                {/* Ended overlay — show big replay button */}
+                {/* Ended overlay */}
                 {playerState === 'ended' && !isVideoHidden && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
                     <button
@@ -912,7 +953,6 @@ const LessonViewer: React.FC = () => {
                 {/* ════ CONTROLS ════════════════════════════════════════════ */}
                 {showPlayerCtrls && (
                   <div className={`ctrl-wrap absolute inset-x-0 bottom-0 ${ctrlsHidden ? 'hide' : ''}`}>
-                    {/* Gradient */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-transparent pointer-events-none" />
 
                     <div className="relative px-3 pb-3 pt-10">
@@ -928,7 +968,6 @@ const LessonViewer: React.FC = () => {
                       >
                         <div className="prg-track">
                           <div className="prg-buf" style={{ width: `${bufferedPct}%` }} />
-                          {/* No transition during drag for instant feel */}
                           <div className={`prg-fill${isDragging ? '' : ' smooth'}`} style={{ width: `${playPct}%` }} />
                           <div className="prg-dot" style={{ left: `${playPct}%` }} />
                         </div>
@@ -962,7 +1001,7 @@ const LessonViewer: React.FC = () => {
                           <SkipForward size={17} />
                         </button>
 
-                        {/* ── Volume button → floating panel ── */}
+                        {/* ── Volume ── */}
                         <div className="relative flex-shrink-0" ref={volumeWrapRef}>
                           <button
                             className={`cb ${showVolPanel ? 'on' : ''}`}
@@ -973,7 +1012,6 @@ const LessonViewer: React.FC = () => {
                           </button>
 
                           {showVolPanel && (() => {
-                            // Vertical slider interaction
                             const TRACK_H = 90;
                             const volPct  = muted ? 0 : volume;
                             const fillH   = volPct * TRACK_H;
@@ -1008,15 +1046,11 @@ const LessonViewer: React.FC = () => {
                             return (
                               <div className="vol-panel">
                                 <span className="vol-pct">{Math.round(volPct * 100)}%</span>
-                                {/* Vertical track */}
                                 <div id="vol-vert-track" className="vol-vert-wrap"
-                                  onMouseDown={onTrackDown}
-                                  onTouchStart={onTrackTouch}
-                                >
+                                  onMouseDown={onTrackDown} onTouchStart={onTrackTouch}>
                                   <div className="vol-vert-fill" style={{ height: fillH }} />
                                   <div className="vol-vert-dot" style={{ bottom: dotBot }} />
                                 </div>
-                                {/* Mute button */}
                                 <button className="cb" style={{ padding: 4 }} onClick={toggleMute} title="Mute (M)">
                                   <VolumeIcon size={16} />
                                 </button>
@@ -1056,19 +1090,13 @@ const LessonViewer: React.FC = () => {
                               <div className="spd-panel">
                                 <span className="spd-label">Speed</span>
                                 <span className="spd-value">{speed.toFixed(2)}×</span>
-
-                                {/* +/- buttons with bar */}
                                 <div className="spd-row">
-                                  <button className="spd-btn"
-                                    onClick={() => setSpeedTo(speed - SPEED_STEP)}>−</button>
+                                  <button className="spd-btn" onClick={() => setSpeedTo(speed - SPEED_STEP)}>−</button>
                                   <div className="spd-bar-wrap">
                                     <div className="spd-bar-fill" style={{ width: `${pct}%` }} />
                                   </div>
-                                  <button className="spd-btn"
-                                    onClick={() => setSpeedTo(speed + SPEED_STEP)}>+</button>
+                                  <button className="spd-btn" onClick={() => setSpeedTo(speed + SPEED_STEP)}>+</button>
                                 </div>
-
-                                {/* Preset chips */}
                                 <div className="spd-presets">
                                   {presets.map(p => (
                                     <button key={p}
@@ -1078,8 +1106,6 @@ const LessonViewer: React.FC = () => {
                                     </button>
                                   ))}
                                 </div>
-
-                                {/* Reset */}
                                 {speed !== 1 && (
                                   <button className="spd-preset" style={{ width: '100%', marginTop: 2 }}
                                     onClick={() => setSpeedTo(1)}>Reset to 1×</button>
@@ -1125,7 +1151,7 @@ const LessonViewer: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <div className="lg:col-span-2 space-y-4">
 
-              {/* Title */}
+              {/* Title card */}
               <div className="au2 rounded-2xl border border-white/6 bg-[#0d0f1a] p-5 sm:p-6">
                 <div className="flex items-start gap-3 mb-3">
                   <span className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border mt-0.5
