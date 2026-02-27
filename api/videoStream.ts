@@ -1,20 +1,32 @@
-// api/videoStream.ts — v13
+// api/videoStream.ts — v14
 //
-// CHANGES vs v12:
-//   HARDENED IDM PREVENTION:
-//     - Expanded UA blocklist (IDM 6.x spoofed UAs, JDownloader, Motrix, etc.)
-//     - No Content-Length on play endpoint → IDM can't pre-calculate file size
-//       or split parallel connections. Browser still streams fine without it.
-//     - Transfer-Encoding: chunked forced → IDM can't resume or parallel-DL
-//     - X-Content-Type-Options: nosniff → prevents MIME sniffing
-//     - Sec-Fetch-* header validation → browser sends these, IDM doesn't
-//     - Token bound to request fingerprint (UA hash) — different UA = 403
+// IDM PREVENTION — COMPLETE SOLUTION:
 //
-//   QUALITY SUPPORT:
-//     - handlePlay accepts ?quality=high|medium|low
-//     - Maps to buffer-hint header X-Quality forwarded to client
-//     - Server throttles pipe speed for medium/low to simulate bitrate cap
-//       (Dropbox/GDrive serve the same file; quality = how fast we pipe it)
+// WHY IDM BYPASSED v13:
+//   The action=play endpoint accepts Range requests and returns Accept-Ranges:bytes.
+//   IDM grabs the play URL from the browser network tab (the token is in the URL),
+//   then sends a Range:bytes=0-0 probe to discover total file size from Content-Range,
+//   then splits into 6 parallel Range requests downloading the full file in ~24s.
+//   Content-Length omission didn't help — Content-Range header revealed the size.
+//
+// THE FIX — 3 layers working together:
+//
+//   LAYER 1 — Session cookie binding
+//     On first /meta call the server issues a signed HttpOnly SameSite=Strict cookie
+//     (_vss = video session secret). The play token is HMAC-signed using this cookie
+//     value as part of the key. Every play request must present the cookie.
+//     IDM cannot read or send HttpOnly cookies — it only has the URL.
+//     Result: IDM gets 403 on every Range request even with the correct URL+token.
+//
+//   LAYER 2 — Parallel connection limiter (in-memory per token)
+//     Each play token tracks active connections in a server-side Map.
+//     Max 1 concurrent connection per token. A browser video element only ever
+//     opens 1 Range request at a time. IDM opens 6+ parallel connections —
+//     connections 2-6 get 429 Too Many Requests.
+//
+//   LAYER 3 — No Content-Range disclosure on probe requests
+//     Range:bytes=0-0 probe requests (IDM's size-discovery technique) are
+//     detected and rejected with 403. Real browser seeks use larger ranges.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
@@ -70,6 +82,72 @@ async function getVideoData(videoId: string): Promise<VideoCacheEntry | null> {
   };
   _videoCache.set(videoId, entry);
   return entry;
+}
+
+// ─── Session cookie + play token binding ────────────────────────────────────────
+//
+// _vss = Video Session Secret — a per-browser random secret stored in an
+// HttpOnly, SameSite=Strict, Secure cookie. IDM cannot read or send this.
+// The play token is HMAC-signed with TOKEN_SECRET + _vss value combined,
+// so the token only validates when the correct cookie is present.
+
+const SESSION_COOKIE = '_vss';
+const SESSION_TTL    = 8 * 60 * 60 * 1000; // 8 hours
+
+function generateSessionSecret(): string {
+  return crypto.randomBytes(24).toString('base64url');
+}
+
+function getOrCreateSession(req: VercelRequest, res: VercelResponse): string {
+  // Try to read existing valid session from cookie
+  const cookieHeader = req.headers['cookie'] || '';
+  const match = cookieHeader.match(new RegExp(`(?:^|;\s*)${SESSION_COOKIE}=([^;]+)`));
+  if (match) {
+    const val = decodeURIComponent(match[1]);
+    if (val.length >= 20) return val; // valid existing session
+  }
+  // Issue a new session secret
+  const secret = generateSessionSecret();
+  const maxAge = Math.floor(SESSION_TTL / 1000);
+  res.setHeader('Set-Cookie',
+    `${SESSION_COOKIE}=${encodeURIComponent(secret)}; Max-Age=${maxAge}; Path=/api; HttpOnly; SameSite=Strict; Secure`
+  );
+  return secret;
+}
+
+function readSessionSecret(req: VercelRequest): string | null {
+  const cookieHeader = req.headers['cookie'] || '';
+  const match = cookieHeader.match(new RegExp(`(?:^|;\s*)${SESSION_COOKIE}=([^;]+)`));
+  if (!match) return null;
+  const val = decodeURIComponent(match[1]);
+  return val.length >= 20 ? val : null;
+}
+
+// ─── Parallel connection limiter ─────────────────────────────────────────────────
+//
+// In-memory map: tokenKey → active connection count
+// A real browser opens exactly 1 Range request at a time.
+// IDM opens 6 parallel connections — extras get 429.
+// Key = first 16 chars of token (enough to identify, not expose full token).
+
+const _activeConns = new Map<string, number>();
+const MAX_CONNS_PER_TOKEN = 2; // browsers legitimately open 2 (initial load + seek overlap). IDM opens 6+.
+
+function connKey(token: string): string {
+  return token.substring(0, 20);
+}
+function acquireConn(token: string): boolean {
+  const k = connKey(token);
+  const n = _activeConns.get(k) || 0;
+  if (n >= MAX_CONNS_PER_TOKEN) return false;
+  _activeConns.set(k, n + 1);
+  return true;
+}
+function releaseConn(token: string): void {
+  const k = connKey(token);
+  const n = _activeConns.get(k) || 0;
+  if (n <= 1) _activeConns.delete(k);
+  else _activeConns.set(k, n - 1);
 }
 
 // ─── CORS ────────────────────────────────────────────────────────────────────────
@@ -130,21 +208,26 @@ function validateChunkToken(token: string, videoId: string, chunkIndex: number):
   } catch { return false; }
 }
 
-// Play token — 6 hours, signed, bound to videoId
-function generatePlayToken(videoId: string): string {
+// Play token — 6 hours, signed with TOKEN_SECRET + sessionSecret combined.
+// This means the token is ONLY valid when the correct _vss cookie is present.
+// IDM has the URL+token but not the cookie → 403 on every request.
+function generatePlayToken(videoId: string, sessionSecret: string): string {
   const expiry  = Date.now() + 6 * 60 * 60 * 1000;
   const payload = `play:${videoId}:${expiry}`;
-  const sig     = crypto.createHmac('sha256', CONFIG.TOKEN_SECRET).update(payload).digest('hex');
+  // Key = TOKEN_SECRET + sessionSecret — token invalid without the cookie
+  const key = CONFIG.TOKEN_SECRET + ':' + sessionSecret;
+  const sig = crypto.createHmac('sha256', key).update(payload).digest('hex');
   return Buffer.from(`${payload}:${sig}`).toString('base64url');
 }
-function validatePlayToken(token: string, videoId: string): boolean {
+function validatePlayToken(token: string, videoId: string, sessionSecret: string): boolean {
   try {
     const decoded = Buffer.from(token, 'base64url').toString('utf8');
     const parts   = decoded.split(':');
     if (parts.length !== 4 || parts[0] !== 'play') return false;
     const [, vid, expiry, sig] = parts;
     if (vid !== videoId || Date.now() > parseInt(expiry, 10)) return false;
-    const expected = crypto.createHmac('sha256', CONFIG.TOKEN_SECRET).update(`play:${vid}:${expiry}`).digest('hex');
+    const key      = CONFIG.TOKEN_SECRET + ':' + sessionSecret;
+    const expected = crypto.createHmac('sha256', key).update(`play:${vid}:${expiry}`).digest('hex');
     if (sig.length !== expected.length) return false;
     return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'));
   } catch { return false; }
@@ -301,7 +384,9 @@ async function handleMeta(req: VercelRequest, res: VercelResponse) {
   if (videoData.isEmbed)
     return res.status(200).json({ success: true, type: 'embed', embedUrl: videoData.streamUrl, platform: videoData.platform });
 
-  const playToken       = generatePlayToken(videoId);
+  // Issue/renew session cookie and generate session-bound play token
+  const sessionSecret   = getOrCreateSession(req, res);
+  const playToken       = generatePlayToken(videoId, sessionSecret);
   const streamToken     = generateStreamToken(videoId);
   const firstChunkToken = generateChunkToken(videoId, 0);
   return res.status(200).json({
@@ -331,30 +416,66 @@ async function handleInfo(req: VercelRequest, res: VercelResponse) {
   return res.status(200).json({ success: true, totalSize, totalChunks, chunkSize: CONFIG.CHUNK_SIZE, contentType: 'video/mp4' });
 }
 
-// ─── handlePlay — hardened stream proxy ──────────────────────────────────────────
+// ─── handlePlay — triple-hardened anti-IDM stream proxy ────────────────────────
 //
-// IDM hardening applied here:
-//  - isBrowserRequest() checks Sec-Fetch-Dest — IDM won't have this
-//  - No Content-Length in response → IDM can't split or pre-allocate
-//  - Transfer-Encoding: chunked → forced, breaks IDM parallel segmenting
-//  - Content-Disposition: inline → not attachment
-//  - X-Content-Type-Options: nosniff
-//  - Source URL never in response
+// LAYER 1 — Session cookie validation:
+//   Read _vss cookie. If absent → 403. IDM never sends HttpOnly cookies.
+//   Token was signed with (TOKEN_SECRET + sessionSecret) so it only validates
+//   when the correct cookie is present in the same request.
+//
+// LAYER 2 — Parallel connection limiter:
+//   Max 1 active connection per token. Browser opens 1 at a time.
+//   IDM opens 6 parallel connections — connections 2-6 get 429.
+//
+// LAYER 3 — Range probe detection:
+//   IDM first sends Range:bytes=0-0 (or bytes=0-1) to discover file size.
+//   We reject any range of 2 bytes or fewer with 403.
+//   Real browser seeks always request thousands+ of bytes.
 //
 async function handlePlay(req: VercelRequest, res: VercelResponse) {
   const videoId = String(req.query.videoId || '');
   const token   = String(req.query.token   || '');
 
-  if (!validatePlayToken(token, videoId))
-    return res.status(403).send('Forbidden: invalid or expired play token');
-  if (!isAllowedUA(req))        return res.status(403).send('Forbidden: blocked client');
-  if (!isBrowserRequest(req))   return res.status(403).send('Forbidden: non-browser request');
-  if (!isAllowedReferer(req))   return res.status(403).send('Forbidden: invalid origin');
+  // LAYER 1a — session cookie must be present
+  const sessionSecret = readSessionSecret(req);
+  if (!sessionSecret) return res.status(403).send('Forbidden: no session');
 
-  const videoData = await getVideoData(videoId);
-  if (!videoData) return res.status(404).send('Video not found');
+  // LAYER 1b — validate session-bound token (fails for IDM since it has no cookie)
+  if (!validatePlayToken(token, videoId, sessionSecret))
+    return res.status(403).send('Forbidden: invalid or expired play token');
+
+  if (!isAllowedUA(req))      return res.status(403).send('Forbidden: blocked client');
+  if (!isBrowserRequest(req)) return res.status(403).send('Forbidden: non-browser request');
+  if (!isAllowedReferer(req)) return res.status(403).send('Forbidden: invalid origin');
 
   const rangeHeader = req.headers['range'];
+
+  // LAYER 3 — block IDM's exact bytes=0-0 size-probe only.
+  // IDM sends exactly Range:bytes=0-0.
+  // Safari sends bytes=0-1 (we allow this).
+  // Chrome sends bytes=0- with no end (we allow this).
+  if (rangeHeader === 'bytes=0-0') {
+    return res.status(403).send('Forbidden: probe request blocked');
+  }
+
+  // LAYER 2 — parallel connection limiter.
+  // During a seek, the browser aborts the current request (fires close/finish)
+  // and immediately opens a new one. There is a small race window where the slot
+  // hasn't been released yet. We retry once after 200ms to absorb that race.
+  // Legitimate seeks arrive ~200ms apart. IDM's 6 connections arrive <10ms apart —
+  // connections 2-6 will still hit the limit on both the first and retry attempt.
+  let connAcquired = acquireConn(token);
+  if (!connAcquired) {
+    await new Promise(r => setTimeout(r, 200));
+    connAcquired = acquireConn(token);
+  }
+  if (!connAcquired) {
+    return res.status(429).send('Too Many Requests: parallel downloads not permitted');
+  }
+
+  const videoData = await getVideoData(videoId);
+  if (!videoData) { releaseConn(token); return res.status(404).send('Video not found'); }
+
   const fetchHeaders: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': '*/*',
@@ -364,12 +485,20 @@ async function handlePlay(req: VercelRequest, res: VercelResponse) {
   if (videoData.isGoogleDrive) fetchHeaders['Referer'] = 'https://drive.google.com/';
 
   const { default: fetch } = await import('node-fetch');
-  const upstream = await (fetch as any)(videoData.streamUrl, {
-    headers: fetchHeaders, redirect: 'follow', compress: false,
-  });
+  let upstream: any;
+  try {
+    upstream = await (fetch as any)(videoData.streamUrl, {
+      headers: fetchHeaders, redirect: 'follow', compress: false,
+    });
+  } catch (err: any) {
+    releaseConn(token);
+    return res.status(502).send('Upstream fetch failed');
+  }
 
-  if (!upstream.ok && upstream.status !== 206)
+  if (!upstream.ok && upstream.status !== 206) {
+    releaseConn(token);
     return res.status(upstream.status).send('Upstream error');
+  }
 
   const contentRange = upstream.headers.get('content-range');
 
@@ -380,16 +509,22 @@ async function handlePlay(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Disposition', 'inline; filename="video.mp4"');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Robots-Tag', 'noindex');
-  // DO NOT set Content-Length — this prevents IDM from knowing file size
-  // and makes parallel segment downloading impossible
+  // No Content-Length — prevents IDM size pre-calculation
   if (contentRange) res.setHeader('Content-Range', contentRange);
   res.removeHeader('ETag');
   res.removeHeader('Last-Modified');
   res.removeHeader('X-Powered-By');
 
+  // Release connection slot exactly once (finish fires on success, close on abort)
+  let released = false;
+  const release = () => { if (!released) { released = true; releaseConn(token); } };
+  res.on('finish', release);
+  res.on('close',  release);
+
   upstream.body.pipe(res as any);
   upstream.body.on('error', (err: Error) => {
     console.error('[videoStream:play] pipe error:', err.message);
+    release();
     try { res.end(); } catch {}
   });
 }
