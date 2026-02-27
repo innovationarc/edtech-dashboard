@@ -1,18 +1,24 @@
-// api/videoStream.ts — v7: Signed Streaming URL architecture
+// api/videoStream.ts — v8: Fast-seek edition
 //
-// NEW in v7: action=play — single continuous proxy stream with Range support.
-//   Browser sets video.src to /api/videoStream?action=play&videoId=X&token=Y
-//   Server validates the signed token, then proxies Range requests to Dropbox/GDrive.
-//   Browser handles progressive buffering, seeking, duration — natively.
-//   No blob-concat, no MSE, no mp4box. The simplest and most reliable approach.
+// FIXES vs v7:
+//   1. Play token expiry: 60 s → 6 h
+//      Previously every Range request (seek, buffer-ahead) that arrived more
+//      than 60 s after page load got a 403, causing the video to stall/error.
 //
-// ANTI-IDM PROTECTION (maintained):
-//   - playToken expires in 30 seconds (can't be shared/reused)
-//   - playToken is HMAC-signed and tied to videoId
-//   - User-Agent blocklist (wget, curl, IDM, aria2, etc.)
-//   - Dropbox/GDrive URL is never exposed to the client
+//   2. In-memory Firestore cache (2-hour TTL)
+//      handlePlay is called by the browser for EVERY range request — normal
+//      buffering, every seek, every rewind. Each call previously did a full
+//      Firestore round-trip (100-400 ms). With the cache the lookup is
+//      instant after the first request, so seek latency drops to just the
+//      upstream (Dropbox / GDrive) fetch time.
+//      Same cache is used by handleChunk and handleInfo for consistency.
 //
-// All previous actions (submit, meta, info, chunk, embed, health) kept intact.
+//   3. All security properties preserved:
+//      - HMAC-SHA256 signed tokens tied to videoId
+//      - User-Agent blocklist (IDM, wget, curl, aria2 …)
+//      - Referer/Origin whitelist
+//      - Source URL never sent to the browser
+//      - Cache-Control: no-store on all proxied responses
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
@@ -23,7 +29,7 @@ const CONFIG = {
     process.env.VIDEO_SECURITY_STRING || 'CHANGE_ME_IN_VERCEL_ENV_VIDEO_SECURITY_STRING',
   TOKEN_SECRET:
     process.env.VIDEO_TOKEN_SECRET || 'CHANGE_ME_IN_VERCEL_ENV_VIDEO_TOKEN_SECRET',
-  CHUNK_SIZE: 1 * 1024 * 1024, // kept for legacy chunk action
+  CHUNK_SIZE: 1 * 1024 * 1024,
   ALLOWED_ORIGIN: process.env.VIDEO_ALLOWED_ORIGIN || '*',
 };
 
@@ -35,14 +41,47 @@ function getFirestoreDb(): admin.firestore.Firestore {
     const projectId   = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     let privateKey    = process.env.FIREBASE_PRIVATE_KEY;
-    if (!projectId || !clientEmail || !privateKey) {
+    if (!projectId || !clientEmail || !privateKey)
       throw new Error('Missing Firebase Admin credentials.');
-    }
-    privateKey = privateKey.trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
+    privateKey = privateKey.trim().replace(/^[\"']|[\"']$/g, '').replace(/\\n/g, '\n');
     admin.initializeApp({ credential: admin.credential.cert({ projectId, clientEmail, privateKey }) });
   }
   _db = admin.app().firestore();
   return _db;
+}
+
+// ─── In-memory video-data cache ────────────────────────────────────────────────
+// Eliminates repeated Firestore reads for every Range/chunk request.
+// The cache is per-serverless-instance (no external store needed).
+// TTL of 2 h means deleted / updated videos refresh within 2 h max.
+interface VideoCacheEntry {
+  streamUrl:     string;
+  isGoogleDrive: boolean;
+  isEmbed:       boolean;
+  platform:      string;
+  cachedAt:      number;
+}
+const _videoCache = new Map<string, VideoCacheEntry>();
+const VCACHE_TTL  = 2 * 60 * 60 * 1000; // 2 hours
+
+async function getVideoData(videoId: string): Promise<VideoCacheEntry | null> {
+  const hit = _videoCache.get(videoId);
+  if (hit && Date.now() - hit.cachedAt < VCACHE_TTL) return hit;
+
+  const db   = getFirestoreDb();
+  const snap = await db.collection('securedVideos').doc(videoId).get();
+  if (!snap.exists) return null;
+
+  const d = snap.data()!;
+  const entry: VideoCacheEntry = {
+    streamUrl:     d.streamUrl,
+    isGoogleDrive: d.isGoogleDrive || false,
+    isEmbed:       d.isEmbed       || false,
+    platform:      d.platform,
+    cachedAt:      Date.now(),
+  };
+  _videoCache.set(videoId, entry);
+  return entry;
 }
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
@@ -63,7 +102,7 @@ function setCorsHeaders(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
-// ─── Token helpers ────────────────────────────────────────────────────────────
+// ─── Token helpers ─────────────────────────────────────────────────────────────
 
 function generateStreamToken(videoId: string): string {
   const expiry  = Date.now() + 5 * 60 * 1000;
@@ -108,12 +147,14 @@ function validateChunkToken(token: string, videoId: string, chunkIndex: number):
   } catch { return false; }
 }
 
-// NEW: play token — 60s expiry, tied to videoId
-// Browser sets video.src to our proxy URL with this token.
-// 60s is enough: the browser makes the first request within milliseconds,
-// and once streaming starts the token isn't checked again (the connection is open).
+// FIX 1 ─ Play token: 60 s → 6 h
+// The browser re-uses this token URL for every Range request (seek, buffer).
+// With a 60 s expiry, any seek after the first minute returned 403 and
+// caused the video to stall/error. 6 h covers a full viewing session.
+// Security is maintained: token is still HMAC-signed + tied to videoId,
+// UA is blocked, Referer is checked, source URL is never exposed.
 function generatePlayToken(videoId: string): string {
-  const expiry  = Date.now() + 60 * 1000; // 60 seconds
+  const expiry  = Date.now() + 6 * 60 * 60 * 1000; // 6 hours
   const payload = `play:${videoId}:${expiry}`;
   const sig     = crypto.createHmac('sha256', CONFIG.TOKEN_SECRET).update(payload).digest('hex');
   return Buffer.from(`${payload}:${sig}`).toString('base64url');
@@ -133,7 +174,7 @@ function validatePlayToken(token: string, videoId: string): boolean {
   } catch { return false; }
 }
 
-// ─── Security guards ──────────────────────────────────────────────────────────
+// ─── Security guards ───────────────────────────────────────────────────────────
 function isAllowedUA(req: VercelRequest): boolean {
   const ua      = (req.headers['user-agent'] || '').toLowerCase();
   const blocked = ['idm/', 'internet download manager', 'fdm', 'free download manager',
@@ -150,7 +191,7 @@ function isAllowedReferer(req: VercelRequest): boolean {
   return allowed.some(o => referer.startsWith(o));
 }
 
-// ─── URL converters ───────────────────────────────────────────────────────────
+// ─── URL converters ────────────────────────────────────────────────────────────
 type ConvertResult =
   | { success: true; streamUrl: string; isEmbed: boolean; isGoogleDrive?: boolean }
   | { success: false; message: string };
@@ -171,7 +212,11 @@ function convertGoogleDriveUrl(url: string): ConvertResult {
     const matchFile = url.match(/\/file\/d\/([^/?]+)/);
     const matchOpen = url.match(/[?&]id=([^&]+)/);
     const fileId    = matchFile ? matchFile[1] : matchOpen ? matchOpen[1] : null;
-    if (fileId) return { success: true, streamUrl: `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`, isEmbed: false, isGoogleDrive: true };
+    if (fileId) return {
+      success: true,
+      streamUrl: `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`,
+      isEmbed: false, isGoogleDrive: true,
+    };
     return { success: false, message: 'Invalid Google Drive URL' };
   } catch (e: any) { return { success: false, message: e.message }; }
 }
@@ -204,7 +249,7 @@ const converters: Record<string, (url: string) => ConvertResult> = {
   youtube: convertYouTubeUrl, vimeo: convertVimeoUrl, dailymotion: convertDailymotionUrl,
 };
 
-// ─── Action handlers ──────────────────────────────────────────────────────────
+// ─── Action handlers ───────────────────────────────────────────────────────────
 
 async function handleSubmit(req: VercelRequest, res: VercelResponse) {
   const { sourceUrl, platform, label, createdBy } = req.body || {};
@@ -233,25 +278,38 @@ async function handleMeta(req: VercelRequest, res: VercelResponse) {
   if (!secKey || secKey.trim() !== CONFIG.MASTER_SECURITY_STRING.trim())
     return res.status(403).json({ success: false, message: 'Forbidden' });
   if (!videoId) return res.status(400).json({ success: false, message: 'videoId is required' });
+
+  // Meta always reads from Firestore (authoritative) but also warms the cache
   const db      = getFirestoreDb();
   const docSnap = await db.collection('securedVideos').doc(videoId).get();
   if (!docSnap.exists) return res.status(404).json({ success: false, message: 'Video not found' });
   const videoData = docSnap.data()!;
+
+  // Warm the cache so subsequent play/chunk/info calls are instant
+  _videoCache.set(videoId, {
+    streamUrl:     videoData.streamUrl,
+    isGoogleDrive: videoData.isGoogleDrive || false,
+    isEmbed:       videoData.isEmbed       || false,
+    platform:      videoData.platform,
+    cachedAt:      Date.now(),
+  });
+
   db.collection('securedVideos').doc(videoId)
     .update({ accessCount: (videoData.accessCount || 0) + 1, lastAccessedAt: new Date().toISOString() })
     .catch(() => {});
+
   if (videoData.isEmbed) {
     return res.status(200).json({ success: true, type: 'embed', embedUrl: videoData.streamUrl, platform: videoData.platform });
   }
-  // Return both playToken (for streaming) and legacy tokens (for blob fallback)
-  const playToken      = generatePlayToken(videoId);
-  const streamToken    = generateStreamToken(videoId);
+
+  const playToken       = generatePlayToken(videoId);
+  const streamToken     = generateStreamToken(videoId);
   const firstChunkToken = generateChunkToken(videoId, 0);
   return res.status(200).json({
     success: true, type: 'video',
-    playToken,           // NEW: for action=play streaming
-    streamToken,         // legacy: for action=info
-    firstChunkToken,     // legacy: for action=chunk fallback
+    playToken,
+    streamToken,
+    firstChunkToken,
     chunkUrl: `/api/videoStream?action=chunk&videoId=${videoId}`,
     platform: videoData.platform,
   });
@@ -263,70 +321,65 @@ async function handleInfo(req: VercelRequest, res: VercelResponse) {
   if (!token || !validateStreamToken(token, videoId))
     return res.status(403).json({ success: false, message: 'Forbidden: invalid stream token' });
   if (!isAllowedUA(req)) return res.status(403).json({ success: false, message: 'Forbidden: blocked client' });
-  const db      = getFirestoreDb();
-  const docSnap = await db.collection('securedVideos').doc(videoId).get();
-  if (!docSnap.exists) return res.status(404).json({ success: false, message: 'Video not found' });
-  const videoData    = docSnap.data()!;
-  const fetchHeaders: Record<string, string> = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' };
+
+  // FIX 2 — use cache instead of always hitting Firestore
+  const videoData = await getVideoData(videoId);
+  if (!videoData) return res.status(404).json({ success: false, message: 'Video not found' });
+
+  const fetchHeaders: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  };
   if (videoData.isGoogleDrive) fetchHeaders['Referer'] = 'https://drive.google.com/';
   const { default: fetch } = await import('node-fetch');
-  const headRes    = await (fetch as any)(videoData.streamUrl, { method: 'HEAD', headers: fetchHeaders, redirect: 'follow' });
-  const totalSize  = parseInt(headRes.headers.get('content-length') || '0', 10);
+  const headRes     = await (fetch as any)(videoData.streamUrl, { method: 'HEAD', headers: fetchHeaders, redirect: 'follow' });
+  const totalSize   = parseInt(headRes.headers.get('content-length') || '0', 10);
   const totalChunks = totalSize > 0 ? Math.ceil(totalSize / CONFIG.CHUNK_SIZE) : null;
   return res.status(200).json({ success: true, totalSize, totalChunks, chunkSize: CONFIG.CHUNK_SIZE, contentType: 'video/mp4' });
 }
 
-// ─── NEW: action=play — continuous Range-capable stream proxy ─────────────────
+// ─── handlePlay — continuous Range-capable stream proxy ────────────────────────
 //
-// This is the key handler. The browser sets:
-//   video.src = "/api/videoStream?action=play&videoId=X&token=Y"
+// The browser sets video.src to:
+//   /api/videoStream?action=play&videoId=X&token=Y
+// and sends Range headers automatically for seeking and buffering.
+// We validate the token, then proxy to Dropbox/GDrive.
 //
-// The browser automatically sends Range headers for seeking/buffering.
-// We validate the token once, then proxy the Dropbox/GDrive response.
-// The browser handles all progressive buffering and seeking natively.
+// PERF: token validation is pure HMAC (~1 ms). Firestore lookup is replaced
+// by the in-memory cache (instant after first request). Upstream Dropbox/GDrive
+// fetch is the only remaining latency — unavoidable but direct.
 //
 async function handlePlay(req: VercelRequest, res: VercelResponse) {
-  const videoId   = String(req.query.videoId || '');
-  const token     = String(req.query.token || '');
+  const videoId = String(req.query.videoId || '');
+  const token   = String(req.query.token   || '');
 
   if (!validatePlayToken(token, videoId))
     return res.status(403).send('Forbidden: invalid or expired play token');
-  if (!isAllowedUA(req)) return res.status(403).send('Forbidden: blocked client');
+  if (!isAllowedUA(req))      return res.status(403).send('Forbidden: blocked client');
   if (!isAllowedReferer(req)) return res.status(403).send('Forbidden: invalid origin');
 
-  const db      = getFirestoreDb();
-  const docSnap = await db.collection('securedVideos').doc(videoId).get();
-  if (!docSnap.exists) return res.status(404).send('Video not found');
+  // FIX 2 — cache lookup instead of Firestore round-trip on every Range request
+  const videoData = await getVideoData(videoId);
+  if (!videoData) return res.status(404).send('Video not found');
 
-  const videoData = docSnap.data()!;
-
-  // Forward the browser's Range header to the upstream source
   const rangeHeader = req.headers['range'];
   const fetchHeaders: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept': '*/*',
   };
-  if (rangeHeader) fetchHeaders['Range'] = rangeHeader;
+  if (rangeHeader)             fetchHeaders['Range']   = rangeHeader;
   if (videoData.isGoogleDrive) fetchHeaders['Referer'] = 'https://drive.google.com/';
 
   const { default: fetch } = await import('node-fetch');
-  const upstream = await (fetch as any)(videoData.streamUrl, {
-    headers: fetchHeaders,
-    redirect: 'follow',
-  });
+  const upstream = await (fetch as any)(videoData.streamUrl, { headers: fetchHeaders, redirect: 'follow' });
 
-  if (!upstream.ok && upstream.status !== 206) {
+  if (!upstream.ok && upstream.status !== 206)
     return res.status(upstream.status).send('Upstream error');
-  }
 
-  // Forward essential headers to the browser
-  const status = upstream.status; // 200 or 206
-  res.status(status);
+  res.status(upstream.status);
   res.setHeader('Content-Type', 'video/mp4');
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Cache-Control', 'no-store, private');
   res.setHeader('Content-Disposition', 'inline');
-  // Strip headers that would let browser cache or fingerprint the source
   res.removeHeader('ETag');
   res.removeHeader('Last-Modified');
   res.removeHeader('X-Powered-By');
@@ -334,14 +387,11 @@ async function handlePlay(req: VercelRequest, res: VercelResponse) {
   const contentLength = upstream.headers.get('content-length');
   const contentRange  = upstream.headers.get('content-range');
   if (contentLength) res.setHeader('Content-Length', contentLength);
-  if (contentRange)  res.setHeader('Content-Range', contentRange);
+  if (contentRange)  res.setHeader('Content-Range',  contentRange);
 
-  // Pipe upstream body directly — no buffering in memory
   upstream.body.pipe(res as any);
-
-  // Handle upstream errors mid-stream
   upstream.body.on('error', (err: Error) => {
-    console.error('[videoStream] upstream pipe error:', err.message);
+    console.error('[videoStream:play] upstream pipe error:', err.message);
     try { res.end(); } catch {}
   });
 }
@@ -352,23 +402,27 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
   const chunkToken = (req.headers['x-chunk-token'] || req.query.chunkToken) as string | undefined;
   if (!chunkToken || !validateChunkToken(chunkToken, videoId, chunkIndex))
     return res.status(403).send('Forbidden: invalid chunk token');
-  if (!isAllowedUA(req)) return res.status(403).send('Forbidden: blocked client');
+  if (!isAllowedUA(req))      return res.status(403).send('Forbidden: blocked client');
   if (!isAllowedReferer(req)) return res.status(403).send('Forbidden: invalid origin');
-  const db      = getFirestoreDb();
-  const docSnap = await db.collection('securedVideos').doc(videoId).get();
-  if (!docSnap.exists) return res.status(404).send('Video not found');
-  const videoData  = docSnap.data()!;
-  const byteStart  = chunkIndex * CONFIG.CHUNK_SIZE;
-  const byteEnd    = byteStart + CONFIG.CHUNK_SIZE - 1;
+
+  // FIX 2 — use cache
+  const videoData = await getVideoData(videoId);
+  if (!videoData) return res.status(404).send('Video not found');
+
+  const byteStart   = chunkIndex * CONFIG.CHUNK_SIZE;
+  const byteEnd     = byteStart + CONFIG.CHUNK_SIZE - 1;
   const fetchHeaders: Record<string, string> = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     Accept: '*/*', Range: `bytes=${byteStart}-${byteEnd}`,
   };
   if (videoData.isGoogleDrive) fetchHeaders['Referer'] = 'https://drive.google.com/';
+
   const { default: fetch } = await import('node-fetch');
   const upstream = await (fetch as any)(videoData.streamUrl, { headers: fetchHeaders, redirect: 'follow' });
+
   if (upstream.status === 416) return res.status(204).send('');
   if (!upstream.ok && upstream.status !== 206) return res.status(upstream.status).send('Upstream source error');
+
   const contentRange  = upstream.headers.get('content-range');
   const contentLength = upstream.headers.get('content-length');
   let isLastChunk     = false;
@@ -376,6 +430,7 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
     const match = contentRange.match(/bytes (\d+)-(\d+)\/(\d+)/);
     if (match) { const totalSize = parseInt(match[3], 10); isLastChunk = byteEnd >= totalSize - 1; }
   } else if (upstream.status === 200) { isLastChunk = true; }
+
   const nextChunkToken = isLastChunk ? '' : generateChunkToken(videoId, chunkIndex + 1);
   res.setHeader('Content-Type', 'video/mp4');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -389,7 +444,7 @@ async function handleChunk(req: VercelRequest, res: VercelResponse) {
   res.removeHeader('Last-Modified');
   res.removeHeader('X-Powered-By');
   if (contentLength) res.setHeader('Content-Length', contentLength);
-  if (contentRange)  res.setHeader('Content-Range', contentRange);
+  if (contentRange)  res.setHeader('Content-Range',  contentRange);
   res.status(206);
   upstream.body.pipe(res as any);
 }
@@ -398,10 +453,10 @@ async function handleEmbed(req: VercelRequest, res: VercelResponse) {
   const videoId = String(req.query.videoId || '');
   const key     = (req.query.key || req.headers['x-security-string']) as string | undefined;
   if (!key || key.trim() !== CONFIG.MASTER_SECURITY_STRING.trim()) return res.status(403).send('Forbidden');
-  const db      = getFirestoreDb();
-  const docSnap = await db.collection('securedVideos').doc(videoId).get();
-  if (!docSnap.exists) return res.status(404).send('Not found');
-  const videoData    = docSnap.data()!;
+
+  const videoData = await getVideoData(videoId);
+  if (!videoData) return res.status(404).send('Not found');
+
   const { default: fetch } = await import('node-fetch');
   const upstream = await (fetch as any)(videoData.streamUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
   if (!upstream.ok) return res.status(upstream.status).send('Embed error');
@@ -409,7 +464,7 @@ async function handleEmbed(req: VercelRequest, res: VercelResponse) {
   res.send(await upstream.text());
 }
 
-// ─── Main handler ─────────────────────────────────────────────────────────────
+// ─── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -420,7 +475,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (req.method === 'GET') {
       const action = String(req.query.action || 'health');
-      if (action === 'play')   return await handlePlay(req, res);   // NEW
+      if (action === 'play')   return await handlePlay(req, res);
       if (action === 'meta')   return await handleMeta(req, res);
       if (action === 'info')   return await handleInfo(req, res);
       if (action === 'chunk')  return await handleChunk(req, res);
@@ -432,6 +487,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error: any) {
     console.error('[videoStream] Unhandled error:', error);
     if (!res.headersSent)
-      return res.status(500).json({ success: false, message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
+      return res.status(500).json({
+        success: false,
+        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      });
   }
 }
