@@ -8,8 +8,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, FileText, Download, Eye, X, ZoomIn, ZoomOut,
-  RotateCw, Loader2, AlertCircle, ChevronLeft, ChevronRight,
-  Maximize2, Minimize2, BookOpen, Clock, Tag, Globe, Shield,
+  Loader2, AlertCircle, Maximize2, Minimize2, BookOpen,
+  Clock, Tag, Globe, Shield,
 } from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
 import { contentLibraryService, LibraryContent } from '../services/contentLibraryService';
@@ -26,13 +26,79 @@ function formatDuration(minutes?: number): string {
 
 function getDifficultyMeta(d?: string) {
   switch (d) {
-    case 'easy':      return { label: 'Easy',      color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' };
-    case 'medium':    return { label: 'Medium',    color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20' };
-    case 'hard':      return { label: 'Hard',      color: 'text-rose-400',    bg: 'bg-rose-500/10 border-rose-500/20' };
-    case 'very_hard': return { label: 'Very Hard', color: 'text-red-400',     bg: 'bg-red-500/10 border-red-500/20' };
-    default:          return { label: 'Standard',  color: 'text-slate-400',   bg: 'bg-slate-500/10 border-slate-500/20' };
+    case 'easy':      return { label: 'Easy',      color: 'text-emerald-400' };
+    case 'medium':    return { label: 'Medium',    color: 'text-amber-400'   };
+    case 'hard':      return { label: 'Hard',      color: 'text-rose-400'    };
+    case 'very_hard': return { label: 'Very Hard', color: 'text-red-400'     };
+    default:          return { label: 'Standard',  color: 'text-slate-400'   };
   }
 }
+
+// ─── Viewer Loading Screen ────────────────────────────────────────────────────
+
+interface ViewerLoadingScreenProps {
+  title: string;
+  isGDrive?: boolean;
+}
+
+const ViewerLoadingScreen: React.FC<ViewerLoadingScreenProps> = ({ title, isGDrive }) => (
+  <div
+    className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-[#0d0f1a]"
+    aria-label="Loading document…"
+  >
+    {/* Pulsing document icon */}
+    <div className="relative mb-7">
+      <div className="w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+        <FileText size={36} className="text-emerald-400" strokeWidth={1.6} />
+      </div>
+      {/* Animated ring */}
+      <div
+        className="absolute inset-0 rounded-2xl border-2 border-emerald-500/30 animate-ping"
+        style={{ animationDuration: '1.8s' }}
+      />
+    </div>
+
+    {/* Spinner + label */}
+    <div className="flex items-center gap-3 mb-3">
+      <Loader2 size={18} className="text-emerald-400 animate-spin flex-shrink-0" />
+      <p className="text-white/80 text-sm font-medium">Loading document…</p>
+    </div>
+
+    {/* File name */}
+    <p className="text-slate-500 text-xs max-w-xs text-center truncate px-4">{title}</p>
+
+    {/* Source badge */}
+    <div className="mt-5 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/4 border border-white/8">
+      {isGDrive ? (
+        <>
+          <Globe size={11} className="text-blue-400" />
+          <span className="text-[11px] text-slate-400">Via Google Drive</span>
+        </>
+      ) : (
+        <>
+          <Shield size={11} className="text-emerald-400" />
+          <span className="text-[11px] text-slate-400">Secure PDF Viewer</span>
+        </>
+      )}
+    </div>
+
+    {/* Progress bar (indeterminate) */}
+    <div className="mt-6 w-48 h-0.5 rounded-full bg-white/6 overflow-hidden">
+      <div
+        className="h-full bg-emerald-500/60 rounded-full"
+        style={{ animation: 'indeterminate 1.6s ease-in-out infinite' }}
+      />
+    </div>
+
+    <style>{`
+      @keyframes indeterminate {
+        0%   { transform: translateX(-100%) scaleX(0.4); }
+        50%  { transform: translateX(50%)   scaleX(0.6); }
+        100% { transform: translateX(300%)  scaleX(0.4); }
+      }
+    `}</style>
+  </div>
+);
 
 // ─── Watermark Overlay ────────────────────────────────────────────────────────
 
@@ -42,7 +108,7 @@ interface WatermarkOverlayProps {
 
 const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ userId }) => (
   <>
-    {/* Top-left: userId watermark */}
+    {/* Top-left: formatted userId watermark (e.g. ST-2601-00001) */}
     <div
       className="absolute top-3 left-3 z-20 pointer-events-none select-none"
       aria-hidden="true"
@@ -52,8 +118,8 @@ const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ userId }) => (
           fontSize: '10px',
           fontFamily: 'monospace',
           color: 'rgba(255,255,255,0.18)',
-          letterSpacing: '0.04em',
-          textShadow: '0 1px 2px rgba(0,0,0,0.4)',
+          letterSpacing: '0.05em',
+          textShadow: '0 1px 2px rgba(0,0,0,0.5)',
           userSelect: 'none',
         }}
       >
@@ -61,7 +127,7 @@ const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ userId }) => (
       </span>
     </div>
 
-    {/* Top-right: Edtech watermark */}
+    {/* Top-right: Edtech brand watermark */}
     <div
       className="absolute top-3 right-3 z-20 pointer-events-none select-none"
       aria-hidden="true"
@@ -71,9 +137,9 @@ const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ userId }) => (
           fontSize: '10px',
           fontFamily: 'monospace',
           color: 'rgba(255,255,255,0.18)',
-          letterSpacing: '0.12em',
+          letterSpacing: '0.14em',
           textTransform: 'uppercase',
-          textShadow: '0 1px 2px rgba(0,0,0,0.4)',
+          textShadow: '0 1px 2px rgba(0,0,0,0.5)',
           userSelect: 'none',
         }}
       >
@@ -81,13 +147,10 @@ const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ userId }) => (
       </span>
     </div>
 
-    {/* Diagonal tiled watermark in center (very subtle) */}
+    {/* Diagonal tiled watermark (very subtle) */}
     <div
       className="absolute inset-0 z-10 pointer-events-none select-none overflow-hidden"
       aria-hidden="true"
-      style={{
-        background: 'repeating-linear-gradient(45deg, transparent, transparent 120px, rgba(255,255,255,0.012) 120px, rgba(255,255,255,0.012) 121px)',
-      }}
     >
       <div
         style={{
@@ -107,14 +170,14 @@ const WatermarkOverlay: React.FC<WatermarkOverlayProps> = ({ userId }) => (
             key={i}
             style={{
               fontSize: '11px',
-              color: 'rgba(255,255,255,0.04)',
+              color: 'rgba(255,255,255,0.035)',
               fontFamily: 'monospace',
               letterSpacing: '0.1em',
               whiteSpace: 'nowrap',
               userSelect: 'none',
             }}
           >
-            Edtech • {userId.slice(0, 8)}
+            Edtech • {userId}
           </span>
         ))}
       </div>
@@ -132,45 +195,53 @@ interface LocalPDFViewerProps {
 }
 
 const LocalPDFViewer: React.FC<LocalPDFViewerProps> = ({ url, title, userId, onClose }) => {
-  const [zoom, setZoom] = useState(100);
+  const [zoom, setZoom]             = useState(100);
   const [fullscreen, setFullscreen] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [loaded, setLoaded]         = useState(false);
+  const iframeRef                   = useRef<HTMLIFrameElement>(null);
 
   const handleZoomIn  = () => setZoom(z => Math.min(z + 20, 200));
   const handleZoomOut = () => setZoom(z => Math.max(z - 20, 40));
   const handleReset   = () => setZoom(100);
 
-  // Prevent keyboard shortcut download (best effort in browser)
+  // Prevent keyboard-shortcut download (best-effort)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') e.preventDefault();
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') e.preventDefault();
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'p')) {
+        e.preventDefault();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   return (
-    <div
-      className={`fixed inset-0 z-50 flex flex-col bg-[#080a12] ${fullscreen ? '' : ''}`}
-      style={{ backdropFilter: 'blur(12px)' }}
-    >
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/8 bg-[#0c0e18]/95 backdrop-blur-xl flex-shrink-0">
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#080a12]">
+
+      {/* ── Toolbar ── */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/8 bg-[#0c0e18]/95 backdrop-blur-xl flex-shrink-0">
+
+        {/* Back button */}
         <button
           onClick={onClose}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-all text-sm border border-transparent hover:border-white/10"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white
+                     hover:bg-white/8 transition-all text-sm border border-white/8 hover:border-white/16
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
         >
-          <X size={14} />
-          Close
+          <ArrowLeft size={14} />
+          <span className="hidden sm:inline">Back</span>
         </button>
 
+        {/* Divider */}
+        <div className="w-px h-5 bg-white/8 mx-1 flex-shrink-0" />
+
+        {/* Title */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white/80 truncate">{title}</p>
+          <p className="text-sm font-medium text-white/70 truncate">{title}</p>
         </div>
 
         {/* Zoom controls */}
-        <div className="flex items-center gap-1 bg-white/5 border border-white/8 rounded-lg p-1">
+        <div className="flex items-center gap-0.5 bg-white/5 border border-white/8 rounded-lg p-1">
           <button
             onClick={handleZoomOut}
             className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-white/10 transition-all"
@@ -180,7 +251,7 @@ const LocalPDFViewer: React.FC<LocalPDFViewerProps> = ({ url, title, userId, onC
           </button>
           <button
             onClick={handleReset}
-            className="px-2 py-1 text-xs text-slate-300 hover:text-white transition-colors min-w-[48px] text-center font-mono"
+            className="px-2 py-1 text-xs text-slate-300 hover:text-white transition-colors min-w-[46px] text-center font-mono"
             title="Reset zoom"
           >
             {zoom}%
@@ -194,55 +265,53 @@ const LocalPDFViewer: React.FC<LocalPDFViewerProps> = ({ url, title, userId, onC
           </button>
         </div>
 
+        {/* Fullscreen toggle */}
         <button
           onClick={() => setFullscreen(f => !f)}
-          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-all border border-transparent hover:border-white/10"
+          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-all
+                     border border-transparent hover:border-white/10"
           title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         >
           {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
       </div>
 
-      {/* Viewer area with watermark */}
+      {/* ── Viewer area ── */}
       <div className="relative flex-1 overflow-hidden">
-        <WatermarkOverlay userId={userId} />
+
+        {/* Loading screen — shown until iframe onLoad fires */}
+        {!loaded && <ViewerLoadingScreen title={title} isGDrive={false} />}
+
+        {/* Watermark — rendered only after content is visible */}
+        {loaded && <WatermarkOverlay userId={userId} />}
 
         <div
           className="w-full h-full overflow-auto flex items-start justify-center p-4"
-          style={{ background: '#111318' }}
+          style={{
+            background: '#111318',
+            opacity: loaded ? 1 : 0,
+            transition: 'opacity 0.35s ease',
+          }}
         >
           <div
             style={{
               width: `${zoom}%`,
               minWidth: zoom < 100 ? '100%' : undefined,
               transition: 'width 0.25s ease',
-              position: 'relative',
             }}
           >
             <iframe
               ref={iframeRef}
               src={`${url}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`}
               className="w-full rounded-lg shadow-2xl"
-              style={{
-                height: '80vh',
-                border: 'none',
-                background: '#fff',
-                display: 'block',
-              }}
+              style={{ height: '82vh', border: 'none', background: '#fff', display: 'block' }}
               title={title}
               sandbox="allow-same-origin allow-scripts"
+              onLoad={() => setLoaded(true)}
             />
           </div>
         </div>
       </div>
-
-      {/* Anti-inspect overlay (visually harmless, adds friction) */}
-      <div
-        className="absolute inset-0 pointer-events-none select-none z-30"
-        onContextMenu={(e) => e.preventDefault()}
-        style={{ userSelect: 'none' }}
-        aria-hidden="true"
-      />
     </div>
   );
 };
@@ -258,64 +327,87 @@ interface GDriveViewerProps {
 
 const GDriveViewer: React.FC<GDriveViewerProps> = ({ previewUrl, title, userId, onClose }) => {
   const [fullscreen, setFullscreen] = useState(false);
+  const [loaded, setLoaded]         = useState(false);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#080a12]">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/8 bg-[#0c0e18]/95 backdrop-blur-xl flex-shrink-0">
+
+      {/* ── Toolbar ── */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/8 bg-[#0c0e18]/95 backdrop-blur-xl flex-shrink-0">
+
+        {/* Back button */}
         <button
           onClick={onClose}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-all text-sm border border-transparent hover:border-white/10"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white
+                     hover:bg-white/8 transition-all text-sm border border-white/8 hover:border-white/16
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
-          <X size={14} />
-          Close
+          <ArrowLeft size={14} />
+          <span className="hidden sm:inline">Back</span>
         </button>
 
+        {/* Divider */}
+        <div className="w-px h-5 bg-white/8 mx-1 flex-shrink-0" />
+
+        {/* GDrive icon + title */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
-          <div className="w-4 h-4 flex-shrink-0">
-            <svg viewBox="0 0 24 24" className="w-full h-full">
-              <path fill="#4285F4" d="M6 2L2 8l4 7h8l4-7-4-6z" />
-              <path fill="#0F9D58" d="M2 8l4 7 4-7z" />
-              <path fill="#F4B400" d="M14 15l4-7-4-6z" />
-              <path fill="#EA4335" d="M6 9l8 6-4-7z" />
-            </svg>
-          </div>
-          <p className="text-sm font-medium text-white/80 truncate">{title}</p>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/20 flex-shrink-0">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" aria-hidden="true">
+            <path fill="#4285F4" d="M6 2L2 8l4 7h8l4-7-4-6z" />
+            <path fill="#0F9D58" d="M2 8l4 7 4-7z" />
+            <path fill="#F4B400" d="M14 15l4-7-4-6z" />
+            <path fill="#EA4335" d="M6 9l8 6-4-7z" />
+          </svg>
+          <p className="text-sm font-medium text-white/70 truncate">{title}</p>
+          <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/20 flex-shrink-0">
             Google Drive
           </span>
         </div>
 
+        {/* Fullscreen toggle */}
         <button
           onClick={() => setFullscreen(f => !f)}
-          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-all border border-transparent hover:border-white/10"
+          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/8 transition-all
+                     border border-transparent hover:border-white/10"
           title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         >
           {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
         </button>
       </div>
 
-      {/* Viewer area with watermark */}
+      {/* ── Viewer area ── */}
       <div className="relative flex-1 overflow-hidden bg-[#111318]">
-        <WatermarkOverlay userId={userId} />
+
+        {/* Loading screen — shown until iframe onLoad fires */}
+        {!loaded && <ViewerLoadingScreen title={title} isGDrive />}
+
+        {/* Watermark — rendered only after content is visible */}
+        {loaded && <WatermarkOverlay userId={userId} />}
 
         <iframe
           src={previewUrl}
           className="w-full h-full"
-          style={{ border: 'none' }}
+          style={{
+            border: 'none',
+            opacity: loaded ? 1 : 0,
+            transition: 'opacity 0.35s ease',
+          }}
           title={title}
           allow="autoplay"
+          onLoad={() => setLoaded(true)}
         />
       </div>
     </div>
   );
 };
 
-// ─── Info Row ─────────────────────────────────────────────────────────────────
+// ─── Info Pill ────────────────────────────────────────────────────────────────
 
-const InfoPill: React.FC<{ icon: React.ReactNode; label: string; value: string; accent?: string }> = ({
-  icon, label, value, accent = 'text-slate-300',
-}) => (
+const InfoPill: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  accent?: string;
+}> = ({ icon, label, value, accent = 'text-slate-300' }) => (
   <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/3 border border-white/6">
     <div className="text-slate-500 flex-shrink-0">{icon}</div>
     <div className="min-w-0 flex-1">
@@ -329,17 +421,18 @@ const InfoPill: React.FC<{ icon: React.ReactNode; label: string; value: string; 
 
 const NoteViewer: React.FC = () => {
   const { courseId, contentId } = useParams<{ courseId: string; contentId: string }>();
-  const navigate = useNavigate();
-  const { user } = useDashboard();
+  const navigate                = useNavigate();
+  const { user }                = useDashboard();
 
-  const [content, setContent] = useState<LibraryContent | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
+  const [content, setContent]         = useState<LibraryContent | null>(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState('');
+  const [viewerOpen, setViewerOpen]   = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
-  const [viewerOpen, setViewerOpen]     = useState(false);
-  const [downloading, setDownloading]   = useState(false);
-
-  const userId = user?.uid || user?.id || 'anonymous';
+  // ── Correct userId: use the formatted student ID (e.g. ST-2601-00001),
+  //    NOT uid which is the Firebase Firestore document/collection ID.
+  const userId = user?.userId || user?.uid || 'anonymous';
 
   // ── Load content ──
   useEffect(() => {
@@ -367,7 +460,7 @@ const NoteViewer: React.FC = () => {
         };
 
         const found = findContent(course.contentStructure);
-        if (!found) { setError('Note content not found.'); return; }
+        if (!found)               { setError('Note content not found.');    return; }
         if (found.type !== 'note') { setError('This content is not a note.'); return; }
 
         setContent(found);
@@ -405,11 +498,11 @@ const NoteViewer: React.FC = () => {
     }
   }, [content]);
 
-  const isGDrive    = content?.noteSource === 'gdrive';
-  const hasFile     = !!(content?.noteUrl || content?.noteGDrivePreviewUrl);
-  const diffMeta    = getDifficultyMeta((content as any)?.difficulty);
+  const isGDrive = content?.noteSource === 'gdrive';
+  const hasFile  = !!(content?.noteUrl || content?.noteGDrivePreviewUrl);
+  const diffMeta = getDifficultyMeta((content as any)?.difficulty);
 
-  // ── Render: Loading ──
+  // ── Render: Page loading ──
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0c0e16] flex items-center justify-center">
@@ -439,7 +532,8 @@ const NoteViewer: React.FC = () => {
           </div>
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/6 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10 transition-all text-sm font-medium"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/6 border border-white/10
+                       text-slate-300 hover:text-white hover:bg-white/10 transition-all text-sm font-medium"
           >
             <ArrowLeft size={14} />
             Go back
@@ -449,7 +543,7 @@ const NoteViewer: React.FC = () => {
     );
   }
 
-  // ── Render: Main ──
+  // ── Render: Main page ──
   return (
     <>
       {/* Viewer Modals */}
@@ -506,7 +600,6 @@ const NoteViewer: React.FC = () => {
                   'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 50%, transparent 100%)',
               }}
             >
-              {/* Type pill */}
               <div className="flex items-center gap-3 mb-5">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/12 border border-emerald-400/25 text-emerald-300 text-xs font-semibold tracking-wide">
                   <FileText size={11} strokeWidth={2.5} />
@@ -526,7 +619,6 @@ const NoteViewer: React.FC = () => {
                 )}
               </div>
 
-              {/* Title */}
               <h1 className="text-2xl sm:text-3xl font-bold text-white leading-tight mb-2 tracking-tight">
                 {content.title}
               </h1>
@@ -534,11 +626,7 @@ const NoteViewer: React.FC = () => {
                 <p className="text-slate-400 text-sm font-medium">{content.subject}</p>
               )}
 
-              {/* Decorative icon */}
-              <div
-                className="absolute right-7 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none"
-                aria-hidden="true"
-              >
+              <div className="absolute right-7 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none" aria-hidden="true">
                 <FileText size={96} strokeWidth={1} />
               </div>
             </div>
@@ -547,7 +635,6 @@ const NoteViewer: React.FC = () => {
             {hasFile ? (
               <div className="px-7 py-6 border-b border-white/6">
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {/* View */}
                   <button
                     onClick={() => setViewerOpen(true)}
                     className="flex-1 flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-2xl
@@ -560,7 +647,6 @@ const NoteViewer: React.FC = () => {
                     View Note
                   </button>
 
-                  {/* Download */}
                   <button
                     onClick={handleDownload}
                     disabled={downloading}
@@ -572,16 +658,11 @@ const NoteViewer: React.FC = () => {
                                focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20
                                disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0"
                   >
-                    {downloading ? (
-                      <Loader2 size={17} className="animate-spin" />
-                    ) : (
-                      <Download size={17} />
-                    )}
+                    {downloading ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />}
                     {downloading ? 'Downloading…' : 'Download'}
                   </button>
                 </div>
 
-                {/* Security note */}
                 <p className="text-center text-[11px] text-slate-600 mt-3 flex items-center justify-center gap-1.5">
                   <Shield size={10} className="text-emerald-500/50" />
                   {isGDrive
@@ -609,49 +690,25 @@ const NoteViewer: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {content.subject && (
-                  <InfoPill
-                    icon={<BookOpen size={15} />}
-                    label="Subject"
-                    value={content.subject}
-                    accent="text-white"
-                  />
+                  <InfoPill icon={<BookOpen size={15} />} label="Subject" value={content.subject} accent="text-white" />
                 )}
                 {content.duration && content.duration > 0 && (
-                  <InfoPill
-                    icon={<Clock size={15} />}
-                    label="Est. Read Time"
-                    value={formatDuration(content.duration)}
-                    accent="text-emerald-300"
-                  />
+                  <InfoPill icon={<Clock size={15} />} label="Est. Read Time" value={formatDuration(content.duration)} accent="text-emerald-300" />
                 )}
                 {(content as any).difficulty && (
-                  <InfoPill
-                    icon={<Tag size={15} />}
-                    label="Difficulty"
-                    value={diffMeta.label}
-                    accent={diffMeta.color}
-                  />
+                  <InfoPill icon={<Tag size={15} />} label="Difficulty" value={diffMeta.label} accent={diffMeta.color} />
                 )}
                 {(content as any).language && (
-                  <InfoPill
-                    icon={<Globe size={15} />}
-                    label="Language"
-                    value={(content as any).language}
-                    accent="text-slate-300"
-                  />
+                  <InfoPill icon={<Globe size={15} />} label="Language" value={(content as any).language} accent="text-slate-300" />
                 )}
               </div>
 
-              {/* Tags */}
               {(content as any).tags && (content as any).tags.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-[10px] uppercase tracking-widest text-slate-600 font-semibold">Tags</p>
                   <div className="flex flex-wrap gap-2">
                     {(content as any).tags.map((tag: string) => (
-                      <span
-                        key={tag}
-                        className="px-2.5 py-1 rounded-full text-xs bg-white/4 border border-white/8 text-slate-400"
-                      >
+                      <span key={tag} className="px-2.5 py-1 rounded-full text-xs bg-white/4 border border-white/8 text-slate-400">
                         {tag}
                       </span>
                     ))}
@@ -659,7 +716,6 @@ const NoteViewer: React.FC = () => {
                 </div>
               )}
 
-              {/* Source info */}
               <div className="pt-2 border-t border-white/5">
                 <div className="flex items-center gap-2 text-xs text-slate-600">
                   <Shield size={11} />
