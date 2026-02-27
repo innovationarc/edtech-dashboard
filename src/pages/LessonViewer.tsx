@@ -1,4 +1,4 @@
-// src/pages/LessonViewer.tsx — v9: Refined player controls
+// src/pages/LessonViewer.tsx — v10: Fast seek, custom loader, user watermark
 //
 // STREAMING LOGIC: 100% identical to v7 (proven working, unchanged).
 // NEW in v8: Full production-grade player UI replacing the basic controls.
@@ -170,6 +170,7 @@ const LessonViewer: React.FC = () => {
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showVolPanel,  setShowVolPanel]  = useState(false);
   const [isDragging,    setIsDragging]    = useState(false);
+  const [dragVisualPct, setDragVisualPct] = useState(0); // visual-only position while dragging
   const [hoverInfo,     setHoverInfo]     = useState<{ pct: number; time: number } | null>(null);
   const [skipFlash,     setSkipFlash]     = useState<'fwd' | 'back' | null>(null);
 
@@ -486,29 +487,48 @@ const LessonViewer: React.FC = () => {
 
   const handleRetry = () => { initLockRef.current = ''; if (content?.videoUrl) initPlayer(content.videoUrl); };
 
-  // ── Progress bar interaction ──────────────────────────────────────────────
-  // Key: during drag we directly mutate video.currentTime and update React state
-  // only via requestAnimationFrame to avoid batching lag.
+  // ── Progress bar interaction ─────────────────────────────────────────────
+  // FAST SEEK DESIGN:
+  //   During drag  → only update dragVisualPct (moves the bar instantly, zero lag)
+  //                  NO video.currentTime writes during drag = no buffer thrash
+  //   On mouseUp   → commit ONE seek to video.currentTime
+  //                  Use fastSeek() if available (imprecise but instant)
+  //   This makes both forward AND backward drag feel instant on streaming video.
   const pctFromMouse = (clientX: number): number => {
     const el = progressRef.current; if (!el) return 0;
     const r = el.getBoundingClientRect();
     return clamp((clientX - r.left) / r.width, 0, 1);
   };
-  const seekToPct = (pct: number) => {
+
+  // Commit the final seek — called only once on drag end
+  const commitSeek = (pct: number) => {
     const v = videoRef.current; if (!v || !duration) return;
     const t = pct * duration;
-    v.currentTime = t;
-    // Immediately update React state so the fill moves without waiting for timeupdate
+    // fastSeek() is imprecise but MUCH faster for large files (keyframe-aligned)
+    // Falls back to currentTime assignment for browsers that don't support it
+    if (typeof (v as any).fastSeek === 'function') {
+      (v as any).fastSeek(t);
+    } else {
+      v.currentTime = t;
+    }
     setCurrentTime(t);
   };
 
   const onProgressMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
+    const startPct = pctFromMouse(e.clientX);
     setIsDragging(true);
-    seekToPct(pctFromMouse(e.clientX));
-    const onMove = (ev: MouseEvent) => seekToPct(pctFromMouse(ev.clientX));
-    const onUp   = (ev: MouseEvent) => {
-      seekToPct(pctFromMouse(ev.clientX));
+    setDragVisualPct(startPct * 100);
+
+    const onMove = (ev: MouseEvent) => {
+      // Only update visual bar — no video seek during drag
+      const p = pctFromMouse(ev.clientX);
+      setDragVisualPct(p * 100);
+    };
+    const onUp = (ev: MouseEvent) => {
+      const finalPct = pctFromMouse(ev.clientX);
+      setDragVisualPct(finalPct * 100);
+      commitSeek(finalPct);      // single seek on release
       setIsDragging(false);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
@@ -519,14 +539,26 @@ const LessonViewer: React.FC = () => {
 
   const onProgressTouchStart = (e: React.TouchEvent) => {
     e.preventDefault();
-    setIsDragging(true);
     const getPct = (touches: TouchList) => {
       const r = progressRef.current!.getBoundingClientRect();
       return clamp((touches[0].clientX - r.left) / r.width, 0, 1);
     };
-    seekToPct(getPct(e.touches));
-    const onMove = (ev: TouchEvent) => { ev.preventDefault(); seekToPct(getPct(ev.touches)); };
-    const onEnd  = () => { setIsDragging(false); window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onEnd); };
+    const startPct = getPct(e.touches);
+    setIsDragging(true);
+    setDragVisualPct(startPct * 100);
+
+    const onMove = (ev: TouchEvent) => {
+      ev.preventDefault();
+      setDragVisualPct(getPct(ev.touches) * 100);
+    };
+    const onEnd = (ev: TouchEvent) => {
+      const finalPct = getPct(ev.changedTouches);
+      setDragVisualPct(finalPct * 100);
+      commitSeek(finalPct);
+      setIsDragging(false);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
     window.addEventListener('touchmove', onMove, { passive: false });
     window.addEventListener('touchend', onEnd);
   };
@@ -556,14 +588,12 @@ const LessonViewer: React.FC = () => {
   };
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const playPct          = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const playPct          = isDragging ? dragVisualPct : (duration > 0 ? (currentTime / duration) * 100 : 0);
   const showLoadOverlay  = playerState === 'streaming' || playerState === 'downloading';
   const showPlayerCtrls  = (playerState === 'playing' || playerState === 'paused' || playerState === 'ended') && !isVideoHidden;
   const ctrlsHidden      = playerState === 'playing' && !ctrlVisible && !isDragging && !showSpeedMenu && !showVolPanel;
 
-  const loadLabel = playerState === 'streaming'
-    ? 'Preparing secure stream…'
-    : dlBytes === 0 ? 'Preparing…' : `Downloading ${fmtBytes(dlBytes)} · chunk ${dlChunks}`;
+  // loadLabel removed — loading overlay now shows simple "Loading…" text
 
   const VolumeIcon = muted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
 
@@ -598,16 +628,18 @@ const LessonViewer: React.FC = () => {
         .sv video::-webkit-media-controls,
         .sv video::-webkit-media-controls-enclosure { display:none !important; }
 
-        /* ── Watermark ─────────────────────────────────────────── */
+        /* ── Watermarks ────────────────────────────────────────── */
         .wm {
-          position:absolute; top:14px; right:16px; z-index:30;
+          position:absolute; top:13px; z-index:30;
           font-family:'Space Grotesk', 'DM Sans', system-ui, sans-serif;
-          font-size:13px; font-weight:700; letter-spacing:.12em;
+          font-size:12px; font-weight:700; letter-spacing:.13em;
           text-transform:uppercase;
-          color:rgba(255,255,255,.18);
-          text-shadow: 0 1px 4px rgba(0,0,0,.5);
-          pointer-events:none; user-select:none;
+          color:rgba(255,255,255,.2);
+          text-shadow: 0 1px 6px rgba(0,0,0,.6);
+          pointer-events:none; user-select:none; white-space:nowrap;
         }
+        .wm-right { right:14px; }
+        .wm-left  { left:14px; }
 
         /* ── Progress bar — NO transition on fill during drag ──── */
         .prg { position:relative; height:5px; cursor:pointer; transition:height .15s; touch-action:none; }
@@ -773,8 +805,11 @@ const LessonViewer: React.FC = () => {
                 onMouseLeave={() => { if (playerState === 'playing') setCtrlVisible(false); }}
                 onTouchStart={showControls}
               >
-                {/* Watermark — always visible over video */}
-                <div className="wm">Edtech</div>
+                {/* Watermarks — always visible, pointer-events off */}
+                {user?.userId && (
+                  <div className="wm wm-left">{user.userId}</div>
+                )}
+                <div className="wm wm-right">Edtech</div>
 
                 {/* Video element — always mounted */}
                 <video
@@ -796,23 +831,40 @@ const LessonViewer: React.FC = () => {
 
                 {/* Loading overlay */}
                 {showLoadOverlay && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-4">
-                    <div className="relative w-14 h-14">
-                      <svg className="w-full h-full" viewBox="0 0 56 56" fill="none">
-                        <circle cx="28" cy="28" r="23" stroke="rgba(124,58,237,.2)" strokeWidth="3.5" />
-                        <circle cx="28" cy="28" r="23" stroke="#7c3aed" strokeWidth="3.5"
-                          strokeDasharray="36 108" strokeLinecap="round"
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black gap-5">
+                    {/* Flagship loading icon — open book with play pulse */}
+                    <div className="relative w-20 h-20 flex items-center justify-center">
+                      {/* Outer spinning ring */}
+                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 80 80" fill="none">
+                        <circle cx="40" cy="40" r="34" stroke="rgba(124,58,237,.15)" strokeWidth="3.5" />
+                        <circle cx="40" cy="40" r="34" stroke="#7c3aed" strokeWidth="3.5"
+                          strokeDasharray="50 163" strokeLinecap="round"
                           className="spin-ring" />
                       </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Shield size={16} className="text-violet-400" />
-                      </div>
+                      {/* Inner static ring */}
+                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 80 80" fill="none"
+                        style={{ animation: 'spin360 3s linear infinite reverse', transformOrigin: 'center' }}>
+                        <circle cx="40" cy="40" r="26" stroke="rgba(124,58,237,.1)" strokeWidth="2" strokeDasharray="8 6" strokeLinecap="round" />
+                      </svg>
+                      {/* Book + play icon */}
+                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style={{ position: 'relative', zIndex: 1 }}>
+                        {/* Book pages */}
+                        <path d="M4 6C4 4.9 4.9 4 6 4H13V20H6C4.9 20 4 19.1 4 18V6Z" fill="rgba(124,58,237,.6)" />
+                        <path d="M15 4H22C23.1 4 24 4.9 24 6V18C24 19.1 23.1 20 22 20H15V4Z" fill="rgba(124,58,237,.4)" />
+                        {/* Spine */}
+                        <rect x="13" y="4" width="2" height="16" fill="rgba(167,139,250,.8)" />
+                        {/* Bottom page curl */}
+                        <path d="M6 20C6 21.1 6.9 22 8 22H20C21.1 22 22 21.1 22 20H6Z" fill="rgba(124,58,237,.3)" />
+                        {/* Play triangle overlay */}
+                        <circle cx="14" cy="14" r="5.5" fill="rgba(0,0,0,.35)" />
+                        <path d="M12.3 11.5L17.2 14L12.3 16.5V11.5Z" fill="white" />
+                      </svg>
                     </div>
-                    <div className="text-center">
-                      <p className="text-white/55 text-sm font-medium">{loadLabel}</p>
-                      {playerState === 'downloading' && dlBytes > 0 &&
-                        <p className="text-white/20 text-xs mt-1">Will play automatically when ready</p>}
-                    </div>
+                    <p className="text-white/40 text-sm font-medium tracking-wide">
+                      {playerState === 'downloading'
+                        ? dlBytes > 0 ? `Loading… ${fmtBytes(dlBytes)}` : 'Loading…'
+                        : 'Loading…'}
+                    </p>
                   </div>
                 )}
 
