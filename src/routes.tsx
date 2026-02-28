@@ -361,13 +361,19 @@ const AppRoutes = () => {
         <Route path="content-library/exam/:courseId/:contentId" element={<ExamViewer />} />
 
         {/* ── Exam Evaluation Routes ── */}
-        {/* Teachers/admins/managers/coordinators evaluate written answers here */}
+        {/* Hub page — shows all exams with written parts */}
+        <Route path="exam-evaluation" element={
+          <EvaluatorRoute>
+            <ExamEvaluation />
+          </EvaluatorRoute>
+        } />
+        {/* Direct link to a specific exam's evaluation */}
         <Route path="exam-evaluation/:contentId" element={
           <EvaluatorRoute>
             <ExamEvaluation />
           </EvaluatorRoute>
         } />
-        {/* With optional courseId filter */}
+        {/* Scoped to a specific course */}
         <Route path="exam-evaluation/:contentId/:courseId" element={
           <EvaluatorRoute>
             <ExamEvaluation />
