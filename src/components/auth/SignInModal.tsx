@@ -205,7 +205,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] overflow-y-auto">
       <div className="flex justify-center min-h-full p-3 sm:p-4 md:p-6 items-start">
       <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-[400px] sm:max-w-md md:max-w-lg border border-gray-700/50 relative overflow-hidden mt-0">
         {/* Animated background effects */}
