@@ -205,8 +205,8 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
-      <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-[400px] sm:max-w-md md:max-w-lg border border-gray-700/50 relative overflow-hidden">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center z-50 p-3 sm:p-4 md:p-6 overflow-y-auto">
+      <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-[400px] sm:max-w-md md:max-w-lg border border-gray-700/50 relative overflow-hidden my-auto">
         {/* Animated background effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-purple-500/5 to-blue-500/5 pointer-events-none"></div>
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -237,7 +237,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
           </div>
 
           {/* Content */}
-          <div className="p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4 max-h-[calc(100vh-200px)] sm:max-h-[calc(100vh-180px)] overflow-y-auto custom-scrollbar">
+          <div className="p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4">
             {/* Error Message */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2 backdrop-blur-sm animate-shake">
@@ -260,7 +260,10 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                     value={displayUserId}
                     onChange={(e) => handleUserIdChange(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-3 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide text-xs md:text-base"
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.15)'; e.currentTarget.style.outline = 'none'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(55,65,81,0.5)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-3 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide text-xs md:text-base"
+                    style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: 'rgba(55,65,81,0.5)', outline: 'none' }}
                     placeholder="ST-2601-00001"
                     disabled={loading}
                     autoComplete="username"
@@ -293,7 +296,10 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-8 md:pr-12 border-2 border-gray-700/50 focus:border-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base"
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.15)'; e.currentTarget.style.outline = 'none'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(55,65,81,0.5)'; e.currentTarget.style.boxShadow = 'none'; }}
+                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-8 md:pr-12 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base"
+                    style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: 'rgba(55,65,81,0.5)', outline: 'none' }}
                     placeholder="Enter your password"
                     disabled={loading}
                     autoComplete="current-password"
