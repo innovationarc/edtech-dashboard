@@ -82,10 +82,20 @@ export interface VideoInfo {
   contentType: string;
 }
 
+/** Returned by getBunnySignedUrl — Bunny CDN Token Auth signed playback URL */
+export interface BunnyMeta {
+  success: true;
+  type: 'bunny';
+  /** Short-lived Bunny Token Auth signed URL — browser plays from this directly */
+  signedUrl: string;
+  /** Unix timestamp (seconds) when the signed URL expires */
+  expires: number;
+  /** Whether Bunny Token Auth was applied (false = BUNNY_TOKEN_AUTH_KEY not set on server) */
+  tokenAuth: boolean;
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-/** Derives the API base URL from the current window location so the service
- *  works in both local dev and Vercel production without any env config. */
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
     return window.location.origin;
@@ -181,11 +191,6 @@ const EMBED_PLATFORMS: VideoSourcePlatform[] = ['youtube', 'vimeo', 'dailymotion
 // ─── videoStreamService ───────────────────────────────────────────────────────
 
 export const videoStreamService = {
-  /**
-   * Submit a source video URL to the Platform B backend.
-   * The backend converts it, stores it in Firebase, and returns a secure proxy URL.
-   * That proxy URL is what you store in `content.videoUrl` instead of the raw source URL.
-   */
   async submitVideo(
     sourceUrl: string,
     platform: VideoSourcePlatform,
@@ -197,30 +202,18 @@ export const videoStreamService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'submit', sourceUrl, platform, label, createdBy }),
     });
-
     if (!response.ok) {
       const err = await response.json().catch(() => ({ message: 'Network error' }));
       throw new Error(err.message || `Server error ${response.status}`);
     }
-
     const data = await response.json();
     if (!data.success) throw new Error(data.message || 'Failed to submit video');
     return data as SubmitVideoResult;
   },
 
-  /**
-   * Validate a source URL format on the CLIENT side before even hitting the API.
-   * Returns an error message string if invalid, or null if valid.
-   */
   validateSourceUrl(url: string, platform: VideoSourcePlatform): string | null {
     if (!url || !url.trim()) return 'URL is required';
-
-    try {
-      new URL(url);
-    } catch {
-      return 'Invalid URL format';
-    }
-
+    try { new URL(url); } catch { return 'Invalid URL format'; }
     switch (platform) {
       case 'dropbox':
         if (!url.includes('dropbox.com')) return 'URL does not appear to be a Dropbox link';
@@ -240,53 +233,66 @@ export const videoStreamService = {
         if (!url.includes('dailymotion.com')) return 'URL does not appear to be a Dailymotion link';
         break;
     }
-
     return null;
   },
 
   /**
-   * Get metadata for a secured video by its Firestore video ID.
-   * Returns stream tokens (for Dropbox/GDrive) or embedUrl (for embeds).
-   * Called by the LessonViewer player component.
+   * Get metadata for a secured:// video (GDrive / Dropbox proxy path).
+   * Returns stream tokens or embedUrl. Called by LessonViewer for secured:// videos.
    */
   async getVideoMetadata(videoId: string, securityString: string): Promise<VideoMeta> {
     const response = await fetch(
       `${getApiBase()}/api/videoStream?action=meta&videoId=${encodeURIComponent(videoId)}`,
       { headers: { 'x-security-string': securityString } }
     );
-
     if (!response.ok) {
       const err = await response.json().catch(() => ({ message: 'Network error' }));
       throw new Error(err.message || `Server error ${response.status}`);
     }
-
     const data = await response.json();
     if (!data.success) throw new Error(data.message || 'Failed to get video metadata');
     return data as VideoMeta;
   },
 
   /**
-   * NEW: Fetch total size and chunk count for progress bar display.
-   * Called by the MSE pump loop before starting playback.
+   * Get a Bunny Token Auth signed URL for a Bunny CDN video.
+   * Called by LessonViewer when content.videoUrl starts with the Bunny CDN hostname.
+   *
+   * Security model:
+   *   - Raw Bunny URL stays on the server — browser never sees it
+   *   - Backend looks it up from Firestore content doc by contentId
+   *   - Signs it with Bunny Token Auth (MD5-based, time-limited)
+   *   - Bunny validates token on every request — IDM gets 403
+   *   - __idm_id__ detection in LessonViewer provides a second layer
+   *
+   * @param contentId      Firestore content document ID
+   * @param securityString VITE_VIDEO_SECURITY_STRING
    */
+  async getBunnySignedUrl(contentId: string, securityString: string): Promise<BunnyMeta> {
+    const response = await fetch(
+      `${getApiBase()}/api/videoStream?action=bunny-meta&contentId=${encodeURIComponent(contentId)}`,
+      { headers: { 'x-security-string': securityString } }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ message: 'Network error' }));
+      throw new Error(err.message || `Server error ${response.status}`);
+    }
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message || 'Failed to get Bunny signed URL');
+    return data as BunnyMeta;
+  },
+
   async getVideoInfo(videoId: string, streamToken: string): Promise<VideoInfo> {
     const response = await fetch(
       `${getApiBase()}/api/videoStream?action=info&videoId=${encodeURIComponent(videoId)}`,
       { headers: { 'x-stream-token': streamToken } }
     );
-
     if (!response.ok) {
-      // Non-fatal — caller can proceed without total chunk info
       return { success: false, totalSize: 0, totalChunks: null, chunkSize: 8388608, contentType: 'video/mp4' };
     }
-
     return response.json();
   },
 
-  /**
-   * Fetch a single chunk from the Platform B chunk proxy.
-   * Called by the MediaSource pump loop in the LessonViewer player.
-   */
   async fetchChunk(
     videoId: string,
     chunkIndex: number,
@@ -294,26 +300,18 @@ export const videoStreamService = {
   ): Promise<{ blob: ArrayBuffer; nextChunkToken: string; isLastChunk: boolean }> {
     const response = await fetch(
       `${getApiBase()}/api/videoStream?action=chunk&videoId=${encodeURIComponent(videoId)}&chunk=${chunkIndex}`,
-      { headers: { 'x-chunk-token': chunkToken } }
+      { headers: { 'x-chunk-token': chunkToken }, cache: 'no-store' }
     );
-
     if (response.status === 204) {
       return { blob: new ArrayBuffer(0), nextChunkToken: '', isLastChunk: true };
     }
-
     if (!response.ok) throw new Error(`Chunk fetch failed: ${response.status}`);
-
     const blob = await response.arrayBuffer();
     const nextChunkToken = response.headers.get('x-next-chunk-token') || '';
     const isLastChunk = response.headers.get('x-is-last-chunk') === 'true';
-
     return { blob, nextChunkToken, isLastChunk };
   },
 
-  /**
-   * Delete a secured video record from Firebase.
-   * Call this when the corresponding content record is deleted.
-   */
   async deleteSecuredVideo(videoId: string): Promise<void> {
     try {
       await deleteDoc(doc(db, 'securedVideos', videoId));
@@ -323,9 +321,6 @@ export const videoStreamService = {
     }
   },
 
-  /**
-   * List all secured video records created by a user.
-   */
   async getSecuredVideosByUser(userId: string): Promise<SecuredVideo[]> {
     const q = query(
       collection(db, 'securedVideos'),
@@ -336,10 +331,6 @@ export const videoStreamService = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as SecuredVideo));
   },
 
-  /**
-   * Extract a videoId from a proxy URL.
-   * Stored format in Firestore: secured://<videoId>
-   */
   extractVideoId(proxyUrl: string): string | null {
     if (proxyUrl.startsWith('secured://')) {
       return proxyUrl.replace('secured://', '');
@@ -352,7 +343,6 @@ export const videoStreamService = {
     }
   },
 
-  /** Returns human-readable platform label for UI display */
   getPlatformLabel(platform: VideoSourcePlatform): string {
     const labels: Record<VideoSourcePlatform, string> = {
       dropbox: 'Dropbox',
@@ -364,7 +354,6 @@ export const videoStreamService = {
     return labels[platform] || platform;
   },
 
-  /** Returns platform icon emoji for UI display */
   getPlatformIcon(platform: VideoSourcePlatform): string {
     const icons: Record<VideoSourcePlatform, string> = {
       dropbox: '📦',
@@ -376,12 +365,10 @@ export const videoStreamService = {
     return icons[platform] || '🎞️';
   },
 
-  /** Whether this platform uses an iframe embed or the chunked MSE stream */
   isEmbedPlatform(platform: VideoSourcePlatform): boolean {
     return EMBED_PLATFORMS.includes(platform);
   },
 
-  // ─── Client-side URL conversion helpers ──────────────────────────────────────
   _convertDropboxUrl: convertDropboxUrl,
   _convertGoogleDriveUrl: convertGoogleDriveUrl,
   _convertYouTubeUrl: convertYouTubeUrl,
