@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { uploadService, UploadProgress } from './uploadService';
+import { videoUploadService } from './videoUploadService';
 
 export interface MCQQuestion {
   id: string;
@@ -233,7 +234,39 @@ export const contentService = {
     }
   },
 
-  async createContent(
+  // ── VIDEO: Bunny.net upload (browser → Bunny directly, server never touches bytes) ──
+
+  async uploadVideoFile(
+    file: File,
+    folder: string,
+    onProgress?: (progress: UploadProgress) => void
+  ): Promise<{ url: string; fileName: string }> {
+    try {
+      if (!file) throw new Error('No file provided');
+      console.log('[Video] Uploading to Bunny.net:', file.name, 'folder:', folder);
+      const result = await videoUploadService.uploadVideo(
+        file,
+        folder,
+        onProgress ? (p) => onProgress({ percentage: p.percentage, speed: p.speed }) : undefined
+      );
+      console.log('[Video] Upload complete:', result.url);
+      return result;
+    } catch (error: any) {
+      console.error('[Video] Upload error:', error);
+      throw new Error(`Failed to upload video: ${error.message}`);
+    }
+  },
+
+  async deleteVideoFile(fileUrl: string): Promise<void> {
+    try {
+      if (!fileUrl) return;
+      // secured:// URLs are managed by the video stream service — nothing to delete here
+      if (fileUrl.startsWith('secured://')) return;
+      await videoUploadService.deleteVideo(fileUrl);
+    } catch (error: any) {
+      console.error('[Video] Delete error:', error);
+    }
+  },
     content: Omit<Content, 'id' | 'createdAt'>,
     onProgress?: (stage: string, progress: number) => void
   ): Promise<string> {
@@ -500,7 +533,7 @@ export const contentService = {
       }
 
       if (content.videoUrl) {
-        await this.deleteFile(content.videoUrl);
+        await this.deleteVideoFile(content.videoUrl);
       }
       if (content.noteUrl) {
         await this.deleteFile(content.noteUrl);
