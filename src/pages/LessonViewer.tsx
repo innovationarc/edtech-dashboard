@@ -36,6 +36,10 @@ const SECURITY_STRING =
   (import.meta as any).env?.VITE_VIDEO_SECURITY_STRING ||
   'CHANGE_ME_IN_VITE_ENV_VITE_VIDEO_SECURITY_STRING';
 
+// Bunny CDN hostname — set VITE_BUNNY_CDN_HOSTNAME in .env (e.g. myzone.b-cdn.net)
+// Used to detect Bunny-uploaded videos and route them through the signed-URL path.
+const BUNNY_CDN_HOSTNAME = (import.meta as any).env?.VITE_BUNNY_CDN_HOSTNAME || '';
+
 const DEBUG = false;
 const log    = (...a: any[]) => { if (DEBUG) console.log('[LessonViewer]', ...a); };
 const logErr = (...a: any[]) => console.error('[LessonViewer ERROR]', ...a);
@@ -360,6 +364,61 @@ const LessonViewer: React.FC = () => {
     setDuration(0); setCurrentTime(0); setBufferedPct(0);
     setSpeed(1);
 
+    // ── PATH C: Bunny CDN video (uploaded via videoUploadService) ─────────────
+    // Detected by CDN hostname prefix. Flow:
+    //   1. Call backend bunny-meta → gets raw URL from Firestore, signs it
+    //   2. Browser uses short-lived Bunny Token Auth signed URL (CDN-direct, fast)
+    //   3. Raw URL never reaches browser — Bunny validates token on every request
+    //   4. __idm_id__ detection still active for layer-2 IDM protection
+    if (BUNNY_CDN_HOSTNAME && videoUrl.startsWith(`https://${BUNNY_CDN_HOSTNAME}/`)) {
+      try {
+        log('Bunny CDN video — fetching signed URL...');
+        const bunnyMeta = await videoStreamService.getBunnySignedUrl(contentId!, SECURITY_STRING);
+        if (!alive.current) { initLockRef.current = ''; return; }
+
+        const v = videoRef.current;
+        if (!v) { initLockRef.current = ''; return; }
+
+        const restoreTime = savedTimeRef.current;
+        savedTimeRef.current = 0;
+
+        startIDMWatch();
+
+        await new Promise<void>(resolve => {
+          const onCanPlay = () => {
+            if (!alive.current || devToolsRef.current) { resolve(); return; }
+            if (restoreTime > 0) v.currentTime = restoreTime;
+            log('Bunny canplay — CDN streaming works!');
+            setPlayerState('playing');
+            setTimeout(() => {
+              if (alive.current && v.paused && !devToolsRef.current)
+                v.play().catch(e => { log('autoplay blocked:', e.message); setPlayerState('paused'); });
+            }, 100);
+            resolve();
+          };
+          const onMetaLoaded = () => { if (alive.current) setDuration(v.duration || 0); };
+          const onError = () => {
+            logErr('Bunny playback error');
+            if (alive.current) { setPlayerError('Video failed to load. Please retry.'); setPlayerState('error'); }
+            resolve();
+          };
+          v.addEventListener('canplay',        onCanPlay,    { once: true });
+          v.addEventListener('loadedmetadata', onMetaLoaded, { once: true });
+          v.addEventListener('error',          onError,      { once: true });
+          v.src = bunnyMeta.signedUrl; v.load(); v.preload = 'auto';
+        });
+
+        initLockRef.current = '';
+        return;
+      } catch (err: any) {
+        initLockRef.current = '';
+        logErr('Bunny meta error:', err);
+        if (alive.current) { setPlayerError(err.message || 'Failed to load video.'); setPlayerState('error'); }
+        return;
+      }
+    }
+
+    // ── Non-secured direct URL (fallback — shouldn't normally appear in prod) ──
     if (!videoUrl.startsWith('secured://')) {
       const v = videoRef.current;
       if (v) { v.src = videoUrl; v.load(); }
