@@ -15,7 +15,6 @@ import Settings from './pages/Settings';
 import ComingSoon from './pages/ComingSoon';
 import CourseCreation from './pages/CourseCreation';
 import PaymentManagement from './pages/PaymentManagement';
-import MCQPractice from './pages/MCQPractice';
 import Achievements from './pages/Achievements';
 import AllAnnouncements from './pages/AllAnnouncements';
 import StudentQA from './pages/StudentQA';
@@ -46,6 +45,9 @@ import CouponManagement from './pages/CouponManagement';
 import LessonViewer from './pages/LessonViewer';
 import NoteViewer from './pages/NoteViewer';
 import ExamViewer from './pages/ExamViewer';
+
+// NEW: Exam Evaluation Page (teacher/admin/evaluator)
+import ExamEvaluation from './pages/ExamEvaluation';
 
 import { useDashboard } from './contexts/DashboardContext';
 
@@ -136,6 +138,18 @@ const AdminManagerRoute = ({ children }: { children: React.ReactNode }) => {
     );
   }
   
+  return <>{children}</>;
+};
+
+// Protected Route Component for Exam Evaluation — teachers, admins, managers, coordinators
+const EvaluatorRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated } = useDashboard();
+
+  const allowed = ['admin', 'teacher', 'manager', 'coordinator'];
+  if (!isAuthenticated || !user?.role || !allowed.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <>{children}</>;
 };
 
@@ -333,19 +347,32 @@ const AppRoutes = () => {
         <Route path="content-library" element={<ContentLibrary />} />
         <Route path="course-enrollment" element={<CourseEnrollment />} />
         <Route path="receipt" element={<CourseReceipt />} />
-        <Route path="mcq-practice" element={<MCQPractice />} />
         <Route path="achievements" element={<Achievements />} />
         <Route path="coming-soon" element={<ComingSoon />} />
         <Route path="settings" element={<Settings />} />
         <Route path="question/:questionId" element={<QuestionDetail />} />
 
-        {/* ── NEW: Content Library Viewer Routes ── */}
+        {/* ── Content Library Viewer Routes ── */}
         {/* Lesson & Trick share the same viewer page */}
         <Route path="content-library/lesson/:courseId/:contentId" element={<LessonViewer />} />
         {/* Note viewer */}
         <Route path="content-library/note/:courseId/:contentId" element={<NoteViewer />} />
-        {/* Exam viewer */}
+        {/* Exam viewer — accessible to all authenticated users (student takes exam here) */}
         <Route path="content-library/exam/:courseId/:contentId" element={<ExamViewer />} />
+
+        {/* ── Exam Evaluation Routes ── */}
+        {/* Teachers/admins/managers/coordinators evaluate written answers here */}
+        <Route path="exam-evaluation/:contentId" element={
+          <EvaluatorRoute>
+            <ExamEvaluation />
+          </EvaluatorRoute>
+        } />
+        {/* With optional courseId filter */}
+        <Route path="exam-evaluation/:contentId/:courseId" element={
+          <EvaluatorRoute>
+            <ExamEvaluation />
+          </EvaluatorRoute>
+        } />
 
       </Route>
     </Routes>
