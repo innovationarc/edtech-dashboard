@@ -53,7 +53,10 @@ import { useDashboard } from './contexts/DashboardContext';
 
 // Protected Route Component for Admin-only pages
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
+  
+  // Wait for user profile to load before checking role
+  if (loading || (isAuthenticated && !user)) return null;
   
   if (!isAuthenticated || user?.role !== 'admin') {
     return <Navigate to="/dashboard" replace />;
@@ -64,7 +67,10 @@ const AdminRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected Route Component for Teacher and Admin pages
 const TeacherAdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
+  
+  // Wait for user profile to load before checking role
+  if (loading || (isAuthenticated && !user)) return null;
   
   if (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'teacher')) {
     return <Navigate to="/dashboard" replace />;
@@ -75,7 +81,10 @@ const TeacherAdminRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected Route Component for Student-only pages
 const StudentRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
+  
+  // Wait for user profile to load before checking role
+  if (loading || (isAuthenticated && !user)) return null;
   
   if (!isAuthenticated || user?.role !== 'student') {
     return <Navigate to="/dashboard" replace />;
@@ -86,7 +95,10 @@ const StudentRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected Route Component for Teacher-only pages
 const TeacherRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
+  
+  // Wait for user profile to load before checking role
+  if (loading || (isAuthenticated && !user)) return null;
   
   if (!isAuthenticated || user?.role !== 'teacher') {
     return <Navigate to="/dashboard" replace />;
@@ -97,7 +109,10 @@ const TeacherRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected Route Component for Admin, Manager, Coordinator pages
 const ManagementRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
+  
+  // Wait for user profile to load before checking role
+  if (loading || (isAuthenticated && !user)) return null;
   
   if (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'manager' && user?.role !== 'coordinator')) {
     return (
@@ -120,7 +135,10 @@ const ManagementRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected Route Component for Admin and Manager pages
 const AdminManagerRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
+  
+  // Wait for user profile to load before checking role
+  if (loading || (isAuthenticated && !user)) return null;
   
   if (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'manager')) {
     return (
@@ -143,7 +161,10 @@ const AdminManagerRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected Route Component for Exam Evaluation — teachers, admins, managers, coordinators
 const EvaluatorRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useDashboard();
+  const { user, isAuthenticated, loading } = useDashboard();
+
+  // Wait for user profile to load before checking role
+  if (loading || (isAuthenticated && !user)) return null;
 
   const allowed = ['admin', 'teacher', 'manager', 'coordinator'];
   if (!isAuthenticated || !user?.role || !allowed.includes(user.role)) {
@@ -186,11 +207,11 @@ const AppRoutes = () => {
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<Navigate to={getDefaultRoute()} replace />} />
         
-        {/* Admin dashboard */}
+        {/* Admin + Teacher dashboard */}
         <Route path="dashboard" element={
-          <AdminRoute>
+          <TeacherAdminRoute>
             <Dashboard />
-          </AdminRoute>
+          </TeacherAdminRoute>
         } />
         
         {/* Student-only routes */}
