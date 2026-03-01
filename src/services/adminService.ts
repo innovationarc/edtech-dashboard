@@ -762,7 +762,7 @@ export const adminService = {
       
       console.log('📡 Calling password reset API...');
       const response = await fetchWithRetry(
-        `${BACKEND_URL}/api/reset-password`,
+        `${BACKEND_URL}/api/password-reset`,
         {
           method: 'POST',
           headers: {
