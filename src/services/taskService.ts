@@ -130,6 +130,8 @@ const serTask = (t: Partial<Task>): any => {
   if (t.milestones) d.milestones = t.milestones.map(m => ({ ...m, dueDate: Timestamp.fromDate(m.dueDate) }));
   if (t.reviewDeadline) d.reviewDeadline = Timestamp.fromDate(t.reviewDeadline);
   delete d.id;
+  // Strip undefined values — Firestore addDoc/updateDoc rejects undefined fields
+  Object.keys(d).forEach(k => d[k] === undefined && delete d[k]);
   return d;
 };
 
@@ -208,6 +210,8 @@ export const taskService = {
     if (updates.lateSubmissionDeadline) d.lateSubmissionDeadline = Timestamp.fromDate(updates.lateSubmissionDeadline);
     if (updates.startDate) d.startDate = Timestamp.fromDate(updates.startDate);
     delete d.id;
+    // Strip undefined values — Firestore rejects undefined fields
+    Object.keys(d).forEach(k => d[k] === undefined && delete d[k]);
     await updateDoc(doc(db, 'taskGroups', groupId), d);
   },
 
