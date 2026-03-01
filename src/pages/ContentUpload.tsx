@@ -3990,7 +3990,7 @@ const ContentUpload = () => {
                                       className="w-full bg-background-800 text-white rounded py-1.5 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                       placeholder="0 = all"
                                     />
-                                    <p className="text-xs text-gray-500 mt-0.5">0 = show all MCQ questions (excluding locked)</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">0 = show all MCQ questions (including locked)</p>
                                   </div>
 
                                   {/* MCQ Direction */}
@@ -4068,7 +4068,7 @@ const ContentUpload = () => {
                                       className="w-full bg-background-800 text-white rounded py-1.5 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-green-500"
                                       placeholder="0 = all"
                                     />
-                                    <p className="text-xs text-gray-500 mt-0.5">0 = show all written questions (excluding locked)</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">0 = show all written questions (including locked)</p>
                                   </div>
 
                                   {/* Written Direction */}
