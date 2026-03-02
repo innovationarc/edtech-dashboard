@@ -8,11 +8,13 @@ import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [uid, setUid] = useState<string | null>(null);
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const dragging = useRef(false);
@@ -33,38 +35,50 @@ const DashboardLayout = () => {
     setShowAuthModal(!isAuthenticated);
   }, [isAuthenticated]);
 
+  // Track auth uid reliably via onAuthStateChanged (avoids race condition)
   useEffect(() => {
-    if (!isAuthenticated) return;
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setUid(user?.uid ?? null);
+    });
+    return unsub;
+  }, []);
+
+  // Load saved position once uid is available
+  useEffect(() => {
+    if (!uid) return;
     const load = async () => {
       try {
-        const uid = auth.currentUser?.uid;
-        if (!uid) return;
         const snap = await getDoc(doc(db, 'users', uid));
         if (snap.exists()) {
           const saved = snap.data()?.preferences?.chatbotWidgetPosition;
           if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
             positionRef.current = saved;
             setPosition(saved);
+            console.log('✅ Widget position loaded:', saved);
           }
         }
-      } catch {
-        // Fail silently
+      } catch (e) {
+        console.warn('⚠️ Could not load widget position:', e);
       }
     };
     load();
-  }, [isAuthenticated]);
+  }, [uid]);
 
   const savePosition = useCallback((pos: { x: number; y: number }) => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
+      const currentUid = auth.currentUser?.uid;
+      if (!currentUid) {
+        console.warn('⚠️ Cannot save position: no uid');
+        return;
+      }
       try {
-        const uid = auth.currentUser?.uid;
-        if (!uid) return;
-        await updateDoc(doc(db, 'users', uid), {
+        await updateDoc(doc(db, 'users', currentUid), {
           'preferences.chatbotWidgetPosition': { x: pos.x, y: pos.y },
         });
-      } catch {
-        // Fail silently
+        console.log('✅ Widget position saved:', pos);
+      } catch (e) {
+        console.warn('⚠️ Could not save widget position:', e);
       }
     }, 500);
   }, []);
