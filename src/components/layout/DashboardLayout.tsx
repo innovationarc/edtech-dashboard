@@ -17,12 +17,16 @@ const DashboardLayout = () => {
   const [uid, setUid] = useState<string | null>(null);
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
+
   const dragging = useRef(false);
   const hasMoved = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; posX: number; posY: number } | null>(null);
   const positionRef = useRef({ x: 0, y: 0 });
+  const lastPos = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const eyeResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -35,7 +39,6 @@ const DashboardLayout = () => {
     setShowAuthModal(!isAuthenticated);
   }, [isAuthenticated]);
 
-  // Track auth uid reliably via onAuthStateChanged (avoids race condition)
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       setUid(user?.uid ?? null);
@@ -43,7 +46,6 @@ const DashboardLayout = () => {
     return unsub;
   }, []);
 
-  // Load saved position once uid is available
   useEffect(() => {
     if (!uid) return;
     const load = async () => {
@@ -54,11 +56,10 @@ const DashboardLayout = () => {
           if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
             positionRef.current = saved;
             setPosition(saved);
-            console.log('✅ Widget position loaded:', saved);
           }
         }
-      } catch (e) {
-        console.warn('⚠️ Could not load widget position:', e);
+      } catch {
+        // Fail silently
       }
     };
     load();
@@ -68,22 +69,32 @@ const DashboardLayout = () => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       const currentUid = auth.currentUser?.uid;
-      if (!currentUid) {
-        console.warn('⚠️ Cannot save position: no uid');
-        return;
-      }
+      if (!currentUid) return;
       try {
         await updateDoc(doc(db, 'users', currentUid), {
           'preferences.chatbotWidgetPosition': { x: pos.x, y: pos.y },
         });
-        console.log('✅ Widget position saved:', pos);
-      } catch (e) {
-        console.warn('⚠️ Could not save widget position:', e);
+      } catch {
+        // Fail silently
       }
     }, 500);
   }, []);
 
   const updatePosition = useCallback((x: number, y: number) => {
+    // Compute eye offset from movement direction
+    const dx = x - lastPos.current.x;
+    const dy = y - lastPos.current.y;
+    lastPos.current = { x, y };
+
+    // Scale movement into a subtle eye shift (max ±4 on x, ±3 on y)
+    const scale = 0.25;
+    const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
+    setEyeOffset({ x: clamp(dx * scale, 4), y: clamp(dy * scale, 3) });
+
+    // Reset eye after brief pause
+    if (eyeResetTimeout.current) clearTimeout(eyeResetTimeout.current);
+    eyeResetTimeout.current = setTimeout(() => setEyeOffset({ x: 0, y: 0 }), 120);
+
     positionRef.current = { x, y };
     if (widgetRef.current) {
       widgetRef.current.style.transform = `translate(${x}px, ${y}px)`;
@@ -93,6 +104,7 @@ const DashboardLayout = () => {
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
+    lastPos.current = { ...positionRef.current };
     dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
     dragging.current = false;
     hasMoved.current = false;
@@ -114,6 +126,7 @@ const DashboardLayout = () => {
       const finalPos = { ...positionRef.current };
       setPosition(finalPos);
       savePosition(finalPos);
+      setEyeOffset({ x: 0, y: 0 });
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
@@ -127,6 +140,7 @@ const DashboardLayout = () => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
     const t = e.touches[0];
+    lastPos.current = { ...positionRef.current };
     dragStart.current = { mouseX: t.clientX, mouseY: t.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
     dragging.current = false;
     hasMoved.current = false;
@@ -150,6 +164,7 @@ const DashboardLayout = () => {
       const finalPos = { ...positionRef.current };
       setPosition(finalPos);
       savePosition(finalPos);
+      setEyeOffset({ x: 0, y: 0 });
     };
     window.addEventListener('touchmove', handleTouchMove, { passive: false });
     window.addEventListener('touchend', handleTouchEnd);
@@ -196,7 +211,7 @@ const DashboardLayout = () => {
             cursor: 'grab',
           }}
         >
-          <ChatbotWidget />
+          <ChatbotWidget eyeOffset={eyeOffset} />
         </div>
       )}
 
