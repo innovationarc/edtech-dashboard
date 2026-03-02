@@ -10,12 +10,13 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
+const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
+
 const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
-
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
 
@@ -23,10 +24,10 @@ const DashboardLayout = () => {
   const hasMoved = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; posX: number; posY: number } | null>(null);
   const positionRef = useRef({ x: 0, y: 0 });
-  const lastPos = useRef({ x: 0, y: 0 });
+  const prevDragPos = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const eyeResetTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const eyeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -35,20 +36,16 @@ const DashboardLayout = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => {
-    setShowAuthModal(!isAuthenticated);
-  }, [isAuthenticated]);
+  useEffect(() => { setShowAuthModal(!isAuthenticated); }, [isAuthenticated]);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setUid(user?.uid ?? null);
-    });
+    const unsub = onAuthStateChanged(auth, (user) => setUid(user?.uid ?? null));
     return unsub;
   }, []);
 
   useEffect(() => {
     if (!uid) return;
-    const load = async () => {
+    (async () => {
       try {
         const snap = await getDoc(doc(db, 'users', uid));
         if (snap.exists()) {
@@ -58,11 +55,8 @@ const DashboardLayout = () => {
             setPosition(saved);
           }
         }
-      } catch {
-        // Fail silently
-      }
-    };
-    load();
+      } catch { /* fail silently */ }
+    })();
   }, [uid]);
 
   const savePosition = useCallback((pos: { x: number; y: number }) => {
@@ -74,41 +68,24 @@ const DashboardLayout = () => {
         await updateDoc(doc(db, 'users', currentUid), {
           'preferences.chatbotWidgetPosition': { x: pos.x, y: pos.y },
         });
-      } catch {
-        // Fail silently
-      }
+      } catch { /* fail silently */ }
     }, 500);
   }, []);
 
-  const updatePosition = useCallback((x: number, y: number) => {
-    // Compute eye offset from movement direction
-    const dx = x - lastPos.current.x;
-    const dy = y - lastPos.current.y;
-    lastPos.current = { x, y };
+  // Separated from useCallback so setEyeOffset always has fresh closure
+  const applyEyeOffset = (dx: number, dy: number) => {
+    setEyeOffset({
+      x: CLAMP(dx * 0.3, 4),
+      y: CLAMP(dy * 0.3, 3),
+    });
+    if (eyeTimeout.current) clearTimeout(eyeTimeout.current);
+    eyeTimeout.current = setTimeout(() => setEyeOffset({ x: 0, y: 0 }), 150);
+  };
 
-    // Scale movement into a subtle eye shift (max ±4 on x, ±3 on y)
-    const scale = 0.25;
-    const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
-    setEyeOffset({ x: clamp(dx * scale, 4), y: clamp(dy * scale, 3) });
-
-    // Reset eye after brief pause
-    if (eyeResetTimeout.current) clearTimeout(eyeResetTimeout.current);
-    eyeResetTimeout.current = setTimeout(() => setEyeOffset({ x: 0, y: 0 }), 120);
-
-    positionRef.current = { x, y };
-    if (widgetRef.current) {
-      widgetRef.current.style.transform = `translate(${x}px, ${y}px)`;
-    }
-  }, []);
-
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
-    lastPos.current = { ...positionRef.current };
-    dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
-    dragging.current = false;
-    hasMoved.current = false;
-  }, []);
+  const resetEyes = () => {
+    if (eyeTimeout.current) clearTimeout(eyeTimeout.current);
+    setEyeOffset({ x: 0, y: 0 });
+  };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -118,15 +95,29 @@ const DashboardLayout = () => {
       if (!dragging.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
       dragging.current = true;
       hasMoved.current = true;
-      updatePosition(dragStart.current.posX + dx, dragStart.current.posY + dy);
+
+      const newX = dragStart.current.posX + dx;
+      const newY = dragStart.current.posY + dy;
+
+      // Eye offset from frame delta
+      const fdx = newX - prevDragPos.current.x;
+      const fdy = newY - prevDragPos.current.y;
+      prevDragPos.current = { x: newX, y: newY };
+      applyEyeOffset(fdx, fdy);
+
+      positionRef.current = { x: newX, y: newY };
+      if (widgetRef.current) {
+        widgetRef.current.style.transform = `translate(${newX}px, ${newY}px)`;
+      }
     };
     const handleMouseUp = () => {
+      if (!dragStart.current) return;
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
       const finalPos = { ...positionRef.current };
       setPosition(finalPos);
       savePosition(finalPos);
-      setEyeOffset({ x: 0, y: 0 });
+      resetEyes();
     };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
@@ -134,14 +125,13 @@ const DashboardLayout = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [updatePosition, savePosition]);
+  }, [savePosition]);
 
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
-    const t = e.touches[0];
-    lastPos.current = { ...positionRef.current };
-    dragStart.current = { mouseX: t.clientX, mouseY: t.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
+    prevDragPos.current = { ...positionRef.current };
+    dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
     dragging.current = false;
     hasMoved.current = false;
   }, []);
@@ -156,15 +146,28 @@ const DashboardLayout = () => {
       dragging.current = true;
       hasMoved.current = true;
       e.preventDefault();
-      updatePosition(dragStart.current.posX + dx, dragStart.current.posY + dy);
+
+      const newX = dragStart.current.posX + dx;
+      const newY = dragStart.current.posY + dy;
+
+      const fdx = newX - prevDragPos.current.x;
+      const fdy = newY - prevDragPos.current.y;
+      prevDragPos.current = { x: newX, y: newY };
+      applyEyeOffset(fdx, fdy);
+
+      positionRef.current = { x: newX, y: newY };
+      if (widgetRef.current) {
+        widgetRef.current.style.transform = `translate(${newX}px, ${newY}px)`;
+      }
     };
     const handleTouchEnd = () => {
+      if (!dragStart.current) return;
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
       const finalPos = { ...positionRef.current };
       setPosition(finalPos);
       savePosition(finalPos);
-      setEyeOffset({ x: 0, y: 0 });
+      resetEyes();
     };
     window.addEventListener('touchmove', handleTouchMove, { passive: false });
     window.addEventListener('touchend', handleTouchEnd);
@@ -172,7 +175,17 @@ const DashboardLayout = () => {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [updatePosition, savePosition]);
+  }, [savePosition]);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
+    const t = e.touches[0];
+    prevDragPos.current = { ...positionRef.current };
+    dragStart.current = { mouseX: t.clientX, mouseY: t.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
+    dragging.current = false;
+    hasMoved.current = false;
+  }, []);
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
