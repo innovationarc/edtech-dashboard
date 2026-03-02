@@ -45,25 +45,25 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       if (mouthORef.current)     mouthORef.current.style.display     = drag ? '' : 'none';
     };
 
-    // ── JS blink — ref so recursive calls always point to same function ──
+    // ── JS eye squint — slow open/close like original SVG animate ──
     const scheduleBlinkRef = { current: () => {} };
     scheduleBlinkRef.current = () => {
       if (blinkTimer.current) clearTimeout(blinkTimer.current);
       blinkTimer.current = setTimeout(() => {
         if (isDragging.current) { scheduleBlinkRef.current(); return; }
 
-        const duration = 160;
+        const duration = 600; // slow squint close+open
         const start = performance.now();
         const animFrame = (now: number) => {
           if (isDragging.current) { setEyeRy(12); scheduleBlinkRef.current(); return; }
           const t = Math.min((now - start) / duration, 1);
-          const ry = t < 0.5 ? lerp(12, 1, t * 2) : lerp(1, 12, (t - 0.5) * 2);
+          const ry = t < 0.5 ? lerp(12, 1.2, t * 2) : lerp(1.2, 12, (t - 0.5) * 2);
           setEyeRy(ry);
           if (t < 1) requestAnimationFrame(animFrame);
           else scheduleBlinkRef.current();
         };
         requestAnimationFrame(animFrame);
-      }, 2500 + Math.random() * 2000);
+      }, 3000 + Math.random() * 2000);
     };
 
     scheduleBlinkRef.current();
