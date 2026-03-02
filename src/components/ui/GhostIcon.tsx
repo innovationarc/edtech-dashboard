@@ -10,12 +10,27 @@ interface GhostIconProps {
 const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) => {
   const [pupil, setPupil] = useState({ x: 0, y: 0 });
   const [tilt, setTilt] = useState(0);
-  const [drift, setDrift] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prev = useRef({ x: 0, y: 0 });
   const active = useRef(false);
+  // Smooth tilt via lerp on rAF
+  const targetTilt = useRef(0);
+  const currentTilt = useRef(0);
+  const rafId = useRef<number>(0);
+
+  useEffect(() => {
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    const tick = () => {
+      currentTilt.current = lerp(currentTilt.current, targetTilt.current, 0.18);
+      setTilt(currentTilt.current);
+      rafId.current = requestAnimationFrame(tick);
+    };
+    rafId.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId.current);
+  }, []);
 
   useEffect(() => {
     const getPos = (e: MouseEvent | TouchEvent) =>
@@ -35,15 +50,19 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       const dx = pos.x - prev.current.x;
       const dy = pos.y - prev.current.y;
       prev.current = pos;
+
       const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
-      setPupil({ x: clamp(dx * 0.5, 5), y: clamp(dy * 0.5, 4) });
-      setTilt(clamp(dx * 1.2, 18));
-      setDrift(clamp(dx * 0.4, 8));
+
+      // Pupils follow drag direction — curious look
+      setPupil({ x: clamp(dx * 0.7, 6), y: clamp(dy * 0.5, 4) });
+
+      // Set target tilt — lerp loop smooths it
+      targetTilt.current = clamp(dx * 2.5, 28);
+
       if (resetTimer.current) clearTimeout(resetTimer.current);
       resetTimer.current = setTimeout(() => {
         setPupil({ x: 0, y: 0 });
-        setTilt(0);
-        setDrift(0);
+        targetTilt.current = 0;
       }, 150);
     };
 
@@ -52,8 +71,7 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       setIsDragging(false);
       if (resetTimer.current) clearTimeout(resetTimer.current);
       setPupil({ x: 0, y: 0 });
-      setTilt(0);
-      setDrift(0);
+      targetTilt.current = 0;
     };
 
     window.addEventListener('mousedown', onDown);
@@ -73,16 +91,13 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
   }, []);
 
   const pupilStyle: React.CSSProperties = {
-    transition: 'transform 0.08s ease-out',
+    transition: 'transform 0.06s ease-out',
     transform: `translate(${pupil.x}px, ${pupil.y}px)`,
   };
 
   const wrapStyle: React.CSSProperties = {
     display: 'inline-block',
-    transition: 'transform 0.12s ease-out',
-    transform: isDragging
-      ? `translateX(${drift}px) rotate(${tilt}deg)`
-      : 'translateX(0px) rotate(0deg)',
+    transform: `rotate(${tilt}deg)`,
     transformOrigin: 'center bottom',
   };
 
@@ -119,19 +134,25 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
 
         {/* Ground shadow */}
         <ellipse cx="80" cy="164" rx="40" ry="7" fill="url(#g-aura)">
-          <animate attributeName="rx"      values="40;50;40"  dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
-          <animate attributeName="opacity" values="0.7;1;0.7" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
+          <animate attributeName="rx"      values="40;50;40"  dur="2s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
+          <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
         </ellipse>
 
-        {/* Body + face — always rendered, float via CSS on wrapper div instead of animateTransform */}
         <g filter="url(#g-glow)">
-          <path fill="url(#g-body)"
-            d="M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z"
-          >
-            {/* Hem wobble — always on, CSS tilt handles drag feel */}
+          {/* Float — always active, faster dur */}
+          <animateTransform
+            attributeName="transform" type="translate"
+            values="0,0; 0,-14; 0,0"
+            dur="2s" repeatCount="indefinite"
+            calcMode="spline"
+            keySplines="0.45 0.05 0.55 0.95;0.45 0.05 0.55 0.95"
+          />
+
+          {/* Body with hem wobble — always active */}
+          <path fill="url(#g-body)">
             <animate
               attributeName="d"
-              dur="2.4s"
+              dur="1.8s"
               repeatCount="indefinite"
               calcMode="spline"
               keySplines="0.5 0 0.5 1; 0.5 0 0.5 1; 0.5 0 0.5 1"
@@ -144,9 +165,9 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
             />
           </path>
 
-          {/* Left eye */}
-          <ellipse cx="60" cy="72" rx="11.5" ry={isActive ? 14 : 12} fill="#1c0b30" filter="url(#g-eye)">
-            {!isActive && (
+          {/* Left eye — blink only when idle, open wide when dragging (curious) */}
+          <ellipse cx="60" cy="72" rx="11.5" ry={isActive || isDragging ? 14 : 12} fill="#1c0b30" filter="url(#g-eye)">
+            {!isActive && !isDragging && (
               <animate attributeName="ry" values="12;1.2;12" dur="5s" begin="2s" repeatCount="indefinite"
                 calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
             )}
@@ -154,17 +175,17 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
           <ellipse cx="64" cy="66" rx="3" ry="4" fill="white" opacity="0.55" style={pupilStyle} />
 
           {/* Right eye */}
-          <ellipse cx="100" cy="72" rx="11.5" ry={isActive ? 14 : 12} fill="#1c0b30" filter="url(#g-eye)">
-            {!isActive && (
+          <ellipse cx="100" cy="72" rx="11.5" ry={isActive || isDragging ? 14 : 12} fill="#1c0b30" filter="url(#g-eye)">
+            {!isActive && !isDragging && (
               <animate attributeName="ry" values="12;1.2;12" dur="5s" begin="2s" repeatCount="indefinite"
                 calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
             )}
           </ellipse>
           <ellipse cx="104" cy="66" rx="3" ry="4" fill="white" opacity="0.55" style={pupilStyle} />
 
-          {/* Mouth */}
+          {/* Mouth — surprised O when dragging, open when chat active, smile when idle */}
           {isDragging ? (
-            <ellipse cx="80" cy="106" rx="6" ry="6" fill="#1c0b30" opacity="0.9" />
+            <ellipse cx="80" cy="106" rx="5" ry="5" fill="#1c0b30" opacity="0.9" />
           ) : isActive ? (
             <>
               <ellipse cx="80" cy="104" rx="9"   ry="11"  fill="#1c0b30" opacity="0.92" />
