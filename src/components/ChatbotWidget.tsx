@@ -3,9 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, X, Loader, AlertTriangle, Info } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
 
+interface ChatbotWidgetProps { eyeOffset?: { x: number; y: number }; }
 interface ChatMessage { sender: 'user' | 'ai'; text: string; }
 
-const ChatbotWidget: React.FC = () => {
+const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset = { x: 0, y: 0 } }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -89,7 +90,7 @@ const ChatbotWidget: React.FC = () => {
       )}
 
       <button onClick={() => setIsOpen(!isOpen)} className="ghost-btn fixed bottom-4 right-4 z-40" style={{ width: 72, height: 72 }} aria-label={isOpen ? 'Close chatbot' : 'Open chatbot'}>
-        <GhostIcon size={72} isActive={isOpen} />
+        <GhostIcon size={72} isActive={isOpen} eyeOffset={eyeOffset} />
       </button>
 
       {isOpen && (
