@@ -63,7 +63,7 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
           else scheduleBlinkRef.current();
         };
         requestAnimationFrame(animFrame);
-      }, 3000 + Math.random() * 2000);
+      }, 1000 + Math.random() * 1000);
     };
 
     scheduleBlinkRef.current();
