@@ -1,20 +1,65 @@
 // src/components/ui/GhostIcon.tsx
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface GhostIconProps {
   size?: number;
   isActive?: boolean;
-  eyeOffset?: { x: number; y: number };
+  eyeOffset?: { x: number; y: number }; // kept for backward compat, ignored internally
 }
 
-const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false, eyeOffset = { x: 0, y: 0 } }) => {
-  const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
-  const ex = clamp(eyeOffset.x, 4);
-  const ey = clamp(eyeOffset.y, 3);
+const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) => {
+  const [pupil, setPupil] = useState({ x: 0, y: 0 });
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prev = useRef({ x: 0, y: 0 });
+  const active = useRef(false);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      active.current = true;
+      const pos = 'touches' in e ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+      prev.current = pos;
+    };
+
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!active.current) return;
+      const pos = 'touches' in e ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+      const dx = pos.x - prev.current.x;
+      const dy = pos.y - prev.current.y;
+      prev.current = pos;
+
+      const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
+      setPupil({ x: clamp(dx * 0.5, 5), y: clamp(dy * 0.5, 4) });
+
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => setPupil({ x: 0, y: 0 }), 120);
+    };
+
+    const onUp = () => {
+      active.current = false;
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+      setPupil({ x: 0, y: 0 });
+    };
+
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchstart', onDown);
+    window.addEventListener('touchmove', onMove);
+    window.addEventListener('touchend', onUp);
+
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchstart', onDown);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, []);
 
   const pupilStyle: React.CSSProperties = {
-    transition: 'transform 0.12s ease-out',
-    transform: `translate(${ex}px, ${ey}px)`,
+    transition: 'transform 0.08s ease-out',
+    transform: `translate(${pupil.x}px, ${pupil.y}px)`,
   };
 
   return (
@@ -47,7 +92,6 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false, eyeO
         </radialGradient>
       </defs>
 
-      {/* Ground shadow */}
       <ellipse cx="80" cy="164" rx="40" ry="7" fill="url(#g-aura)">
         <animate attributeName="rx" values="40;50;40" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
         <animate attributeName="opacity" values="0.7;1;0.7" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
@@ -85,7 +129,6 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false, eyeO
               calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
           )}
         </ellipse>
-        {/* Left pupil highlight — uses transform for smooth CSS transition */}
         <ellipse cx="64" cy="66" rx="3" ry="4" fill="white" opacity="0.55" style={pupilStyle} />
 
         {/* Right eye */}
@@ -95,7 +138,6 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false, eyeO
               calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
           )}
         </ellipse>
-        {/* Right pupil highlight — uses transform for smooth CSS transition */}
         <ellipse cx="104" cy="66" rx="3" ry="4" fill="white" opacity="0.55" style={pupilStyle} />
 
         {/* Mouth */}
