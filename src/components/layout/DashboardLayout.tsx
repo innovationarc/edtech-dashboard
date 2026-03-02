@@ -3,9 +3,11 @@ import { Outlet } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
 import { useDashboard } from '../../contexts/DashboardContext';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../config/firebase';
 
 const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated } = useDashboard();
@@ -13,8 +15,12 @@ const DashboardLayout = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
+  const dragging = useRef(false);
+  const hasMoved = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; posX: number; posY: number } | null>(null);
+  const positionRef = useRef({ x: 0, y: 0 });
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -27,37 +33,117 @@ const DashboardLayout = () => {
     setShowAuthModal(!isAuthenticated);
   }, [isAuthenticated]);
 
-  const startDrag = (clientX: number, clientY: number) => {
-    dragStart.current = { mouseX: clientX, mouseY: clientY, posX: position.x, posY: position.y };
-    setDragging(true);
-  };
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const load = async () => {
+      try {
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists()) {
+          const saved = snap.data()?.preferences?.chatbotWidgetPosition;
+          if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+            positionRef.current = saved;
+            setPosition(saved);
+          }
+        }
+      } catch {
+        // Fail silently
+      }
+    };
+    load();
+  }, [isAuthenticated]);
+
+  const savePosition = useCallback((pos: { x: number; y: number }) => {
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(async () => {
+      try {
+        const uid = auth.currentUser?.uid;
+        if (!uid) return;
+        await updateDoc(doc(db, 'users', uid), {
+          'preferences.chatbotWidgetPosition': { x: pos.x, y: pos.y },
+        });
+      } catch {
+        // Fail silently
+      }
+    }, 500);
+  }, []);
+
+  const updatePosition = useCallback((x: number, y: number) => {
+    positionRef.current = { x, y };
+    if (widgetRef.current) {
+      widgetRef.current.style.transform = `translate(${x}px, ${y}px)`;
+    }
+  }, []);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
+    dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
+    dragging.current = false;
+    hasMoved.current = false;
+  }, []);
 
   useEffect(() => {
-    const onMove = (clientX: number, clientY: number) => {
-      if (!dragging || !dragStart.current) return;
-      setPosition({
-        x: dragStart.current.posX + (clientX - dragStart.current.mouseX),
-        y: dragStart.current.posY + (clientY - dragStart.current.mouseY),
-      });
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStart.current) return;
+      const dx = e.clientX - dragStart.current.mouseX;
+      const dy = e.clientY - dragStart.current.mouseY;
+      if (!dragging.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      dragging.current = true;
+      hasMoved.current = true;
+      updatePosition(dragStart.current.posX + dx, dragStart.current.posY + dy);
     };
-    const onEnd = () => { setDragging(false); dragStart.current = null; };
-
-    const handleMouseMove = (e: MouseEvent) => onMove(e.clientX, e.clientY);
-    const handleTouchMove = (e: TouchEvent) => onMove(e.touches[0].clientX, e.touches[0].clientY);
-
-    if (dragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', onEnd);
-      window.addEventListener('touchmove', handleTouchMove);
-      window.addEventListener('touchend', onEnd);
-    }
+    const handleMouseUp = () => {
+      dragStart.current = null;
+      setTimeout(() => { dragging.current = false; }, 0);
+      const finalPos = { ...positionRef.current };
+      setPosition(finalPos);
+      savePosition(finalPos);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', onEnd);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging]);
+  }, [updatePosition, savePosition]);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
+    const t = e.touches[0];
+    dragStart.current = { mouseX: t.clientX, mouseY: t.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
+    dragging.current = false;
+    hasMoved.current = false;
+  }, []);
+
+  useEffect(() => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragStart.current) return;
+      const t = e.touches[0];
+      const dx = t.clientX - dragStart.current.mouseX;
+      const dy = t.clientY - dragStart.current.mouseY;
+      if (!dragging.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      dragging.current = true;
+      hasMoved.current = true;
+      e.preventDefault();
+      updatePosition(dragStart.current.posX + dx, dragStart.current.posY + dy);
+    };
+    const handleTouchEnd = () => {
+      dragStart.current = null;
+      setTimeout(() => { dragging.current = false; }, 0);
+      const finalPos = { ...positionRef.current };
+      setPosition(finalPos);
+      savePosition(finalPos);
+    };
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [updatePosition, savePosition]);
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
@@ -82,16 +168,18 @@ const DashboardLayout = () => {
 
       {isAuthenticated && (
         <div
-          onMouseDown={(e) => { startDrag(e.clientX, e.clientY); e.preventDefault(); }}
-          onTouchStart={(e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)}
+          ref={widgetRef}
+          onMouseDown={onMouseDown}
+          onTouchStart={onTouchStart}
           style={{
             position: 'fixed',
             transform: `translate(${position.x}px, ${position.y}px)`,
             zIndex: 1000,
             bottom: 0,
             right: 0,
-            cursor: dragging ? 'grabbing' : 'grab',
             userSelect: 'none',
+            touchAction: 'none',
+            cursor: 'grab',
           }}
         >
           <ChatbotWidget />
@@ -106,4 +194,3 @@ const DashboardLayout = () => {
 };
 
 export default DashboardLayout;
-  
