@@ -45,37 +45,28 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       if (mouthORef.current)     mouthORef.current.style.display     = drag ? '' : 'none';
     };
 
-    // ── JS blink — checks isDragging ref on EVERY frame so it stops instantly ──
-    const scheduleBlink = () => {
+    // ── JS blink — ref so recursive calls always point to same function ──
+    const scheduleBlinkRef = { current: () => {} };
+    scheduleBlinkRef.current = () => {
       if (blinkTimer.current) clearTimeout(blinkTimer.current);
       blinkTimer.current = setTimeout(() => {
-        // Abort immediately if dragging
-        if (isDragging.current) { scheduleBlink(); return; }
+        if (isDragging.current) { scheduleBlinkRef.current(); return; }
 
         const duration = 160;
         const start = performance.now();
-
         const animFrame = (now: number) => {
-          // Stop mid-blink the moment drag starts
-          if (isDragging.current) {
-            setEyeRy(12);
-            scheduleBlink();
-            return;
-          }
+          if (isDragging.current) { setEyeRy(12); scheduleBlinkRef.current(); return; }
           const t = Math.min((now - start) / duration, 1);
           const ry = t < 0.5 ? lerp(12, 1, t * 2) : lerp(1, 12, (t - 0.5) * 2);
           setEyeRy(ry);
-          if (t < 1) {
-            requestAnimationFrame(animFrame);
-          } else {
-            scheduleBlink(); // next blink
-          }
+          if (t < 1) requestAnimationFrame(animFrame);
+          else scheduleBlinkRef.current();
         };
         requestAnimationFrame(animFrame);
       }, 2500 + Math.random() * 2000);
     };
 
-    scheduleBlink();
+    scheduleBlinkRef.current();
 
     // ── Main rAF: tilt lerp + pupil sync ──
     const tick = () => {
@@ -131,7 +122,7 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       setPupils(0, 0);
       setMouth(false);
       setEyeRy(12);
-      scheduleBlink();
+      scheduleBlinkRef.current();
     };
 
     window.addEventListener('mousedown',  onDown);
