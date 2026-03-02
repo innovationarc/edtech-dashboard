@@ -4,13 +4,13 @@ import React, { useState, useEffect, useRef } from 'react';
 interface GhostIconProps {
   size?: number;
   isActive?: boolean;
-  eyeOffset?: { x: number; y: number }; // kept for backward compat
+  eyeOffset?: { x: number; y: number };
 }
 
 const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) => {
   const [pupil, setPupil] = useState({ x: 0, y: 0 });
-  const [tilt, setTilt] = useState(0);   // rotation degrees
-  const [drift, setDrift] = useState(0); // horizontal drift px
+  const [tilt, setTilt] = useState(0);
+  const [drift, setDrift] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -35,18 +35,10 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       const dx = pos.x - prev.current.x;
       const dy = pos.y - prev.current.y;
       prev.current = pos;
-
       const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
-
-      // Pupils follow drag direction
       setPupil({ x: clamp(dx * 0.5, 5), y: clamp(dy * 0.5, 4) });
-
-      // Tilt based on horizontal movement (lean into the direction)
       setTilt(clamp(dx * 1.2, 18));
-
-      // Drift slightly in the direction of horizontal drag
       setDrift(clamp(dx * 0.4, 8));
-
       if (resetTimer.current) clearTimeout(resetTimer.current);
       resetTimer.current = setTimeout(() => {
         setPupil({ x: 0, y: 0 });
@@ -70,7 +62,6 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
     window.addEventListener('touchstart', onDown as EventListener);
     window.addEventListener('touchmove', onMove as EventListener);
     window.addEventListener('touchend', onUp);
-
     return () => {
       window.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);
@@ -86,21 +77,17 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
     transform: `translate(${pupil.x}px, ${pupil.y}px)`,
   };
 
-  // Ghost wrapper transform: tilt + drift when dragging, idle float otherwise
-  const ghostWrapStyle: React.CSSProperties = isDragging ? {
-    transition: 'transform 0.1s ease-out',
-    transform: `translateX(${drift}px) rotate(${tilt}deg)`,
-    transformOrigin: 'center bottom',
+  const wrapStyle: React.CSSProperties = {
     display: 'inline-block',
-  } : {
-    transition: 'transform 0.3s ease-out',
-    transform: 'translateX(0px) rotate(0deg)',
+    transition: 'transform 0.12s ease-out',
+    transform: isDragging
+      ? `translateX(${drift}px) rotate(${tilt}deg)`
+      : 'translateX(0px) rotate(0deg)',
     transformOrigin: 'center bottom',
-    display: 'inline-block',
   };
 
   return (
-    <div style={ghostWrapStyle}>
+    <div style={wrapStyle}>
       <svg
         width={size}
         height={size}
@@ -130,71 +117,36 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
           </radialGradient>
         </defs>
 
-        {/* Ground shadow — shrinks/shifts slightly when dragging */}
-        <ellipse
-          cx="80" cy="164" rx="40" ry="7"
-          fill="url(#g-aura)"
-          style={{
-            transition: 'transform 0.15s ease-out, opacity 0.15s ease-out',
-            transform: isDragging ? `translateX(${-drift * 0.5}px) scaleX(0.8)` : 'translateX(0) scaleX(1)',
-            transformOrigin: 'center center',
-            opacity: isDragging ? 0.5 : 1,
-          }}
-        >
-          {!isDragging && (
-            <>
-              <animate attributeName="rx" values="40;50;40" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
-              <animate attributeName="opacity" values="0.7;1;0.7" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
-            </>
-          )}
+        {/* Ground shadow */}
+        <ellipse cx="80" cy="164" rx="40" ry="7" fill="url(#g-aura)">
+          <animate attributeName="rx"      values="40;50;40"  dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
+          <animate attributeName="opacity" values="0.7;1;0.7" dur="3.4s" repeatCount="indefinite" calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
         </ellipse>
 
+        {/* Body + face — always rendered, float via CSS on wrapper div instead of animateTransform */}
         <g filter="url(#g-glow)">
-          {/* Idle float animation — paused when dragging */}
-          {!isDragging && (
-            <animateTransform
-              attributeName="transform" type="translate"
-              values="0,0; 0,-12; 0,0"
-              dur="3.4s" repeatCount="indefinite"
+          <path fill="url(#g-body)"
+            d="M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z"
+          >
+            {/* Hem wobble — always on, CSS tilt handles drag feel */}
+            <animate
+              attributeName="d"
+              dur="2.4s"
+              repeatCount="indefinite"
               calcMode="spline"
-              keySplines="0.45 0.05 0.55 0.95;0.45 0.05 0.55 0.95"
+              keySplines="0.5 0 0.5 1; 0.5 0 0.5 1; 0.5 0 0.5 1"
+              values="
+                M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z;
+                M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,128 106,128 C 100,128 96,156 80,156 C 64,156 60,128 54,128 C 48,128 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z;
+                M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,132 106,132 C 100,132 96,150 80,150 C 64,150 60,132 54,132 C 48,132 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z;
+                M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z
+              "
             />
-          )}
-
-          <path fill="url(#g-body)">
-            {!isDragging && (
-              <animate
-                attributeName="d"
-                dur="2.4s"
-                repeatCount="indefinite"
-                calcMode="spline"
-                keySplines="0.5 0 0.5 1; 0.5 0 0.5 1; 0.5 0 0.5 1"
-                values="
-                  M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z;
-                  M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,128 106,128 C 100,128 96,156 80,156 C 64,156 60,128 54,128 C 48,128 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z;
-                  M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,132 106,132 C 100,132 96,150 80,150 C 64,150 60,132 54,132 C 48,132 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z;
-                  M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z
-                "
-              />
-            )}
-            {isDragging && (
-              // Stretched body shape when dragging
-              <animate
-                attributeName="d"
-                dur="0.1s"
-                repeatCount="1"
-                fill="freeze"
-                values="
-                  M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z;
-                  M 80,12 C 112,12 138,36 138,70 C 138,96 138,118 138,130 C 138,140 128,140 122,140 C 116,140 112,130 106,130 C 100,130 96,152 80,152 C 64,152 60,130 54,130 C 48,130 44,140 38,140 C 32,140 22,140 22,130 C 22,118 22,96 22,70 C 22,36 48,12 80,12 Z
-                "
-              />
-            )}
           </path>
 
           {/* Left eye */}
           <ellipse cx="60" cy="72" rx="11.5" ry={isActive ? 14 : 12} fill="#1c0b30" filter="url(#g-eye)">
-            {!isActive && !isDragging && (
+            {!isActive && (
               <animate attributeName="ry" values="12;1.2;12" dur="5s" begin="2s" repeatCount="indefinite"
                 calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
             )}
@@ -203,16 +155,16 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
 
           {/* Right eye */}
           <ellipse cx="100" cy="72" rx="11.5" ry={isActive ? 14 : 12} fill="#1c0b30" filter="url(#g-eye)">
-            {!isActive && !isDragging && (
+            {!isActive && (
               <animate attributeName="ry" values="12;1.2;12" dur="5s" begin="2s" repeatCount="indefinite"
                 calcMode="spline" keySplines="0.5 0 0.5 1;0.5 0 0.5 1" />
             )}
           </ellipse>
           <ellipse cx="104" cy="66" rx="3" ry="4" fill="white" opacity="0.55" style={pupilStyle} />
 
-          {/* Mouth — surprised O when dragging, open when active, smile when idle */}
+          {/* Mouth */}
           {isDragging ? (
-            <ellipse cx="80" cy="106" rx="7" ry="7" fill="#1c0b30" opacity="0.9" />
+            <ellipse cx="80" cy="106" rx="6" ry="6" fill="#1c0b30" opacity="0.9" />
           ) : isActive ? (
             <>
               <ellipse cx="80" cy="104" rx="9"   ry="11"  fill="#1c0b30" opacity="0.92" />
