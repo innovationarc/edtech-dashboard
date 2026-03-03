@@ -184,119 +184,331 @@ const AppearanceSettings = () => {
     fontFamily,
     setFontFamily
   } = useDashboard();
-  
+
+  // Android 16 / Material You inspired themes
   const themes = [
-    { id: 'dark', name: 'Dark', colors: ['#0d1117', '#1f2937', '#374151'] },
-    { id: 'light', name: 'Light', colors: ['#f9fafb', '#f3f4f6', '#e5e7eb'] },
-    { id: 'purple', name: 'Purple', colors: ['#1e1b4b', '#312e81', '#4c1d95'] },
-    { id: 'pink', name: 'Pink', colors: ['#831843', '#9d174d', '#be185d'] },
+    { 
+      id: 'dark', 
+      name: 'Midnight', 
+      description: 'Deep dark base',
+      colors: ['#0d1117', '#1f2937', '#374151'],
+      accent: '#6366f1'
+    },
+    { 
+      id: 'light', 
+      name: 'Daylight', 
+      description: 'Clean bright mode',
+      colors: ['#f9fafb', '#f3f4f6', '#e5e7eb'],
+      accent: '#6366f1'
+    },
+    { 
+      id: 'purple', 
+      name: 'Aurora', 
+      description: 'Indigo galaxy',
+      colors: ['#1e1b4b', '#312e81', '#4c1d95'],
+      accent: '#a78bfa'
+    },
+    { 
+      id: 'pink', 
+      name: 'Blossom', 
+      description: 'Rose energy',
+      colors: ['#831843', '#9d174d', '#be185d'],
+      accent: '#f9a8d4'
+    },
+    { 
+      id: 'ocean', 
+      name: 'Ocean', 
+      description: 'Deep sea calm',
+      colors: ['#0c1a2e', '#0f2744', '#1e3a5f'],
+      accent: '#38bdf8'
+    },
+    { 
+      id: 'forest', 
+      name: 'Forest', 
+      description: 'Nature grounded',
+      colors: ['#0a1f14', '#0f2d1e', '#14532d'],
+      accent: '#4ade80'
+    },
+    { 
+      id: 'sunset', 
+      name: 'Sunset', 
+      description: 'Warm horizon',
+      colors: ['#1c0a00', '#431407', '#7c2d12'],
+      accent: '#fb923c'
+    },
+    { 
+      id: 'slate', 
+      name: 'Graphite', 
+      description: 'Minimal pro',
+      colors: ['#0f172a', '#1e293b', '#334155'],
+      accent: '#94a3b8'
+    },
   ];
 
+  // Synced color palettes - Android 16 Material You style
+  const colorPalettes = [
+    { 
+      name: 'Violet Storm', 
+      primary: '#7c3aed', 
+      accent: '#06b6d4',
+      preview: ['#7c3aed', '#5b21b6', '#06b6d4']
+    },
+    { 
+      name: 'Ocean Breeze', 
+      primary: '#0ea5e9', 
+      accent: '#10b981',
+      preview: ['#0ea5e9', '#0284c7', '#10b981']
+    },
+    { 
+      name: 'Flame', 
+      primary: '#ef4444', 
+      accent: '#f97316',
+      preview: ['#ef4444', '#dc2626', '#f97316']
+    },
+    { 
+      name: 'Neon Mint', 
+      primary: '#10b981', 
+      accent: '#a78bfa',
+      preview: ['#10b981', '#059669', '#a78bfa']
+    },
+    { 
+      name: 'Golden Hour', 
+      primary: '#f59e0b', 
+      accent: '#ec4899',
+      preview: ['#f59e0b', '#d97706', '#ec4899']
+    },
+    { 
+      name: 'Rose Quartz', 
+      primary: '#ec4899', 
+      accent: '#8b5cf6',
+      preview: ['#ec4899', '#db2777', '#8b5cf6']
+    },
+    { 
+      name: 'Arctic', 
+      primary: '#6366f1', 
+      accent: '#22d3ee',
+      preview: ['#6366f1', '#4f46e5', '#22d3ee']
+    },
+    { 
+      name: 'Emerald City', 
+      primary: '#059669', 
+      accent: '#0ea5e9',
+      preview: ['#059669', '#047857', '#0ea5e9']
+    },
+  ];
+
+  // Rich font options with Google Fonts
+  const fontOptions = [
+    { value: 'Sora', label: 'Sora', description: 'Modern & geometric', category: 'Sans-serif' },
+    { value: 'DM Sans', label: 'DM Sans', description: 'Clean & neutral', category: 'Sans-serif' },
+    { value: 'Outfit', label: 'Outfit', description: 'Friendly & versatile', category: 'Sans-serif' },
+    { value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans', description: 'Contemporary', category: 'Sans-serif' },
+    { value: 'Nunito', label: 'Nunito', description: 'Rounded & warm', category: 'Sans-serif' },
+    { value: 'Raleway', label: 'Raleway', description: 'Elegant & refined', category: 'Display' },
+    { value: 'Josefin Sans', label: 'Josefin Sans', description: 'Art deco flair', category: 'Display' },
+    { value: 'Exo 2', label: 'Exo 2', description: 'Tech forward', category: 'Display' },
+    { value: 'Fira Code', label: 'Fira Code', description: 'Monospace code', category: 'Monospace' },
+    { value: 'JetBrains Mono', label: 'JetBrains Mono', description: 'Dev favorite', category: 'Monospace' },
+  ];
+
+  const isActivePalette = (palette: typeof colorPalettes[0]) => 
+    palette.primary === primaryColor && palette.accent === accentColor;
+
+  // Load Google Font dynamically when selected
+  const handleFontChange = (font: string) => {
+    setFontFamily(font);
+    // Dynamically inject font link
+    const fontName = font.replace(/ /g, '+');
+    const linkId = `google-font-${fontName}`;
+    if (!document.getElementById(linkId)) {
+      const link = document.createElement('link');
+      link.id = linkId;
+      link.rel = 'stylesheet';
+      link.href = `https://fonts.googleapis.com/css2?family=${fontName}:wght@300;400;500;600;700&display=swap`;
+      document.head.appendChild(link);
+    }
+    document.documentElement.style.setProperty('--font-sans', font);
+    document.body.style.fontFamily = `'${font}', sans-serif`;
+  };
+
   const handleSaveSettings = () => {
-    // Settings are automatically saved via context
-    alert('Appearance settings saved successfully!');
+    alert('Appearance settings saved!');
   };
   
   return (
-    <Card title="Appearance Settings">
-      <div className="space-y-6">
+    <Card title="Appearance" subtitle="Android 16-inspired theming & personalization">
+      <div className="space-y-8">
+
+        {/* Theme Selection */}
         <div>
-          <label className="block text-sm text-gray-400 mb-3">Color Theme</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <label className="block text-sm font-semibold text-gray-300 mb-4 uppercase tracking-wider">Visual Theme</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {themes.map((themeOption) => (
-              <div key={themeOption.id} className="flex flex-col items-center">
-                <button
-                  className={`h-20 w-full rounded-lg overflow-hidden p-0.5 mb-2 focus:outline-none transition-all ${
-                    theme === themeOption.id 
-                      ? 'ring-2 ring-primary-500 scale-105' 
-                      : 'ring-1 ring-background-600 hover:ring-2 hover:ring-primary-400'
-                  }`}
-                  onClick={() => setTheme(themeOption.id)}
-                >
-                  <div className="h-full w-full grid grid-cols-3 rounded">
-                    {themeOption.colors.map((color, idx) => (
-                      <div key={idx} className="h-full" style={{ backgroundColor: color }}></div>
-                    ))}
+              <button
+                key={themeOption.id}
+                onClick={() => setTheme(themeOption.id)}
+                className={`relative rounded-2xl overflow-hidden transition-all duration-200 focus:outline-none group ${
+                  theme === themeOption.id 
+                    ? 'ring-2 ring-offset-2 ring-offset-background-900 ring-primary-500 scale-105 shadow-xl' 
+                    : 'ring-1 ring-background-600 hover:scale-102 hover:ring-primary-400/50'
+                }`}
+              >
+                {/* Color preview */}
+                <div className="h-14 w-full flex">
+                  {themeOption.colors.map((color, idx) => (
+                    <div key={idx} className="flex-1 h-full" style={{ backgroundColor: color }}></div>
+                  ))}
+                  {/* Accent dot */}
+                  <div 
+                    className="absolute bottom-2 right-2 w-3 h-3 rounded-full ring-1 ring-white/30"
+                    style={{ backgroundColor: themeOption.accent }}
+                  />
+                </div>
+                {/* Label */}
+                <div className="px-2 py-1.5 bg-background-800/90">
+                  <p className={`text-xs font-semibold ${theme === themeOption.id ? 'text-primary-300' : 'text-gray-200'}`}>
+                    {themeOption.name}
+                  </p>
+                  <p className="text-[10px] text-gray-500">{themeOption.description}</p>
+                </div>
+                {theme === themeOption.id && (
+                  <div className="absolute top-1.5 left-1.5 w-4 h-4 bg-primary-500 rounded-full flex items-center justify-center">
+                    <svg width="8" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
                   </div>
-                </button>
-                <span className={`text-sm transition-colors ${
-                  theme === themeOption.id ? 'text-primary-300 font-medium' : 'text-gray-300'
-                }`}>
-                  {themeOption.name}
-                </span>
-              </div>
+                )}
+              </button>
             ))}
           </div>
         </div>
-        
+
+        {/* Synced Color Palettes */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Primary Color</label>
-          <div className="flex gap-4">
-            <input
-              type="color"
-              value={primaryColor}
-              onChange={(e) => setPrimaryColor(e.target.value)}
-              className="h-10 w-10 rounded overflow-hidden bg-transparent border-0 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={primaryColor}
-              onChange={(e) => setPrimaryColor(e.target.value)}
-              className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+          <label className="block text-sm font-semibold text-gray-300 mb-1 uppercase tracking-wider">Synced Color Palettes</label>
+          <p className="text-xs text-gray-500 mb-4">One click syncs both primary & accent colors</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {colorPalettes.map((palette) => (
+              <button
+                key={palette.name}
+                onClick={() => { setPrimaryColor(palette.primary); setAccentColor(palette.accent); }}
+                className={`relative p-3 rounded-2xl transition-all duration-200 focus:outline-none text-left ${
+                  isActivePalette(palette)
+                    ? 'ring-2 ring-primary-500 ring-offset-1 ring-offset-background-900 bg-background-700 scale-105'
+                    : 'bg-background-800 hover:bg-background-700 ring-1 ring-background-600'
+                }`}
+              >
+                {/* Color swatches */}
+                <div className="flex gap-1 mb-2">
+                  {palette.preview.map((c, i) => (
+                    <div key={i} className={`h-5 rounded-full ${i === 0 ? 'flex-1' : 'w-5'}`} style={{ backgroundColor: c }}/>
+                  ))}
+                </div>
+                <p className="text-xs font-medium text-gray-200">{palette.name}</p>
+                {isActivePalette(palette) && (
+                  <div className="absolute top-2 right-2 w-4 h-4 bg-primary-500 rounded-full flex items-center justify-center">
+                    <svg width="8" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                  </div>
+                )}
+              </button>
+            ))}
           </div>
         </div>
-        
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">Accent Color</label>
-          <div className="flex gap-4">
-            <input
-              type="color"
-              value={accentColor}
-              onChange={(e) => setAccentColor(e.target.value)}
-              className="h-10 w-10 rounded overflow-hidden bg-transparent border-0 cursor-pointer"
-            />
-            <input
-              type="text"
-              value={accentColor}
-              onChange={(e) => setAccentColor(e.target.value)}
-              className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
+
+        {/* Custom Color Pickers */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wider">Primary Color</label>
+            <div className="flex items-center gap-3 bg-background-800 rounded-xl p-2 ring-1 ring-background-600">
+              <input
+                type="color"
+                value={primaryColor}
+                onChange={(e) => setPrimaryColor(e.target.value)}
+                className="h-9 w-9 rounded-lg overflow-hidden bg-transparent border-0 cursor-pointer flex-shrink-0"
+              />
+              <input
+                type="text"
+                value={primaryColor}
+                onChange={(e) => setPrimaryColor(e.target.value)}
+                className="flex-1 bg-transparent text-white text-sm focus:outline-none font-mono"
+              />
+              <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: primaryColor }} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wider">Accent Color</label>
+            <div className="flex items-center gap-3 bg-background-800 rounded-xl p-2 ring-1 ring-background-600">
+              <input
+                type="color"
+                value={accentColor}
+                onChange={(e) => setAccentColor(e.target.value)}
+                className="h-9 w-9 rounded-lg overflow-hidden bg-transparent border-0 cursor-pointer flex-shrink-0"
+              />
+              <input
+                type="text"
+                value={accentColor}
+                onChange={(e) => setAccentColor(e.target.value)}
+                className="flex-1 bg-transparent text-white text-sm focus:outline-none font-mono"
+              />
+              <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: accentColor }} />
+            </div>
           </div>
         </div>
-        
+
+        {/* Font Family */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Font</label>
-          <select 
-            value={fontFamily}
-            onChange={(e) => setFontFamily(e.target.value)}
-            className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="inter">Inter</option>
-            <option value="roboto">Roboto</option>
-            <option value="open-sans">Open Sans</option>
-            <option value="poppins">Poppins</option>
-          </select>
+          <label className="block text-sm font-semibold text-gray-300 mb-1 uppercase tracking-wider">Typography</label>
+          <p className="text-xs text-gray-500 mb-4">Choose a font that matches your style</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {fontOptions.map((font) => (
+              <button
+                key={font.value}
+                onClick={() => handleFontChange(font.value)}
+                className={`flex items-center justify-between p-3 rounded-xl transition-all text-left ${
+                  fontFamily === font.value
+                    ? 'bg-primary-900/40 ring-2 ring-primary-500 text-primary-200'
+                    : 'bg-background-800 ring-1 ring-background-600 hover:bg-background-700 text-gray-300'
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-medium" style={{ fontFamily: `'${font.value}', sans-serif` }}>{font.label}</p>
+                  <p className="text-[11px] text-gray-500">{font.description}</p>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                  font.category === 'Monospace' ? 'bg-yellow-900/40 text-yellow-400' 
+                  : font.category === 'Display' ? 'bg-purple-900/40 text-purple-400'
+                  : 'bg-blue-900/40 text-blue-400'
+                }`}>
+                  {font.category}
+                </span>
+              </button>
+            ))}
+          </div>
+          {/* Live preview */}
+          <div className="mt-3 p-4 bg-background-800 rounded-xl ring-1 ring-background-600">
+            <p className="text-xs text-gray-500 mb-2">Live Preview</p>
+            <p className="text-lg font-bold text-white" style={{ fontFamily: `'${fontFamily}', sans-serif` }}>The quick brown fox</p>
+            <p className="text-sm text-gray-400" style={{ fontFamily: `'${fontFamily}', sans-serif` }}>jumps over the lazy dog — 1234567890</p>
+          </div>
         </div>
-        
-        <div>
-          <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
-            <input
-              type="checkbox"
-              defaultChecked
-              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-            />
-            <span>Enable animations</span>
+
+        {/* Animations Toggle */}
+        <div className="flex items-center justify-between p-4 bg-background-800 rounded-xl ring-1 ring-background-600">
+          <div>
+            <p className="text-sm font-semibold text-white">Enable Animations</p>
+            <p className="text-xs text-gray-500 mt-0.5">Smooth transitions & micro-interactions</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" defaultChecked className="sr-only peer" />
+            <div className="w-11 h-6 bg-background-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
           </label>
         </div>
         
         <div className="flex justify-end">
           <button 
             onClick={handleSaveSettings}
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors"
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2.5 px-6 rounded-xl transition-colors font-medium"
           >
             <Save size={18} />
-            <span>Save Settings</span>
+            <span>Save Appearance</span>
           </button>
         </div>
       </div>
