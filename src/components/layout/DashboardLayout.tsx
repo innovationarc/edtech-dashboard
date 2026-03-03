@@ -28,6 +28,8 @@ const DashboardLayout = () => {
   const widgetRef = useRef<HTMLDivElement>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eyeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flyRafId = useRef(0);
+  const isFlying = useRef(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
