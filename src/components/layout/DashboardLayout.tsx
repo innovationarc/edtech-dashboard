@@ -231,6 +231,7 @@ const DashboardLayout = () => {
       };
 
       const start = performance.now();
+      const prevPt = { x: startX, y: startY };
       const tick = (now: number) => {
         const t = Math.min((now - start) / duration, 1);
         // Ease in-out
@@ -239,6 +240,9 @@ const DashboardLayout = () => {
         if (widgetRef.current) {
           widgetRef.current.style.transform = `translate(${pt.x}px, ${pt.y}px)`;
         }
+        // Tell GhostIcon to tilt/move eyes in flight direction
+        window.dispatchEvent(new CustomEvent('ghost-move', { detail: { dx: pt.x - prevPt.x, dy: pt.y - prevPt.y } }));
+        prevPt.x = pt.x; prevPt.y = pt.y;
         if (t < 1) {
           flyRafId.current = requestAnimationFrame(tick);
         } else {
@@ -248,6 +252,7 @@ const DashboardLayout = () => {
             widgetRef.current.style.transform = `translate(${startX}px, ${startY}px)`;
           }
           isFlying.current = false;
+          window.dispatchEvent(new CustomEvent('ghost-land'));
         }
       };
       flyRafId.current = requestAnimationFrame(tick);
