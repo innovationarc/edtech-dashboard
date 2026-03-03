@@ -187,6 +187,74 @@ const DashboardLayout = () => {
     hasMoved.current = false;
   }, []);
 
+
+  // Ghost fly animation — pure rAF, zero React state updates during flight
+  useEffect(() => {
+    const handleFly = () => {
+      if (isFlying.current || !widgetRef.current) return;
+      isFlying.current = true;
+
+      const startX = positionRef.current.x;
+      const startY = positionRef.current.y;
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const duration = 2200; // ms for full loop
+
+      // Bezier control points — loop around the screen
+      const path = [
+        { x: startX, y: startY },
+        { x: -W * 0.3, y: -H * 0.5 },
+        { x: W * 0.1,  y: -H * 0.6 },
+        { x: W * 0.4,  y: -H * 0.3 },
+        { x: W * 0.2,  y: H * 0.1  },
+        { x: -W * 0.1, y: H * 0.2  },
+        { x: startX,   y: startY   },
+      ];
+
+      // Catmull-Rom interpolation for smooth looping path
+      const getPoint = (t: number) => {
+        const segments = path.length - 1;
+        const seg = Math.min(Math.floor(t * segments), segments - 1);
+        const lt = (t * segments) - seg;
+        const p0 = path[Math.max(seg - 1, 0)];
+        const p1 = path[seg];
+        const p2 = path[Math.min(seg + 1, segments)];
+        const p3 = path[Math.min(seg + 2, segments)];
+        const cx = 0.5 * (2*p1.x + (-p0.x + p2.x)*lt + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*lt*lt + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*lt*lt*lt);
+        const cy = 0.5 * (2*p1.y + (-p0.y + p2.y)*lt + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*lt*lt + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*lt*lt*lt);
+        return { x: cx, y: cy };
+      };
+
+      const start = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min((now - start) / duration, 1);
+        // Ease in-out
+        const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+        const pt = getPoint(ease);
+        if (widgetRef.current) {
+          widgetRef.current.style.transform = `translate(${pt.x}px, ${pt.y}px)`;
+        }
+        if (t < 1) {
+          flyRafId.current = requestAnimationFrame(tick);
+        } else {
+          // Snap back exactly to start
+          positionRef.current = { x: startX, y: startY };
+          if (widgetRef.current) {
+            widgetRef.current.style.transform = `translate(${startX}px, ${startY}px)`;
+          }
+          isFlying.current = false;
+        }
+      };
+      flyRafId.current = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener('ghost-fly', handleFly);
+    return () => {
+      window.removeEventListener('ghost-fly', handleFly);
+      cancelAnimationFrame(flyRafId.current);
+    };
+  }, []);
+
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
       <style>{`
