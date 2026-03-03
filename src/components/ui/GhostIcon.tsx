@@ -53,6 +53,8 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
   const mouthORef     = useRef<SVGEllipseElement>(null);
 
   const isDragging  = useRef(false);
+  const clickCount  = useRef(0);
+  const clickTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prev        = useRef({ x: 0, y: 0 });
   const pupilY      = useRef(0);
   const targetTilt  = useRef(0);
@@ -118,6 +120,15 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
         : { x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY };
 
     const onDown = (e: MouseEvent | TouchEvent) => {
+      // Triple-click detection
+      clickCount.current += 1;
+      if (clickTimer.current) clearTimeout(clickTimer.current);
+      if (clickCount.current >= 3) {
+        clickCount.current = 0;
+        window.dispatchEvent(new CustomEvent('ghost-fly'));
+      } else {
+        clickTimer.current = setTimeout(() => { clickCount.current = 0; }, 400);
+      }
       isDragging.current = true;
       pupilY.current = 0;
       prev.current = getPos(e);
@@ -156,6 +167,7 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       cancelAnimationFrame(rafId.current);
       if (blinkTimer.current) clearTimeout(blinkTimer.current);
       if (resetTimer.current) clearTimeout(resetTimer.current);
+      if (clickTimer.current) clearTimeout(clickTimer.current);
       window.removeEventListener('mousedown',  onDown);
       window.removeEventListener('mousemove',  onMove);
       window.removeEventListener('mouseup',    onUp);
