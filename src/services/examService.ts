@@ -27,6 +27,7 @@ export type { MCQQuestion, WrittenQuestion, Content } from './contentService';
 // ─── Exam Attempt Status ──────────────────────────────────────────────────────
 export type AttemptStatus =
   | 'in_progress'
+  | 'mcq_submitted'        // FIX BUG 2: MCQ done, written not yet started
   | 'submitted'
   | 'auto_submitted'
   | 'timed_out'
@@ -82,6 +83,8 @@ export interface ExamSession {
   resultVisibility: ResultVisibility;
 
   startedAt: Date;
+  mcqSubmittedAt?: Date;       // FIX BUG 2: when MCQ part was submitted
+  writtenStartedAt?: Date;     // FIX BUG 2: when written part was started
   submittedAt?: Date;
   timeTakenSeconds: number;
 
@@ -108,7 +111,7 @@ export interface StudentExamStatus {
   attemptCount: number;
   lastAttemptId?: string;
   lastAttemptAt?: Date;
-  status: 'not_started' | 'in_progress' | 'completed' | 'absent' | 'attempt_limit_reached';
+  status: 'not_started' | 'in_progress' | 'mcq_submitted' | 'completed' | 'absent' | 'attempt_limit_reached';
   bestScore?: number;
   bestPercentage?: number;
 }
@@ -175,6 +178,8 @@ const deserializeSession = (id: string, data: any): ExamSession => ({
   status: data.status ?? 'in_progress',
   resultVisibility: data.resultVisibility ?? 'hidden',
   startedAt: toDate(data.startedAt),
+  mcqSubmittedAt: toOptDate(data.mcqSubmittedAt),
+  writtenStartedAt: toOptDate(data.writtenStartedAt),
   submittedAt: toOptDate(data.submittedAt),
   timeTakenSeconds: data.timeTakenSeconds ?? 0,
   tabSwitchCount: data.tabSwitchCount ?? 0,
@@ -277,6 +282,45 @@ export const examService = {
     }));
   },
 
+  // ── 3b. FIX BUG 2: Submit MCQ part only (mixed exam) ─────────────────────────
+  // Marks MCQ as done and records mcqSubmittedAt. Student can then start written.
+  async submitMCQPart(
+    sessionId: string,
+    mcqAnswers: MCQAnswer[],
+    mcqMarks: number,
+    timeTakenSeconds: number
+  ): Promise<void> {
+    const session = await examService.getExamSession(sessionId);
+    if (!session) throw new Error('Session not found');
+
+    await updateDoc(doc(db, 'examSessions', sessionId), clean({
+      mcqAnswers,
+      mcqMarks,
+      status: 'mcq_submitted',
+      mcqSubmittedAt: Timestamp.now(),
+      timeTakenSeconds,
+      updatedAt: Timestamp.now(),
+    }));
+
+    // Update student status
+    await examService._upsertStudentExamStatus({
+      contentId: session.contentId,
+      courseId: session.courseId,
+      studentId: session.studentId,
+      lastAttemptId: sessionId,
+      status: 'mcq_submitted',
+    });
+  },
+
+  // ── 3c. FIX BUG 2: Start written part after MCQ ───────────────────────────────
+  async startWrittenPart(sessionId: string): Promise<void> {
+    await updateDoc(doc(db, 'examSessions', sessionId), clean({
+      status: 'in_progress',
+      writtenStartedAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    }));
+  },
+
   // ── 4. Save written answers ───────────────────────────────────────────────────
   async saveWrittenAnswers(
     sessionId: string,
@@ -328,12 +372,9 @@ export const examService = {
     const session = await examService.getExamSession(sessionId);
     if (!session) throw new Error('Session not found');
 
-    const hasWritten = writtenAnswers.some(a => a.answerText || (a.attachmentUrls?.length ?? 0) > 0);
     const writtenEvaluationPending = session.writtenQuestionIds.length > 0;
 
-    // Total can only be known for MCQ now; written awaits evaluation
     const totalMarks = mcqMarks; // writtenMarks added later by teacher
-    const maxMcqMarks = session.maxMarks; // Will be refined in viewer
     const percentage = session.maxMarks > 0 ? (totalMarks / session.maxMarks) * 100 : 0;
 
     await updateDoc(doc(db, 'examSessions', sessionId), clean({
@@ -350,7 +391,7 @@ export const examService = {
       updatedAt: Timestamp.now(),
     }));
 
-    // Update student exam status
+    // Update student exam status — do NOT increment attemptCount here (already done at start)
     await examService._upsertStudentExamStatus({
       contentId: session.contentId,
       courseId: session.courseId,
@@ -359,6 +400,7 @@ export const examService = {
       status: 'completed',
       bestScore: totalMarks,
       bestPercentage: percentage,
+      incrementAttempt: false,
     });
   },
 
@@ -373,6 +415,7 @@ export const examService = {
       courseId,
       studentId,
       status: 'absent',
+      incrementAttempt: false,
     });
   },
 
@@ -387,6 +430,7 @@ export const examService = {
       courseId,
       studentId,
       status: 'attempt_limit_reached',
+      incrementAttempt: false,
     });
   },
 
@@ -503,6 +547,7 @@ export const examService = {
       status: 'completed',
       bestScore: totalMarks,
       bestPercentage: percentage,
+      incrementAttempt: false,
     });
   },
 
@@ -512,7 +557,7 @@ export const examService = {
       const sessions = await examService.getAllSessionsForContent(contentId);
       await Promise.all(
         sessions
-          .filter(s => s.resultVisibility === 'hidden' && s.status !== 'in_progress')
+          .filter(s => s.resultVisibility === 'hidden' && s.status !== 'in_progress' && s.status !== 'mcq_submitted')
           .map(s =>
             updateDoc(doc(db, 'examSessions', s.id), {
               resultVisibility: 'visible',
@@ -527,7 +572,6 @@ export const examService = {
   },
 
   // ── 15. Upload written answer attachment URL ───────────────────────────────────
-  // (Actual file upload handled by uploadService; this saves the returned URL)
   async addWrittenAttachment(
     sessionId: string,
     questionId: string,
@@ -653,6 +697,7 @@ export const examService = {
     status: StudentExamStatus['status'];
     bestScore?: number;
     bestPercentage?: number;
+    incrementAttempt?: boolean; // defaults to true only for 'in_progress'
   }): Promise<void> {
     try {
       const q = query(
@@ -662,11 +707,22 @@ export const examService = {
       );
       const snap = await getDocs(q);
 
+      // Only increment attempt count when starting a new attempt (in_progress)
+      const shouldIncrement = payload.incrementAttempt !== undefined
+        ? payload.incrementAttempt
+        : payload.status === 'in_progress';
+
       if (snap.empty) {
         await addDoc(collection(db, 'studentExamStatus'), clean({
-          ...payload,
-          attemptCount: 1,
+          contentId: payload.contentId,
+          courseId: payload.courseId,
+          studentId: payload.studentId,
+          lastAttemptId: payload.lastAttemptId,
+          status: payload.status,
+          attemptCount: shouldIncrement ? 1 : 0,
           lastAttemptAt: Timestamp.now(),
+          bestScore: payload.bestScore,
+          bestPercentage: payload.bestPercentage,
         }));
       } else {
         const existing = snap.docs[0].data();
@@ -678,11 +734,14 @@ export const examService = {
           : existing.bestPercentage;
 
         await updateDoc(snap.docs[0].ref, clean({
-          ...payload,
-          attemptCount:
-            payload.status === 'in_progress'
-              ? (existing.attemptCount ?? 0) + 1
-              : existing.attemptCount ?? 1,
+          contentId: payload.contentId,
+          courseId: payload.courseId,
+          studentId: payload.studentId,
+          lastAttemptId: payload.lastAttemptId,
+          status: payload.status,
+          attemptCount: shouldIncrement
+            ? (existing.attemptCount ?? 0) + 1
+            : existing.attemptCount ?? 0,
           lastAttemptAt: Timestamp.now(),
           bestScore: newBest,
           bestPercentage: newBestPct,
