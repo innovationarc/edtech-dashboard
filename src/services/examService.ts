@@ -84,9 +84,11 @@ export interface ExamSession {
   attemptNumber: number;
 
   startedAt: Date;
+  mcqStartedAt?: Date;       // NEW: when MCQ timer actually started (for DB-based timer)
   mcqSubmittedAt?: Date;
   writtenStartedAt?: Date;
   submittedAt?: Date;
+  activeDeviceToken?: string; // NEW: single-device enforcement
   timeTakenSeconds: number;
 
   tabSwitchCount: number;
@@ -179,6 +181,7 @@ const deserializeSession = (id: string, data: any): ExamSession => ({
   // FIX 3: deserialize attemptNumber, fallback to 1
   attemptNumber: data.attemptNumber ?? 1,
   startedAt: toDate(data.startedAt),
+  mcqStartedAt: toOptDate(data.mcqStartedAt),
   mcqSubmittedAt: toOptDate(data.mcqSubmittedAt),
   writtenStartedAt: toOptDate(data.writtenStartedAt),
   submittedAt: toOptDate(data.submittedAt),
@@ -189,6 +192,7 @@ const deserializeSession = (id: string, data: any): ExamSession => ({
   writtenEvaluationPending: data.writtenEvaluationPending ?? false,
   writtenEvaluatedAt: toOptDate(data.writtenEvaluatedAt),
   writtenEvaluatedBy: data.writtenEvaluatedBy,
+  activeDeviceToken: data.activeDeviceToken,
   createdAt: toDate(data.createdAt),
   updatedAt: toOptDate(data.updatedAt),
 });
@@ -229,6 +233,7 @@ export const examService = {
     studentId: string;
     studentName: string;
     studentEmail?: string;
+    deviceToken: string;       // NEW: unique token for this browser tab/device
     mcqQuestionIds: string[];
     writtenQuestionIds: string[];
     maxMarks: number;
@@ -241,9 +246,20 @@ export const examService = {
     );
     const attemptNumber = (existingStatus?.attemptCount ?? 0) + 1;
 
+    const now = Timestamp.now();
     const sessionData = clean({
-      ...payload,
+      contentId: payload.contentId,
+      courseId: payload.courseId,
+      studentId: payload.studentId,
+      studentName: payload.studentName,
+      studentEmail: payload.studentEmail,
+      activeDeviceToken: payload.deviceToken,
+      mcqStartedAt: now,            // NEW: record exact MCQ start time
       attemptNumber,
+      mcqQuestionIds: payload.mcqQuestionIds,
+      writtenQuestionIds: payload.writtenQuestionIds,
+      maxMarks: payload.maxMarks,
+      resultVisibility: payload.resultVisibility,
       mcqAnswers: [],
       writtenAnswers: payload.writtenQuestionIds.map(qId => ({
         questionId: qId,
@@ -315,9 +331,40 @@ export const examService = {
   async startWrittenPart(sessionId: string): Promise<void> {
     await updateDoc(doc(db, 'examSessions', sessionId), clean({
       status: 'in_progress',
-      writtenStartedAt: Timestamp.now(),
+      writtenStartedAt: Timestamp.now(),   // exact written start time for DB-timer
       updatedAt: Timestamp.now(),
     }));
+  },
+
+  // ── NEW: Claim this device as the active device for a session ─────────────────
+  // Returns false if another device already has the lock.
+  async claimDevice(sessionId: string, deviceToken: string): Promise<boolean> {
+    try {
+      const snap = await getDoc(doc(db, 'examSessions', sessionId));
+      if (!snap.exists()) return false;
+      const existing = snap.data().activeDeviceToken;
+      if (existing && existing !== deviceToken) return false; // another device holds the lock
+      await updateDoc(doc(db, 'examSessions', sessionId), {
+        activeDeviceToken: deviceToken,
+        updatedAt: Timestamp.now(),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // ── NEW: Release device lock on session (called on beforeunload) ───────────────
+  async releaseDevice(sessionId: string, deviceToken: string): Promise<void> {
+    try {
+      const snap = await getDoc(doc(db, 'examSessions', sessionId));
+      if (!snap.exists()) return;
+      if (snap.data().activeDeviceToken !== deviceToken) return;
+      await updateDoc(doc(db, 'examSessions', sessionId), {
+        activeDeviceToken: null,
+        updatedAt: Timestamp.now(),
+      });
+    } catch { /* best-effort */ }
   },
 
   // ── 4. Save written answers ───────────────────────────────────────────────────
