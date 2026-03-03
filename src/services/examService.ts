@@ -27,7 +27,7 @@ export type { MCQQuestion, WrittenQuestion, Content } from './contentService';
 // ─── Exam Attempt Status ──────────────────────────────────────────────────────
 export type AttemptStatus =
   | 'in_progress'
-  | 'mcq_submitted'        // FIX BUG 2: MCQ done, written not yet started
+  | 'mcq_submitted'
   | 'submitted'
   | 'auto_submitted'
   | 'timed_out'
@@ -39,7 +39,7 @@ export type ResultVisibility = 'hidden' | 'visible';
 // ─── MCQ Answer ───────────────────────────────────────────────────────────────
 export interface MCQAnswer {
   questionId: string;
-  selectedOptions: number[]; // indices of selected options
+  selectedOptions: number[];
   isCorrect: boolean;
   marksAwarded: number;
   timeTakenSeconds?: number;
@@ -49,8 +49,8 @@ export interface MCQAnswer {
 export interface WrittenAnswer {
   questionId: string;
   answerText?: string;
-  attachmentUrls?: string[]; // image uploads (notebook photos)
-  marksAwarded?: number;     // filled by teacher during evaluation
+  attachmentUrls?: string[];
+  marksAwarded?: number;
   evaluatorComment?: string;
   evaluatedAt?: Date;
   evaluatedBy?: string;
@@ -59,22 +59,20 @@ export interface WrittenAnswer {
 // ─── Exam Session (one attempt by one student) ────────────────────────────────
 export interface ExamSession {
   id: string;
-  contentId: string;           // references 'content' collection
+  contentId: string;
   courseId?: string;
   studentId: string;
   studentName: string;
   studentEmail?: string;
 
-  // Which questions were shown (after shuffle/lock logic applied)
   mcqQuestionIds: string[];
   writtenQuestionIds: string[];
 
   mcqAnswers: MCQAnswer[];
   writtenAnswers: WrittenAnswer[];
 
-  // Scoring
   mcqMarks: number;
-  writtenMarks: number;        // 0 until evaluated
+  writtenMarks: number;
   totalMarks: number;
   maxMarks: number;
   percentage: number;
@@ -82,18 +80,19 @@ export interface ExamSession {
   status: AttemptStatus;
   resultVisibility: ResultVisibility;
 
+  // FIX 3: attemptNumber field added
+  attemptNumber: number;
+
   startedAt: Date;
-  mcqSubmittedAt?: Date;       // FIX BUG 2: when MCQ part was submitted
-  writtenStartedAt?: Date;     // FIX BUG 2: when written part was started
+  mcqSubmittedAt?: Date;
+  writtenStartedAt?: Date;
   submittedAt?: Date;
   timeTakenSeconds: number;
 
-  // Anti-cheat
   tabSwitchCount: number;
   focusLostCount: number;
-  suspiciousActivity: string[]; // log of suspicious events
+  suspiciousActivity: string[];
 
-  // Written evaluation state
   writtenEvaluationPending: boolean;
   writtenEvaluatedAt?: Date;
   writtenEvaluatedBy?: string;
@@ -177,6 +176,8 @@ const deserializeSession = (id: string, data: any): ExamSession => ({
   percentage: data.percentage ?? 0,
   status: data.status ?? 'in_progress',
   resultVisibility: data.resultVisibility ?? 'hidden',
+  // FIX 3: deserialize attemptNumber, fallback to 1
+  attemptNumber: data.attemptNumber ?? 1,
   startedAt: toDate(data.startedAt),
   mcqSubmittedAt: toOptDate(data.mcqSubmittedAt),
   writtenStartedAt: toOptDate(data.writtenStartedAt),
@@ -233,8 +234,16 @@ export const examService = {
     maxMarks: number;
     resultVisibility: ResultVisibility;
   }): Promise<string> {
+    // FIX 3: compute attemptNumber before creating session
+    const existingStatus = await examService.getStudentExamStatus(
+      payload.contentId,
+      payload.studentId
+    );
+    const attemptNumber = (existingStatus?.attemptCount ?? 0) + 1;
+
     const sessionData = clean({
       ...payload,
+      attemptNumber,
       mcqAnswers: [],
       writtenAnswers: payload.writtenQuestionIds.map(qId => ({
         questionId: qId,
@@ -257,7 +266,6 @@ export const examService = {
 
     const ref = await addDoc(collection(db, 'examSessions'), sessionData);
 
-    // Upsert studentExamStatus
     await examService._upsertStudentExamStatus({
       contentId: payload.contentId,
       courseId: payload.courseId,
@@ -282,27 +290,18 @@ export const examService = {
     }));
   },
 
-  // ── 3b. FIX BUG 2: Submit MCQ part only (mixed exam) ─────────────────────────
-  // Marks MCQ as done and records mcqSubmittedAt. Student can then start written.
-  async submitMCQPart(
-    sessionId: string,
-    mcqAnswers: MCQAnswer[],
-    mcqMarks: number,
-    timeTakenSeconds: number
-  ): Promise<void> {
+  // ── 3b. FIX 2: submitMCQPart takes only sessionId ────────────────────────────
+  // Answers already saved via saveMCQAnswers before this is called.
+  async submitMCQPart(sessionId: string): Promise<void> {
     const session = await examService.getExamSession(sessionId);
     if (!session) throw new Error('Session not found');
 
     await updateDoc(doc(db, 'examSessions', sessionId), clean({
-      mcqAnswers,
-      mcqMarks,
       status: 'mcq_submitted',
       mcqSubmittedAt: Timestamp.now(),
-      timeTakenSeconds,
       updatedAt: Timestamp.now(),
     }));
 
-    // Update student status
     await examService._upsertStudentExamStatus({
       contentId: session.contentId,
       courseId: session.courseId,
@@ -312,7 +311,7 @@ export const examService = {
     });
   },
 
-  // ── 3c. FIX BUG 2: Start written part after MCQ ───────────────────────────────
+  // ── 3c. Start written part after MCQ ─────────────────────────────────────────
   async startWrittenPart(sessionId: string): Promise<void> {
     await updateDoc(doc(db, 'examSessions', sessionId), clean({
       status: 'in_progress',
@@ -373,8 +372,7 @@ export const examService = {
     if (!session) throw new Error('Session not found');
 
     const writtenEvaluationPending = session.writtenQuestionIds.length > 0;
-
-    const totalMarks = mcqMarks; // writtenMarks added later by teacher
+    const totalMarks = mcqMarks;
     const percentage = session.maxMarks > 0 ? (totalMarks / session.maxMarks) * 100 : 0;
 
     await updateDoc(doc(db, 'examSessions', sessionId), clean({
@@ -391,7 +389,6 @@ export const examService = {
       updatedAt: Timestamp.now(),
     }));
 
-    // Update student exam status — do NOT increment attemptCount here (already done at start)
     await examService._upsertStudentExamStatus({
       contentId: session.contentId,
       courseId: session.courseId,
@@ -404,7 +401,7 @@ export const examService = {
     });
   },
 
-  // ── 7. Mark absent (scheduled exam passed, student didn't attempt) ─────────────
+  // ── 7. Mark absent ────────────────────────────────────────────────────────────
   async markAbsent(
     contentId: string,
     studentId: string,
@@ -456,7 +453,7 @@ export const examService = {
         collection(db, 'examSessions'),
         where('contentId', '==', contentId),
         where('studentId', '==', studentId),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'asc')
       );
       const snap = await getDocs(q);
       return snap.docs.map(d => deserializeSession(d.id, d.data()));
@@ -472,7 +469,7 @@ export const examService = {
     courseId?: string
   ): Promise<ExamSession[]> {
     try {
-      let q = query(
+      const q = query(
         collection(db, 'examSessions'),
         where('contentId', '==', contentId),
         orderBy('createdAt', 'desc')
@@ -538,7 +535,6 @@ export const examService = {
       updatedAt: Timestamp.now(),
     }));
 
-    // Update student status best score
     await examService._upsertStudentExamStatus({
       contentId: session.contentId,
       courseId: session.courseId,
@@ -551,7 +547,7 @@ export const examService = {
     });
   },
 
-  // ── 14. Publish results for a content (set resultVisibility = visible) ─────────
+  // ── 14. Publish results for a content ─────────────────────────────────────────
   async publishResults(contentId: string): Promise<void> {
     try {
       const sessions = await examService.getAllSessionsForContent(contentId);
@@ -571,7 +567,7 @@ export const examService = {
     }
   },
 
-  // ── 15. Upload written answer attachment URL ───────────────────────────────────
+  // ── 15. Add written answer attachment ─────────────────────────────────────────
   async addWrittenAttachment(
     sessionId: string,
     questionId: string,
@@ -582,10 +578,7 @@ export const examService = {
 
     const updatedAnswers = session.writtenAnswers.map(wa => {
       if (wa.questionId !== questionId) return wa;
-      return {
-        ...wa,
-        attachmentUrls: [...(wa.attachmentUrls || []), fileUrl],
-      };
+      return { ...wa, attachmentUrls: [...(wa.attachmentUrls || []), fileUrl] };
     });
 
     await updateDoc(doc(db, 'examSessions', sessionId), clean({
@@ -605,10 +598,7 @@ export const examService = {
 
     const updatedAnswers = session.writtenAnswers.map(wa => {
       if (wa.questionId !== questionId) return wa;
-      return {
-        ...wa,
-        attachmentUrls: (wa.attachmentUrls || []).filter(u => u !== fileUrl),
-      };
+      return { ...wa, attachmentUrls: (wa.attachmentUrls || []).filter(u => u !== fileUrl) };
     });
 
     await updateDoc(doc(db, 'examSessions', sessionId), clean({
@@ -651,15 +641,7 @@ export const examService = {
       );
 
       if (completed.length === 0) {
-        return {
-          totalAttempts: 0,
-          averageScore: 0,
-          averagePercentage: 0,
-          highestScore: 0,
-          lowestScore: 0,
-          passRate: 0,
-          pendingEvaluations: 0,
-        };
+        return { totalAttempts: 0, averageScore: 0, averagePercentage: 0, highestScore: 0, lowestScore: 0, passRate: 0, pendingEvaluations: 0 };
       }
 
       const scores = completed.map(s => s.percentage);
@@ -676,15 +658,7 @@ export const examService = {
       };
     } catch (e: any) {
       console.error('examService.getExamStatistics:', e);
-      return {
-        totalAttempts: 0,
-        averageScore: 0,
-        averagePercentage: 0,
-        highestScore: 0,
-        lowestScore: 0,
-        passRate: 0,
-        pendingEvaluations: 0,
-      };
+      return { totalAttempts: 0, averageScore: 0, averagePercentage: 0, highestScore: 0, lowestScore: 0, passRate: 0, pendingEvaluations: 0 };
     }
   },
 
@@ -697,7 +671,7 @@ export const examService = {
     status: StudentExamStatus['status'];
     bestScore?: number;
     bestPercentage?: number;
-    incrementAttempt?: boolean; // defaults to true only for 'in_progress'
+    incrementAttempt?: boolean;
   }): Promise<void> {
     try {
       const q = query(
@@ -707,7 +681,6 @@ export const examService = {
       );
       const snap = await getDocs(q);
 
-      // Only increment attempt count when starting a new attempt (in_progress)
       const shouldIncrement = payload.incrementAttempt !== undefined
         ? payload.incrementAttempt
         : payload.status === 'in_progress';
