@@ -57,7 +57,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
       tapTimer.current = setTimeout(() => {
         if (tapCount.current === 1) setIsOpen(prev => !prev);
         tapCount.current = 0;
-      }, 350);
+      }, 200);
     }
   };
 
