@@ -1,5 +1,5 @@
 // src/components/ChatbotWidget.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Send, X, Loader, AlertTriangle, Info } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -16,6 +16,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const [errorDetails, setErrorDetails] = useState('');
   const [showInfo, setShowInfo] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const tapCount = useRef(0);
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
   const MODEL = 'gemini-2.5-flash';
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,6 +45,20 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
       setErrorDetails(`Error: ${errorMsg}\n\nPossible causes:\n1. CORS blocking\n2. Network issue\n3. API key problem\n4. Rate limiting`);
       setMessages(p => [...p, { sender: 'ai', text: `❌ ${errorMsg}\n\nClick the info icon for details.` }]);
     } finally { setIsLoading(false); }
+  };
+
+  const handleGhostTap = () => {
+    tapCount.current += 1;
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+    if (tapCount.current >= 3) {
+      tapCount.current = 0;
+      window.dispatchEvent(new CustomEvent('ghost-fly'));
+    } else {
+      tapTimer.current = setTimeout(() => {
+        if (tapCount.current === 1) setIsOpen(prev => !prev);
+        tapCount.current = 0;
+      }, 350);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !isLoading) handleSendMessage(); };
@@ -91,7 +107,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
         </div>
       )}
 
-      <button onClick={() => setIsOpen(!isOpen)} className="ghost-btn fixed bottom-4 right-4 z-40" style={{ width: 72, height: 72, ['--ghost-glow-color' as any]: accentColor + 'a6', ['--ghost-glow-color-full' as any]: accentColor }} aria-label={isOpen ? 'Close chatbot' : 'Open chatbot'}>
+      <button onClick={handleGhostTap} className="ghost-btn fixed bottom-4 right-4 z-40" style={{ width: 72, height: 72, ['--ghost-glow-color' as any]: accentColor + 'a6', ['--ghost-glow-color-full' as any]: accentColor }} aria-label={isOpen ? 'Close chatbot' : 'Open chatbot'}>
         <GhostIcon size={72} isActive={isOpen} />
       </button>
 
