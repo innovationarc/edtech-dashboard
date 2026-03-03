@@ -1,9 +1,7 @@
 // src/pages/ExamEvaluation.tsx
 // Teacher Exam Evaluation Hub
-// Route: /exam-evaluation  → lists all exams with written parts + filters
-//        /exam-evaluation/:contentId  → opens evaluation for that specific exam
-//        /exam-evaluation/:contentId/:courseId  → scoped to course
-// Access: teachers, admins, managers, coordinators
+// FIX BUG 3: Written exams from versioned content now correctly appear in the list.
+//            writtenQMap is now built from examVersions when content.writtenQuestions is empty.
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -45,6 +43,36 @@ const StatusBadge: React.FC<{ pending: boolean }> = ({ pending }) => (
     {pending ? 'Pending' : 'Evaluated'}
   </span>
 );
+
+// ─── FIX BUG 3: Helper to extract all written questions from any content ───────
+// Works for both old flat structure (content.writtenQuestions) and
+// new versioned structure (content.examVersions[].writtenQuestions)
+const extractAllWrittenQuestions = (content: Content): WrittenQuestion[] => {
+  // If content has top-level writtenQuestions (legacy / flat)
+  if (content.writtenQuestions && content.writtenQuestions.length > 0) {
+    return content.writtenQuestions;
+  }
+  // If content has versioned questions, collect from all versions
+  if ((content as any).examVersions && (content as any).examVersions.length > 0) {
+    const allWritten: WrittenQuestion[] = [];
+    const seen = new Set<string>();
+    for (const version of (content as any).examVersions) {
+      for (const q of (version.writtenQuestions || [])) {
+        if (!seen.has(q.id)) {
+          seen.add(q.id);
+          allWritten.push(q);
+        }
+      }
+    }
+    return allWritten;
+  }
+  return [];
+};
+
+// ─── FIX BUG 3: Check if content has any written questions ───────────────────
+const contentHasWrittenQuestions = (content: Content): boolean => {
+  return extractAllWrittenQuestions(content).length > 0;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Root Component
@@ -111,9 +139,9 @@ const ExamEvaluation: React.FC = () => {
 
       setAllCourses(courses);
 
-      // Only exams with written questions
+      // FIX BUG 3: Use helper to detect written questions including versioned exams
       const writtenExams = allContent.filter(
-        c => c.type === 'exam' && c.writtenQuestions && c.writtenQuestions.length > 0
+        c => c.type === 'exam' && contentHasWrittenQuestions(c)
       );
 
       // Build summaries
@@ -126,7 +154,7 @@ const ExamEvaluation: React.FC = () => {
             ]);
             const submitted   = allSessions.filter(s => ['submitted', 'auto_submitted'].includes(s.status));
             const pending     = submitted.filter(s => s.writtenEvaluationPending);
-            const course      = courses.find(c => c.id === content.courseId) || null;
+            const course      = courses.find(c => c.id === (content as any).courseId) || null;
             return {
               content, course,
               totalSessions:  submitted.length,
@@ -135,7 +163,7 @@ const ExamEvaluation: React.FC = () => {
               avgScore:       examStats?.averagePercentage ?? 0,
             };
           } catch {
-            const course = courses.find(c => c.id === content.courseId) || null;
+            const course = courses.find(c => c.id === (content as any).courseId) || null;
             return { content, course, totalSessions: 0, pendingCount: 0, evaluatedCount: 0, avgScore: 0 };
           }
         })
@@ -241,7 +269,7 @@ const ExamEvaluation: React.FC = () => {
   }, [examSummaries]);
 
   const filteredExams = useMemo(() => examSummaries.filter(es => {
-    if (filterCourse  !== 'all' && es.content.courseId !== filterCourse)  return false;
+    if (filterCourse  !== 'all' && (es.content as any).courseId !== filterCourse)  return false;
     if (filterSubject !== 'all' && es.content.subject   !== filterSubject) return false;
     if (filterStatus === 'has_pending'   && es.pendingCount === 0)         return false;
     if (filterStatus === 'all_evaluated' && es.pendingCount > 0)           return false;
@@ -269,9 +297,12 @@ const ExamEvaluation: React.FC = () => {
   const pendingCount = sessions.filter(s => s.writtenEvaluationPending).length;
   const totalPending = examSummaries.reduce((a, e) => a + e.pendingCount, 0);
 
+  // FIX BUG 3: Build writtenQMap from all written questions (including versioned)
   const writtenQMap = useMemo(() => {
     const map: Record<string, WrittenQuestion> = {};
-    (selectedContent?.writtenQuestions || []).forEach(q => { map[q.id] = q; });
+    if (selectedContent) {
+      extractAllWrittenQuestions(selectedContent).forEach(q => { map[q.id] = q; });
+    }
     return map;
   }, [selectedContent]);
 
@@ -323,7 +354,7 @@ const ExamEvaluation: React.FC = () => {
                     {(selectedContent as any).examType && (
                       <span className="capitalize">· {(selectedContent as any).examType}</span>
                     )}
-                    <span>· {selectedContent.writtenQuestions?.length ?? 0} written questions</span>
+                    <span>· {extractAllWrittenQuestions(selectedContent).length} written questions</span>
                   </div>
                 </div>
               </div>
@@ -778,7 +809,7 @@ const ExamCard: React.FC<{ summary: ExamSummary; onOpen: () => void }> = ({ summ
           </span>
         )}
         <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-white/5 text-white/40 border border-white/8">
-          <PenLine size={9} /> {content.writtenQuestions?.length ?? 0} written Qs
+          <PenLine size={9} /> {extractAllWrittenQuestions(content).length} written Qs
         </span>
         {(content as any).examType && (
           <span className="px-2 py-0.5 rounded-full text-[11px] bg-purple-500/10 text-purple-300 border border-purple-500/15 capitalize">
