@@ -384,7 +384,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     const timeout = setTimeout(() => {
       setSidebarOpen(false);
       setHoverTimeout(null);
-    }, 400);
+    }, 350);
     setHoverTimeout(timeout);
   };
 
