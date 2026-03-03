@@ -1,8 +1,8 @@
 // src/components/ChatbotWidget.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Send, X, Loader, AlertTriangle, Info } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
-import { useDashboard } from '../contexts/DashboardContext';
+import { useDashboard } from '../../contexts/DashboardContexts';
 
 interface ChatbotWidgetProps { eyeOffset?: { x: number; y: number }; }
 interface ChatMessage { sender: 'user' | 'ai'; text: string; }
