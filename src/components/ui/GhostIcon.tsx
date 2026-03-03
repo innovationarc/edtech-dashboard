@@ -1,6 +1,6 @@
 // src/components/ui/GhostIcon.tsx
 import React, { useEffect, useRef } from 'react';
-import { useDashboard } from '../../contexts/DashboardContexts';
+import { useDashboard } from '../../contexts/DashboardContext';
 
 interface GhostIconProps {
   size?: number;
