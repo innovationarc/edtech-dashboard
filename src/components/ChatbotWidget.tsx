@@ -49,13 +49,18 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
   const handleGhostTap = () => {
     tapCount.current += 1;
+    console.log('[Ghost] tap #', tapCount.current);
     if (tapTimer.current) clearTimeout(tapTimer.current);
     if (tapCount.current >= 3) {
       tapCount.current = 0;
+      console.log('[Ghost] 3 taps! firing ghost-fly event');
       window.dispatchEvent(new CustomEvent('ghost-fly'));
     } else {
       tapTimer.current = setTimeout(() => {
-        if (tapCount.current === 1) setIsOpen(prev => !prev);
+        if (tapCount.current === 1) {
+          console.log('[Ghost] single tap → toggle chat');
+          setIsOpen(prev => !prev);
+        }
         tapCount.current = 0;
       }, 200);
     }
