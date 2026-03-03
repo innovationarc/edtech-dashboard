@@ -1,6 +1,6 @@
 // src/components/ui/GhostIcon.tsx
 import React, { useEffect, useRef } from 'react';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../../contexts/DashboardContexts';
 
 interface GhostIconProps {
   size?: number;
@@ -151,12 +151,31 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       scheduleBlinkRef.current();
     };
 
+    // React to fly animation movement from DashboardLayout
+    const onFlyMove = (e: Event) => {
+      const { dx, dy } = (e as CustomEvent).detail;
+      const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
+      targetTilt.current = clamp(targetTilt.current + dx * 2.8, 30);
+      pupilY.current = clamp(pupilY.current + dy * 0.7, 4);
+      setEyeRy(13); // wide open during flight
+      setMouth(true);
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+      resetTimer.current = setTimeout(() => { targetTilt.current = 0; pupilY.current = 0; }, 120);
+    };
+
     window.addEventListener('mousedown',  onDown);
     window.addEventListener('mousemove',  onMove);
     window.addEventListener('mouseup',    onUp);
     window.addEventListener('touchstart', onDown as EventListener);
     window.addEventListener('touchmove',  onMove as EventListener);
     window.addEventListener('touchend',   onUp);
+    const onLand = () => {
+      targetTilt.current = 0; pupilY.current = 0;
+      setPupils(0, 0); setMouth(false); setEyeRy(12);
+      scheduleBlinkRef.current();
+    };
+    window.addEventListener('ghost-move', onFlyMove);
+    window.addEventListener('ghost-land', onLand);
     return () => {
       cancelAnimationFrame(rafId.current);
       if (blinkTimer.current) clearTimeout(blinkTimer.current);
@@ -167,6 +186,8 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       window.removeEventListener('touchstart', onDown as EventListener);
       window.removeEventListener('touchmove',  onMove as EventListener);
       window.removeEventListener('touchend',   onUp);
+      window.removeEventListener('ghost-move', onFlyMove);
+      window.removeEventListener('ghost-land', onLand);
     };
   }, [isActive]);
 
