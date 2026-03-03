@@ -157,7 +157,9 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
       const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
       targetTilt.current = clamp(targetTilt.current + dx * 2.8, 30);
       pupilY.current = clamp(pupilY.current + dy * 0.7, 4);
-      setEyeRy(13); // wide open during flight
+      // Set isDragging so the rAF tick loop calls setPupils each frame
+      isDragging.current = true;
+      setEyeRy(13);
       setMouth(true);
       if (resetTimer.current) clearTimeout(resetTimer.current);
       resetTimer.current = setTimeout(() => { targetTilt.current = 0; pupilY.current = 0; }, 120);
