@@ -22,10 +22,16 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const MODEL = 'gemini-2.5-flash';
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
+  const isFlying = useRef(false);
   useEffect(() => {
-    const close = () => setIsOpen(false);
+    const close = () => { isFlying.current = true; setIsOpen(false); };
+    const land  = () => { isFlying.current = false; };
     window.addEventListener('ghost-close-chat', close);
-    return () => window.removeEventListener('ghost-close-chat', close);
+    window.addEventListener('ghost-land',       land);
+    return () => {
+      window.removeEventListener('ghost-close-chat', close);
+      window.removeEventListener('ghost-land',       land);
+    };
   }, []);
 
   const handleSendMessage = async () => {
@@ -60,7 +66,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
       window.dispatchEvent(new CustomEvent('ghost-fly'));
     } else {
       tapTimer.current = setTimeout(() => {
-        if (tapCount.current === 1) {
+        if (tapCount.current === 1 && !isFlying.current) {
           setIsOpen(prev => !prev);
         }
         tapCount.current = 0;
