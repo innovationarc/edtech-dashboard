@@ -1,6 +1,6 @@
 // src/components/ui/GhostIcon.tsx
 import React, { useEffect, useRef } from 'react';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../../contexts/DashboardContexts';
 
 interface GhostIconProps {
   size?: number;
@@ -118,17 +118,22 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
         : { x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY };
 
     const onDown = (e: MouseEvent | TouchEvent) => {
-      isDragging.current = true;
+      // Don't set isDragging yet — wait for actual movement in onMove
       pupilY.current = 0;
       prev.current = getPos(e);
-      setEyeRy(13);
-      setMouth(true);
     };
     const onMove = (e: MouseEvent | TouchEvent) => {
-      if (!isDragging.current) return;
       const pos = getPos(e);
       const dx = pos.x - prev.current.x;
       const dy = pos.y - prev.current.y;
+      // Only start drag after moving 6px — taps never trigger this
+      if (!isDragging.current) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 6) return;
+        isDragging.current = true;
+        setEyeRy(13);
+        setMouth(true);
+      }
       prev.current = pos;
       targetTilt.current = clamp(targetTilt.current + dx * 2.8, 30);
       pupilY.current = clamp(pupilY.current + dy * 0.7, 4);
