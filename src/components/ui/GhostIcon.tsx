@@ -1,6 +1,6 @@
 // src/components/ui/GhostIcon.tsx
 import React, { useEffect, useRef } from 'react';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../../contexts/DashboardContexts';
 
 interface GhostIconProps {
   size?: number;
@@ -66,6 +66,10 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
     const setEyeRy = (ry: number) => {
       leftEyeRef.current?.setAttribute('ry',  String(ry));
       rightEyeRef.current?.setAttribute('ry', String(ry));
+      // Fade pupils out as eye closes so they don't poke through
+      const op = String(Math.min(1, Math.max(0, (ry - 1) / 5)) * 0.6);
+      if (leftPupilRef.current)  leftPupilRef.current.style.opacity = op;
+      if (rightPupilRef.current) rightPupilRef.current.style.opacity = op;
     };
     const setPupils = (px: number, py: number) => {
       const t = `translate(${px}px,${py}px)`;
