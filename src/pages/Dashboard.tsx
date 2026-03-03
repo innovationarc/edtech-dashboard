@@ -1,7 +1,6 @@
 // src/pages/Dashboard.tsx
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, ShoppingBag, BookOpen, FileText, PenTool, BrainCircuit, Loader, AlertCircle } from 'lucide-react';
-import { Megaphone } from 'lucide-react';
+import { Users, BookOpen, FileText, Loader, AlertCircle, LayoutGrid, LayoutList, Columns, Megaphone } from 'lucide-react';
 import StatsCard from '../components/ui/StatsCard';
 import WelcomeCard from '../components/dashboard/WelcomeCard';
 import SatisfactionCard from '../components/dashboard/SatisfactionCard';
@@ -13,6 +12,8 @@ import OrdersOverview from '../components/dashboard/OrdersOverview';
 import ContentStatsChart from '../components/dashboard/ContentStatsChart';
 import SubjectBreakdown from '../components/dashboard/SubjectBreakdown';
 import CreateAnnouncementModal from '../components/announcements/CreateAnnouncementModal';
+import { WidgetGrid, WidgetEditBar, Widget, WidgetSize } from '../components/dashboard/WidgetDashboard';
+import ClockWidget from '../components/dashboard/ClockWidget';
 import { useDashboard } from '../contexts/DashboardContext';
 import { userService } from '../services/userService';
 import { contentService } from '../services/contentService';
@@ -37,10 +38,45 @@ interface DashboardStats {
 }
 
 const Dashboard = () => {
-  const { user } = useDashboard();
+  const { user, dashboardLayout, setDashboardLayout } = useDashboard();
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [widgetEditMode, setWidgetEditMode] = useState(false);
+
+  const DEFAULT_WIDGETS: Widget[] = [
+    { id: 'welcome',      size: '1x2', title: 'Welcome',         order: 0 },
+    { id: 'clock',        size: '1x1', title: 'Clock',           order: 1 },
+    { id: 'satisfaction', size: '1x1', title: 'Satisfaction',    order: 2 },
+    { id: 'referral',     size: '1x1', title: 'User Stats',      order: 3 },
+    { id: 'content-chart',size: '2x2', title: 'Content Stats',   order: 4 },
+    { id: 'users-chart',  size: '1x1', title: 'Active Users',    order: 5 },
+    { id: 'activity',     size: '2x1', title: 'Recent Activity', order: 6 },
+    { id: 'subject',      size: '1x1', title: 'Subjects',        order: 7 },
+  ];
+
+  const [widgets, setWidgets] = useState<Widget[]>(() => {
+    try {
+      const saved = localStorage.getItem('dashboardWidgets');
+      return saved ? JSON.parse(saved) : DEFAULT_WIDGETS;
+    } catch { return DEFAULT_WIDGETS; }
+  });
+
+  const handleWidgetResize = (id: string, size: WidgetSize) => {
+    const updated = widgets.map(w => w.id === id ? { ...w, size } : w);
+    setWidgets(updated);
+    localStorage.setItem('dashboardWidgets', JSON.stringify(updated));
+  };
+
+  const handleWidgetReorder = (reordered: Widget[]) => {
+    setWidgets(reordered);
+    localStorage.setItem('dashboardWidgets', JSON.stringify(reordered));
+  };
+
+  const handleResetWidgets = () => {
+    setWidgets(DEFAULT_WIDGETS);
+    localStorage.removeItem('dashboardWidgets');
+  };
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     activeUsers: 0,
@@ -268,133 +304,138 @@ const Dashboard = () => {
     );
   }
 
+  const renderWidget = (widget: Widget) => {
+    const { stats } = { stats: (window as any).__dashStats || stats };
+    switch (widget.id) {
+      case 'welcome':      return <WelcomeCard userName={user?.name || 'Admin'} />;
+      case 'clock':        return <ClockWidget />;
+      case 'satisfaction': return <SatisfactionCard satisfactionRate={stats.satisfactionRate} />;
+      case 'referral':     return <ReferralCard invitedCount={stats.totalUsers} bonusValue={stats.activeUsers} />;
+      case 'content-chart':return <ContentStatsChart chartData={stats.contentBySubject} />;
+      case 'users-chart':  return <ActiveUsersChart chartData={stats.userGrowth} />;
+      case 'activity':     return <RecentActivityTable recentItems={stats.recentActivity} />;
+      case 'subject':      return <SubjectBreakdown subjectsData={stats.contentBySubject} />;
+      default:             return null;
+    }
+  };
+
+  // Store stats in window for widget renderer
+  (window as any).__dashStats = stats;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5" style={{ fontFamily: "'Outfit', sans-serif" }}>
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-          <p className="text-gray-400 mt-1">Manage your educational platform</p>
-          {stats.pendingUsers > 0 && (
-            <p className="text-warning-DEFAULT text-sm mt-1">
-              {stats.pendingUsers} user{stats.pendingUsers !== 1 ? 's' : ''} pending approval
-            </p>
-          )}
+          <h1 className="font-bold text-white tracking-tight" style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.75rem)' }}>
+            Dashboard
+          </h1>
+          <p style={{ fontSize: 'clamp(0.75rem, 1.3vw, 0.875rem)', color: 'rgba(156,163,175,1)', marginTop: '2px' }}>
+            {stats.pendingUsers > 0
+              ? <span style={{ color: '#fbbf24' }}>⚠ {stats.pendingUsers} pending approvals</span>
+              : 'All systems running smoothly'}
+          </p>
         </div>
-        <button
-          onClick={handleCreateAnnouncement}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg hover:shadow-xl"
-        >
-          <Megaphone size={20} />
-          <span>Create Announcement</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <WidgetEditBar
+            editMode={widgetEditMode}
+            onToggleEdit={() => setWidgetEditMode(!widgetEditMode)}
+            onReset={handleResetWidgets}
+          />
+          <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: 'var(--color-card, #1f2937)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            {(['default','compact','wide'] as const).map((l, i) => {
+              const icons = [<LayoutGrid size={14}/>, <LayoutList size={14}/>, <Columns size={14}/>];
+              return (
+                <button key={l} onClick={() => setDashboardLayout(l)} title={l}
+                  className={`p-2 rounded-lg transition-all ${dashboardLayout === l ? 'bg-primary-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}>
+                  {icons[i]}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={handleCreateAnnouncement}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-semibold transition-all shadow-lg shadow-primary-900/30"
+            style={{ padding: 'clamp(0.4rem, 0.8vw, 0.5rem) clamp(0.75rem, 1.5vw, 1rem)', fontSize: 'clamp(0.75rem, 1.2vw, 0.875rem)' }}>
+            <Megaphone size={15} /><span>Announce</span>
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="bg-error-dark text-error-light px-4 py-3 rounded-lg flex items-center gap-2">
-          <AlertCircle size={16} />
-          <span>{error}</span>
+        <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-rose-300" style={{ background: 'rgba(159,18,57,0.15)', border: '1px solid rgba(159,18,57,0.3)', fontSize: 'clamp(0.75rem,1.2vw,0.875rem)' }}>
+          <AlertCircle size={15} /><span>{error}</span>
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard 
-          title="Total Users" 
-          value={stats.totalUsers.toString()} 
-          icon={<Users size={20} className="text-white" />}
-          change={{ 
-            value: stats.activeUsers > 0 ? `${Math.round((stats.activeUsers / stats.totalUsers) * 100)}% active` : "0% active", 
-            positive: stats.activeUsers > 0 
-          }}
-          colorScheme="primary"
-        />
-        <StatsCard 
-          title="Total Content" 
-          value={stats.totalContent.toString()} 
-          icon={<FileText size={20} className="text-white" />}
-          change={{ 
-            value: `${stats.totalMCQs} MCQs`, 
-            positive: true 
-          }}
-          colorScheme="secondary"
-        />
-        <StatsCard 
-          title="Active Courses" 
-          value={stats.totalCourses.toString()} 
-          icon={<BookOpen size={20} className="text-white" />}
-          change={{ 
-            value: "Published", 
-            positive: true 
-          }}
-          colorScheme="accent"
-        />
-        <StatsCard 
-          title="Announcements" 
-          value={stats.totalAnnouncements.toString()} 
-          icon={<Megaphone size={20} className="text-white" />}
-          change={{ 
-            value: "Active", 
-            positive: true 
-          }}
-          colorScheme="success"
-        />
-      </div>
-      
-      {/* Welcome and Overview Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
-          <WelcomeCard userName={user?.name || 'Admin'} />
-        </div>
-        <div className="lg:col-span-1">
-          <SatisfactionCard satisfactionRate={stats.satisfactionRate} />
-        </div>
-        <div className="lg:col-span-1">
-          <ReferralCard 
-            invitedCount={stats.totalUsers} 
-            bonusValue={stats.activeUsers} 
-          />
-        </div>
-      </div>
-      
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <ContentStatsChart chartData={stats.contentBySubject} />
-        </div>
-        <div className="lg:col-span-1">
-          <ActiveUsersChart chartData={stats.userGrowth} />
-        </div>
-      </div>
-      
-      {/* Activity and Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <RecentActivityTable recentItems={stats.recentActivity} />
-        </div>
-        <div className="lg:col-span-1">
-          <SubjectBreakdown subjectsData={stats.contentBySubject} />
-        </div>
+      {/* ── Stats Row ── */}
+      <div className={`grid gap-3 ${
+        dashboardLayout === 'compact' ? 'grid-cols-2 xl:grid-cols-4'
+        : dashboardLayout === 'wide'  ? 'grid-cols-2'
+        : 'grid-cols-2 lg:grid-cols-4'
+      }`}>
+        <StatsCard title="Total Users"    value={stats.totalUsers}
+          icon={<Users size={16}/>}
+          change={{ value: stats.activeUsers > 0 ? `${Math.round((stats.activeUsers/stats.totalUsers)*100)}% active` : '—', positive: true }}
+          colorScheme="primary" />
+        <StatsCard title="Content Items"  value={stats.totalContent}
+          icon={<FileText size={16}/>}
+          change={{ value: `${stats.totalMCQs} MCQs`, positive: true }}
+          colorScheme="secondary" />
+        <StatsCard title="Active Courses" value={stats.totalCourses}
+          icon={<BookOpen size={16}/>}
+          change={{ value: 'Published', positive: true }}
+          colorScheme="accent" />
+        <StatsCard title="Announcements"  value={stats.totalAnnouncements}
+          icon={<Megaphone size={16}/>}
+          change={{ value: 'Live', positive: true }}
+          colorScheme="success" />
       </div>
 
-      {/* Orders Overview */}
+      {/* ── Edit Mode hint ── */}
+      {widgetEditMode && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl" style={{
+          background: 'rgba(99,102,241,0.08)',
+          border: '1px solid rgba(99,102,241,0.2)',
+          fontSize: 'clamp(0.7rem, 1.1vw, 0.8rem)',
+          color: 'rgb(167,139,250)'
+        }}>
+          <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse flex-shrink-0 inline-block" />
+          <span>Drag the <strong>grip handle</strong> to reorder · Tap resize button to change widget size</span>
+        </div>
+      )}
+
+      {/* ── Widget Grid — drag & resize ── */}
+      <WidgetGrid
+        widgets={widgets}
+        onReorder={handleWidgetReorder}
+        onResize={handleWidgetResize}
+        editMode={widgetEditMode}
+      >
+        {(widget) => renderWidget(widget)}
+      </WidgetGrid>
+
+      {/* ── Orders Row ── */}
       {stats.recentTransactions.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="lg:col-span-1">
-            <OrdersOverview recentOrders={stats.recentTransactions} />
-          </div>
-          <div className="lg:col-span-1">
-            <SalesChart chartData={stats.recentTransactions} />
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="rounded-2xl overflow-hidden"><OrdersOverview recentOrders={stats.recentTransactions} /></div>
+          <div className="rounded-2xl overflow-hidden"><SalesChart chartData={stats.recentTransactions} /></div>
         </div>
       )}
 
-      {/* Create Announcement Modal */}
       {showAnnouncementModal && (
         <CreateAnnouncementModal
           onClose={() => setShowAnnouncementModal(false)}
           onSuccess={handleAnnouncementSuccess}
         />
       )}
+
+      <style>{`
+        @keyframes slideDown {
+          from { opacity:0; transform:translateY(-6px) scale(0.97); }
+          to   { opacity:1; transform:translateY(0)   scale(1); }
+        }
+      `}</style>
     </div>
   );
 };
