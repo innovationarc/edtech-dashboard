@@ -47,6 +47,8 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
   const rightPupilRef = useRef<SVGEllipseElement>(null);
   const leftEyeRef    = useRef<SVGEllipseElement>(null);
   const rightEyeRef   = useRef<SVGEllipseElement>(null);
+  const leftClipEllRef  = useRef<SVGEllipseElement>(null);
+  const rightClipEllRef = useRef<SVGEllipseElement>(null);
   const mouthSmileRef = useRef<SVGPathElement>(null);
   const mouthORef     = useRef<SVGEllipseElement>(null);
 
@@ -64,12 +66,11 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
     const lerp  = (a: number, b: number, t: number) => a + (b - a) * t;
 
     const setEyeRy = (ry: number) => {
+      // Update clip ellipses so they mask the pupils exactly like eyelids
       leftEyeRef.current?.setAttribute('ry',  String(ry));
       rightEyeRef.current?.setAttribute('ry', String(ry));
-      // Fade pupils out as eye closes so they don't poke through
-      const op = String(Math.min(1, Math.max(0, (ry - 1) / 5)) * 0.6);
-      if (leftPupilRef.current)  leftPupilRef.current.style.opacity = op;
-      if (rightPupilRef.current) rightPupilRef.current.style.opacity = op;
+      leftClipEllRef.current?.setAttribute('ry',  String(ry));
+      rightClipEllRef.current?.setAttribute('ry', String(ry));
     };
     const setPupils = (px: number, py: number) => {
       const t = `translate(${px}px,${py}px)`;
@@ -178,6 +179,13 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          {/* Clip paths — same shape as eye sockets, control pupil masking */}
+          <clipPath id="clip-left-eye">
+            <ellipse ref={leftClipEllRef} cx="60" cy="72" rx="11.5" ry="12" />
+          </clipPath>
+          <clipPath id="clip-right-eye">
+            <ellipse ref={rightClipEllRef} cx="100" cy="72" rx="11.5" ry="12" />
+          </clipPath>
           <filter id="g-eye" x="-80%" y="-80%" width="260%" height="260%">
             <feGaussianBlur stdDeviation="2" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -221,9 +229,9 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
 
           {/* Eyes — always dark, always visible regardless of theme */}
           <ellipse ref={leftEyeRef}    cx="60"  cy="72" rx="11.5" ry="12" fill={eyeColor} filter="url(#g-eye)" />
-          <ellipse ref={leftPupilRef}  cx="64"  cy="66" rx="3" ry="4" fill="white" opacity="0.6" style={{ willChange: 'transform' }} />
+          <g clipPath="url(#clip-left-eye)"><ellipse ref={leftPupilRef}  cx="64"  cy="66" rx="3" ry="4" fill="white" opacity="0.6" style={{ willChange: 'transform' }} /></g>
           <ellipse ref={rightEyeRef}   cx="100" cy="72" rx="11.5" ry="12" fill={eyeColor} filter="url(#g-eye)" />
-          <ellipse ref={rightPupilRef} cx="104" cy="66" rx="3" ry="4" fill="white" opacity="0.6" style={{ willChange: 'transform' }} />
+          <g clipPath="url(#clip-right-eye)"><ellipse ref={rightPupilRef} cx="104" cy="66" rx="3" ry="4" fill="white" opacity="0.6" style={{ willChange: 'transform' }} /></g>
 
           {/* Smile — always dark */}
           <path ref={mouthSmileRef} d="M67,102 Q80,116 93,102"
