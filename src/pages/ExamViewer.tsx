@@ -388,7 +388,7 @@ const ExamViewer: React.FC = () => {
       setExamStatus(status);
 
       // Load versions
-      const versionDocs = await contentService.getExamVersions(contentId);
+      
       const vs: ExamVersion[] = (c.examVersions || []).map((v: any) => ({
         id: v.id,
         versionName: v.versionName || 'Version 1',
