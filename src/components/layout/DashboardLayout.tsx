@@ -202,18 +202,19 @@ const DashboardLayout = () => {
       const startY = positionRef.current.y;
       const W = window.innerWidth;
       const H = window.innerHeight;
-      const duration = 2000;
+      const duration = 3800;
 
       // Path waypoints — offsets relative to startX/startY
       // Widget is anchored bottom-right, so negative y = up, negative x = left
       const path = [
-        { x: startX,       y: startY        },
-        { x: startX - 100, y: startY - 200  },
-        { x: startX - W * 0.5, y: startY - H * 0.4 },
-        { x: startX - W * 0.7, y: startY - H * 0.2 },
-        { x: startX - W * 0.5, y: startY + H * 0.1  },
-        { x: startX - 150, y: startY - 80  },
-        { x: startX,       y: startY        },
+        { x: startX,            y: startY           },
+        { x: startX - 80,       y: startY - 280     },
+        { x: startX - W * 0.55, y: startY - H * 0.55},
+        { x: startX - W * 0.8,  y: startY - H * 0.3 },
+        { x: startX - W * 0.75, y: startY + H * 0.15},
+        { x: startX - W * 0.35, y: startY + H * 0.1 },
+        { x: startX - 100,      y: startY - 120     },
+        { x: startX,            y: startY           },
       ];
 
       // Catmull-Rom interpolation for smooth looping path
