@@ -198,17 +198,18 @@ const DashboardLayout = () => {
       const startY = positionRef.current.y;
       const W = window.innerWidth;
       const H = window.innerHeight;
-      const duration = 2200; // ms for full loop
+      const duration = 2000;
 
-      // Bezier control points — loop around the screen
+      // Path waypoints — offsets relative to startX/startY
+      // Widget is anchored bottom-right, so negative y = up, negative x = left
       const path = [
-        { x: startX, y: startY },
-        { x: -W * 0.3, y: -H * 0.5 },
-        { x: W * 0.1,  y: -H * 0.6 },
-        { x: W * 0.4,  y: -H * 0.3 },
-        { x: W * 0.2,  y: H * 0.1  },
-        { x: -W * 0.1, y: H * 0.2  },
-        { x: startX,   y: startY   },
+        { x: startX,       y: startY        },
+        { x: startX - 100, y: startY - 200  },
+        { x: startX - W * 0.5, y: startY - H * 0.4 },
+        { x: startX - W * 0.7, y: startY - H * 0.2 },
+        { x: startX - W * 0.5, y: startY + H * 0.1  },
+        { x: startX - 150, y: startY - 80  },
+        { x: startX,       y: startY        },
       ];
 
       // Catmull-Rom interpolation for smooth looping path
