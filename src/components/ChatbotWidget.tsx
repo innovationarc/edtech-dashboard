@@ -2,11 +2,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, X, Loader, AlertTriangle, Info } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
+import { useDashboard } from '../../contexts/DashboardContext';
 
 interface ChatbotWidgetProps { eyeOffset?: { x: number; y: number }; }
 interface ChatMessage { sender: 'user' | 'ai'; text: string; }
 
-const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset = { x: 0, y: 0 } }) => {
+const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
+  const { accentColor } = useDashboard();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -49,11 +51,11 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset = { x: 0, y: 0 
     <>
       <style>{`
         @keyframes ghost-halo {
-          0%,100% { filter: drop-shadow(0 0 10px rgba(167,139,250,0.65)) drop-shadow(0 6px 20px rgba(0,0,0,0.4)); }
-          50%      { filter: drop-shadow(0 0 24px rgba(167,139,250,1)) drop-shadow(0 10px 28px rgba(0,0,0,0.5)); }
+          0%,100% { filter: drop-shadow(0 0 10px var(--ghost-glow-color, rgba(167,139,250,0.65))) drop-shadow(0 6px 20px rgba(0,0,0,0.4)); }
+          50%      { filter: drop-shadow(0 0 24px var(--ghost-glow-color-full, rgba(167,139,250,1))) drop-shadow(0 10px 28px rgba(0,0,0,0.5)); }
         }
         .ghost-btn { animation: ghost-halo 3.4s ease-in-out infinite; transition: transform 0.2s ease; background: none !important; border: none !important; padding: 0 !important; cursor: pointer; }
-        .ghost-btn:hover { animation: none; transform: scale(1.1); filter: drop-shadow(0 0 28px rgba(167,139,250,1)) drop-shadow(0 12px 32px rgba(0,0,0,0.55)); }
+        .ghost-btn:hover { animation: none; transform: scale(1.1); filter: drop-shadow(0 0 28px var(--ghost-glow-color-full, rgba(167,139,250,1))) drop-shadow(0 12px 32px rgba(0,0,0,0.55)); }
       `}</style>
 
       {showInfo && (
@@ -89,8 +91,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset = { x: 0, y: 0 
         </div>
       )}
 
-      <button onClick={() => setIsOpen(!isOpen)} className="ghost-btn fixed bottom-4 right-4 z-40" style={{ width: 72, height: 72 }} aria-label={isOpen ? 'Close chatbot' : 'Open chatbot'}>
-        <GhostIcon size={72} isActive={isOpen} eyeOffset={eyeOffset} />
+      <button onClick={() => setIsOpen(!isOpen)} className="ghost-btn fixed bottom-4 right-4 z-40" style={{ width: 72, height: 72, ['--ghost-glow-color' as any]: accentColor + 'a6', ['--ghost-glow-color-full' as any]: accentColor }} aria-label={isOpen ? 'Close chatbot' : 'Open chatbot'}>
+        <GhostIcon size={72} isActive={isOpen} />
       </button>
 
       {isOpen && (
