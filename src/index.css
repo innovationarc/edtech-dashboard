@@ -4,7 +4,8 @@
 
 @layer base {
   :root {
-    --font-sans: 'Inter';
+    --font-sans: 'Outfit';
+    --font-mono: 'Fira Code';
   }
   
   html {
@@ -13,12 +14,17 @@
   }
   
   body {
-    font-family: var(--font-sans), 'Inter', 'Roboto', 'Open Sans', 'Poppins', sans-serif;
+    font-family: 'Outfit', var(--font-sans), sans-serif;
     @apply bg-background-950 text-white;
     transition: background-color 0.3s ease;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+
+  code, pre, kbd, samp, .font-mono {
+    font-family: 'Fira Code', var(--font-mono), monospace;
   }
   
   /* Improved scrollbar styling */
@@ -132,6 +138,38 @@
   .theme-pink .bg-card {
     background-color: #9d174d !important;
   }
+
+  .theme-ocean {
+    --color-text: #ffffff;
+    --color-text-secondary: #7dd3fc;
+  }
+  .theme-ocean body { background-color: #0c1a2e !important; }
+  .theme-ocean .bg-background-800, .theme-ocean .bg-background-900 { background-color: #0f2744 !important; }
+  .theme-ocean .bg-card { background-color: #0f2744 !important; }
+
+  .theme-forest {
+    --color-text: #ffffff;
+    --color-text-secondary: #86efac;
+  }
+  .theme-forest body { background-color: #0a1f14 !important; }
+  .theme-forest .bg-background-800, .theme-forest .bg-background-900 { background-color: #0f2d1e !important; }
+  .theme-forest .bg-card { background-color: #0f2d1e !important; }
+
+  .theme-sunset {
+    --color-text: #ffffff;
+    --color-text-secondary: #fdba74;
+  }
+  .theme-sunset body { background-color: #1c0a00 !important; }
+  .theme-sunset .bg-background-800, .theme-sunset .bg-background-900 { background-color: #431407 !important; }
+  .theme-sunset .bg-card { background-color: #431407 !important; }
+
+  .theme-slate {
+    --color-text: #ffffff;
+    --color-text-secondary: #94a3b8;
+  }
+  .theme-slate body { background-color: #0f172a !important; }
+  .theme-slate .bg-background-800, .theme-slate .bg-background-900 { background-color: #1e293b !important; }
+  .theme-slate .bg-card { background-color: #1e293b !important; }
 
   /* Mobile touch improvements */
   @media (max-width: 768px) {
@@ -593,4 +631,158 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+/* ═══════════════════════════════════════════════════════
+   GRID BACKGROUND — applies to ALL pages via .dl-main
+   ═══════════════════════════════════════════════════════ */
+
+/* The grid is drawn on the main scroll container */
+.dl-main {
+  position: relative;
+  background-color: var(--color-background, #0d1117);
+  background-image:
+    linear-gradient(rgba(99, 102, 241, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center center;
+}
+
+/* Dot variant for light theme */
+.theme-light .dl-main {
+  background-image:
+    radial-gradient(circle, rgba(99, 102, 241, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-color: #f5f5f7;
+}
+
+/* Theme-tinted grids */
+.theme-ocean .dl-main {
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.theme-forest .dl-main {
+  background-image:
+    linear-gradient(rgba(74, 222, 128, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 222, 128, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.theme-sunset .dl-main {
+  background-image:
+    linear-gradient(rgba(251, 146, 60, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(251, 146, 60, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.theme-pink .dl-main {
+  background-image:
+    linear-gradient(rgba(249, 168, 212, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(249, 168, 212, 0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.theme-purple .dl-main {
+  background-image:
+    linear-gradient(rgba(167, 139, 250, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167, 139, 250, 0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.theme-slate .dl-main {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FLUID TYPOGRAPHY — Outfit font, clamped scales
+   ═══════════════════════════════════════════════════════ */
+
+/* Fluid heading scale */
+.text-fluid-xs   { font-size: clamp(0.65rem,  1.2vw, 0.75rem);  line-height: 1.4; }
+.text-fluid-sm   { font-size: clamp(0.75rem,  1.4vw, 0.875rem); line-height: 1.5; }
+.text-fluid-base { font-size: clamp(0.875rem, 1.6vw, 1rem);     line-height: 1.6; }
+.text-fluid-lg   { font-size: clamp(1rem,     2vw,   1.25rem);  line-height: 1.5; }
+.text-fluid-xl   { font-size: clamp(1.125rem, 2.4vw, 1.5rem);  line-height: 1.4; }
+.text-fluid-2xl  { font-size: clamp(1.25rem,  3vw,   2rem);    line-height: 1.3; }
+.text-fluid-3xl  { font-size: clamp(1.5rem,   4vw,   2.5rem);  line-height: 1.2; }
+
+/* Card text resets — ensure Outfit everywhere */
+.bg-card, .bg-card * {
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Card heading */
+.card-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(0.875rem, 1.5vw, 1rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: white;
+}
+
+/* Card value (big number) */
+.card-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: white;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card subtext */
+.card-sub {
+  font-size: clamp(0.65rem, 1.1vw, 0.75rem);
+  color: rgba(156, 163, 175, 1);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════
+   DRAG & DROP WIDGET SYSTEM
+   ═══════════════════════════════════════════════════════ */
+
+.widget-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+.widget-drag-handle:active { cursor: grabbing; }
+
+.widget-dragging {
+  opacity: 0.5;
+  transform: scale(0.97);
+  z-index: 100;
+  pointer-events: none;
+}
+
+.widget-drag-over {
+  outline: 2px dashed rgba(99, 102, 241, 0.5);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
+@keyframes widget-drop-in {
+  from { opacity: 0; transform: scale(0.95) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.widget-drop-animation {
+  animation: widget-drop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FONT OVERRIDE — kill ALL system font fallbacks
+   ═══════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  font-family: inherit;
+}
+
+html, body, #root {
+  font-family: 'Outfit', sans-serif !important;
+}
+
+/* Specific overrides for inputs */
+input, textarea, select, button {
+  font-family: 'Outfit', sans-serif;
 }
