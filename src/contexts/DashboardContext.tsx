@@ -39,6 +39,8 @@ interface DashboardContextType {
   timezone: string;
   setTimezone: (timezone: string) => void;
   canAccessUserManagement: () => boolean;
+  dashboardLayout: string;
+  setDashboardLayout: (layout: string) => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -105,6 +107,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '#6366f1');
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#10b981');
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
+  const [dashboardLayout, setDashboardLayout] = useState(() => localStorage.getItem('dashboardLayout') || 'default');
   const [siteName, setSiteName] = useState(() => localStorage.getItem('siteName') || 'Learning Management Portal');
   const [siteTagline, setSiteTagline] = useState(() => localStorage.getItem('siteTagline') || 'Empowering educators, inspiring students');
   const [contactEmail, setContactEmail] = useState(() => localStorage.getItem('contactEmail') || 'admin@example.com');
@@ -276,6 +279,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     localStorage.setItem('primaryColor', primaryColor);
     localStorage.setItem('accentColor', accentColor);
     localStorage.setItem('fontFamily', fontFamily);
+    localStorage.setItem('dashboardLayout', dashboardLayout);
     localStorage.setItem('siteName', siteName);
     localStorage.setItem('siteTagline', siteTagline);
     localStorage.setItem('contactEmail', contactEmail);
@@ -314,6 +318,26 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         bg: '#831843',
         card: '#9d174d',
         cardLight: '#be185d'
+      },
+      ocean: {
+        bg: '#0c1a2e',
+        card: '#0f2744',
+        cardLight: '#1e3a5f'
+      },
+      forest: {
+        bg: '#0a1f14',
+        card: '#0f2d1e',
+        cardLight: '#14532d'
+      },
+      sunset: {
+        bg: '#1c0a00',
+        card: '#431407',
+        cardLight: '#7c2d12'
+      },
+      slate: {
+        bg: '#0f172a',
+        card: '#1e293b',
+        cardLight: '#334155'
       }
     };
     
@@ -324,7 +348,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     
     // Update body background
     document.body.style.backgroundColor = colors.bg;
-  }, [theme, primaryColor, accentColor, fontFamily, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
+  }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -355,11 +379,12 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     // Only handle hover on desktop
     if (!isDesktop) return;
     
-    // Set a timeout to close the sidebar after a short delay
+    // Use a longer delay (600ms) so brief cursor movements near the sidebar edge
+    // don't cause the sidebar to flicker closed/open rapidly
     const timeout = setTimeout(() => {
       setSidebarOpen(false);
       setHoverTimeout(null);
-    }, 300);
+    }, 400);
     setHoverTimeout(timeout);
   };
 
@@ -477,7 +502,9 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setSiteLogoUrl: handleSetSiteLogoUrl,
         timezone,
         setTimezone: handleSetTimezone,
-        canAccessUserManagement
+        canAccessUserManagement,
+        dashboardLayout,
+        setDashboardLayout
       }}
     >
       {children}
