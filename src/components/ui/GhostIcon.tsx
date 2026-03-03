@@ -33,7 +33,7 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
   const { primaryColor, accentColor } = useDashboard();
 
   // Body gradient colors — light/mid/dark shades of primary
-  const bodyLight  = lightenColor(primaryColor, 0.6);  // near white highlight
+  const bodyLight  = lightenColor(primaryColor, 0.35); // lighter primary
   const bodyMid    = lightenColor(primaryColor, 0.25); // mid tone
   const bodyDark   = darkenColor(primaryColor, 0.2);   // subtle shadow at base
   // Aura glow uses accent
@@ -167,18 +167,22 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
         <defs>
           <filter id="g-glow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="5" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <feFlood floodColor={accentColor} floodOpacity="0.35" result="color" />
+            <feComposite in="color" in2="blur" operator="in" result="coloredBlur" />
+            <feMerge>
+              <feMergeNode in="coloredBlur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
           <filter id="g-eye" x="-80%" y="-80%" width="260%" height="260%">
             <feGaussianBlur stdDeviation="2" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
 
-          {/* Body: white highlight → light primary → primary → slightly darker */}
+          {/* Body: primary tones only, no white */}
           <radialGradient id="g-body" cx="40%" cy="20%" r="78%" fx="40%" fy="20%">
-            <stop offset="0%"   stopColor="#ffffff" />
-            <stop offset="25%"  stopColor={bodyLight} />
-            <stop offset="65%"  stopColor={bodyMid} />
+            <stop offset="0%"   stopColor={bodyLight} />
+            <stop offset="50%"  stopColor={bodyMid} />
             <stop offset="100%" stopColor={bodyDark} />
           </radialGradient>
 
