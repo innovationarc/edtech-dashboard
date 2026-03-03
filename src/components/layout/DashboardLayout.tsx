@@ -191,8 +191,10 @@ const DashboardLayout = () => {
   // Ghost fly animation — pure rAF, zero React state updates during flight
   useEffect(() => {
     const handleFly = () => {
+      console.log('[Ghost] ghost-fly received, isFlying=', isFlying.current, 'widgetRef=', !!widgetRef.current);
       if (isFlying.current || !widgetRef.current) return;
       isFlying.current = true;
+      console.log('[Ghost] starting fly from', positionRef.current);
 
       const startX = positionRef.current.x;
       const startY = positionRef.current.y;
@@ -238,7 +240,7 @@ const DashboardLayout = () => {
         if (t < 1) {
           flyRafId.current = requestAnimationFrame(tick);
         } else {
-          // Snap back exactly to start
+          console.log('[Ghost] fly complete, snapping back to', startX, startY);
           positionRef.current = { x: startX, y: startY };
           if (widgetRef.current) {
             widgetRef.current.style.transform = `translate(${startX}px, ${startY}px)`;
