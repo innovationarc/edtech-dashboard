@@ -107,6 +107,7 @@ export interface ExamSession {
   writtenEvaluationPending: boolean;
   writtenEvaluatedAt?: Date;
   writtenEvaluatedBy?: string;
+  writtenEvaluatedName?: string;
 
   createdAt: Date;
   updatedAt?: Date;
@@ -219,6 +220,7 @@ const deserializeSession = (id: string, data: any): ExamSession => ({
   writtenEvaluationPending: data.writtenEvaluationPending ?? false,
   writtenEvaluatedAt: toOptDate(data.writtenEvaluatedAt),
   writtenEvaluatedBy: data.writtenEvaluatedBy,
+  writtenEvaluatedName: data.writtenEvaluatedName,
   activeDeviceToken: data.activeDeviceToken,
   createdAt: toDate(data.createdAt),
   updatedAt: toOptDate(data.updatedAt),
@@ -623,6 +625,7 @@ export const examService = {
       writtenEvaluationPending: false,
       writtenEvaluatedAt: Timestamp.now(),
       writtenEvaluatedBy: payload.evaluatorId,
+      writtenEvaluatedName: payload.evaluatorName,
       updatedAt: Timestamp.now(),
     }));
 
