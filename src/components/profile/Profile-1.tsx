@@ -120,8 +120,8 @@ const Profile1 = ({ onClose }: Profile1Props) => {
 
         {/* Modal Content Container */}
         <div className="relative h-full w-full flex flex-col">
-          {/* Spacer replacing removed header — matches bg */}
-          <div className="flex-shrink-0 bg-slate-950/95 pt-3 sm:pt-4" />
+          {/* Spacer to push content below the site navbar */}
+          <div className="flex-shrink-0 bg-slate-950/95 h-20 sm:h-24" />
 
           {/* Scrollable Content */}
           <div 
