@@ -120,28 +120,8 @@ const Profile1 = ({ onClose }: Profile1Props) => {
 
         {/* Modal Content Container */}
         <div className="relative h-full w-full flex flex-col">
-          {/* Fixed Header with Close Button */}
-          <div className="flex-shrink-0 sticky top-0 z-10 bg-slate-900/90 backdrop-blur-md border-b border-slate-700/50">
-            <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4">
-              <div className="flex items-center justify-between gap-3 sm:gap-4">
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-base sm:text-xl md:text-2xl lg:text-3xl font-semibold text-slate-100 truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
-                    Administrator Profile
-                  </h1>
-                  <p className="text-slate-400 text-xs sm:text-sm mt-0.5 sm:mt-1 truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
-                    Platform identity and system access overview
-                  </p>
-                </div>
-                <button
-                  onClick={handleClose}
-                  className="flex-shrink-0 p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors border border-slate-700/50 group"
-                  aria-label="Close profile"
-                >
-                  <X size={18} className="sm:w-5 sm:h-5 md:w-6 md:h-6 group-hover:rotate-90 transition-transform duration-200" />
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Spacer replacing removed header — matches bg */}
+          <div className="flex-shrink-0 bg-slate-950/95 pt-3 sm:pt-4" />
 
           {/* Scrollable Content */}
           <div 
@@ -214,7 +194,7 @@ const Profile1 = ({ onClose }: Profile1Props) => {
                     </div>
                     <button
                       onClick={handleClose}
-                      className="no-print sm:hidden w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group"
+                      className="no-print w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group sm:hidden"
                       aria-label="Close profile"
                     >
                       <X size={16} className="group-hover:rotate-90 transition-transform duration-200" />
@@ -223,6 +203,15 @@ const Profile1 = ({ onClose }: Profile1Props) => {
 
                     {/* Identity Information */}
                     <div className="flex-1 w-full sm:w-auto">
+                      <div className="hidden sm:flex justify-end mb-2">
+                        <button
+                          onClick={handleClose}
+                          className="no-print w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group"
+                          aria-label="Close profile"
+                        >
+                          <X size={16} className="group-hover:rotate-90 transition-transform duration-200" />
+                        </button>
+                      </div>
                       <div className="mb-3 sm:mb-4">
                         <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-semibold text-slate-100 mb-1.5 sm:mb-2 break-words" style={{ fontFamily: 'Inter, sans-serif' }}>
                           {user.fullName || user.name}
