@@ -602,6 +602,12 @@ export const examService = {
         evaluatorComment: eval_.comment ?? '',
         evaluatedAt: new Date(),
         evaluatedBy: payload.evaluatorId,
+        // Auto-resolve any pending review requests — re-evaluation supersedes them
+        reviewRequests: (wa.reviewRequests || []).map(r =>
+          r.status === 'pending'
+            ? { ...r, status: 'resolved' as const, resolvedAt: new Date(), resolvedComment: 'Resolved by re-evaluation.' }
+            : r
+        ),
       };
     });
 
