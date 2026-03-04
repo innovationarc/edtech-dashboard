@@ -68,6 +68,8 @@ export interface CourseAssignment {
   courseCategory?: string;
   courseThumbnail?: string;
   permissions: CoursePermission[];
+  // Subjects this teacher can access for Q&A and Exams. Empty = all subjects.
+  allowedSubjects: string[];
   assignedAt: Date;
   assignedByUid: string;
   assignedByUserId: string;
@@ -126,6 +128,7 @@ export const courseAssignmentService = {
       thumbnail?: string;
     },
     permissions: CoursePermission[],
+    allowedSubjects: string[],
     assignedByUser: { uid: string; userId: string; surname: string },
     notes?: string
   ): Promise<string> {
@@ -133,7 +136,7 @@ export const courseAssignmentService = {
       const existing = await this.getAssignment(teacher.uid, course.id);
 
       if (existing?.id) {
-        await this.updateAssignmentPermissions(existing.id, permissions, assignedByUser, notes);
+        await this.updateAssignmentPermissions(existing.id, permissions, allowedSubjects, assignedByUser, notes);
         return existing.id;
       }
 
@@ -148,6 +151,7 @@ export const courseAssignmentService = {
         courseCategory: course.category || '',
         courseThumbnail: course.thumbnail || '',
         permissions,
+        allowedSubjects,
         assignedAt: Timestamp.now(),
         assignedByUid: assignedByUser.uid,
         assignedByUserId: assignedByUser.userId,
@@ -167,7 +171,7 @@ export const courseAssignmentService = {
         performedByUserId: assignedByUser.userId,
         performedBySurname: assignedByUser.surname,
         timestamp: new Date(),
-        details: `${teacher.surname} assigned to "${course.title}" with [${permissions.join(', ')}]`,
+        details: `${teacher.surname} assigned to "${course.title}" with [${permissions.join(', ')}]${allowedSubjects.length ? ` — subjects: [${allowedSubjects.join(', ')}]` : ''}`,
         newPermissions: permissions,
       });
 
@@ -183,6 +187,7 @@ export const courseAssignmentService = {
   async updateAssignmentPermissions(
     assignmentId: string,
     newPermissions: CoursePermission[],
+    allowedSubjects: string[],
     updatedByUser: { uid: string; userId: string; surname: string },
     notes?: string
   ): Promise<void> {
@@ -195,6 +200,7 @@ export const courseAssignmentService = {
 
       await updateDoc(ref, {
         permissions: newPermissions,
+        allowedSubjects,
         isActive: true,
         updatedAt: Timestamp.now(),
         updatedByUid: updatedByUser.uid,
@@ -301,7 +307,7 @@ export const courseAssignmentService = {
    */
   async bulkAssign(
     teacher: { uid: string; userId: string; surname: string; fullName?: string; phoneNumber?: string },
-    courses: Array<{ id: string; title: string; category?: string; thumbnail?: string; permissions: CoursePermission[] }>,
+    courses: Array<{ id: string; title: string; category?: string; thumbnail?: string; permissions: CoursePermission[]; allowedSubjects: string[] }>,
     byUser: { uid: string; userId: string; surname: string }
   ): Promise<void> {
     try {
@@ -313,6 +319,7 @@ export const courseAssignmentService = {
           const ref = doc(db, 'course_assignments', existing.id);
           batch.update(ref, {
             permissions: c.permissions,
+            allowedSubjects: c.allowedSubjects,
             isActive: true,
             updatedAt: Timestamp.now(),
             updatedByUid: byUser.uid,
@@ -330,6 +337,7 @@ export const courseAssignmentService = {
             courseCategory: c.category || '',
             courseThumbnail: c.thumbnail || '',
             permissions: c.permissions,
+            allowedSubjects: c.allowedSubjects,
             assignedAt: Timestamp.now(),
             assignedByUid: byUser.uid,
             assignedByUserId: byUser.userId,
