@@ -7,13 +7,13 @@ import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBbAvX__6Yk7h0FR3mFsYw9jx_K6Rcbdr4",
-  authDomain: "smart-study-ffa8e.firebaseapp.com",
-  projectId: "smart-study-ffa8e",
-  storageBucket: "smart-study-ffa8e.firebasestorage.app",
-  messagingSenderId: "343513057419",
-  appId: "1:343513057419:web:b353dc8dd3fe7334b4ac8e",
-  measurementId: "G-HZNR8VH2H9"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase
@@ -24,4 +24,4 @@ const db = getFirestore(app);
 const storage = getStorage(app);
 
 // Export the initialized services
-export {   auth, db, storage };
+export { auth, db, storage };
