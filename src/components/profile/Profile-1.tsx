@@ -190,7 +190,7 @@ const Profile1 = ({ onClose }: Profile1Props) => {
                 {/* Admin Identity Header */}
                 <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg sm:rounded-xl md:rounded-2xl p-3 sm:p-4 md:p-6 lg:p-8 border border-slate-700/50">
                   <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 md:gap-6">
-                    {/* Profile Image + Close Button (same row on mobile) */}
+                    {/* Profile Image + Close Button Row */}
                     <div className="flex items-start justify-between w-full sm:w-auto sm:block">
                     <div className="relative flex-shrink-0">
                       <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-lg sm:rounded-xl overflow-hidden border-2 border-slate-700/50 shadow-xl bg-slate-800">
@@ -214,7 +214,7 @@ const Profile1 = ({ onClose }: Profile1Props) => {
                     </div>
                     <button
                       onClick={handleClose}
-                      className="no-print sm:hidden p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group"
+                      className="no-print sm:hidden w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group"
                       aria-label="Close profile"
                     >
                       <X size={16} className="group-hover:rotate-90 transition-transform duration-200" />
