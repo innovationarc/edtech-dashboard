@@ -342,8 +342,19 @@ export const examService = {
     try {
       const snap = await getDoc(doc(db, 'examSessions', sessionId));
       if (!snap.exists()) return false;
-      const existing = snap.data().activeDeviceToken;
-      if (existing && existing !== deviceToken) return false; // another device holds the lock
+      const data = snap.data();
+      const existingToken = data.activeDeviceToken;
+
+      if (existingToken && existingToken !== deviceToken) {
+        // Another device holds the lock — but check if it's stale.
+        // A lock is stale if updatedAt hasn't changed in > 5 minutes
+        // (i.e. the browser that held it is clearly gone).
+        const updatedAt = data.updatedAt?.toDate?.() ?? new Date(0);
+        const staleSecs = Math.floor((Date.now() - updatedAt.getTime()) / 1000);
+        if (staleSecs < 300) return false; // lock is fresh — genuinely another device
+        // Stale lock — fall through and claim it
+      }
+
       await updateDoc(doc(db, 'examSessions', sessionId), {
         activeDeviceToken: deviceToken,
         updatedAt: Timestamp.now(),
