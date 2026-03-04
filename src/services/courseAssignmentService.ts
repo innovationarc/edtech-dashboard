@@ -20,9 +20,9 @@ import { db } from '../config/firebase';
 
 // ==================== INTERFACES ====================
 
-export type CoursePermission = 'editing' | 'qna' | 'tasks' | 'exams';
+export type CoursePermission = 'course_creation' | 'editing' | 'qna' | 'tasks' | 'exams';
 
-export const ALL_PERMISSIONS: CoursePermission[] = ['editing', 'qna', 'tasks', 'exams'];
+export const ALL_PERMISSIONS: CoursePermission[] = ['course_creation', 'editing', 'qna', 'tasks', 'exams'];
 
 export const PERMISSION_META: Record<CoursePermission, {
   label: string;
@@ -30,6 +30,12 @@ export const PERMISSION_META: Record<CoursePermission, {
   color: string;
   bgColor: string;
 }> = {
+  course_creation: {
+    label: 'Course Creation',
+    description: 'Create new courses on the platform',
+    color: '#a855f7',
+    bgColor: 'rgba(168,85,247,0.12)',
+  },
   editing: {
     label: 'Course Editing',
     description: 'Edit content, lessons, and materials',
@@ -456,7 +462,7 @@ export const courseAssignmentService = {
   async getStats(): Promise<AssignmentStats> {
     const all = await this.getAllAssignments();
     const active = all.filter(a => a.isActive);
-    const breakdown: Record<CoursePermission, number> = { editing: 0, qna: 0, tasks: 0, exams: 0 };
+    const breakdown: Record<CoursePermission, number> = { course_creation: 0, editing: 0, qna: 0, tasks: 0, exams: 0 };
     active.forEach(a => a.permissions.forEach(p => breakdown[p]++));
     return {
       totalAssignments: all.length,
