@@ -188,7 +188,14 @@ const Profile1 = ({ onClose }: Profile1Props) => {
 
               <div className="print-content space-y-3 sm:space-y-4 md:space-y-6 pb-4 sm:pb-6">
                 {/* Admin Identity Header */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg sm:rounded-xl md:rounded-2xl p-3 sm:p-4 md:p-6 lg:p-8 border border-slate-700/50">
+                <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg sm:rounded-xl md:rounded-2xl p-3 sm:p-4 md:p-6 lg:p-8 border border-slate-700/50">
+                  <button
+                    onClick={handleClose}
+                    className="no-print absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group z-10"
+                    aria-label="Close profile"
+                  >
+                    <X size={16} className="group-hover:rotate-90 transition-transform duration-200" />
+                  </button>
                   <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 md:gap-6">
                     {/* Profile Image */}
                     <div className="relative flex-shrink-0">
