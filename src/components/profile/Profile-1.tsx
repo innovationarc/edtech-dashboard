@@ -220,7 +220,7 @@ const Profile1 = ({ onClose }: Profile1Props) => {
                     </div>
 
                     {/* Identity Information */}
-                    <div className="flex-1 w-full sm:w-auto">
+                    <div className="flex-1 w-full sm:w-auto pr-10 sm:pr-0">
                       <div className="mb-3 sm:mb-4">
                         <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-semibold text-slate-100 mb-1.5 sm:mb-2 break-words" style={{ fontFamily: 'Inter, sans-serif' }}>
                           {user.fullName || user.name}
