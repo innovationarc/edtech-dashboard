@@ -129,17 +129,18 @@ function AssignModal({
   state: AssignModalState;
   courses: Course[];
   onClose:()=>void;
-  onSave:(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],notes:string)=>Promise<void>;
+  onSave:(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],allowedSubjects:string[],notes:string)=>Promise<void>;
   saving:boolean;
 }) {
   const [step, setStep] = useState<'course'|'perms'>('course');
   const [search, setSearch] = useState('');
   const [sel, setSel] = useState<Course|null>(null);
   const [perms, setPerms] = useState<Set<CoursePermission>>(new Set());
+  const [allowedSubjects, setAllowedSubjects] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState('');
 
   useEffect(()=>{
-    if(state.open){ setStep('course'); setSel(null); setPerms(new Set()); setNotes(''); setSearch(''); }
+    if(state.open){ setStep('course'); setSel(null); setPerms(new Set()); setAllowedSubjects(new Set()); setNotes(''); setSearch(''); }
   },[state.open]);
 
   const existingIds = new Set(state.existingAssignments.map(a=>a.courseId));
@@ -153,6 +154,7 @@ function AssignModal({
     setSel(c);
     const ex = state.existingAssignments.find(a=>a.courseId===c.id);
     setPerms(ex ? new Set(ex.permissions) : new Set());
+    setAllowedSubjects(ex?.allowedSubjects?.length ? new Set(ex.allowedSubjects) : new Set());
     setNotes(ex?.notes||'');
     setStep('perms');
   };
@@ -253,6 +255,67 @@ function AssignModal({
                   Clear All
                 </button>
               </div>
+
+              {/* Subject Access — only shown when qna or exams is selected */}
+              {(perms.has('qna') || perms.has('exams')) && sel?.subjects && sel.subjects.length > 0 && (
+                <div style={{marginBottom:14,padding:'12px 14px',borderRadius:10,
+                  background:'rgba(14,165,233,0.06)',border:'1px solid rgba(14,165,233,0.18)'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:11,color:'#0ea5e9',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em'}}>
+                        Subject Access
+                      </div>
+                      <div style={{fontSize:11,color:'#555',marginTop:2}}>
+                        Restrict Q&amp;A / Exams to specific subjects. Leave all unchecked = access all.
+                      </div>
+                    </div>
+                    <div style={{display:'flex',gap:6}}>
+                      <button onClick={()=>setAllowedSubjects(new Set(sel.subjects))}
+                        style={{fontSize:10,padding:'3px 8px',borderRadius:6,background:'rgba(14,165,233,0.12)',
+                        border:'1px solid rgba(14,165,233,0.25)',color:'#0ea5e9',cursor:'pointer',fontWeight:600}}>
+                        All
+                      </button>
+                      <button onClick={()=>setAllowedSubjects(new Set())}
+                        style={{fontSize:10,padding:'3px 8px',borderRadius:6,background:'rgba(255,255,255,0.05)',
+                        border:'1px solid rgba(255,255,255,0.09)',color:'#666',cursor:'pointer',fontWeight:600}}>
+                        None
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                    {sel.subjects.map(subject=>{
+                      const checked = allowedSubjects.has(subject);
+                      return (
+                        <button key={subject} onClick={()=>{
+                          setAllowedSubjects(prev=>{
+                            const n=new Set(prev); n.has(subject)?n.delete(subject):n.add(subject); return n;
+                          });
+                        }} style={{
+                          display:'inline-flex',alignItems:'center',gap:5,
+                          padding:'5px 10px',borderRadius:8,cursor:'pointer',
+                          background: checked?'rgba(14,165,233,0.15)':'rgba(255,255,255,0.04)',
+                          border:`1.5px solid ${checked?'#0ea5e9':'rgba(255,255,255,0.1)'}`,
+                          color: checked?'#38bdf8':'#666',
+                          fontSize:12,fontWeight:checked?600:400,transition:'all 0.12s',
+                        }}>
+                          <div style={{width:13,height:13,borderRadius:3,flexShrink:0,
+                            background:checked?'#0ea5e9':'transparent',
+                            border:`1.5px solid ${checked?'#0ea5e9':'rgba(255,255,255,0.2)'}`,
+                            display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            {checked && <Check size={9} color="#fff" strokeWidth={3}/>}
+                          </div>
+                          {subject}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {allowedSubjects.size===0 && (
+                    <div style={{fontSize:10,color:'#555',marginTop:8,fontStyle:'italic'}}>
+                      ⚠ No subjects selected — teacher will have access to all subjects
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 <div style={{fontSize:11,color:'#555',marginBottom:5,fontWeight:600}}>Notes (optional)</div>
                 <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Add context..." rows={2}
@@ -271,7 +334,7 @@ function AssignModal({
               background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.09)',color:'#888',cursor:'pointer'}}>
               Cancel
             </button>
-            <button onClick={()=>{ if(sel) onSave(sel.id,sel.title,sel.thumbnail||sel.thumbnailUrl,Array.from(perms),notes); }}
+            <button onClick={()=>{ if(sel) onSave(sel.id,sel.title,sel.thumbnail||sel.thumbnailUrl,Array.from(perms),Array.from(allowedSubjects),notes); }}
               disabled={saving||perms.size===0} style={{
               flex:2,padding:'10px',borderRadius:9,fontSize:13,fontWeight:700,
               background: perms.size===0?'#222':'linear-gradient(135deg,#4f46e5,#7c3aed)',
@@ -421,6 +484,18 @@ function AssignmentCard({ assignment,onEdit,onRevoke,onToggleActive,isToggling }
         <div style={{display:'flex',gap:4,marginTop:5,flexWrap:'wrap'}}>
           {assignment.permissions.map(p=><PermBadge key={p} perm={p}/>)}
         </div>
+        {/* Subject scope — only shown when subjects are restricted */}
+        {assignment.allowedSubjects?.length > 0 && (
+          <div style={{display:'flex',gap:4,marginTop:5,flexWrap:'wrap',alignItems:'center'}}>
+            <span style={{fontSize:9,color:'#0ea5e9',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',flexShrink:0}}>subjects:</span>
+            {assignment.allowedSubjects.map(s=>(
+              <span key={s} style={{fontSize:10,color:'#38bdf8',background:'rgba(14,165,233,0.1)',
+                padding:'1px 6px',borderRadius:4,border:'1px solid rgba(14,165,233,0.2)',whiteSpace:'nowrap'}}>
+                {s}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       {/* Date + Status */}
       <div style={{fontSize:10,color:'#444',flexShrink:0,textAlign:'right'}}>
@@ -600,7 +675,7 @@ export default function CourseAssignmentPage() {
 
   const toggleExpand = (uid:string) => setTeachers(p=>p.map(t=>t.uid===uid?{...t,isExpanded:!t.isExpanded}:t));
 
-  const handleSaveAssignment = async(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],notes:string) => {
+  const handleSaveAssignment = async(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],allowedSubjects:string[],notes:string) => {
     if(!assignModal.teacher||!currentUser) return;
     setSavingAssignment(true);
     try {
@@ -611,6 +686,7 @@ export default function CourseAssignmentPage() {
           phoneNumber:assignModal.teacher.phoneNumber },
         { id:courseId, title:courseTitle, category:course?.category, thumbnail },
         perms,
+        allowedSubjects,
         { uid:currentUser.uid, userId:currentUser.userId||'', surname:currentUser.surname||'' },
         notes
       );
