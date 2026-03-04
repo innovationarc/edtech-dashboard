@@ -1,0 +1,2533 @@
+// src/pages/ExamViewer.tsx
+// Production-grade Exam Viewer — Complete rewrite
+// Fixes: version questions blank bug, duration object vs decimal, stale closure on startExam,
+//        marking rules, timer, result publish polling, attempt tracking, session resume
+// BUG FIXES THIS VERSION:
+//   Bug 1: Result publishing — completed check now runs BEFORE attempt-limit check
+//   Bug 2: Separate "Start MCQ" / "Start Written" buttons; 10-min lock after MCQ submission
+//   Bug 4: Re-attempt — "Try Again" button shown when attemptCount < maxAttempts
+// NEW UPDATES:
+//   Update 1: 10-min written start window persisted in Firestore — survives browser close
+//   Update 2: Results page shows ALL past attempts + analytics/progress tab
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Clock, AlertTriangle, CheckCircle, XCircle,
+  Shield, EyeOff, X, ChevronLeft, ChevronRight,
+  ClipboardList, PenLine, Check, AlertCircle,
+  Paperclip, ZoomIn, Lock, Loader2, RefreshCw, Layers,
+  RotateCcw, TrendingUp, BarChart2, History, MessageSquare,
+} from 'lucide-react';
+import { useDashboard } from '../contexts/DashboardContext';
+import { contentService, Content, MCQQuestion, WrittenQuestion } from '../services/contentService';
+import { examService, ExamSession, MCQAnswer, WrittenAnswer, StudentExamStatus } from '../services/examService';
+import { uploadService } from '../services/uploadService';
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+type Phase =
+  | 'loading'
+  | 'version_select'
+  | 'directions'
+  | 'mcq'
+  | 'mcq_submitted'
+  | 'written'
+  | 'results'
+  | 'blocked'
+  | 'device_blocked'
+  | 'scheduled_locked'
+  | 'absent'
+  | 'attempt_limit';
+
+interface ExamVersion {
+  id: string;
+  versionName: string;
+  mcqQuestions: MCQQuestion[];
+  writtenQuestions: WrittenQuestion[];
+  mcqDuration: number;
+  writtenDuration: number;
+  mcqQuestionsToShow: number;
+  writtenQuestionsToShow: number;
+  mcqDirection?: string;
+  writtenDirection?: string;
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+const fmtTime = (secs: number) => {
+  if (secs <= 0) return '00:00';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+const fmtDuration = (decimalMinutes: number) => {
+  if (!decimalMinutes || decimalMinutes <= 0) return null;
+  const totalSeconds = Math.round(decimalMinutes * 60);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+};
+
+const durToSecs = (decimalMinutes: number): number =>
+  Math.round((decimalMinutes || 0) * 60);
+
+// ─── buildQuestionSet ──────────────────────────────────────────────────────────
+const shuffle = <T,>(arr: T[]): T[] => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
+
+const buildQuestionSet = <T extends { isLocked?: boolean; lockedPosition?: 'first' | 'last' | null }>(
+  all: T[],
+  questionsToShow: number
+): T[] => {
+  if (!all || all.length === 0) return [];
+  const total = questionsToShow > 0 ? questionsToShow : all.length;
+  const first    = all.filter(q => q.isLocked && q.lockedPosition === 'first');
+  const last     = all.filter(q => q.isLocked && q.lockedPosition === 'last');
+  const unlocked = all.filter(q => !q.isLocked || !q.lockedPosition);
+  const lockedCount   = first.length + last.length;
+  const unlockedSlots = Math.max(0, total - lockedCount);
+  const picked        = shuffle(unlocked).slice(0, unlockedSlots);
+  return [...first, ...picked, ...last];
+};
+
+// ─── Marks calculation ─────────────────────────────────────────────────────────
+const calcMcqMarks = (
+  q: MCQQuestion,
+  selectedOptions: number[]
+): { isCorrect: boolean; marksAwarded: number } => {
+  if (!selectedOptions || selectedOptions.length === 0) {
+    return { isCorrect: false, marksAwarded: q.skipMarks ?? 0 };
+  }
+  const allCorrect = q.correctOptions.every(o => selectedOptions.includes(o));
+  const noneWrong  = selectedOptions.every(o => q.correctOptions.includes(o));
+  const isCorrect  = allCorrect && noneWrong && q.correctOptions.length > 0;
+  return isCorrect
+    ? { isCorrect: true,  marksAwarded: q.correctMarks }
+    : { isCorrect: false, marksAwarded: -(q.wrongMarks ?? 0) };
+};
+
+// ─── Exam window helpers ───────────────────────────────────────────────────────
+const checkResultVisible = (content: Content, session?: ExamSession | null): boolean => {
+  if (!session) return false;
+  if (session.resultVisibility === 'visible') return true;
+  if (content.resultPublishType === 'immediate') return true;
+  if (content.resultPublishType === 'scheduled' && content.resultPublishDateTime) {
+    return Date.now() >= new Date(content.resultPublishDateTime).getTime();
+  }
+  return false;
+};
+
+// ─── Swipe gesture hook ───────────────────────────────────────────────────────
+function useSwipe(onLeft: () => void, onRight: () => void, minDist = 50) {
+  const startX = useRef<number | null>(null);
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX;
+  }, []);
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (startX.current === null) return;
+    const dx = e.changedTouches[0].clientX - startX.current;
+    if (Math.abs(dx) >= minDist) dx < 0 ? onLeft() : onRight();
+    startX.current = null;
+  }, [onLeft, onRight, minDist]);
+  return { onTouchStart, onTouchEnd };
+}
+
+// ─── LaTeX / Math renderer ────────────────────────────────────────────────────
+// Renders inline $...$ and block $$...$$ math using KaTeX loaded from CDN.
+// Falls back to plain text if KaTeX is unavailable.
+const MathText: React.FC<{ text: string; className?: string }> = ({ text, className }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!ref.current || !text) return;
+    const katex = (window as any).katex;
+    if (!katex) {
+      ref.current.textContent = text;
+      return;
+    }
+    // Split on $$...$$ (block) and $...$ (inline)
+    const parts = text.split(/(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)/g);
+    ref.current.innerHTML = '';
+    parts.forEach(part => {
+      if (part.startsWith('$$') && part.endsWith('$$')) {
+        const span = document.createElement('span');
+        span.style.display = 'block';
+        try { katex.render(part.slice(2, -2), span, { displayMode: true, throwOnError: false }); }
+        catch { span.textContent = part; }
+        ref.current!.appendChild(span);
+      } else if (part.startsWith('$') && part.endsWith('$') && part.length > 2) {
+        const span = document.createElement('span');
+        try { katex.render(part.slice(1, -1), span, { displayMode: false, throwOnError: false }); }
+        catch { span.textContent = part; }
+        ref.current!.appendChild(span);
+      } else if (part) {
+        ref.current!.appendChild(document.createTextNode(part));
+      }
+    });
+  }, [text]);
+  return <div ref={ref} className={className} />;
+};
+
+// Inject KaTeX from CDN once
+if (typeof window !== 'undefined' && !(window as any).__katexLoaded) {
+  (window as any).__katexLoaded = true;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
+  document.head.appendChild(link);
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js';
+  document.head.appendChild(script);
+}
+
+// ─── Anti-cheat hook ───────────────────────────────────────────────────────────
+// Design principles:
+//  1. Only log visibilitychange (tab_switch) — NOT window.blur (too many false positives:
+//     mobile keyboard, file picker, notification shade, address bar all trigger blur).
+//  2. Grace period: tab must be hidden for >1.5s before logging (accidental swipe/gesture forgiveness).
+//  3. Copy/cut blocked only on MCQ option elements, not globally (written textarea needs copy).
+//  4. Right-click blocked only on question/option content, not on images or file buttons.
+//  5. selectstart NOT blocked globally — written textarea must allow text selection.
+//  6. DevTools key combos blocked and logged.
+//  7. Rapid repeated events deduplicated within 2s window.
+function useAntiCheat(active: boolean, sessionId: string | null, onViolation: (t: string) => void) {
+  const cbRef      = useRef(onViolation);
+  const lastLog    = useRef<Record<string, number>>({});
+  const hiddenTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => { cbRef.current = onViolation; });
+
+  useEffect(() => {
+    if (!active || !sessionId) return;
+
+    const log = (type: string) => {
+      const now = Date.now();
+      // Deduplicate: same event type within 2s = ignore
+      if (now - (lastLog.current[type] || 0) < 2000) return;
+      lastLog.current[type] = now;
+      cbRef.current(type);
+    };
+
+    // ── Tab switch: only fire after 1.5s of being hidden (not momentary swipe/gesture)
+    const onVis = () => {
+      if (document.hidden) {
+        hiddenTimer.current = setTimeout(() => log('tab_switch'), 1500);
+      } else {
+        // Came back before 1.5s — cancel, it was accidental
+        clearTimeout(hiddenTimer.current);
+      }
+    };
+
+    // ── DevTools key combos (F12, Ctrl+Shift+I/J/C, Ctrl+U/P/S)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F12' ||
+          (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key.toUpperCase())) ||
+          (e.ctrlKey && !e.shiftKey && ['U','P','S'].includes(e.key.toUpperCase()))) {
+        e.preventDefault();
+        log('devtools_attempt');
+      }
+    };
+
+    // ── Right-click: block on question/option text only (not images, not file buttons)
+    const onCtx = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Allow right-click on images (student may want to zoom) and file inputs
+      if (target.tagName === 'IMG' || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      // Allow if inside a button that's an image zoom or file upload
+      if (target.closest('button[data-allow-ctx]')) return;
+      e.preventDefault();
+      log('right_click');
+    };
+
+    // ── Copy/cut: block only on non-textarea elements (allow copy in written answer)
+    const onCopy = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') return;
+      e.preventDefault();
+      log('copy_attempt');
+    };
+
+    document.addEventListener('visibilitychange', onVis);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('contextmenu', onCtx);
+    document.addEventListener('copy', onCopy as EventListener);
+    document.addEventListener('cut', onCopy as EventListener);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('contextmenu', onCtx);
+      document.removeEventListener('copy', onCopy as EventListener);
+      document.removeEventListener('cut', onCopy as EventListener);
+      clearTimeout(hiddenTimer.current);
+    };
+  }, [active, sessionId]);
+}
+
+// ─── Countdown timer hook ──────────────────────────────────────────────────────
+function useCountdown(durationSecs: number, active: boolean, onExpire: () => void): number {
+  const [remaining, setRemaining] = useState(durationSecs);
+  const expiredRef  = useRef(false);
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => { onExpireRef.current = onExpire; });
+
+  useEffect(() => {
+    setRemaining(durationSecs);
+    expiredRef.current = false;
+  }, [durationSecs]);
+
+  useEffect(() => {
+    if (!active) return;
+    // Already expired when timer was set (resumed after browser close with 0s remaining)
+    if (durationSecs <= 0) {
+      if (!expiredRef.current) {
+        expiredRef.current = true;
+        setTimeout(() => onExpireRef.current(), 0);
+      }
+      return;
+    }
+    const id = setInterval(() => {
+      setRemaining(prev => {
+        const next = prev - 1;
+        if (next <= 0 && !expiredRef.current) {
+          expiredRef.current = true;
+          clearInterval(id);
+          setTimeout(() => onExpireRef.current(), 0);
+          return 0;
+        }
+        return Math.max(0, next);
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [active, durationSecs]);
+
+  return remaining;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Shell layout wrapper (module-level, stable reference) ──────────────────
+const Shell: React.FC<{ children: React.ReactNode; noPad?: boolean }> = ({ children, noPad }) => (
+  <div className="min-h-screen bg-[#080a12] text-white">
+    <div className="fixed inset-0 pointer-events-none"
+      style={{ background: 'radial-gradient(ellipse 70% 35% at 50% -10%,rgba(244,63,94,.08) 0%,transparent 65%)' }} />
+    {noPad ? children : <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-8">{children}</div>}
+  </div>
+);
+
+// ─── ScheduledLockScreen ──────────────────────────────────────────────────────
+const ScheduledLockScreen: React.FC<{
+  start: Date | null;
+  onUnlock: () => void;
+  onBack: () => void;
+}> = ({ start, onUnlock, onBack }) => {
+  const [countdown, setCountdown] = useState(() =>
+    start ? Math.max(0, Math.floor((start.getTime() - Date.now()) / 1000)) : 0);
+  useEffect(() => {
+    if (!start) return;
+    const id = setInterval(() => {
+      const left = Math.max(0, Math.floor((start.getTime() - Date.now()) / 1000));
+      setCountdown(left);
+      if (left <= 0) { clearInterval(id); onUnlock(); }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [start]);
+  const h = Math.floor(countdown / 3600), m = Math.floor((countdown % 3600) / 60), s = countdown % 60;
+  return (
+    <Shell>
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-white/40 hover:text-white mb-8 transition group">
+        <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" /> Back
+      </button>
+      <div className="max-w-md mx-auto mt-12 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center">
+        <Lock size={40} className="text-amber-400 mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">Exam Not Started Yet</h2>
+        {start && <p className="text-white/40 text-xs mb-4">Opens on {start.toLocaleString()}</p>}
+        {countdown > 0 && (
+          <div className="flex items-center justify-center gap-2 mt-2">
+            {[{ v: h, l: 'hrs' }, { v: m, l: 'min' }, { v: s, l: 'sec' }].map(({ v, l }) => (
+              <div key={l} className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 min-w-[60px]">
+                <p className="text-amber-400 font-black text-2xl font-mono leading-none">{String(v).padStart(2,'0')}</p>
+                <p className="text-amber-400/40 text-[10px] mt-1">{l}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {!start && <p className="text-white/50 text-sm">Check back later.</p>}
+      </div>
+    </Shell>
+  );
+};
+
+// ─── BlockedScreen ────────────────────────────────────────────────────────────
+const BlockedScreen: React.FC<{
+  publishDate: Date | null;
+  onBack: () => void;
+}> = ({ publishDate, onBack }) => {
+  const [pollCountdown, setPollCountdown] = useState(15);
+  const [publishCountdown, setPublishCountdown] = useState(() =>
+    publishDate ? Math.max(0, Math.floor((publishDate.getTime() - Date.now()) / 1000)) : 0);
+  useEffect(() => {
+    const id = setInterval(() => setPollCountdown(p => p <= 1 ? 15 : p - 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (!publishDate) return;
+    const id = setInterval(() =>
+      setPublishCountdown(Math.max(0, Math.floor((publishDate.getTime() - Date.now()) / 1000))), 1000);
+    return () => clearInterval(id);
+  }, [publishDate]);
+  const h = Math.floor(publishCountdown / 3600), m = Math.floor((publishCountdown % 3600) / 60), s = publishCountdown % 60;
+  return (
+    <Shell>
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-white/40 hover:text-white mb-8 transition group">
+        <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" /> Back
+      </button>
+      <div className="max-w-md mx-auto mt-12 rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-8 text-center">
+        <EyeOff size={40} className="text-indigo-400 mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">Exam Submitted!</h2>
+        <p className="text-white/50 text-sm mb-4">
+          {publishDate ? `Results will be published on ${publishDate.toLocaleString()}.`
+            : 'Results will be published when your teacher releases them.'}
+        </p>
+        {publishDate && publishCountdown > 0 && (
+          <div className="flex items-center justify-center gap-2 mb-5">
+            {[{ v: h, l: 'hrs' }, { v: m, l: 'min' }, { v: s, l: 'sec' }].map(({ v, l }) => (
+              <div key={l} className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 min-w-[52px]">
+                <p className="text-indigo-300 font-black text-xl font-mono leading-none">{String(v).padStart(2,'0')}</p>
+                <p className="text-indigo-400/40 text-[10px] mt-1">{l}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center justify-center gap-1.5 text-xs text-white/25 mt-2">
+          <RefreshCw size={11} className="animate-spin" /> Checking in {pollCountdown}s…
+        </div>
+      </div>
+    </Shell>
+  );
+};
+
+// ─── ReattemptButton ──────────────────────────────────────────────────────────
+const ReattemptButton: React.FC<{ onReattempt: () => Promise<void> }> = ({ onReattempt }) => {
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    setRetrying(true);
+    try { await onReattempt(); } finally { setRetrying(false); }
+  };
+  return (
+    <div className="mt-6">
+      <button onClick={handleRetry} disabled={retrying}
+        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-white/8 hover:bg-white/14
+                   border border-white/10 text-white/70 hover:text-white text-sm font-medium transition disabled:opacity-50">
+        {retrying ? <><Loader2 size={14} className="animate-spin" /> Starting…</> : <><RotateCcw size={14} /> Try Again</>}
+      </button>
+    </div>
+  );
+};
+
+const ExamViewer: React.FC = () => {
+  const { courseId, contentId } = useParams<{ courseId?: string; contentId: string }>();
+  const navigate = useNavigate();
+  const { user } = useDashboard();
+
+  // Stable per-device token — localStorage survives browser close/reopen on same device
+  const deviceTokenRef = useRef<string>(
+    (() => {
+      const existing = localStorage.getItem('examDeviceToken');
+      if (existing) return existing;
+      const t = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem('examDeviceToken', t);
+      return t;
+    })()
+  );
+  const deviceToken = deviceTokenRef.current;
+
+  const [phase, setPhase]           = useState<Phase>('loading');
+  const [content, setContent]       = useState<Content | null>(null);
+  const [examStatus, setExamStatus] = useState<StudentExamStatus | null>(null);
+  const [session, setSession]       = useState<ExamSession | null>(null);
+  const [sessionId, setSessionId]   = useState<string | null>(null);
+  const [error, setError]           = useState('');
+
+  const [versions, setVersions]                         = useState<ExamVersion[]>([]);
+  const activeVersionRef                                 = useRef<ExamVersion | null>(null);
+  const [activeVersionForUI, setActiveVersionForUI]     = useState<ExamVersion | null>(null);
+
+  const [mcqQuestions, setMcqQuestions]         = useState<MCQQuestion[]>([]);
+  const [writtenQuestions, setWrittenQuestions] = useState<WrittenQuestion[]>([]);
+  const [mcqAnswers, setMcqAnswers]             = useState<MCQAnswer[]>([]);
+  const [writtenAnswers, setWrittenAnswers]     = useState<WrittenAnswer[]>([]);
+
+  const [mcqIndex, setMcqIndex]         = useState(0);
+  const [writtenIndex, setWrittenIndex] = useState(0);
+  const [activePart, setActivePart]     = useState<'mcq' | 'written'>('mcq');
+
+  const [mcqDurSecs, setMcqDurSecs]         = useState(0);
+  const [writtenDurSecs, setWrittenDurSecs] = useState(0);
+  const [mcqTimerOn, setMcqTimerOn]         = useState(false);
+  const [writtenTimerOn, setWrittenTimerOn] = useState(false);
+
+  const [mcqSubmittedAt, setMcqSubmittedAt]   = useState<Date | null>(null);
+  const [writtenLocked, setWrittenLocked]     = useState(false);
+  const [writtenWindowSecs, setWrittenWindowSecs] = useState(600);
+  const writtenLockCheckRef  = useRef<ReturnType<typeof setInterval>>();
+  const writtenWindowTickRef = useRef<ReturnType<typeof setInterval>>();
+
+  const [startTime, setStartTime]       = useState(Date.now());
+  const [submitting, setSubmitting]     = useState(false);
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl]   = useState<string | null>(null);
+  const [violationMsg, setViolationMsg] = useState('');
+  const fileInputRef        = useRef<HTMLInputElement>(null);
+  const violationTimerRef   = useRef<ReturnType<typeof setTimeout>>();
+  const publishPollRef      = useRef<ReturnType<typeof setInterval>>();
+  const autoSaveRef         = useRef<ReturnType<typeof setInterval>>();
+
+  const mcqAnswersRef       = useRef<MCQAnswer[]>([]);
+  const writtenAnswersRef   = useRef<WrittenAnswer[]>([]);
+  const writtenSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [writtenSaveStatus, setWrittenSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const startTimeRef      = useRef(Date.now());
+  const submittingRef     = useRef(false);
+  const sessionIdRef      = useRef<string | null>(null);
+  const contentRef        = useRef<Content | null>(null);
+  const versionsRef       = useRef<ExamVersion[]>([]);
+
+  useEffect(() => { mcqAnswersRef.current     = mcqAnswers; },     [mcqAnswers]);
+  useEffect(() => { writtenAnswersRef.current = writtenAnswers; }, [writtenAnswers]);
+  useEffect(() => { startTimeRef.current      = startTime; },      [startTime]);
+  useEffect(() => { submittingRef.current     = submitting; },     [submitting]);
+  useEffect(() => { sessionIdRef.current      = sessionId; },      [sessionId]);
+  useEffect(() => { contentRef.current        = content; },        [content]);
+  useEffect(() => { versionsRef.current       = versions; },       [versions]);
+
+  // ── Swipe handlers (must be top-level hooks, not inside render) ─────────────
+  const mcqSwipe = useSwipe(
+    useCallback(() => setMcqIndex(p => Math.min(mcqQuestions.length - 1, p + 1)), [mcqQuestions.length]),
+    useCallback(() => setMcqIndex(p => Math.max(0, p - 1)), [])
+  );
+  const writtenSwipe = useSwipe(
+    useCallback(() => setWrittenIndex(p => Math.min(writtenQuestions.length - 1, p + 1)), [writtenQuestions.length]),
+    useCallback(() => setWrittenIndex(p => Math.max(0, p - 1)), [])
+  );
+
+  // ── Anti-cheat ───────────────────────────────────────────────────────────────
+  const examActive = phase === 'mcq' || phase === 'written';
+  const handleViolation = useCallback((type: string) => {
+    const sid = sessionIdRef.current;
+    if (sid) examService.logAntiCheatEvent(sid, type).catch(() => {});
+    // Only show toast for meaningful events — silent log for minor ones
+    const msg = type === 'tab_switch'     ? '⚠️ Tab switch recorded.' :
+                type === 'copy_attempt'   ? 'Copying is disabled during the exam.' :
+                type === 'devtools_attempt' ? '⚠️ Developer tools are not allowed.' :
+                type === 'right_click'    ? '' :  // silent — too common on mobile
+                                            '';
+    if (!msg) return; // don't show toast for silent events
+    setViolationMsg(msg);
+    clearTimeout(violationTimerRef.current);
+    violationTimerRef.current = setTimeout(() => setViolationMsg(''), 3000);
+  }, []);
+  useAntiCheat(examActive, sessionId, handleViolation);
+
+  // ── Timers ───────────────────────────────────────────────────────────────────
+  const mcqExpired = useCallback(() => {
+    if (writtenQuestions.length > 0) {
+      setMcqTimerOn(false);
+      const sid = sessionIdRef.current;
+      if (sid) {
+        const a = mcqAnswersRef.current;
+        const marks = a.reduce((s, x) => s + (x.marksAwarded ?? 0), 0);
+        examService.saveMCQAnswers(sid, a, marks).catch(() => {});
+        // FIX 2: submitMCQPart called with only sessionId
+        examService.submitMCQPart(sid).catch(() => {});
+      }
+      setMcqSubmittedAt(new Date());
+      setPhase('mcq_submitted');
+    } else {
+      doSubmit(true);
+    }
+  }, [writtenQuestions.length]);
+
+  const writtenExpired = useCallback(() => doSubmit(true), []);
+
+  const mcqRemaining     = useCountdown(mcqDurSecs, mcqTimerOn, mcqExpired);
+  const writtenRemaining = useCountdown(writtenDurSecs, writtenTimerOn, writtenExpired);
+  const activeRemaining  = activePart === 'mcq' ? mcqRemaining : writtenRemaining;
+  const timerWarning     = activeRemaining > 0 && activeRemaining < 120;
+
+  // ── 10-min written window countdown ──────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== 'mcq_submitted' || !mcqSubmittedAt) return;
+    const MCQ_WRITTEN_WINDOW_MS = 10 * 60 * 1000;
+
+    const updateCountdown = () => {
+      const elapsed = Date.now() - mcqSubmittedAt.getTime();
+      const remaining = Math.max(0, Math.ceil((MCQ_WRITTEN_WINDOW_MS - elapsed) / 1000));
+      setWrittenWindowSecs(remaining);
+      if (remaining <= 0) {
+        setWrittenLocked(true);
+        clearInterval(writtenLockCheckRef.current);
+        clearInterval(writtenWindowTickRef.current);
+      }
+    };
+
+    updateCountdown();
+    writtenLockCheckRef.current = setInterval(updateCountdown, 1000);
+    writtenWindowTickRef.current = writtenLockCheckRef.current;
+    return () => { clearInterval(writtenLockCheckRef.current); };
+  }, [phase, mcqSubmittedAt]);
+
+  // ── Auto-save ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!examActive || !sessionId) return;
+    autoSaveRef.current = setInterval(() => {
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+      const a  = mcqAnswersRef.current;
+      const wa = writtenAnswersRef.current;
+      const marks = a.reduce((s, x) => s + (x.marksAwarded ?? 0), 0);
+      examService.saveMCQAnswers(sid, a, marks).catch(() => {});
+      if (wa.length > 0) examService.saveWrittenAnswers(sid, wa).catch(() => {});
+    }, 30_000);
+    return () => clearInterval(autoSaveRef.current);
+  }, [examActive, sessionId]);
+
+  // ── Cleanup ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleUnload = () => {
+      const sid = sessionIdRef.current;
+      if (sid) examService.releaseDevice(sid, deviceToken).catch(() => {});
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      clearInterval(autoSaveRef.current);
+      clearInterval(publishPollRef.current);
+      clearInterval(writtenLockCheckRef.current);
+      clearTimeout(violationTimerRef.current);
+    };
+  }, []);
+
+  // ── Load exam ────────────────────────────────────────────────────────────────
+  const loadExam = useCallback(async () => {
+    if (!contentId || !user) return;
+    setPhase('loading');
+    setError('');
+    try {
+      const [c, status] = await Promise.all([
+        contentService.getContentById(contentId),
+        examService.getStudentExamStatus(contentId, user.uid, courseId),
+      ]);
+
+      if (!c) { setError('Exam not found.'); return; }
+      setContent(c);
+      contentRef.current = c;
+      setExamStatus(status);
+
+      // FIX 1: removed non-existent contentService.getExamVersions call
+      const vs: ExamVersion[] = (c.examVersions || []).map((v: any) => ({
+        id: v.id,
+        versionName: v.versionName || 'Version 1',
+        mcqQuestions: v.mcqQuestions || [],
+        writtenQuestions: v.writtenQuestions || [],
+        mcqDuration: v.mcqDuration || 0,
+        writtenDuration: v.writtenDuration || 0,
+        mcqQuestionsToShow: v.mcqQuestionsToShow || (v.mcqQuestions || []).length,
+        writtenQuestionsToShow: v.writtenQuestionsToShow || (v.writtenQuestions || []).length,
+        mcqDirection: v.mcqDirection,
+        writtenDirection: v.writtenDirection,
+      }));
+      setVersions(vs);
+      versionsRef.current = vs;
+
+      if (c.examStartDateTime && Date.now() < new Date(c.examStartDateTime).getTime()) {
+        setPhase('scheduled_locked');
+        return;
+      }
+      if (c.examEndDateTime && Date.now() > new Date(c.examEndDateTime).getTime()) {
+        if (!status || status.status === 'not_started') {
+          setPhase('absent');
+          return;
+        }
+      }
+
+      if (status?.lastAttemptId) {
+        const existingSession = await examService.getExamSession(status.lastAttemptId);
+        if (existingSession) {
+          if (existingSession.status === 'mcq_submitted' && existingSession.mcqSubmittedAt) {
+            const submittedAt = existingSession.mcqSubmittedAt;
+            const elapsed = Date.now() - submittedAt.getTime();
+            const MCQ_WINDOW_MS = 10 * 60 * 1000;
+
+            setSessionId(existingSession.id);
+            sessionIdRef.current = existingSession.id;
+            setMcqSubmittedAt(submittedAt);
+            setWrittenLocked(elapsed >= MCQ_WINDOW_MS);
+
+            if (vs.length > 0) {
+              const ver = vs[0];
+              setActiveVersion(ver);
+              const mcqSet     = restoreMcqQuestions(existingSession, ver);
+              const writtenSet = restoreWrittenQuestions(existingSession, ver);
+              setMcqQuestions(mcqSet);
+              setWrittenQuestions(writtenSet);
+              setMcqAnswers(existingSession.mcqAnswers);
+              setWrittenAnswers(writtenSet.map(q => ({ questionId: q.id, answerText: '', attachmentUrls: [] })));
+            }
+            setPhase('mcq_submitted');
+            return;
+          }
+
+          if (existingSession.status === 'in_progress') {
+            const ver = vs[0];
+            const mcqSecs     = ver ? durToSecs(ver.mcqDuration) : 0;
+            const writtenSecs = ver ? durToSecs(ver.writtenDuration) : 0;
+            const now = Date.now();
+
+            // ── SERVER-SIDE TIMEOUT: auto-submit if timer expired while browser was closed ──
+            const isWrittenPhase = !!existingSession.writtenStartedAt;
+            const timerStart = isWrittenPhase
+              ? existingSession.writtenStartedAt!.getTime()
+              : (existingSession.mcqStartedAt || existingSession.startedAt).getTime();
+            const totalSecs  = isWrittenPhase ? writtenSecs : mcqSecs;
+            const elapsedSecs = Math.floor((now - timerStart) / 1000);
+            const hasTimedOut = totalSecs > 0 && elapsedSecs >= totalSecs;
+
+            if (hasTimedOut) {
+              // Submit with whatever answers were saved, clear device lock
+              const a  = existingSession.mcqAnswers;
+              const wa = existingSession.writtenAnswers;
+              const marks = a.reduce((s: number, x: any) => s + (x.marksAwarded ?? 0), 0);
+              await examService.submitExamSession(
+                existingSession.id, a, wa, marks, totalSecs, /*auto=*/true
+              );
+              const submitted = await examService.getExamSession(existingSession.id);
+              if (vs.length > 0) {
+                setActiveVersion(vs[0]);
+                restoreQuestionsFromSession(existingSession, vs);
+              }
+              setSession(submitted);
+              if (submitted && checkResultVisible(c, submitted)) {
+                setPhase('results');
+              } else {
+                startPublishPoll(c, submitted);
+                setPhase('blocked');
+              }
+              return;
+            }
+
+            // ── DEVICE LOCK: only enforce if session is still genuinely live ──
+            const claimed = await examService.claimDevice(existingSession.id, deviceToken);
+            if (!claimed) {
+              setPhase('device_blocked');
+              return;
+            }
+
+            setSessionId(existingSession.id);
+            sessionIdRef.current = existingSession.id;
+
+            if (vs.length > 0) {
+              setActiveVersion(ver);
+              const mcqSet     = restoreMcqQuestions(existingSession, ver);
+              const writtenSet = restoreWrittenQuestions(existingSession, ver);
+
+              setMcqQuestions(mcqSet);
+              setWrittenQuestions(writtenSet);
+              setMcqAnswers(existingSession.mcqAnswers.length > 0
+                ? existingSession.mcqAnswers
+                : mcqSet.map(q => ({ questionId: q.id, selectedOptions: [], isCorrect: false, marksAwarded: q.skipMarks ?? 0 })));
+              setWrittenAnswers(existingSession.writtenAnswers.length > 0
+                ? existingSession.writtenAnswers
+                : writtenSet.map(q => ({ questionId: q.id, answerText: '', attachmentUrls: [] })));
+
+              if (existingSession.writtenStartedAt) {
+                const remainingSecs = Math.max(0, writtenSecs - elapsedSecs);
+                setActivePart('written');
+                setWrittenDurSecs(remainingSecs);
+                // Keep timer active even at 0 so useCountdown fires onExpire immediately
+                setWrittenTimerOn(writtenSecs > 0);
+                setPhase('written');
+              } else {
+                const remainingSecs = Math.max(0, mcqSecs - elapsedSecs);
+                setActivePart('mcq');
+                setMcqDurSecs(remainingSecs);
+                // Keep timer active even at 0 so useCountdown fires onExpire immediately
+                setMcqTimerOn(mcqSecs > 0);
+                setPhase('mcq');
+              }
+              return;
+            }
+          }
+
+          if (['submitted', 'auto_submitted', 'timed_out'].includes(existingSession.status)) {
+            if (vs.length > 0) {
+              setActiveVersion(vs[0]);
+              restoreQuestionsFromSession(existingSession, vs);
+            }
+            setSession(existingSession);
+            if (checkResultVisible(c, existingSession)) {
+              setPhase('results');
+            } else {
+              startPublishPoll(c, existingSession);
+              setPhase('blocked');
+            }
+            return;
+          }
+        }
+      }
+
+      if (status) {
+        const maxAtt = c.maxAttempts;
+        const attemptCount = status.attemptCount ?? 0;
+        if (maxAtt !== 'unlimited' && maxAtt && attemptCount >= Number(maxAtt)) {
+          setPhase('attempt_limit');
+          return;
+        }
+      }
+
+      if (status?.status === 'absent') {
+        setPhase('absent');
+        return;
+      }
+
+      if (vs.length > 1) {
+        setPhase('version_select');
+      } else if (vs.length === 1) {
+        setActiveVersion(vs[0]);
+        setPhase('directions');
+      } else {
+        setError('No exam versions found. Please contact your teacher.');
+      }
+    } catch (e: any) {
+      console.error('loadExam error:', e);
+      setError(e.message || 'Failed to load exam.');
+    }
+  }, [contentId, user, courseId]);
+
+  useEffect(() => { loadExam(); }, [loadExam]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  const setActiveVersion = (ver: ExamVersion) => {
+    activeVersionRef.current = ver;
+    setActiveVersionForUI(ver);
+  };
+
+  const restoreMcqQuestions = (s: ExamSession, ver: ExamVersion): MCQQuestion[] => {
+    if (!s.mcqQuestionIds?.length) return buildQuestionSet(ver.mcqQuestions, ver.mcqQuestionsToShow);
+    return s.mcqQuestionIds.map(id => ver.mcqQuestions.find(q => q.id === id)!).filter(Boolean);
+  };
+
+  const restoreWrittenQuestions = (s: ExamSession, ver: ExamVersion): WrittenQuestion[] => {
+    if (!s.writtenQuestionIds?.length) return buildQuestionSet(ver.writtenQuestions, ver.writtenQuestionsToShow);
+    return s.writtenQuestionIds.map(id => ver.writtenQuestions.find(q => q.id === id)!).filter(Boolean);
+  };
+
+  const restoreQuestionsFromSession = (s: ExamSession, vs: ExamVersion[]) => {
+    const ver = vs.find(v =>
+      v.mcqQuestions.some(q => s.mcqQuestionIds?.includes(q.id)) ||
+      v.writtenQuestions.some(q => s.writtenQuestionIds?.includes(q.id))
+    ) || vs[0];
+    if (!ver) return;
+    setMcqQuestions(restoreMcqQuestions(s, ver));
+    setWrittenQuestions(restoreWrittenQuestions(s, ver));
+  };
+
+  // ── Publish poll ──────────────────────────────────────────────────────────────
+  const startPublishPoll = (c: Content, s: ExamSession | null) => {
+    clearInterval(publishPollRef.current);
+    publishPollRef.current = setInterval(async () => {
+      const updated = await examService.getExamSession(s?.id || '');
+      if (updated && checkResultVisible(c, updated)) {
+        clearInterval(publishPollRef.current);
+        setSession(updated);
+        restoreQuestionsFromSession(updated, versionsRef.current);
+        setPhase('results');
+      }
+    }, 15_000);
+  };
+
+  // ── Start exam ────────────────────────────────────────────────────────────────
+  const startExam = async () => {
+    if (submitting) return;
+    if (!user || !content || !contentId) return;
+
+    const ver = activeVersionRef.current || versionsRef.current[0];
+    if (!ver) { setError('No exam version selected.'); return; }
+
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const mcqSet      = buildQuestionSet(ver.mcqQuestions,     ver.mcqQuestionsToShow);
+      const writtenSet  = buildQuestionSet(ver.writtenQuestions, ver.writtenQuestionsToShow);
+      const mcqMax      = mcqSet.reduce((s, q) => s + (q.correctMarks || 0), 0);
+      const writtenMax  = writtenSet.reduce((s, q) => s + (q.marks || 0), 0);
+      const mcqSecs     = durToSecs(ver.mcqDuration);
+      const writtenSecs = durToSecs(ver.writtenDuration);
+
+      const sid = await examService.startExamSession({
+        contentId,
+        courseId,
+        studentId: user.uid,
+        studentName: user.displayName || user.email || 'Student',
+        studentEmail: user.email || undefined,
+        deviceToken,
+        mcqQuestionIds: mcqSet.map(q => q.id),
+        writtenQuestionIds: writtenSet.map(q => q.id),
+        maxMarks: mcqMax + writtenMax,
+        resultVisibility: 'hidden',
+      });
+
+      setSessionId(sid);
+      sessionIdRef.current = sid;
+      setMcqQuestions(mcqSet);
+      setWrittenQuestions(writtenSet);
+      setMcqAnswers(mcqSet.map(q => ({
+        questionId: q.id, selectedOptions: [], isCorrect: false, marksAwarded: q.skipMarks ?? 0,
+      })));
+      setWrittenAnswers(writtenSet.map(q => ({
+        questionId: q.id, answerText: '', attachmentUrls: [],
+      })));
+      setMcqDurSecs(mcqSecs);
+      setWrittenDurSecs(writtenSecs);
+      const now = Date.now();
+      setStartTime(now);
+      startTimeRef.current = now;
+      setMcqIndex(0);
+      setWrittenIndex(0);
+      setMcqSubmittedAt(null);
+      setWrittenLocked(false);
+
+      if (mcqSet.length > 0) {
+        setActivePart('mcq');
+        setMcqTimerOn(mcqSecs > 0);
+        setPhase('mcq');
+      } else if (writtenSet.length > 0) {
+        setActivePart('written');
+        setWrittenTimerOn(writtenSecs > 0);
+        setPhase('written');
+      } else {
+        setError('No questions found in this version. Please contact your teacher.');
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to start exam. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ─── SELECT OPTION ────────────────────────────────────────────────────────────
+  const selectOption = (qi: number, oi: number) => {
+    const q = mcqQuestions[qi];
+    if (!q) return;
+    const cur = mcqAnswers[qi] || { questionId: q.id, selectedOptions: [], isCorrect: false, marksAwarded: 0 };
+
+    // LOCK: once any option is selected, answer is final — no editing allowed
+    if (cur.selectedOptions.length > 0) return;
+
+    const newSel = [oi];
+
+    // MULTI-SELECT penalty: if question expects multiple correct options,
+    // a single click locks immediately and is marked incorrect unless it
+    // happens to be the sole correct option (edge case with 1 correct of many).
+    // Per requirement: "if someone chose more than 1 option → incorrect"
+    // Since we now lock after 1 click, the student only ever submits 1 option.
+    // calcMcqMarks already handles correctness — no extra logic needed here.
+    const { isCorrect, marksAwarded } = calcMcqMarks(q, newSel);
+    const updated = [...mcqAnswers];
+    updated[qi] = { questionId: q.id, selectedOptions: newSel, isCorrect, marksAwarded };
+    setMcqAnswers(updated);
+    mcqAnswersRef.current = updated;
+
+    // Persist immediately so selection survives refresh/browser close
+    const sid = sessionIdRef.current;
+    if (sid) {
+      const marks = updated.reduce((s, x) => s + (x.marksAwarded ?? 0), 0);
+      examService.saveMCQAnswers(sid, updated, marks).catch(() => {});
+    }
+  };
+
+  // ─── WRITTEN ANSWER ───────────────────────────────────────────────────────────
+  const changeWritten = (qi: number, text: string) => {
+    const updated = [...writtenAnswers];
+    updated[qi] = { ...updated[qi], answerText: text };
+    setWrittenAnswers(updated);
+    writtenAnswersRef.current = updated;
+    // Debounced auto-save with status indicator
+    setWrittenSaveStatus('unsaved');
+    clearTimeout(writtenSaveTimerRef.current);
+    writtenSaveTimerRef.current = setTimeout(() => {
+      const sid = sessionIdRef.current;
+      if (!sid) return;
+      setWrittenSaveStatus('saving');
+      examService.saveWrittenAnswers(sid, writtenAnswersRef.current)
+        .then(() => setWrittenSaveStatus('saved'))
+        .catch(() => setWrittenSaveStatus('unsaved'));
+    }, 1500);
+  };
+
+  // ─── ATTACHMENT ───────────────────────────────────────────────────────────────
+  const uploadAttachment = async (qi: number, file: File) => {
+    const qId = writtenQuestions[qi]?.id;
+    if (!qId || !sessionId) return;
+    setUploadingFor(qId);
+    try {
+      const result = await uploadService.uploadToSupabase(file, 'exam-answers');
+      await examService.addWrittenAttachment(sessionId, qId, result.url);
+      const updated = [...writtenAnswers];
+      updated[qi] = { ...updated[qi], attachmentUrls: [...(updated[qi].attachmentUrls || []), result.url] };
+      setWrittenAnswers(updated);
+      writtenAnswersRef.current = updated;
+    } catch (e: any) {
+      setError('Upload failed: ' + e.message);
+    } finally {
+      setUploadingFor(null);
+    }
+  };
+
+  const removeAttachment = async (qi: number, url: string) => {
+    const qId = writtenQuestions[qi]?.id;
+    if (!qId || !sessionId) return;
+    await examService.removeWrittenAttachment(sessionId, qId, url);
+    const updated = [...writtenAnswers];
+    updated[qi] = { ...updated[qi], attachmentUrls: (updated[qi].attachmentUrls || []).filter(u => u !== url) };
+    setWrittenAnswers(updated);
+    writtenAnswersRef.current = updated;
+  };
+
+  // ─── SUBMIT MCQ PART ─────────────────────────────────────────────────────────
+  const submitMCQPart = async () => {
+    if (submitting) return;
+    const unanswered = mcqQuestions.length - mcqAnswers.filter(a => a.selectedOptions?.length > 0).length;
+    const msg = unanswered > 0
+      ? `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Submit MCQ anyway? You cannot change answers after this.`
+      : 'Submit MCQ section? You cannot change MCQ answers after this.';
+    if (!confirm(msg)) return;
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+
+    setSubmitting(true);
+    setMcqTimerOn(false);
+    try {
+      const a = mcqAnswersRef.current;
+      const marks = a.reduce((s, x) => s + (x.marksAwarded ?? 0), 0);
+      await examService.saveMCQAnswers(sid, a, marks);
+      // FIX 2: only pass sessionId
+      await examService.submitMCQPart(sid);
+      setMcqSubmittedAt(new Date());
+      setWrittenLocked(false);
+      setPhase('mcq_submitted');
+    } catch (e: any) {
+      setError(e.message || 'Failed to submit MCQ. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ─── MCQ-ONLY GUARD: if exam is mcq-only, submitMCQPart should do full submit ──
+  // (mcq_submitted phase already guarded by hasBothParts in startExam,
+  //  but doSubmit handles it correctly; no extra guard needed here)
+
+  // ─── START WRITTEN PART ───────────────────────────────────────────────────────
+  const startWrittenPart = async () => {
+    const sid = sessionIdRef.current;
+    const ver = activeVersionRef.current || versionsRef.current[0];
+    if (!sid || !ver) return;
+
+    setSubmitting(true);
+    try {
+      await examService.startWrittenPart(sid);
+      const writtenSecs = durToSecs(ver.writtenDuration);
+      setWrittenDurSecs(writtenSecs);
+      setActivePart('written');
+      setWrittenTimerOn(writtenSecs > 0);
+      setWrittenIndex(0);
+      setPhase('written');
+    } catch (e: any) {
+      setError(e.message || 'Failed to start written section.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ─── SUBMIT FULL EXAM ────────────────────────────────────────────────────────
+  const doSubmit = async (auto = false) => {
+    if (submittingRef.current) return;
+    const sid = sessionIdRef.current;
+    const c   = contentRef.current;
+    if (!sid || !c || !user) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setMcqTimerOn(false);
+    setWrittenTimerOn(false);
+    clearInterval(autoSaveRef.current);
+
+    try {
+      const a       = mcqAnswersRef.current;
+      const wa      = writtenAnswersRef.current;
+      const marks   = a.reduce((s, x) => s + (x.marksAwarded ?? 0), 0);
+      const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+
+      if (wa.length > 0) await examService.saveWrittenAnswers(sid, wa);
+      await examService.submitExamSession(sid, a, wa, marks, elapsed, auto);
+
+      const updated = await examService.getExamSession(sid);
+      setSession(updated);
+      if (updated) restoreQuestionsFromSession(updated, versionsRef.current);
+
+      const newStatus = await examService.getStudentExamStatus(contentId!, user.uid, courseId);
+      setExamStatus(newStatus);
+
+      if (checkResultVisible(c, updated)) { setPhase('results'); }
+      else { startPublishPoll(c, updated); setPhase('blocked'); }
+    } catch (e: any) {
+      setError(e.message || 'Submit failed. Please try again.');
+      setSubmitting(false);
+      submittingRef.current = false;
+    }
+  };
+
+  const handleSubmit = () => {
+    if (submitting) return;
+    const unansweredMcq     = phase === 'mcq' ? mcqQuestions.length - mcqAnswers.filter(a => a.selectedOptions?.length > 0).length : 0;
+    const unansweredWritten = phase === 'written' ? writtenAnswers.filter(a => !a.answerText?.trim() && !(a.attachmentUrls?.length)).length : 0;
+    const unanswered = unansweredMcq + unansweredWritten;
+    const msg = unanswered > 0
+      ? `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Submit exam anyway? This cannot be undone.`
+      : 'Submit your exam now? You cannot change answers after submission.';
+    if (!confirm(msg)) return;
+    doSubmit(false);
+  };
+
+  // ─── RE-ATTEMPT ───────────────────────────────────────────────────────────────
+  const handleReattempt = async () => {
+    if (!content || !user) return;
+    // Reset all in-progress exam state
+    setError('');
+    setSession(null);
+    setSessionId(null);
+    sessionIdRef.current = null;
+    setMcqQuestions([]);
+    setWrittenQuestions([]);
+    setMcqAnswers([]);
+    setWrittenAnswers([]);
+    setMcqSubmittedAt(null);
+    setWrittenLocked(false);
+    setMcqTimerOn(false);
+    setWrittenTimerOn(false);
+    submittingRef.current = false;
+
+    // Refresh attempt status from DB
+    const status = await examService.getStudentExamStatus(contentId!, user.uid, courseId);
+    setExamStatus(status);
+
+    // Use versionsRef — always current, not stale like the versions state during results
+    const vs = versionsRef.current;
+    if (vs.length > 1) {
+      setPhase('version_select');
+    } else if (vs.length === 1) {
+      setActiveVersion(vs[0]);
+      setPhase('directions');
+    } else {
+      // Versions not in ref yet — fall back to full reload
+      await loadExam();
+    }
+  };
+
+  // ── Status helpers ────────────────────────────────────────────────────────────
+  const mcqStatus = (i: number) => {
+    const a = mcqAnswers[i];
+    if (!a || !a.selectedOptions) return 'not_visited';
+    return a.selectedOptions.length > 0 ? 'answered' : 'skipped';
+  };
+  const writtenStatus = (i: number) => {
+    const a = writtenAnswers[i];
+    if (!a) return 'not_visited';
+    return (a.answerText?.trim() || (a.attachmentUrls?.length ?? 0) > 0) ? 'answered' : 'not_visited';
+  };
+  const mcqAnsweredCount     = mcqAnswers.filter(a => a.selectedOptions?.length > 0).length;
+  const writtenAnsweredCount = writtenAnswers.filter(a =>
+    a.answerText?.trim() || (a.attachmentUrls?.length ?? 0) > 0).length;
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  // Shell is defined at module level below
+
+  const BackBtn: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
+    const handleBack = () => {
+      if (examActive) {
+        if (!confirm('Leave exam? Your progress is saved and the timer will keep running.')) return;
+      }
+      if (onClick) onClick(); else navigate(-1);
+    };
+    return (
+      <button onClick={handleBack}
+        className="flex items-center gap-2 text-sm text-white/40 hover:text-white mb-8 transition group">
+        <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" /> Back
+      </button>
+    );
+  };
+
+  const ViolationToast = () => violationMsg ? (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2
+                    px-4 py-2.5 bg-red-500/95 backdrop-blur rounded-xl text-white text-sm
+                    font-medium shadow-xl pointer-events-none">
+      <Shield size={14} /> {violationMsg}
+    </div>
+  ) : null;
+
+  const Lightbox = () => lightboxUrl ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur"
+      onClick={() => setLightboxUrl(null)}>
+      <img src={lightboxUrl} alt="enlarged" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
+      <button className="absolute top-4 right-4 text-white/60 hover:text-white"><X size={24} /></button>
+    </div>
+  ) : null;
+
+  // ── Loading ───────────────────────────────────────────────────────────────────
+  if (phase === 'loading') return (
+    <Shell>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        {error ? (
+          <>
+            <AlertCircle size={32} className="text-rose-400" />
+            <p className="text-rose-300 text-center max-w-sm">{error}</p>
+            <button onClick={loadExam}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/8 hover:bg-white/12 text-sm transition">
+              <RefreshCw size={14} /> Retry
+            </button>
+            <button onClick={() => navigate(-1)} className="text-sm text-white/30 hover:text-white">← Go back</button>
+          </>
+        ) : (
+          <>
+            <Loader2 size={32} className="animate-spin text-rose-400" />
+            <p className="text-white/40 text-sm">Loading exam…</p>
+          </>
+        )}
+      </div>
+    </Shell>
+  );
+
+  if (phase === 'scheduled_locked') {
+    const start = content?.examStartDateTime ? new Date(content.examStartDateTime) : null;
+    return <ScheduledLockScreen start={start} onUnlock={loadExam} onBack={() => navigate(-1)} />;
+  }
+
+  if (phase === 'absent') return (
+    <Shell><BackBtn />
+      <div className="max-w-md mx-auto mt-12 rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center">
+        <XCircle size={40} className="text-red-400 mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">Marked Absent</h2>
+        <p className="text-white/50 text-sm">The exam window closed before you attempted it.</p>
+      </div>
+    </Shell>
+  );
+
+  if (phase === 'attempt_limit') return (
+    <Shell><BackBtn />
+      <div className="max-w-md mx-auto mt-12 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-8 text-center">
+        <AlertCircle size={40} className="text-orange-400 mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">Attempt Limit Reached</h2>
+        <p className="text-white/50 text-sm">You've used all allowed attempts for this exam.</p>
+        {examStatus?.bestPercentage !== undefined && (
+          <p className="text-white/35 text-sm mt-2">Best score: {examStatus.bestPercentage.toFixed(1)}%</p>
+        )}
+      </div>
+    </Shell>
+  );
+
+  if (phase === 'blocked') {
+    const publishDate = content?.resultPublishDateTime ? new Date(content.resultPublishDateTime) : null;
+    return <BlockedScreen publishDate={publishDate} onBack={() => navigate(-1)} />;
+  }
+
+  if (phase === 'device_blocked') return (
+    <Shell><BackBtn />
+      <div className="max-w-md mx-auto mt-12 rounded-2xl border border-red-500/20 bg-red-500/5 p-8 text-center">
+        <Shield size={40} className="text-red-400 mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">Exam Open on Another Device</h2>
+        <p className="text-white/50 text-sm mb-4">
+          This exam is currently active in another browser or device. Only one device is allowed at a time.
+        </p>
+        <p className="text-white/30 text-xs">Close the exam on the other device, then refresh this page to continue.</p>
+        <button onClick={loadExam}
+          className="mt-6 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/8 hover:bg-white/12 text-sm transition mx-auto">
+          <RefreshCw size={14} /> Retry
+        </button>
+      </div>
+    </Shell>
+  );
+
+  if (phase === 'version_select') return (
+    <Shell>
+      <BackBtn />
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center shrink-0">
+            <Layers size={26} className="text-violet-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{content?.title}</h1>
+            <p className="text-white/40 text-sm mt-0.5">Select your exam version</p>
+          </div>
+        </div>
+        <div className="grid gap-3">
+          {versions.map(v => (
+            <button key={v.id} onClick={() => { setActiveVersion(v); setPhase('directions'); }}
+              className="w-full text-left p-5 rounded-2xl border border-white/8 bg-white/3
+                         hover:border-violet-500/40 hover:bg-violet-500/5 transition-all group">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-white group-hover:text-violet-300 transition">{v.versionName}</h3>
+                <ChevronRight size={16} className="text-white/30 group-hover:text-violet-400 transition" />
+              </div>
+              <div className="flex flex-wrap gap-4 mt-1.5 text-xs text-white/40">
+                {v.mcqQuestions.length > 0 && <span>MCQ: {v.mcqQuestionsToShow} questions</span>}
+                {v.writtenQuestions.length > 0 && <span>Written: {v.writtenQuestionsToShow} questions</span>}
+                {v.mcqDuration > 0 && <span>MCQ timer: {fmtDuration(v.mcqDuration)}</span>}
+                {v.writtenDuration > 0 && <span>Written timer: {fmtDuration(v.writtenDuration)}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </Shell>
+  );
+
+  if (phase === 'directions') {
+    const ver = activeVersionForUI || versions[0];
+    if (!ver) return <Shell><p className="text-white/40 text-center mt-20">Loading version…</p></Shell>;
+
+    const mcqDurFmt     = fmtDuration(ver.mcqDuration);
+    const writtenDurFmt = fmtDuration(ver.writtenDuration);
+    const attemptCount  = examStatus?.attemptCount ?? 0;
+    const maxAtt        = content?.maxAttempts;
+    const attemptsLeft  = maxAtt === 'unlimited' ? null : Math.max(0, Number(maxAtt || 1) - attemptCount);
+    const hasMcq        = ver.mcqQuestions.length > 0;
+    const hasWritten    = ver.writtenQuestions.length > 0;
+    const totalToShow   = ver.mcqQuestionsToShow + ver.writtenQuestionsToShow;
+    const isMixed       = hasMcq && hasWritten;
+
+    return (
+      <div className="min-h-screen bg-[#080a12] text-white">
+        <div className="fixed inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 70% 35% at 50% -10%,rgba(244,63,94,.08) 0%,transparent 65%)' }} />
+        <div className="relative max-w-2xl mx-auto px-4 sm:px-6 py-8">
+          <BackBtn />
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/15 border border-rose-500/20 flex items-center justify-center shrink-0">
+              <ClipboardList size={26} className="text-rose-400" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">{content?.title}</h1>
+              {ver.versionName && versions.length > 1 && (
+                <p className="text-white/40 text-sm mt-0.5">{ver.versionName}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            {[
+              { label: 'Questions',     value: String(totalToShow) },
+              { label: 'MCQ Time',      value: mcqDurFmt || '—' },
+              { label: 'Written Time',  value: writtenDurFmt || '—' },
+              { label: 'Attempts Left', value: attemptsLeft === null ? '∞' : String(attemptsLeft) },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-2xl bg-white/4 border border-white/8 p-4 text-center">
+                <p className="text-base font-bold">{value}</p>
+                <p className="text-[11px] text-white/35">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          {isMixed && (
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-violet-500/8 border border-violet-500/15 mb-6">
+              <AlertCircle size={16} className="text-violet-400 shrink-0 mt-0.5" />
+              <p className="text-violet-200/80 text-sm leading-relaxed">
+                This exam has two parts: <strong>MCQ</strong> and <strong>Written</strong>.
+                After submitting MCQ, you will have <strong>10 minutes</strong> to start the Written section.
+                This window persists even if you close the browser.
+              </p>
+            </div>
+          )}
+
+          {(ver.mcqDirection || ver.writtenDirection) && (
+            <div className="mb-8 space-y-4">
+              {ver.mcqDirection && (
+                <div className="rounded-2xl bg-white/3 border border-white/8 p-5">
+                  <p className="text-[11px] uppercase tracking-wider text-rose-400 font-semibold mb-2">MCQ Instructions</p>
+                  <p className="text-white/70 text-sm leading-relaxed whitespace-pre-wrap">{ver.mcqDirection}</p>
+                </div>
+              )}
+              {ver.writtenDirection && (
+                <div className="rounded-2xl bg-white/3 border border-white/8 p-5">
+                  <p className="text-[11px] uppercase tracking-wider text-violet-400 font-semibold mb-2">Written Instructions</p>
+                  <p className="text-white/70 text-sm leading-relaxed whitespace-pre-wrap">{ver.writtenDirection}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/15 mb-8">
+            <Shield size={16} className="text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-amber-200/80 text-sm leading-relaxed">
+              This exam is monitored. Tab switches, right-clicking, copy/paste, and DevTools are logged.
+              {(mcqDurFmt || writtenDurFmt) ? ' Auto-submission occurs when the timer expires.' : ''}
+            </p>
+          </div>
+
+          {error && (
+            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">{error}</div>
+          )}
+
+          <button onClick={startExam} disabled={submitting}
+            className="flex items-center gap-3 px-8 py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600
+                       text-white font-bold text-base transition disabled:opacity-50 shadow-lg shadow-rose-500/20">
+            {submitting
+              ? <><Loader2 size={18} className="animate-spin" /> Starting…</>
+              : <><ClipboardList size={18} /> {isMixed ? 'Start MCQ' : 'Start Exam'}</>}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MCQ Phase ─────────────────────────────────────────────────────────────────
+  if (phase === 'mcq') {
+    const q = mcqQuestions[mcqIndex];
+    const hasBothParts = writtenQuestions.length > 0;
+    return (
+      <Shell noPad>
+        <ViolationToast />
+        <Lightbox />
+        <div className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-[#080a12]/95 backdrop-blur border-b border-white/6">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-white/40 truncate">{content?.title}</p>
+            <p className="text-sm font-semibold">
+              MCQ — Q {mcqIndex + 1}/{mcqQuestions.length}
+              <span className="text-white/30 ml-1.5 text-xs font-normal">({mcqAnsweredCount} answered)</span>
+            </p>
+          </div>
+          {mcqDurSecs > 0 && (
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-mono font-bold
+              ${timerWarning && activePart === 'mcq' ? 'bg-red-500/20 text-red-300 animate-pulse' : 'bg-white/6 text-white'}`}>
+              <Clock size={13} /> {fmtTime(mcqRemaining)}
+            </div>
+          )}
+          {hasBothParts ? (
+            <button onClick={submitMCQPart} disabled={submitting}
+              className="px-4 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium transition disabled:opacity-50 whitespace-nowrap">
+              {submitting ? <Loader2 size={14} className="animate-spin inline" /> : 'Submit MCQ'}
+            </button>
+          ) : (
+            <button onClick={handleSubmit} disabled={submitting}
+              className="px-4 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium transition disabled:opacity-50 whitespace-nowrap">
+              {submitting ? <Loader2 size={14} className="animate-spin inline" /> : 'Submit'}
+            </button>
+          )}
+        </div>
+
+        <div className="flex h-[calc(100vh-57px)]">
+          {/* Desktop sidebar */}
+          <div className="hidden lg:flex flex-col w-52 border-r border-white/6 bg-[#0a0c14] p-3 gap-2 overflow-y-auto shrink-0">
+            <p className="text-[10px] uppercase tracking-widest text-white/25 px-1 mb-1">Questions</p>
+            <div className="grid grid-cols-5 gap-1">
+              {mcqQuestions.map((_, i) => {
+                const st = mcqStatus(i);
+                return (
+                  <button key={i} onClick={() => setMcqIndex(i)}
+                    className={`w-8 h-8 rounded text-[11px] font-medium transition
+                      ${mcqIndex === i ? 'ring-2 ring-rose-400' : ''}
+                      ${st === 'answered' ? 'bg-emerald-500/30 text-emerald-300' :
+                        st === 'skipped'  ? 'bg-amber-500/20 text-amber-300' : 'bg-white/6 text-white/40'}`}>
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-auto space-y-1.5 pt-4 text-xs border-t border-white/6">
+              <div className="flex items-center gap-2 text-white/40"><span className="w-3 h-3 rounded-sm bg-emerald-500/30" /> Answered ({mcqAnsweredCount})</div>
+              <div className="flex items-center gap-2 text-white/40"><span className="w-3 h-3 rounded-sm bg-amber-500/20" /> Visited</div>
+              <div className="flex items-center gap-2 text-white/40"><span className="w-3 h-3 rounded-sm bg-white/6" /> Not visited</div>
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Mobile question grid */}
+            <div className="lg:hidden border-b border-white/6 bg-[#0a0c14] px-3 py-2">
+              <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+                {mcqQuestions.map((_, i) => {
+                  const st = mcqStatus(i);
+                  return (
+                    <button key={i} onClick={() => setMcqIndex(i)}
+                      className={`flex-shrink-0 w-8 h-8 rounded text-[11px] font-medium transition
+                        ${mcqIndex === i ? 'ring-2 ring-rose-400' : ''}
+                        ${st === 'answered' ? 'bg-emerald-500/30 text-emerald-300' :
+                          st === 'skipped'  ? 'bg-amber-500/20 text-amber-300' : 'bg-white/6 text-white/40'}`}>
+                      {i + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8"
+            onTouchStart={mcqSwipe.onTouchStart} onTouchEnd={mcqSwipe.onTouchEnd}>
+            {q ? (
+              <div className="max-w-2xl mx-auto">
+                <div className="mb-6">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span className="text-[11px] uppercase tracking-wider text-rose-400 font-semibold">Question {mcqIndex + 1}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/6 text-white/40">
+                      +{q.correctMarks} / -{q.wrongMarks ?? 0} marks
+                    </span>
+                    {q.correctOptions.length > 1 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-violet-500/15 text-violet-300">Multiple correct</span>
+                    )}
+                  </div>
+                  <MathText text={q.question} className="text-white text-[15px] leading-relaxed" />
+                  {q.questionImage && (
+                    <img src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
+                      className="mt-3 max-h-56 rounded-xl object-contain cursor-pointer" />
+                  )}
+                </div>
+
+                <div className="space-y-2.5 mb-6">
+                  {q.options.map((opt, oi) => {
+                    const sel      = mcqAnswers[mcqIndex]?.selectedOptions?.includes(oi) ?? false;
+                    const answered = (mcqAnswers[mcqIndex]?.selectedOptions?.length ?? 0) > 0;
+                    const multi    = q.correctOptions.length > 1;
+                    return (
+                      <button key={oi} onClick={() => selectOption(mcqIndex, oi)}
+                        disabled={answered}
+                        className={`w-full text-left flex items-start gap-3 px-4 py-3.5 rounded-2xl border transition-all text-sm select-none
+                          ${sel
+                            ? 'border-blue-400/60 bg-blue-500/12 text-white'
+                            : answered
+                              ? 'border-white/5 bg-white/2 text-white/30 cursor-not-allowed'
+                              : 'border-white/8 bg-white/3 text-white/70 hover:border-white/18 hover:bg-white/6'}`}>
+                        <span className={`flex-shrink-0 w-5 h-5 ${multi ? 'rounded' : 'rounded-full'} border-2 flex items-center justify-center mt-0.5
+                          ${sel ? 'border-blue-400 bg-blue-400' : 'border-white/25'}`}>
+                          {sel && <Check size={10} className="text-white" strokeWidth={3} />}
+                        </span>
+                        <MathText text={opt} className="flex-1 leading-relaxed" />
+                        {answered && !sel && <Lock size={11} className="text-white/20 shrink-0 mt-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-white/6">
+                  <button onClick={() => setMcqIndex(p => Math.max(0, p - 1))} disabled={mcqIndex === 0}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-30 text-sm transition">
+                    <ChevronLeft size={15} /> Prev
+                  </button>
+                  <span className="text-xs text-white/25">{mcqIndex + 1}/{mcqQuestions.length}</span>
+                  {mcqIndex < mcqQuestions.length - 1 ? (
+                    <button onClick={() => setMcqIndex(p => p + 1)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 text-sm transition">
+                      Next <ChevronRight size={15} />
+                    </button>
+                  ) : hasBothParts ? (
+                    <button onClick={submitMCQPart} disabled={submitting}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-sm transition">
+                      Submit MCQ <ChevronRight size={15} />
+                    </button>
+                  ) : (
+                    <button onClick={handleSubmit}
+                      className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-sm transition">
+                      Submit
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-3 text-white/30">
+                <AlertCircle size={24} />
+                <p>No questions found in this version.</p>
+              </div>
+            )}
+          </div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── MCQ Submitted Phase ───────────────────────────────────────────────────────
+  if (phase === 'mcq_submitted') {
+    const minsLeft = Math.floor(writtenWindowSecs / 60);
+    const secsLeft = writtenWindowSecs % 60;
+    const pctLeft  = (writtenWindowSecs / 600) * 100;
+
+    return (
+      <Shell>
+        <div className="max-w-md mx-auto mt-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle size={32} className="text-emerald-400" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">MCQ Submitted!</h2>
+          <p className="text-white/50 text-sm mb-8">Your MCQ answers have been saved. Now start the Written section.</p>
+
+          {writtenLocked ? (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 mb-6">
+              <Lock size={24} className="text-red-400 mx-auto mb-3" />
+              <p className="text-red-300 font-semibold mb-1">Written Section Locked</p>
+              <p className="text-white/40 text-sm">The 10-minute window to start the written section has passed.</p>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6 mb-6">
+                <div className="relative w-24 h-24 mx-auto mb-3">
+                  <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
+                    <circle cx="48" cy="48" r="42" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                    <circle cx="48" cy="48" r="42" fill="none"
+                      stroke={writtenWindowSecs < 60 ? '#ef4444' : writtenWindowSecs < 180 ? '#f59e0b' : '#10b981'}
+                      strokeWidth="8"
+                      strokeDasharray={`${2 * Math.PI * 42}`}
+                      strokeDashoffset={`${2 * Math.PI * 42 * (1 - pctLeft / 100)}`}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 1s linear, stroke 1s' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className={`font-mono font-bold text-xl leading-none
+                      ${writtenWindowSecs < 60 ? 'text-red-400' : writtenWindowSecs < 180 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {String(minsLeft).padStart(2,'0')}:{String(secsLeft).padStart(2,'0')}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-amber-200/60 text-xs">Time remaining to start Written section</p>
+                <p className="text-white/30 text-[10px] mt-1">This timer runs even if you close the browser</p>
+              </div>
+              <button onClick={startWrittenPart} disabled={submitting}
+                className="flex items-center gap-3 px-8 py-3.5 rounded-2xl bg-violet-500 hover:bg-violet-600
+                           text-white font-bold text-base transition disabled:opacity-50 shadow-lg shadow-violet-500/20 mx-auto">
+                {submitting
+                  ? <><Loader2 size={18} className="animate-spin" /> Starting…</>
+                  : <><PenLine size={18} /> Start Written Exam</>}
+              </button>
+            </>
+          )}
+          {error && (
+            <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm">{error}</div>
+          )}
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── Written Phase ─────────────────────────────────────────────────────────────
+  if (phase === 'written') {
+    const wq = writtenQuestions[writtenIndex];
+    const wa = writtenAnswers[writtenIndex] || { questionId: wq?.id, answerText: '', attachmentUrls: [] };
+    return (
+      <Shell noPad>
+        <ViolationToast />
+        <Lightbox />
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0];
+            if (f) uploadAttachment(writtenIndex, f);
+            e.target.value = '';
+          }} />
+
+        <div className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-[#080a12]/95 backdrop-blur border-b border-white/6">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-white/40 truncate">{content?.title}</p>
+            <p className="text-sm font-semibold">
+              Written — Q {writtenIndex + 1}/{writtenQuestions.length}
+              <span className="text-white/30 ml-1.5 text-xs font-normal">({writtenAnsweredCount} answered)</span>
+            </p>
+          </div>
+          {writtenDurSecs > 0 && (
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-mono font-bold
+              ${timerWarning && activePart === 'written' ? 'bg-red-500/20 text-red-300 animate-pulse' : 'bg-white/6 text-white'}`}>
+              <Clock size={13} /> {fmtTime(writtenRemaining)}
+            </div>
+          )}
+          <div className="flex items-center gap-1 text-[10px]">
+            {writtenSaveStatus === 'saving'  && <span className="text-white/30 flex items-center gap-1"><Loader2 size={10} className="animate-spin"/>Saving…</span>}
+            {writtenSaveStatus === 'saved'   && <span className="text-emerald-400/60 flex items-center gap-1"><Check size={10}/>Saved</span>}
+            {writtenSaveStatus === 'unsaved' && <span className="text-amber-400/60">Unsaved</span>}
+          </div>
+          <button onClick={handleSubmit} disabled={submitting}
+            className="px-4 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium transition disabled:opacity-50">
+            {submitting ? <Loader2 size={14} className="animate-spin inline" /> : 'Submit'}
+          </button>
+        </div>
+
+        <div className="flex h-[calc(100vh-57px)]">
+          <div className="hidden lg:flex flex-col w-52 border-r border-white/6 bg-[#0a0c14] p-3 gap-2 overflow-y-auto shrink-0">
+            <p className="text-[10px] uppercase tracking-widest text-white/25 px-1 mb-1">Questions</p>
+            <div className="grid grid-cols-5 gap-1">
+              {writtenQuestions.map((_, i) => {
+                const st = writtenStatus(i);
+                return (
+                  <button key={i} onClick={() => setWrittenIndex(i)}
+                    className={`w-8 h-8 rounded text-[11px] font-medium transition
+                      ${writtenIndex === i ? 'ring-2 ring-violet-400' : ''}
+                      ${st === 'answered' ? 'bg-emerald-500/30 text-emerald-300' : 'bg-white/6 text-white/40'}`}>
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-auto pt-4 text-xs text-white/40 border-t border-white/6">
+              {writtenAnsweredCount}/{writtenQuestions.length} answered
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Mobile question strip */}
+            <div className="lg:hidden border-b border-white/6 bg-[#0a0c14] px-3 py-2">
+              <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+                {writtenQuestions.map((_, i) => {
+                  const st = writtenStatus(i);
+                  return (
+                    <button key={i} onClick={() => setWrittenIndex(i)}
+                      className={`flex-shrink-0 w-8 h-8 rounded text-[11px] font-medium transition
+                        ${writtenIndex === i ? 'ring-2 ring-violet-400' : ''}
+                        ${st === 'answered' ? 'bg-emerald-500/30 text-emerald-300' : 'bg-white/6 text-white/40'}`}>
+                      {i + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8"
+            onTouchStart={writtenSwipe.onTouchStart} onTouchEnd={writtenSwipe.onTouchEnd}>
+            {wq ? (
+              <div className="max-w-2xl mx-auto space-y-5">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[11px] uppercase tracking-wider text-violet-400 font-semibold">Question {writtenIndex + 1}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-400">{wq.marks} marks</span>
+                  </div>
+                  <MathText text={wq.question} className="text-white text-[15px] leading-relaxed" />
+                  {wq.questionImage && (
+                    <img src={wq.questionImage} alt="q" onClick={() => setLightboxUrl(wq.questionImage!)}
+                      className="mt-3 max-h-56 rounded-xl object-contain cursor-pointer" />
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-[11px] text-white/40 mb-2 uppercase tracking-wider">Your Answer</p>
+                  <textarea value={wa.answerText || ''} rows={7}
+                    onChange={e => changeWritten(writtenIndex, e.target.value)}
+                    placeholder="Type your answer here…"
+                    style={{ userSelect: 'text', WebkitUserSelect: 'text', MozUserSelect: 'text', color: 'rgba(255,255,255,0.9)', caretColor: 'white' }}
+                    onPaste={e => e.preventDefault()}
+                    onCopy={e => e.stopPropagation()}
+                    onCut={e => e.stopPropagation()}
+                    onContextMenu={e => e.stopPropagation()}
+                    className="w-full bg-white/4 border border-white/10 rounded-2xl px-4 py-3 text-sm
+                               placeholder-white/20 focus:outline-none focus:border-violet-400/50 resize-none leading-relaxed" />
+                </div>
+
+                <div>
+                  <p className="text-[11px] text-white/40 mb-2 uppercase tracking-wider">Attach Photos (optional)</p>
+                  {(wa.attachmentUrls || []).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {(wa.attachmentUrls || []).map((url, ui) => (
+                        <div key={ui} className="relative group">
+                          <img src={url} alt={`att-${ui}`} onClick={() => setLightboxUrl(url)}
+                            className="w-24 h-24 object-cover rounded-xl border border-white/10 cursor-pointer" />
+                          <button onClick={() => removeAttachment(writtenIndex, url)}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                            <X size={10} className="text-white" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => fileInputRef.current?.click()} disabled={uploadingFor === wq.id}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-white/15
+                               hover:border-violet-400/40 hover:bg-violet-500/5 text-white/40 hover:text-white/60 text-sm transition disabled:opacity-50">
+                    {uploadingFor === wq.id
+                      ? <><Loader2 size={14} className="animate-spin" /> Uploading…</>
+                      : <><Paperclip size={14} /> Attach photo</>}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-white/6">
+                  <button onClick={() => setWrittenIndex(p => Math.max(0, p - 1))} disabled={writtenIndex === 0}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-30 text-sm transition">
+                    <ChevronLeft size={15} /> Prev
+                  </button>
+                  <span className="text-xs text-white/25">{writtenIndex + 1}/{writtenQuestions.length}</span>
+                  {writtenIndex < writtenQuestions.length - 1 ? (
+                    <button onClick={() => setWrittenIndex(p => p + 1)}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 text-sm transition">
+                      Next <ChevronRight size={15} />
+                    </button>
+                  ) : (
+                    <button onClick={handleSubmit}
+                      className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-sm transition">
+                      Submit Exam
+                    </button>
+                  )}
+                </div>
+              </div>
+              ) : (
+              <div className="flex items-center justify-center h-full text-white/30">No written questions.</div>
+            )}
+          </div>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── Results ───────────────────────────────────────────────────────────────────
+  if (phase === 'results' && session) {
+    const maxAtt       = content?.maxAttempts;
+    const attemptCount = examStatus?.attemptCount ?? 0;
+    const canReattempt = maxAtt === 'unlimited' || (maxAtt && attemptCount < Number(maxAtt));
+
+    return (
+      <ResultsPage
+        content={content!} session={session}
+        mcqQuestions={mcqQuestions} writtenQuestions={writtenQuestions}
+        canReattempt={!!canReattempt}
+        onReattempt={handleReattempt}
+        onBack={() => navigate(-1)}
+      />
+    );
+  }
+
+  return (
+    <Shell>
+      <BackBtn />
+      <p className="text-center text-white/30 mt-20">Something went wrong. Please go back.</p>
+    </Shell>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RESULTS PAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+const ResultsPage: React.FC<{
+  content: Content; session: ExamSession;
+  mcqQuestions: MCQQuestion[]; writtenQuestions: WrittenQuestion[];
+  canReattempt: boolean;
+  onReattempt: () => void;
+  onBack: () => void;
+}> = ({ content, session, mcqQuestions, writtenQuestions, canReattempt, onReattempt, onBack }) => {
+  type MainTab = 'overview' | 'mcq' | 'written' | 'attempts';
+  const [tab, setTab]           = useState<MainTab>('overview');
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const [allAttempts, setAllAttempts]       = useState<ExamSession[]>([]);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [selectedAttempt, setSelectedAttempt] = useState<ExamSession | null>(null);
+  const [leaderboard, setLeaderboard]         = useState<ExamSession[]>([]);
+  const [personalBestMcq, setPersonalBestMcq] = useState<number | null>(null);
+  const [reviewStates, setReviewStates]       = useState<Record<string,{open:boolean;text:string;sending:boolean;sent:boolean}>>({});
+  const getRS = (qid: string) => reviewStates[qid] || { open:false, text:'', sending:false, sent:false };
+  const setRS = (qid: string, patch: object) => setReviewStates(p => ({ ...p, [qid]: { ...(p[qid] || { open:false, text:'', sending:false, sent:false }), ...patch } }));
+
+  useEffect(() => {
+    // Load leaderboard for all-student highest marks + position
+    examService.getLeaderboard(session.contentId, 9999)
+      .then(lb => setLeaderboard(lb))
+      .catch(() => {});
+    // Load all personal attempts to compute personal best MCQ marks
+    examService.getStudentSessionsForContent(session.contentId, session.studentId)
+      .then(sessions => {
+        const completed = sessions.filter(s => ['submitted','auto_submitted','timed_out'].includes(s.status));
+        if (completed.length > 0) {
+          setPersonalBestMcq(Math.max(...completed.map(s => s.mcqMarks)));
+        }
+      })
+      .catch(() => {});
+  }, [session.contentId, session.studentId]);
+
+  useEffect(() => {
+    if (tab !== 'attempts' || allAttempts.length > 0) return;
+    setAttemptsLoading(true);
+    examService.getStudentSessionsForContent(session.contentId, session.studentId)
+      .then(attempts => setAllAttempts(attempts))
+      .finally(() => setAttemptsLoading(false));
+  }, [tab]);
+
+  const fmtSecs = (s: number) => {
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m ${ss}s`;
+  };
+  const fmtDate = (d?: Date) => d
+    ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+  const pct        = session.maxMarks > 0 ? (session.totalMarks / session.maxMarks) * 100 : 0;
+  const pctStr     = pct.toFixed(1);
+  const gradeColor = pct >= 80 ? 'text-emerald-400' : pct >= 60 ? 'text-amber-400' : pct >= 40 ? 'text-orange-400' : 'text-red-400';
+  const mcqMax     = mcqQuestions.reduce((s, q) => s + (q.correctMarks || 0), 0);
+  const writtenMax = writtenQuestions.reduce((s, q) => s + (q.marks || 0), 0);
+
+  const tabs = [
+    { key: 'overview' as MainTab, label: 'Overview' },
+    ...(mcqQuestions.length > 0     ? [{ key: 'mcq' as MainTab,     label: 'MCQ Review'     }] : []),
+    ...(writtenQuestions.length > 0 ? [{ key: 'written' as MainTab, label: 'Written Review' }] : []),
+    { key: 'attempts' as MainTab, label: 'All Attempts' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#080a12] text-white">
+      <div className="fixed inset-0 pointer-events-none"
+        style={{ background: 'radial-gradient(ellipse 70% 35% at 50% -10%,rgba(16,185,129,.07) 0%,transparent 65%)' }} />
+      {lightboxUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur" onClick={() => setLightboxUrl(null)}>
+          <img src={lightboxUrl} alt="enlarged" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
+        </div>
+      )}
+      <div className="relative max-w-4xl mx-auto px-4 py-8">
+        <button onClick={onBack} className="flex items-center gap-2 text-sm text-white/40 hover:text-white mb-8 transition group">
+          <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" /> Back to Library
+        </button>
+
+        {/* Score hero */}
+        <div className="rounded-3xl bg-white/3 border border-white/8 p-8 mb-6 text-center">
+          <p className="text-white/40 text-sm mb-1">{content.title}</p>
+          <div className={`text-6xl font-black mb-1 ${gradeColor}`}>
+            {session.totalMarks}<span className="text-white/25 text-4xl font-bold">/{session.maxMarks}</span>
+          </div>
+          <p className="text-white/40 text-sm">marks obtained</p>
+          <div className={`text-2xl font-bold mt-1 ${gradeColor}`}>{pctStr}%</div>
+          {session.status === 'auto_submitted' && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+              <Clock size={11} /> Auto-submitted (time expired)
+            </div>
+          )}
+          {session.writtenEvaluationPending && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+              <AlertTriangle size={11} /> Written evaluation pending — score may increase
+            </div>
+          )}
+          {canReattempt && <ReattemptButton onReattempt={onReattempt} />}
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: 'MCQ Marks',     value: `${session.mcqMarks}/${mcqMax}` },
+            { label: 'Written Marks', value: session.writtenEvaluationPending ? 'Pending' : `${session.writtenMarks}/${writtenMax}` },
+            { label: 'Time Taken',    value: fmtSecs(session.timeTakenSeconds) },
+            { label: 'Tab Switches',  value: String(session.tabSwitchCount) },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-2xl bg-white/4 border border-white/8 p-4 text-center">
+              <p className="text-base font-bold">{value}</p>
+              <p className="text-[11px] text-white/35">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 bg-white/4 rounded-2xl border border-white/8 mb-6 overflow-x-auto">
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium transition whitespace-nowrap px-3
+                ${tab === t.key ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/60'}`}>
+              {t.key === 'attempts'
+                ? <span className="flex items-center justify-center gap-1.5"><History size={13} />{t.label}</span>
+                : t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Overview */}
+        {tab === 'overview' && (
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-white/3 border border-white/8 p-6">
+              <h3 className="font-semibold mb-5">Performance Breakdown</h3>
+              {mcqQuestions.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex justify-between text-sm mb-1.5">
+                    <span className="text-white/50">MCQ Score</span>
+                    <span className="font-medium">{session.mcqMarks} / {mcqMax}</span>
+                  </div>
+                  <div className="h-2.5 bg-white/8 rounded-full overflow-hidden">
+                    <div className="h-full bg-rose-500 rounded-full transition-all duration-1000"
+                      style={{ width: `${mcqMax > 0 ? Math.max(0, (session.mcqMarks / mcqMax) * 100) : 0}%` }} />
+                  </div>
+                  <div className="flex gap-4 mt-1.5 text-xs text-white/30">
+                    <span className="text-emerald-400">✓ {session.mcqAnswers.filter(a => a.isCorrect).length} correct</span>
+                    <span className="text-red-400">✗ {session.mcqAnswers.filter(a => !a.isCorrect && a.selectedOptions?.length > 0).length} wrong</span>
+                    <span>— {session.mcqAnswers.filter(a => !a.selectedOptions?.length).length} skipped</span>
+                  </div>
+                </div>
+              )}
+              {writtenQuestions.length > 0 && (
+                <div>
+                  <div className="flex justify-between text-sm mb-1.5">
+                    <span className="text-white/50">Written Score</span>
+                    <span className="font-medium">{session.writtenEvaluationPending ? 'Pending' : `${session.writtenMarks} / ${writtenMax}`}</span>
+                  </div>
+                  {!session.writtenEvaluationPending && (
+                    <div className="h-2.5 bg-white/8 rounded-full overflow-hidden">
+                      <div className="h-full bg-violet-500 rounded-full transition-all duration-1000"
+                        style={{ width: `${writtenMax > 0 ? (session.writtenMarks / writtenMax) * 100 : 0}%` }} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {session.suspiciousActivity?.length > 0 && (
+              <div className="rounded-2xl bg-amber-500/6 border border-amber-500/15 p-5">
+                <p className="text-amber-300 text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Shield size={14} /> Flagged Activity ({session.suspiciousActivity.length})
+                </p>
+                <ul className="space-y-1 max-h-40 overflow-y-auto">
+                  {session.suspiciousActivity.map((a, i) => (
+                    <li key={i} className="text-amber-200/50 text-xs font-mono">{a}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MCQ Review */}
+        {tab === 'mcq' && (() => {
+          const correctCount = session.mcqAnswers.filter(a => a.isCorrect).length;
+          const wrongCount   = session.mcqAnswers.filter(a => !a.isCorrect && (a.selectedOptions?.length ?? 0) > 0).length;
+          const skippedCount  = session.mcqAnswers.filter(a => !a.selectedOptions?.length).length;
+          const totalQ        = session.mcqAnswers.length;
+          const correctMarks  = session.mcqAnswers.filter(a => a.isCorrect).reduce((s,a) => s+(a.marksAwarded??0),0);
+          const wrongMarks    = session.mcqAnswers.filter(a => !a.isCorrect && (a.selectedOptions?.length??0)>0).reduce((s,a) => s+(a.marksAwarded??0),0);
+          const accuracy      = (correctCount + wrongCount) > 0 ? Math.round((correctCount / (correctCount + wrongCount)) * 100) : 0;
+          const myRank        = leaderboard.findIndex(s => s.studentId === session.studentId && s.id === session.id) + 1;
+          const highestMarks  = leaderboard.length > 0 ? Math.max(...leaderboard.map(s => s.mcqMarks)) : null;
+          return (
+            <div className="space-y-4">
+              {session.mcqAnswers.length === 0
+                ? <p className="text-white/30 text-center py-16">No MCQ answers recorded.</p>
+                : <>
+                  {/* Score + stats hero */}
+                  <div className="rounded-2xl bg-white/3 border border-white/8 overflow-hidden">
+                    {/* Main score */}
+                    <div className="p-5 text-center border-b border-white/6">
+                      <p className="text-[11px] uppercase tracking-widest text-white/30 mb-1">Marks Obtained</p>
+                      <p className={`text-4xl font-black mb-0.5 ${gradeColor}`}>
+                        {session.mcqMarks}<span className="text-white/25 text-2xl font-bold">/{mcqMax}</span>
+                      </p>
+                      <p className={`text-lg font-bold ${gradeColor}`}>{pctStr}%</p>
+                    </div>
+                    {/* Stats row — position (1-attempt only), class highest, personal best */}
+                    {(() => {
+                      const showPosition   = content.maxAttempts === 1 && myRank > 0;
+                      const showClassBest  = highestMarks !== null;
+                      const showPersonal   = personalBestMcq !== null;
+                      const cols = [showPosition, showClassBest, showPersonal].filter(Boolean).length;
+                      if (cols === 0) return null;
+                      return (
+                        <div className={`grid divide-x divide-white/6`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+                          {showPosition && (
+                            <div className="py-3 px-2 text-center">
+                              <p className="text-[10px] text-white/35 mb-0.5">Your Position</p>
+                              <p className="text-emerald-400 font-bold text-base">#{myRank}</p>
+                            </div>
+                          )}
+                          {showClassBest && (
+                            <div className="py-3 px-2 text-center">
+                              <p className="text-[10px] text-white/35 mb-0.5">Class Highest</p>
+                              <p className="text-amber-400 font-bold text-base">{highestMarks}/{mcqMax}</p>
+                            </div>
+                          )}
+                          {showPersonal && (
+                            <div className="py-3 px-2 text-center">
+                              <p className="text-[10px] text-white/35 mb-0.5">Your Best</p>
+                              <p className="text-violet-400 font-bold text-base">{personalBestMcq}/{mcqMax}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Analysis Report — 4-box grid */}
+                  <div className="rounded-2xl bg-white/3 border border-white/8 p-4">
+                    <p className="text-[11px] uppercase tracking-widest text-white/30 mb-3 text-center">Analysis Report</p>
+                    <div className="grid grid-cols-2 gap-2.5 mb-4">
+                      {/* Correct */}
+                      <div className="rounded-xl bg-emerald-500/8 border border-emerald-500/20 p-3.5 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                          <CheckCircle size={20} className="text-emerald-400" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-emerald-400/60">Correct</p>
+                          <p className="text-emerald-400 font-black text-2xl leading-none">{correctCount}</p>
+                          <p className="text-emerald-400/40 text-[10px] mt-0.5">+{correctMarks} marks</p>
+                        </div>
+                      </div>
+                      {/* Incorrect */}
+                      <div className="rounded-xl bg-red-500/8 border border-red-500/20 p-3.5 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                          <XCircle size={20} className="text-red-400" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-red-400/60">Incorrect</p>
+                          <p className="text-red-400 font-black text-2xl leading-none">{wrongCount}</p>
+                          <p className="text-red-400/40 text-[10px] mt-0.5">{wrongMarks} marks</p>
+                        </div>
+                      </div>
+                      {/* Skipped */}
+                      <div className="rounded-xl bg-white/4 border border-white/10 p-3.5 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white/8 flex items-center justify-center shrink-0">
+                          <span className="text-white/40 font-bold text-lg">—</span>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-white/35">Skipped</p>
+                          <p className="text-white/60 font-black text-2xl leading-none">{skippedCount}</p>
+                          <p className="text-white/25 text-[10px] mt-0.5">0 marks</p>
+                        </div>
+                      </div>
+                      {/* Accuracy */}
+                      <div className="rounded-xl bg-violet-500/8 border border-violet-500/20 p-3.5 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0">
+                          <TrendingUp size={18} className="text-violet-400" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-violet-400/60">Accuracy</p>
+                          <p className="text-violet-400 font-black text-2xl leading-none">{accuracy}%</p>
+                          <p className="text-violet-400/40 text-[10px] mt-0.5">of attempted</p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Stacked progress bar with legend */}
+                    <div className="h-2.5 rounded-full overflow-hidden flex bg-white/6 mb-2">
+                      <div className="bg-emerald-500 h-full" style={{ width: `${totalQ > 0 ? (correctCount/totalQ)*100 : 0}%` }} />
+                      <div className="bg-red-500 h-full"     style={{ width: `${totalQ > 0 ? (wrongCount/totalQ)*100 : 0}%` }} />
+                      <div className="bg-white/20 h-full"   style={{ width: `${totalQ > 0 ? (skippedCount/totalQ)*100 : 0}%` }} />
+                    </div>
+                    <div className="flex items-center justify-center gap-4 text-[10px] text-white/30">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Correct</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Wrong</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/20 inline-block" /> Skipped</span>
+                    </div>
+                  </div>
+
+                  {/* Per-question cards */}
+                  {session.mcqAnswers.map((ans, i) => {
+                    const q = mcqQuestions.find(q => q.id === ans.questionId);
+                    if (!q) return null;
+                    const isSkipped = !ans.selectedOptions?.length;
+                    const status = ans.isCorrect ? 'correct' : isSkipped ? 'skipped' : 'wrong';
+                    const statusCfg = {
+                      correct: { border: 'border-emerald-500/20', bg: 'bg-emerald-500/5', badge: 'bg-emerald-500/15 text-emerald-400', label: 'Correct',  icon: <CheckCircle size={13} className="text-emerald-400" /> },
+                      wrong:   { border: 'border-red-500/20',     bg: 'bg-red-500/5',     badge: 'bg-red-500/15 text-red-400',         label: 'Wrong',    icon: <XCircle size={13} className="text-red-400" /> },
+                      skipped: { border: 'border-white/8',        bg: 'bg-white/3',       badge: 'bg-white/8 text-white/40',           label: 'Skipped',  icon: <span className="w-3 h-3 rounded-full border border-white/30 inline-block" /> },
+                    }[status];
+                    return (
+                      <div key={i} className={`rounded-2xl border ${statusCfg.border} ${statusCfg.bg} overflow-hidden`}>
+                        {/* Card header */}
+                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/6">
+                          <div className="flex items-center gap-2">
+                            {statusCfg.icon}
+                            <span className="text-[11px] text-white/40 font-medium">Q{i + 1}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusCfg.badge}`}>{statusCfg.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-white/30">+{q.correctMarks} / −{q.wrongMarks ?? 0}</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-lg
+                              ${(ans.marksAwarded ?? 0) > 0 ? 'text-emerald-400 bg-emerald-500/10' :
+                                (ans.marksAwarded ?? 0) < 0 ? 'text-red-400 bg-red-500/10' : 'text-white/30 bg-white/5'}`}>
+                              {(ans.marksAwarded ?? 0) > 0 ? '+' : ''}{ans.marksAwarded ?? 0}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Question body */}
+                        <div className="p-4">
+                          <MathText text={q.question} className="text-white text-sm leading-relaxed mb-3" />
+                          {q.questionImage && (
+                            <img src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
+                              className="mb-3 max-h-40 rounded-xl object-contain cursor-pointer" />
+                          )}
+                          <div className="space-y-1.5">
+                            {q.options.map((opt, oi) => {
+                              const userPicked    = ans.selectedOptions?.includes(oi);
+                              const correctOption = q.correctOptions.includes(oi);
+                              const optStatus = correctOption && userPicked ? 'correct_picked'
+                                             : correctOption              ? 'correct_missed'
+                                             : userPicked                 ? 'wrong_picked'
+                                             :                              'neutral';
+                              const optStyle = {
+                                correct_picked: 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300',
+                                correct_missed: 'bg-emerald-500/8  border border-emerald-500/20 text-emerald-400/70',
+                                wrong_picked:   'bg-red-500/15     border border-red-500/30     text-red-300',
+                                neutral:        'bg-white/3        border border-white/6         text-white/30',
+                              }[optStatus];
+                              return (
+                                <div key={oi} className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm ${optStyle}`}>
+                                  <span className="shrink-0 w-4 flex justify-center">
+                                    {optStatus === 'correct_picked' && <Check size={12} strokeWidth={3} />}
+                                    {optStatus === 'correct_missed' && <Check size={12} strokeWidth={2} className="opacity-60" />}
+                                    {optStatus === 'wrong_picked'   && <X size={12} strokeWidth={3} />}
+                                  </span>
+                                  <MathText text={opt} className="flex-1" />
+                                  {optStatus === 'correct_picked' && <span className="text-[10px] text-emerald-400/60 shrink-0">Your answer ✓</span>}
+                                  {optStatus === 'correct_missed' && <span className="text-[10px] text-emerald-400/50 shrink-0">Correct answer</span>}
+                                  {optStatus === 'wrong_picked'   && <span className="text-[10px] text-red-400/60 shrink-0">Your answer ✗</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {q.solution && (
+                            <div className="mt-3 pt-3 border-t border-white/8">
+                              <p className="text-[10px] text-white/25 uppercase tracking-wider mb-1.5">Solution</p>
+                              <p className="text-white/60 text-sm leading-relaxed">{q.solution}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              }
+            </div>
+          );
+        })()}
+
+        {/* Written Review — uses WrittenReviewTab component to avoid hook-in-render */}
+        {tab === 'written' && (
+          <div className="space-y-4">
+            {/* FIX 16: distinguish pending vs evaluated */}
+            {session.writtenEvaluationPending ? (
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/15">
+                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                <p className="text-amber-200/80 text-sm">Awaiting teacher evaluation. Marks will appear once reviewed.</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
+                <CheckCircle size={14} className="text-emerald-400 shrink-0" />
+                <p className="text-emerald-200/80 text-sm">
+                  Evaluated{session.writtenEvaluatedAt ? ` on ${new Date(session.writtenEvaluatedAt).toLocaleString()}` : ''}.
+                  {' '}Written marks: <strong>{session.writtenMarks}</strong>
+                </p>
+              </div>
+            )}
+            {session.writtenAnswers.map((wa, i) => {
+              const q = writtenQuestions.find(q => q.id === wa.questionId);
+              if (!q) return null;
+              const isEvaluated = !session.writtenEvaluationPending && wa.evaluatedAt;
+              const marksAwarded = wa.marksAwarded ?? 0;
+              const marksColor = isEvaluated
+                ? (marksAwarded >= q.marks * 0.8 ? 'text-emerald-400'
+                  : marksAwarded >= q.marks * 0.5 ? 'text-amber-400' : 'text-red-400')
+                : 'text-white/30';
+              const rs = getRS(q.id);
+              const existingRequests = wa.reviewRequests || [];
+              const lastRequest = existingRequests[existingRequests.length - 1];
+              return (
+                <div key={i} className="rounded-2xl bg-white/3 border border-white/8 overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-white/6 bg-white/2">
+                    <span className="text-[11px] uppercase tracking-wider text-violet-400 font-semibold">Q{i+1} — {q.marks} marks</span>
+                    {session.writtenEvaluationPending
+                      ? <span className="text-[11px] text-amber-400/70 flex items-center gap-1"><AlertTriangle size={11}/> Pending</span>
+                      : isEvaluated
+                        ? <span className={`text-sm font-bold ${marksColor}`}>{marksAwarded}/{q.marks}</span>
+                        : <span className="text-[11px] text-white/30">Not evaluated</span>}
+                  </div>
+                  <div className="p-5 space-y-4">
+                    <MathText text={q.question} className="text-white text-sm leading-relaxed" />
+                    {q.questionImage && <img src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
+                      className="max-h-40 rounded-xl object-contain cursor-pointer" />}
+                    {wa.answerText && (
+                      <div className="bg-white/4 rounded-xl px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-wider text-white/25 mb-1">Your answer</p>
+                        <p className="text-white/70 text-sm whitespace-pre-wrap leading-relaxed">{wa.answerText}</p>
+                      </div>
+                    )}
+                    {(wa.attachmentUrls||[]).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {wa.attachmentUrls!.map((url,ui) => (
+                          <img key={ui} src={url} alt={`att-${ui}`} onClick={() => setLightboxUrl(url)}
+                            className="h-28 object-cover rounded-xl border border-white/10 cursor-pointer" />
+                        ))}
+                      </div>
+                    )}
+                    {wa.evaluatorComment && (
+                      <div className="bg-emerald-500/8 border border-emerald-500/15 rounded-xl px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-wider text-emerald-400 mb-1">Evaluator feedback</p>
+                        <p className="text-white/70 text-sm">{wa.evaluatorComment}</p>
+                      </div>
+                    )}
+                    {q.solution && (
+                      <div className="bg-indigo-500/8 border border-indigo-500/15 rounded-xl px-4 py-3">
+                        <p className="text-[10px] uppercase tracking-wider text-indigo-400 mb-1">Model Solution</p>
+                        <p className="text-white/70 text-sm leading-relaxed">{q.solution}</p>
+                        {q.solutionImage && <img src={q.solutionImage} alt="sol" onClick={() => setLightboxUrl(q.solutionImage!)}
+                          className="mt-2 max-h-40 rounded-xl object-contain cursor-pointer" />}
+                      </div>
+                    )}
+                    {/* Review history */}
+                    {existingRequests.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase tracking-wider text-white/25">Review History</p>
+                        {existingRequests.map((rr, ri) => (
+                          <div key={ri} className={`rounded-xl px-4 py-3 border text-sm
+                            ${rr.status==='resolved' ? 'bg-emerald-500/5 border-emerald-500/15' : 'bg-amber-500/5 border-amber-500/15'}`}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-[10px] font-semibold uppercase tracking-wider
+                                ${rr.status==='resolved' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {rr.status==='resolved' ? '✓ Resolved' : '⏳ Pending review'}
+                              </span>
+                              <span className="text-[10px] text-white/25">{new Date(rr.requestedAt).toLocaleDateString()}</span>
+                            </div>
+                            <p className="text-white/60 text-xs">"{rr.message}"</p>
+                            {rr.resolvedComment && (
+                              <p className="text-emerald-300/70 text-xs mt-1 pt-1 border-t border-emerald-500/15">
+                                Teacher: {rr.resolvedComment}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Request review button — always available after evaluation */}
+                    {isEvaluated && (
+                      !rs.open && !rs.sent ? (
+                        <button onClick={() => setRS(q.id, { open:true })}
+                          className="flex items-center gap-2 text-sm text-violet-400/70 hover:text-violet-300 transition">
+                          <MessageSquare size={14} />
+                          {lastRequest ? 'Request follow-up review' : 'Request review'}
+                        </button>
+                      ) : rs.sent ? (
+                        <p className="text-emerald-400 text-sm flex items-center gap-2">
+                          <CheckCircle size={14}/> Review request sent
+                        </p>
+                      ) : (
+                        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 space-y-3">
+                          <p className="text-[11px] text-violet-300/70 uppercase tracking-wider">
+                            {lastRequest ? 'Follow-up message' : 'Review request'}
+                          </p>
+                          <textarea value={rs.text} onChange={e => setRS(q.id,{text:e.target.value})}
+                            placeholder="Explain why you think the marks should be reconsidered…"
+                            rows={3}
+                            style={{color:'rgba(255,255,255,0.85)',caretColor:'white'}}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm
+                                       placeholder-white/20 focus:outline-none focus:border-violet-400/50 resize-none" />
+                          <div className="flex gap-2 justify-end">
+                            <button onClick={() => setRS(q.id,{open:false,text:''})}
+                              className="px-3 py-1.5 rounded-lg text-sm text-white/40 hover:text-white transition">Cancel</button>
+                            <button disabled={!rs.text.trim()||rs.sending}
+                              onClick={async () => {
+                                setRS(q.id,{sending:true});
+                                try {
+                                  await examService.requestWrittenReview(session.id, q.id, rs.text.trim());
+                                  setRS(q.id,{sending:false,open:false,sent:true});
+                                } catch { setRS(q.id,{sending:false}); }
+                              }}
+                              className="px-4 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-sm
+                                         font-medium transition disabled:opacity-40 flex items-center gap-2">
+                              {rs.sending ? <><Loader2 size={12} className="animate-spin"/>Sending…</> : 'Send Request'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* All Attempts Tab */}
+        {tab === 'attempts' && (
+          <div className="space-y-6">
+            {attemptsLoading ? (
+              <div className="flex items-center justify-center py-16 gap-3 text-white/40">
+                <Loader2 size={20} className="animate-spin" />
+                <span className="text-sm">Loading attempts…</span>
+              </div>
+            ) : allAttempts.length === 0 ? (
+              <p className="text-white/30 text-center py-16">No completed attempts found.</p>
+            ) : (
+              <>
+                {/* Score progression chart */}
+                <div className="rounded-2xl bg-white/3 border border-white/8 p-6">
+                  <h3 className="font-semibold mb-1 flex items-center gap-2">
+                    <TrendingUp size={16} className="text-emerald-400" /> Score Progression
+                  </h3>
+                  <p className="text-white/35 text-xs mb-5">Your score across all attempts</p>
+                  <div className="flex items-end gap-2 h-32">
+                    {allAttempts.map((att, idx) => {
+                      const attPct = att.maxMarks > 0 ? (att.totalMarks / att.maxMarks) * 100 : 0;
+                      const barH   = Math.max(4, (attPct / 100) * 100);
+                      const isLast = idx === allAttempts.length - 1;
+                      const color  = attPct >= 80 ? 'bg-emerald-500' : attPct >= 60 ? 'bg-amber-500' : attPct >= 40 ? 'bg-orange-500' : 'bg-red-500';
+                      return (
+                        <button key={att.id}
+                          onClick={() => setSelectedAttempt(selectedAttempt?.id === att.id ? null : att)}
+                          className="flex-1 flex flex-col items-center gap-1 group transition">
+                          <span className={`text-[10px] font-bold transition
+                            ${selectedAttempt?.id === att.id ? 'text-white' : 'text-white/40 group-hover:text-white/70'}`}>
+                            {attPct.toFixed(0)}%
+                          </span>
+                          <div className={`w-full rounded-t-lg transition-all ${color}
+                            ${selectedAttempt?.id === att.id ? 'opacity-100 ring-2 ring-white/40' : 'opacity-60 group-hover:opacity-90'}`}
+                            style={{ height: `${barH}%` }} />
+                          <span className={`text-[9px] transition
+                            ${isLast ? 'text-rose-400 font-bold' : selectedAttempt?.id === att.id ? 'text-white' : 'text-white/30'}`}>
+                            #{att.attemptNumber}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-4 mt-4 text-[10px] text-white/30">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> ≥80%</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 60–79%</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> 40–59%</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> &lt;40%</span>
+                    <span className="ml-auto italic">Click a bar to see details</span>
+                  </div>
+                </div>
+
+                {/* Analytics summary */}
+                {allAttempts.length >= 2 && (() => {
+                  const scores = allAttempts.map(a => a.maxMarks > 0 ? (a.totalMarks / a.maxMarks) * 100 : 0);
+                  const best   = Math.max(...scores);
+                  const latest = scores[scores.length - 1];
+                  const prev   = scores[scores.length - 2];
+                  const trend  = latest - prev;
+                  const avg    = scores.reduce((s, v) => s + v, 0) / scores.length;
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { label: 'Best Score',      value: `${best.toFixed(1)}%`,   color: 'text-emerald-400' },
+                        { label: 'Latest Score',    value: `${latest.toFixed(1)}%`, color: latest >= 80 ? 'text-emerald-400' : latest >= 60 ? 'text-amber-400' : 'text-red-400' },
+                        { label: 'Average',         value: `${avg.toFixed(1)}%`,    color: 'text-violet-400' },
+                        { label: 'vs Last Attempt', value: `${trend >= 0 ? '+' : ''}${trend.toFixed(1)}%`, color: trend >= 0 ? 'text-emerald-400' : 'text-red-400' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="rounded-2xl bg-white/4 border border-white/8 p-4 text-center">
+                          <p className={`text-lg font-bold ${color}`}>{value}</p>
+                          <p className="text-[11px] text-white/35">{label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* MCQ accuracy trend */}
+                {allAttempts.some(a => a.mcqAnswers?.length > 0) && (
+                  <div className="rounded-2xl bg-white/3 border border-white/8 p-6">
+                    <h3 className="font-semibold mb-1 flex items-center gap-2">
+                      <BarChart2 size={16} className="text-rose-400" /> MCQ Accuracy Trend
+                    </h3>
+                    <p className="text-white/35 text-xs mb-5">Correct / Wrong / Skipped per attempt</p>
+                    <div className="space-y-2">
+                      {allAttempts.map(att => {
+                        if (!att.mcqAnswers?.length) return null;
+                        const total   = att.mcqAnswers.length;
+                        const correct = att.mcqAnswers.filter(a => a.isCorrect).length;
+                        const wrong   = att.mcqAnswers.filter(a => !a.isCorrect && a.selectedOptions?.length > 0).length;
+                        const skipped = att.mcqAnswers.filter(a => !a.selectedOptions?.length).length;
+                        return (
+                          <div key={att.id} className="flex items-center gap-3">
+                            <span className="text-[10px] text-white/30 w-8 shrink-0">#{att.attemptNumber}</span>
+                            <div className="flex-1 h-4 bg-white/5 rounded-full overflow-hidden flex">
+                              <div className="bg-emerald-500/70 h-full" style={{ width: `${(correct / total) * 100}%` }} />
+                              <div className="bg-red-500/70 h-full" style={{ width: `${(wrong / total) * 100}%` }} />
+                              <div className="bg-white/10 h-full" style={{ width: `${(skipped / total) * 100}%` }} />
+                            </div>
+                            <span className="text-[10px] text-white/30 shrink-0 w-24 text-right">
+                              {correct}✓ {wrong}✗ {skipped}—
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attempt list */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-white/50">Attempt Details</h3>
+                  {allAttempts.map((att, idx) => {
+                    const attPct     = att.maxMarks > 0 ? (att.totalMarks / att.maxMarks) * 100 : 0;
+                    const scoreColor = attPct >= 80 ? 'text-emerald-400' : attPct >= 60 ? 'text-amber-400' : attPct >= 40 ? 'text-orange-400' : 'text-red-400';
+                    const isSelected = selectedAttempt?.id === att.id;
+                    const isLatest   = idx === allAttempts.length - 1;
+                    return (
+                      <div key={att.id}
+                        className={`rounded-2xl border p-5 transition cursor-pointer
+                          ${isSelected ? 'border-white/20 bg-white/6' : 'border-white/8 bg-white/3 hover:border-white/15'}`}
+                        onClick={() => setSelectedAttempt(isSelected ? null : att)}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className={`text-2xl font-black ${scoreColor}`}>{attPct.toFixed(0)}%</span>
+                            <div>
+                              <p className="text-sm font-medium text-white">
+                                Attempt #{att.attemptNumber}
+                                {isLatest && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400">Latest</span>}
+                              </p>
+                              <p className="text-xs text-white/35">{fmtDate(att.submittedAt || att.startedAt)}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold">{att.totalMarks}/{att.maxMarks} marks</p>
+                            <p className="text-[11px] text-white/35">{fmtSecs(att.timeTakenSeconds)}</p>
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <div className="mt-4 pt-4 border-t border-white/8 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {att.mcqAnswers?.length > 0 && (
+                              <div className="rounded-xl bg-white/4 p-3">
+                                <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">MCQ</p>
+                                <p className="font-bold">{att.mcqMarks} marks</p>
+                                <p className="text-xs text-white/40">
+                                  {att.mcqAnswers.filter(a => a.isCorrect).length} correct,{' '}
+                                  {att.mcqAnswers.filter(a => !a.isCorrect && a.selectedOptions?.length > 0).length} wrong
+                                </p>
+                              </div>
+                            )}
+                            {att.writtenAnswers?.length > 0 && (
+                              <div className="rounded-xl bg-white/4 p-3">
+                                <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Written</p>
+                                <p className="font-bold">{att.writtenEvaluationPending ? 'Pending' : `${att.writtenMarks} marks`}</p>
+                              </div>
+                            )}
+                            <div className="rounded-xl bg-white/4 p-3">
+                              <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Anti-cheat</p>
+                              <p className="font-bold">{att.tabSwitchCount} tab switches</p>
+                              <p className="text-xs text-white/40">{att.focusLostCount} focus lost</p>
+                            </div>
+                            {att.status === 'auto_submitted' && (
+                              <div className="col-span-full">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                                  <Clock size={10} /> Auto-submitted (time expired)
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ExamViewer;
