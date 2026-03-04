@@ -188,16 +188,10 @@ const Profile1 = ({ onClose }: Profile1Props) => {
 
               <div className="print-content space-y-3 sm:space-y-4 md:space-y-6 pb-4 sm:pb-6">
                 {/* Admin Identity Header */}
-                <div className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg sm:rounded-xl md:rounded-2xl p-3 sm:p-4 md:p-6 lg:p-8 border border-slate-700/50">
-                  <button
-                    onClick={handleClose}
-                    className="no-print absolute top-3 right-3 sm:top-4 sm:right-4 p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group z-10"
-                    aria-label="Close profile"
-                  >
-                    <X size={16} className="group-hover:rotate-90 transition-transform duration-200" />
-                  </button>
+                <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg sm:rounded-xl md:rounded-2xl p-3 sm:p-4 md:p-6 lg:p-8 border border-slate-700/50">
                   <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 md:gap-6">
-                    {/* Profile Image */}
+                    {/* Profile Image + Close Button (same row on mobile) */}
+                    <div className="flex items-start justify-between w-full sm:w-auto sm:block">
                     <div className="relative flex-shrink-0">
                       <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-lg sm:rounded-xl overflow-hidden border-2 border-slate-700/50 shadow-xl bg-slate-800">
                         {user.profilePictureUrl ? (
@@ -218,9 +212,17 @@ const Profile1 = ({ onClose }: Profile1Props) => {
                         <Shield size={12} className="sm:w-3.5 sm:h-3.5 text-white" />
                       </div>
                     </div>
+                    <button
+                      onClick={handleClose}
+                      className="no-print sm:hidden p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 rounded-lg transition-all border border-slate-700/50 group"
+                      aria-label="Close profile"
+                    >
+                      <X size={16} className="group-hover:rotate-90 transition-transform duration-200" />
+                    </button>
+                    </div>
 
                     {/* Identity Information */}
-                    <div className="flex-1 w-full sm:w-auto pr-10 sm:pr-0">
+                    <div className="flex-1 w-full sm:w-auto">
                       <div className="mb-3 sm:mb-4">
                         <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-semibold text-slate-100 mb-1.5 sm:mb-2 break-words" style={{ fontFamily: 'Inter, sans-serif' }}>
                           {user.fullName || user.name}
