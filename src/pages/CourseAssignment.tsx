@@ -33,6 +33,7 @@ interface ConfirmState { open: boolean; assignmentId: string; label: string; }
 
 // ==================== PERMISSION ICONS ====================
 const PermIcon: Record<CoursePermission, React.FC<{size?: number; color?: string}>> = {
+  course_creation: ({size=14,color}) => <Plus size={size} color={color}/>,
   editing: ({size=14,color}) => <Edit3 size={size} color={color}/>,
   qna:     ({size=14,color}) => <MessageSquare size={size} color={color}/>,
   tasks:   ({size=14,color}) => <ClipboardList size={size} color={color}/>,
@@ -266,7 +267,7 @@ function AssignModal({
                         Subject Access
                       </div>
                       <div style={{fontSize:11,color:'#555',marginTop:2}}>
-                        Restrict Q&amp;A / Exams to specific subjects. Leave all unchecked = access all.
+                        Check subjects to grant access. Unchecked subjects are blocked.
                       </div>
                     </div>
                     <div style={{display:'flex',gap:6}}>
