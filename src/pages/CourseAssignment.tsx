@@ -310,8 +310,8 @@ function AssignModal({
                     })}
                   </div>
                   {allowedSubjects.size===0 && (
-                    <div style={{fontSize:10,color:'#555',marginTop:8,fontStyle:'italic'}}>
-                      ⚠ No subjects selected — teacher will have access to all subjects
+                    <div style={{fontSize:10,color:'#e05252',marginTop:8,fontStyle:'italic'}}>
+                      ⚠ No subjects selected — teacher will have no subject access for Q&amp;A / Exams
                     </div>
                   )}
                 </div>
