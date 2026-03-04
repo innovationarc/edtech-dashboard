@@ -41,6 +41,9 @@ import ManageAdmin from './pages/ManageAdmin';
 // NEW: Coupon Management
 import CouponManagement from './pages/CouponManagement';
 
+// NEW: Course Assignment Management
+import CourseAssignment from './pages/CourseAssignment';
+
 // NEW: Content Library Viewer Pages
 import LessonViewer from './pages/LessonViewer';
 import NoteViewer from './pages/NoteViewer';
@@ -284,6 +287,13 @@ const AppRoutes = () => {
         <Route path="manage-coupon" element={
           <AdminManagerRoute>
             <CouponManagement />
+          </AdminManagerRoute>
+        } />
+
+        {/* Course Assignment Management - Admin and Manager */}
+        <Route path="course-assignment" element={
+          <AdminManagerRoute>
+            <CourseAssignment />
           </AdminManagerRoute>
         } />
         
