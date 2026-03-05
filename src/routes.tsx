@@ -195,21 +195,20 @@ const LeaderboardRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Smart index redirect: waits for user profile before deciding which dashboard to show
+const DefaultRedirect = () => {
+  const { user, isAuthenticated, loading } = useDashboard();
+
+  // While authenticated but user profile not yet loaded, render nothing (brief flash-free wait)
+  if (isAuthenticated && (loading || !user)) return null;
+
+  if (!isAuthenticated) return <Navigate to="/dashboard" replace />;
+  if (user?.role === 'student') return <Navigate to="/student-dashboard" replace />;
+  if (user?.role === 'teacher') return <Navigate to="/teacher-dashboard" replace />;
+  return <Navigate to="/dashboard" replace />;
+};
+
 const AppRoutes = () => {
-  const { user, isAuthenticated } = useDashboard();
-
-  // CRITICAL FIX: Removed loading check completely
-  // DashboardContext now initializes isAuthenticated from localStorage instantly
-  // So we can render routes immediately without waiting for Firebase
-  // Firebase validates in background and will redirect if needed
-
-  // Redirect users to their appropriate dashboard by default
-  const getDefaultRoute = () => {
-    if (!isAuthenticated) return '/dashboard';
-    if (user?.role === 'student') return '/student-dashboard';
-    if (user?.role === 'teacher') return '/teacher-dashboard';
-    return '/dashboard'; // Admin, Manager, Coordinator goes to main dashboard
-  };
 
   return (
     <Routes>
@@ -226,7 +225,7 @@ const AppRoutes = () => {
       <Route path="/verify-receipt" element={<VerifyReceipt />} />
       
       <Route path="/" element={<DashboardLayout />}>
-        <Route index element={<Navigate to={getDefaultRoute()} replace />} />
+        <Route index element={<DefaultRedirect />} />
         
         {/* Admin + Teacher dashboard */}
         <Route path="dashboard" element={
