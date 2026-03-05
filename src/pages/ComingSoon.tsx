@@ -289,7 +289,7 @@ interface FeatureCardProps {
 }
 
 const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCancelAccess, requestingId }: FeatureCardProps) => {
-  const isRequested = !!earlyAccess;
+  const isRequested = !!earlyAccess && earlyAccess.status !== 'cancelled';
   const isApproved = earlyAccess?.status === 'approved';
   const isLoading = requestingId === feature.id;
 
