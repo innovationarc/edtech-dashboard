@@ -6,7 +6,7 @@
 import {
   collection, query, where, getDocs, orderBy
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../config/firebase';
 import { ExamSession } from './examService';
 import { contentService, Content } from './contentService';
 import { courseEnrollmentService, Enrollment } from './courseEnrollmentService';
