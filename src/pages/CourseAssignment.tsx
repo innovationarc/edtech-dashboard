@@ -18,6 +18,7 @@ import {
   courseAssignmentService,
   CourseAssignment,
   CoursePermission,
+  GlobalPermission,
   AssignmentLog,
   AssignmentStats,
   ALL_PERMISSIONS,
@@ -33,10 +34,11 @@ interface ConfirmState { open: boolean; assignmentId: string; label: string; }
 
 // ==================== PERMISSION ICONS ====================
 const PermIcon: Record<CoursePermission, React.FC<{size?: number; color?: string}>> = {
-  course_creation: ({size=14,color}) => <Plus size={size} color={color}/>,
   editing: ({size=14,color}) => <Edit3 size={size} color={color}/>,
   qna:     ({size=14,color}) => <MessageSquare size={size} color={color}/>,
-  tasks:   ({size=14,color}) => <ClipboardList size={size} color={color}/>,
+  task_creation:   ({size=14,color}) => <ClipboardList size={size} color={color}/>,
+  task_editing:    ({size=14,color}) => <Edit3 size={size} color={color}/>,
+  task_evaluation: ({size=14,color}) => <BookCheck size={size} color={color}/>,
   exams:   ({size=14,color}) => <BookCheck size={size} color={color}/>,
 };
 
@@ -130,18 +132,19 @@ function AssignModal({
   state: AssignModalState;
   courses: Course[];
   onClose:()=>void;
-  onSave:(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],allowedSubjects:string[],notes:string)=>Promise<void>;
+  onSave:(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],allowedSubjects:string[],notes:string,globalPerms:GlobalPermission[])=>Promise<void>;
   saving:boolean;
 }) {
   const [step, setStep] = useState<'course'|'perms'>('course');
   const [search, setSearch] = useState('');
   const [sel, setSel] = useState<Course|null>(null);
   const [perms, setPerms] = useState<Set<CoursePermission>>(new Set());
+  const [globalPerms, setGlobalPerms] = useState<Set<GlobalPermission>>(new Set());
   const [allowedSubjects, setAllowedSubjects] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState('');
 
   useEffect(()=>{
-    if(state.open){ setStep('course'); setSel(null); setPerms(new Set()); setAllowedSubjects(new Set()); setNotes(''); setSearch(''); }
+    if(state.open){ setStep('course'); setSel(null); setPerms(new Set()); setGlobalPerms(new Set()); setAllowedSubjects(new Set()); setNotes(''); setSearch(''); }
   },[state.open]);
 
   const existingIds = new Set(state.existingAssignments.map(a=>a.courseId));
@@ -155,6 +158,7 @@ function AssignModal({
     setSel(c);
     const ex = state.existingAssignments.find(a=>a.courseId===c.id);
     setPerms(ex ? new Set(ex.permissions) : new Set());
+    setGlobalPerms(ex?.globalPermissions?.length ? new Set(ex.globalPermissions) : new Set());
     setAllowedSubjects(ex?.allowedSubjects?.length ? new Set(ex.allowedSubjects) : new Set());
     setNotes(ex?.notes||'');
     setStep('perms');
@@ -201,6 +205,52 @@ function AssignModal({
         <div style={{flex:1,overflow:'auto',padding:'14px 22px'}}>
           {step==='course' && (
             <>
+              {/* Global Permissions — shown at top of course selection */}
+              <div style={{marginBottom:14,padding:'12px 14px',borderRadius:10,
+                background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.09)'}}>
+                <div style={{fontSize:11,color:'#666',fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:10}}>
+                  Global Access Options
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:7}}>
+                  {/* Course Creation */}
+                  <button onClick={()=>setGlobalPerms(prev=>{const n=new Set(prev);n.has('course_creation')?n.delete('course_creation'):n.add('course_creation');return n;})}
+                    style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',
+                      background:globalPerms.has('course_creation')?'rgba(168,85,247,0.12)':'rgba(255,255,255,0.03)',
+                      border:`1.5px solid ${globalPerms.has('course_creation')?'#a855f7':'rgba(255,255,255,0.09)'}`,
+                      transition:'all 0.14s',width:'100%',textAlign:'left'}}>
+                    <div style={{width:18,height:18,borderRadius:5,flexShrink:0,
+                      background:globalPerms.has('course_creation')?'#a855f7':'transparent',
+                      border:`2px solid ${globalPerms.has('course_creation')?'#a855f7':'rgba(255,255,255,0.25)'}`,
+                      display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.14s'}}>
+                      {globalPerms.has('course_creation') && <Check size={11} color="#fff" strokeWidth={3}/>}
+                    </div>
+                    <Plus size={15} color={globalPerms.has('course_creation')?'#a855f7':'#666'}/>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:globalPerms.has('course_creation')?'#fff':'#888'}}>Course Creation</div>
+                      <div style={{fontSize:11,color:'#555',marginTop:1}}>Allow teacher to create new courses on the platform</div>
+                    </div>
+                  </button>
+                  {/* Task Creation (global) */}
+                  <button onClick={()=>setGlobalPerms(prev=>{const n=new Set(prev);n.has('task_creation_global')?n.delete('task_creation_global'):n.add('task_creation_global');return n;})}
+                    style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',
+                      background:globalPerms.has('task_creation_global')?'rgba(245,158,11,0.12)':'rgba(255,255,255,0.03)',
+                      border:`1.5px solid ${globalPerms.has('task_creation_global')?'#f59e0b':'rgba(255,255,255,0.09)'}`,
+                      transition:'all 0.14s',width:'100%',textAlign:'left'}}>
+                    <div style={{width:18,height:18,borderRadius:5,flexShrink:0,
+                      background:globalPerms.has('task_creation_global')?'#f59e0b':'transparent',
+                      border:`2px solid ${globalPerms.has('task_creation_global')?'#f59e0b':'rgba(255,255,255,0.25)'}`,
+                      display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.14s'}}>
+                      {globalPerms.has('task_creation_global') && <Check size={11} color="#fff" strokeWidth={3}/>}
+                    </div>
+                    <ClipboardList size={15} color={globalPerms.has('task_creation_global')?'#f59e0b':'#666'}/>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:globalPerms.has('task_creation_global')?'#fff':'#888'}}>Task Creation</div>
+                      <div style={{fontSize:11,color:'#555',marginTop:1}}>Allow teacher to create tasks (class, all-student types) in Task Management</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+              <div style={{fontSize:11,color:'#555',marginBottom:8,fontWeight:600}}>Course List — select a course to set permissions</div>
               <div style={{position:'relative',marginBottom:12}}>
                 <Search size={13} style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',color:'#555'}}/>
                 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search courses..." autoFocus
@@ -335,7 +385,7 @@ function AssignModal({
               background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.09)',color:'#888',cursor:'pointer'}}>
               Cancel
             </button>
-            <button onClick={()=>{ if(sel) onSave(sel.id,sel.title,sel.thumbnail||sel.thumbnailUrl,Array.from(perms),Array.from(allowedSubjects),notes); }}
+            <button onClick={()=>{ if(sel) onSave(sel.id,sel.title,sel.thumbnail||sel.thumbnailUrl,Array.from(perms),Array.from(allowedSubjects),notes,Array.from(globalPerms)); }}
               disabled={saving||perms.size===0} style={{
               flex:2,padding:'10px',borderRadius:9,fontSize:13,fontWeight:700,
               background: perms.size===0?'#222':'linear-gradient(135deg,#4f46e5,#7c3aed)',
@@ -676,7 +726,7 @@ export default function CourseAssignmentPage() {
 
   const toggleExpand = (uid:string) => setTeachers(p=>p.map(t=>t.uid===uid?{...t,isExpanded:!t.isExpanded}:t));
 
-  const handleSaveAssignment = async(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],allowedSubjects:string[],notes:string) => {
+  const handleSaveAssignment = async(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],allowedSubjects:string[],notes:string,globalPerms:GlobalPermission[]) => {
     if(!assignModal.teacher||!currentUser) return;
     setSavingAssignment(true);
     try {
@@ -689,7 +739,8 @@ export default function CourseAssignmentPage() {
         perms,
         allowedSubjects,
         { uid:currentUser.uid, userId:currentUser.userId||'', surname:currentUser.surname||'' },
-        notes
+        notes,
+        globalPerms
       );
       toast('success', `Access saved for ${assignModal.teacher.surname}`);
       setAssignModal({open:false,teacher:null,existingAssignments:[]});
