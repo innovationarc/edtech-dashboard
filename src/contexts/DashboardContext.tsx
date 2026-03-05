@@ -115,6 +115,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [timezone, setTimezone] = useState(() => localStorage.getItem('timezone') || 'utc');
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
+  const isDesktopRef = React.useRef(window.innerWidth >= 1024);
 
   // Function to check if user can access User Management
   const canAccessUserManagement = (): boolean => {
@@ -132,6 +133,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     const handleResize = () => {
       const desktop = window.innerWidth >= 1024;
       setIsDesktop(desktop);
+      isDesktopRef.current = desktop;
       
       // Close sidebar on mobile when switching from desktop to mobile
       if (!desktop && sidebarOpen) {
@@ -187,7 +189,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             setIsAuthenticated(true);
             
             // Only auto-open sidebar on desktop
-            if (isDesktop) {
+            if (isDesktopRef.current) {
               setSidebarOpen(true);
             }
 
@@ -269,7 +271,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       clearTimeout(authCheckTimeout);
       unsubscribe();
     };
-  }, [isDesktop]);
+  }, []);
 
   // Apply theme changes to document
   useEffect(() => {
