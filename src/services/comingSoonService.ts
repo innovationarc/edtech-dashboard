@@ -178,13 +178,14 @@ export const comingSoonService = {
   },
 
   async getEarlyAccessByFeature(featureId: string): Promise<EarlyAccessRequest[]> {
+    // No orderBy to avoid composite index requirement — sort client-side
     const q = query(
       collection(db, EARLY_ACCESS_COL),
       where('featureId', '==', featureId),
-      orderBy('requestedAt', 'desc'),
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => mapEarlyAccess(d.id, d.data()));
+    const results = snap.docs.map(d => mapEarlyAccess(d.id, d.data()));
+    return results.sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
   },
 
   async getAllEarlyAccessRequests(): Promise<EarlyAccessRequest[]> {
@@ -235,13 +236,14 @@ export const comingSoonService = {
   },
 
   async getFeatureRequestsByStudent(studentId: string): Promise<FeatureRequest[]> {
+    // No orderBy to avoid composite index requirement — sort client-side
     const q = query(
       collection(db, FEATURE_REQUESTS_COL),
       where('studentId', '==', studentId),
-      orderBy('requestedAt', 'desc'),
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => mapFeatureRequest(d.id, d.data()));
+    const results = snap.docs.map(d => mapFeatureRequest(d.id, d.data()));
+    return results.sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
   },
 
   async getAllFeatureRequests(): Promise<FeatureRequest[]> {
