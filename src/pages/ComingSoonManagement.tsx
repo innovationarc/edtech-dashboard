@@ -2,9 +2,14 @@
 import { useState, useEffect } from 'react';
 import {
   Plus, Edit2, Trash2, ChevronDown, ChevronUp, X, Save,
-  CheckCircle, XCircle, Eye, AlertCircle, Users, Inbox,
+  CheckCircle, XCircle, AlertCircle, Users, Inbox,
   Zap, BookOpen, Star, Upload, GitMerge, BarChart2, Cpu,
-  Layers, Smartphone, Link, FileText,
+  Layers, Smartphone, Link, FileText, Activity, Clock,
+  Wifi, Globe, Shield, Lock, Bell, Camera, Code, Database,
+  Download, Filter, Flag, Gift, Hash, Heart, Home, Image,
+  Mail, Map, MessageSquare, Monitor, Music, Package, Play,
+  Search, Settings, Share2, Sliders, Tag, Target, Terminal,
+  Truck, Video, Wrench, Aperture, Award,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import {
@@ -13,32 +18,50 @@ import {
   EarlyAccessRequest,
   FeatureRequest,
   FeatureRequestStatus,
+  ActivityLog,
+  ActivityLogAction,
 } from '../services/comingSoonService';
 import { useDashboard } from '../contexts/DashboardContext';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Icon registry ─────────────────────────────────────────────────────────────
 const ICON_OPTIONS = [
   'Zap', 'BookOpen', 'Star', 'Upload', 'GitMerge',
   'BarChart2', 'Cpu', 'Users', 'Layers', 'Smartphone',
+  'Wifi', 'Globe', 'Shield', 'Lock', 'Bell',
+  'Camera', 'Code', 'Database', 'Download', 'Filter',
+  'Flag', 'Gift', 'Hash', 'Heart', 'Home',
+  'Image', 'Mail', 'Map', 'MessageSquare', 'Monitor',
+  'Music', 'Package', 'Play', 'Search', 'Settings',
+  'Share2', 'Sliders', 'Tag', 'Target', 'Terminal',
+  'Truck', 'Video', 'Wrench', 'Aperture', 'Award',
 ];
 
-const ICON_PREVIEW: Record<string, React.ReactNode> = {
-  Zap:       <Zap size={18} />,
-  BookOpen:  <BookOpen size={18} />,
-  Star:      <Star size={18} />,
-  Upload:    <Upload size={18} />,
-  GitMerge:  <GitMerge size={18} />,
-  BarChart2: <BarChart2 size={18} />,
-  Cpu:       <Cpu size={18} />,
-  Users:     <Users size={18} />,
-  Layers:    <Layers size={18} />,
-  Smartphone:<Smartphone size={18} />,
+const ICON_COMPONENTS: Record<string, React.ReactNode> = {
+  Zap: <Zap size={18} />, BookOpen: <BookOpen size={18} />, Star: <Star size={18} />,
+  Upload: <Upload size={18} />, GitMerge: <GitMerge size={18} />, BarChart2: <BarChart2 size={18} />,
+  Cpu: <Cpu size={18} />, Users: <Users size={18} />, Layers: <Layers size={18} />,
+  Smartphone: <Smartphone size={18} />, Wifi: <Wifi size={18} />, Globe: <Globe size={18} />,
+  Shield: <Shield size={18} />, Lock: <Lock size={18} />, Bell: <Bell size={18} />,
+  Camera: <Camera size={18} />, Code: <Code size={18} />, Database: <Database size={18} />,
+  Download: <Download size={18} />, Filter: <Filter size={18} />, Flag: <Flag size={18} />,
+  Gift: <Gift size={18} />, Hash: <Hash size={18} />, Heart: <Heart size={18} />,
+  Home: <Home size={18} />, Image: <Image size={18} />, Mail: <Mail size={18} />,
+  Map: <Map size={18} />, MessageSquare: <MessageSquare size={18} />, Monitor: <Monitor size={18} />,
+  Music: <Music size={18} />, Package: <Package size={18} />, Play: <Play size={18} />,
+  Search: <Search size={18} />, Settings: <Settings size={18} />, Share2: <Share2 size={18} />,
+  Sliders: <Sliders size={18} />, Tag: <Tag size={18} />, Target: <Target size={18} />,
+  Terminal: <Terminal size={18} />, Truck: <Truck size={18} />, Video: <Video size={18} />,
+  Wrench: <Wrench size={18} />, Aperture: <Aperture size={18} />, Award: <Award size={18} />,
 };
 
+const getIconNode = (name: string) => ICON_COMPONENTS[name] ?? <Zap size={18} />;
+
+// ─── Status styles ─────────────────────────────────────────────────────────────
 const EA_STATUS_STYLES: Record<string, string> = {
-  pending:  'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
-  approved: 'bg-green-500/20 text-green-400 border border-green-500/30',
-  rejected: 'bg-red-500/20 text-red-400 border border-red-500/30',
+  pending:   'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+  approved:  'bg-green-500/20 text-green-400 border border-green-500/30',
+  rejected:  'bg-red-500/20 text-red-400 border border-red-500/30',
+  cancelled: 'bg-gray-500/20 text-gray-400 border border-gray-500/30',
 };
 
 const FR_STATUS_OPTIONS: { value: FeatureRequestStatus; label: string; color: string }[] = [
@@ -49,60 +72,76 @@ const FR_STATUS_OPTIONS: { value: FeatureRequestStatus; label: string; color: st
   { value: 'declined',  label: 'Declined',  color: 'bg-red-500/20 text-red-400 border border-red-500/30' },
 ];
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+const LOG_ACTION_LABELS: Record<ActivityLogAction, string> = {
+  feature_added:                  'Feature Added',
+  feature_edited:                 'Feature Edited',
+  feature_deleted:                'Feature Deleted',
+  early_access_approved:          'Early Access Approved',
+  early_access_rejected:          'Early Access Rejected',
+  early_access_cancelled:         'Early Access Cancelled',
+  feature_request_status_updated: 'Feature Request Updated',
+  feature_request_deleted:        'Feature Request Deleted',
+};
+
+const LOG_ACTION_COLORS: Record<ActivityLogAction, string> = {
+  feature_added:                  'bg-green-500/20 text-green-400 border border-green-500/30',
+  feature_edited:                 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+  feature_deleted:                'bg-red-500/20 text-red-400 border border-red-500/30',
+  early_access_approved:          'bg-green-500/20 text-green-400 border border-green-500/30',
+  early_access_rejected:          'bg-red-500/20 text-red-400 border border-red-500/30',
+  early_access_cancelled:         'bg-gray-500/20 text-gray-400 border border-gray-500/30',
+  feature_request_status_updated: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+  feature_request_deleted:        'bg-red-500/20 text-red-400 border border-red-500/30',
+};
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (d: Date) => new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtTime = (d: Date) => new Date(d).toLocaleString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const Spinner = () => (
   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
 );
 
-// ─── Feature Form Modal ───────────────────────────────────────────────────────
+const IdBadge = ({ id }: { id?: string }) =>
+  id ? (
+    <span className="text-[10px] font-mono bg-background-900 border border-background-700 text-primary-400 px-1.5 py-0.5 rounded">
+      {id}
+    </span>
+  ) : null;
+
+// ─── Feature Form Modal ────────────────────────────────────────────────────────
 interface FeatureFormModalProps {
   feature?: ComingSoonFeature | null;
   existingCount: number;
-  adminId: string;
+  actor: { uid: string; userId?: string; name: string };
   onSave: () => void;
   onClose: () => void;
 }
 
 const EMPTY_FORM = {
-  title: '',
-  description: '',
-  iconName: 'Zap',
-  progress: 0,
-  expectedDate: '',
-  status: 'in_development' as const,
-  order: 0,
+  title: '', description: '', iconName: 'Zap',
+  progress: 0, expectedDate: '', status: 'in_development' as const, order: 0,
 };
 
-const FeatureFormModal = ({ feature, existingCount, adminId, onSave, onClose }: FeatureFormModalProps) => {
+const FeatureFormModal = ({ feature, existingCount, actor, onSave, onClose }: FeatureFormModalProps) => {
   const [form, setForm] = useState(
     feature
-      ? {
-          title: feature.title,
-          description: feature.description,
-          iconName: feature.iconName,
-          progress: feature.progress,
-          expectedDate: feature.expectedDate,
-          status: feature.status,
-          order: feature.order,
-        }
+      ? { title: feature.title, description: feature.description, iconName: feature.iconName,
+          progress: feature.progress, expectedDate: feature.expectedDate, status: feature.status, order: feature.order }
       : { ...EMPTY_FORM, order: existingCount },
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.expectedDate.trim()) {
-      setError('Title and Expected Date are required.');
-      return;
-    }
+    if (!form.title.trim() || !form.expectedDate.trim()) { setError('Title and Expected Date are required.'); return; }
     setSaving(true);
     try {
       if (feature) {
-        await comingSoonService.updateFeature(feature.id, form);
+        await comingSoonService.updateFeature(feature.id, form, actor, feature.title);
       } else {
-        await comingSoonService.addFeature(form, adminId);
+        await comingSoonService.addFeature(form, actor);
       }
       onSave();
     } catch (e: any) {
@@ -112,18 +151,12 @@ const FeatureFormModal = ({ feature, existingCount, adminId, onSave, onClose }: 
     }
   };
 
-  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-background-800 border border-background-700 rounded-xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-background-800 flex items-center justify-between p-6 border-b border-background-700 z-10">
-          <h3 className="text-white font-semibold text-lg">
-            {feature ? 'Edit Feature' : 'Add New Feature'}
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={20} />
-          </button>
+          <h3 className="text-white font-semibold text-lg">{feature ? 'Edit Feature' : 'Add New Feature'}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors"><X size={20} /></button>
         </div>
 
         <div className="p-6 space-y-4">
@@ -135,42 +168,30 @@ const FeatureFormModal = ({ feature, existingCount, adminId, onSave, onClose }: 
 
           <div>
             <label className="text-sm text-gray-400 block mb-1.5">Title *</label>
-            <input
-              value={form.title}
-              onChange={e => set('title', e.target.value)}
+            <input value={form.title} onChange={e => set('title', e.target.value)}
               placeholder="e.g. Advanced Analytics"
-              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
-            />
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors" />
           </div>
 
           <div>
             <label className="text-sm text-gray-400 block mb-1.5">Description</label>
-            <textarea
-              value={form.description}
-              onChange={e => set('description', e.target.value)}
-              rows={3}
+            <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3}
               placeholder="Brief description of this feature..."
-              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors"
-            />
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors" />
           </div>
 
+          {/* Visual icon picker */}
           <div>
             <label className="text-sm text-gray-400 block mb-2">Icon</label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-9 gap-1.5 max-h-40 overflow-y-auto pr-1">
               {ICON_OPTIONS.map(i => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => set('iconName', i)}
-                  title={i}
-                  className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border transition-all
+                <button key={i} type="button" onClick={() => set('iconName', i)} title={i}
+                  className={`flex flex-col items-center justify-center gap-1 p-2 rounded-lg border transition-all
                     ${form.iconName === i
                       ? 'border-primary-500 bg-primary-500/15 text-primary-400'
-                      : 'border-background-700 bg-background-900 text-gray-400 hover:border-background-600 hover:text-white'
-                    }`}
-                >
-                  {ICON_PREVIEW[i]}
-                  <span className="text-[10px] leading-none truncate w-full text-center">{i}</span>
+                      : 'border-background-700 bg-background-900 text-gray-400 hover:border-background-600 hover:text-white'}`}>
+                  {ICON_COMPONENTS[i]}
+                  <span className="text-[9px] leading-none truncate w-full text-center opacity-70">{i}</span>
                 </button>
               ))}
             </div>
@@ -178,11 +199,8 @@ const FeatureFormModal = ({ feature, existingCount, adminId, onSave, onClose }: 
 
           <div>
             <label className="text-sm text-gray-400 block mb-1.5">Status</label>
-            <select
-              value={form.status}
-              onChange={e => set('status', e.target.value)}
-              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-            >
+            <select value={form.status} onChange={e => set('status', e.target.value)}
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors">
               <option value="in_development">In Development</option>
               <option value="beta">Beta</option>
               <option value="released">Released</option>
@@ -190,60 +208,33 @@ const FeatureFormModal = ({ feature, existingCount, adminId, onSave, onClose }: 
           </div>
 
           <div>
-            <label className="text-sm text-gray-400 block mb-1.5">
-              Progress — {form.progress}%
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={form.progress}
-              onChange={e => set('progress', Number(e.target.value))}
-              className="w-full accent-primary-500"
-            />
+            <label className="text-sm text-gray-400 block mb-1.5">Progress — {form.progress}%</label>
+            <input type="range" min={0} max={100} value={form.progress}
+              onChange={e => set('progress', Number(e.target.value))} className="w-full accent-primary-500" />
             <div className="w-full bg-background-900 rounded-full h-2 mt-1">
-              <div
-                className="h-2 rounded-full bg-primary-500 transition-all"
-                style={{ width: `${form.progress}%` }}
-              />
+              <div className="h-2 rounded-full bg-primary-500 transition-all" style={{ width: `${form.progress}%` }} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm text-gray-400 block mb-1.5">Expected Date *</label>
-              <input
-                value={form.expectedDate}
-                onChange={e => set('expectedDate', e.target.value)}
+              <input value={form.expectedDate} onChange={e => set('expectedDate', e.target.value)}
                 placeholder="e.g. Q2 2025"
-                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
-              />
+                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors" />
             </div>
             <div>
               <label className="text-sm text-gray-400 block mb-1.5">Display Order</label>
-              <input
-                type="number"
-                value={form.order}
-                onChange={e => set('order', Number(e.target.value))}
-                min={0}
-                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-              />
+              <input type="number" value={form.order} onChange={e => set('order', Number(e.target.value))} min={0}
+                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors" />
             </div>
           </div>
         </div>
 
         <div className="sticky bottom-0 bg-background-800 flex gap-3 p-6 border-t border-background-700">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-background-700 hover:bg-background-600 text-white py-2 rounded-lg transition-colors text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
-          >
+          <button onClick={onClose} className="flex-1 bg-background-700 hover:bg-background-600 text-white py-2 rounded-lg transition-colors text-sm">Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
             {saving ? <Spinner /> : <Save size={14} />} Save
           </button>
         </div>
@@ -252,15 +243,16 @@ const FeatureFormModal = ({ feature, existingCount, adminId, onSave, onClose }: 
   );
 };
 
-// ─── Early Access Review Modal ────────────────────────────────────────────────
+// ─── Early Access Review Modal ─────────────────────────────────────────────────
 interface EarlyAccessReviewModalProps {
   request: EarlyAccessRequest;
-  adminId: string;
+  actor: { uid: string; userId?: string; name: string };
+  featureTitle?: string;
   onDone: () => void;
   onClose: () => void;
 }
 
-const EarlyAccessReviewModal = ({ request, adminId, onDone, onClose }: EarlyAccessReviewModalProps) => {
+const EarlyAccessReviewModal = ({ request, actor, featureTitle, onDone, onClose }: EarlyAccessReviewModalProps) => {
   const [accessLink, setAccessLink] = useState(request.accessLink ?? '');
   const [guidelines, setGuidelines] = useState(request.guidelines ?? '');
   const [loading, setLoading] = useState(false);
@@ -268,25 +260,19 @@ const EarlyAccessReviewModal = ({ request, adminId, onDone, onClose }: EarlyAcce
 
   const handleApprove = async () => {
     if (!accessLink.trim()) return;
-    setAction('approve');
-    setLoading(true);
+    setAction('approve'); setLoading(true);
     try {
-      await comingSoonService.approveEarlyAccess(request.id, accessLink.trim(), guidelines.trim(), adminId);
+      await comingSoonService.approveEarlyAccess(request.id, accessLink.trim(), guidelines.trim(), actor, featureTitle, request.studentName);
       onDone();
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleReject = async () => {
-    setAction('reject');
-    setLoading(true);
+    setAction('reject'); setLoading(true);
     try {
-      await comingSoonService.rejectEarlyAccess(request.id, adminId);
+      await comingSoonService.rejectEarlyAccess(request.id, actor, featureTitle, request.studentName);
       onDone();
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
@@ -297,49 +283,32 @@ const EarlyAccessReviewModal = ({ request, adminId, onDone, onClose }: EarlyAcce
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
-          <div className="bg-background-900 rounded-lg p-3 text-sm">
-            <p className="text-gray-400">Student</p>
+          <div className="bg-background-900 rounded-lg p-3 text-sm space-y-1">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 text-xs">Student</p>
+              <IdBadge id={request.studentUserId} />
+            </div>
             <p className="text-white font-medium">{request.studentName}</p>
           </div>
-
           <div>
-            <label className="text-sm text-gray-400 flex items-center gap-1.5 mb-1.5">
-              <Link size={13} /> Access Link *
-            </label>
-            <input
-              value={accessLink}
-              onChange={e => setAccessLink(e.target.value)}
-              placeholder="https://..."
-              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors"
-            />
+            <label className="text-sm text-gray-400 flex items-center gap-1.5 mb-1.5"><Link size={13} /> Access Link *</label>
+            <input value={accessLink} onChange={e => setAccessLink(e.target.value)} placeholder="https://..."
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors" />
           </div>
-
           <div>
-            <label className="text-sm text-gray-400 flex items-center gap-1.5 mb-1.5">
-              <FileText size={13} /> Guidelines (optional)
-            </label>
-            <textarea
-              value={guidelines}
-              onChange={e => setGuidelines(e.target.value)}
-              rows={3}
+            <label className="text-sm text-gray-400 flex items-center gap-1.5 mb-1.5"><FileText size={13} /> Guidelines (optional)</label>
+            <textarea value={guidelines} onChange={e => setGuidelines(e.target.value)} rows={3}
               placeholder="Add any instructions or notes for the student..."
-              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors"
-            />
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors" />
           </div>
         </div>
         <div className="flex gap-3 p-6 border-t border-background-700">
-          <button
-            onClick={handleReject}
-            disabled={loading}
-            className="flex-1 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
-          >
+          <button onClick={handleReject} disabled={loading}
+            className="flex-1 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-1.5 disabled:opacity-50">
             {loading && action === 'reject' ? <Spinner /> : <XCircle size={14} />} Reject
           </button>
-          <button
-            onClick={handleApprove}
-            disabled={loading || !accessLink.trim()}
-            className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-1.5"
-          >
+          <button onClick={handleApprove} disabled={loading || !accessLink.trim()}
+            className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-1.5">
             {loading && action === 'approve' ? <Spinner /> : <CheckCircle size={14} />} Approve
           </button>
         </div>
@@ -348,14 +317,14 @@ const EarlyAccessReviewModal = ({ request, adminId, onDone, onClose }: EarlyAcce
   );
 };
 
-// ─── Early Access Requests Panel ──────────────────────────────────────────────
+// ─── Early Access Panel ────────────────────────────────────────────────────────
 interface EarlyAccessPanelProps {
   featureId: string;
   featureTitle: string;
-  adminId: string;
+  actor: { uid: string; userId?: string; name: string };
 }
 
-const EarlyAccessPanel = ({ featureId, featureTitle, adminId }: EarlyAccessPanelProps) => {
+const EarlyAccessPanel = ({ featureId, featureTitle, actor }: EarlyAccessPanelProps) => {
   const [requests, setRequests] = useState<EarlyAccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState<EarlyAccessRequest | null>(null);
@@ -375,23 +344,26 @@ const EarlyAccessPanel = ({ featureId, featureTitle, adminId }: EarlyAccessPanel
         <p className="text-gray-500 text-sm py-4 text-center">No early access requests yet.</p>
       ) : (
         requests.map(r => (
-          <div key={r.id} className="flex items-center justify-between gap-3 bg-background-900 border border-background-700 rounded-lg px-4 py-3">
-            <div className="min-w-0">
-              <p className="text-white text-sm font-medium truncate">{r.studentName}</p>
-              <p className="text-gray-500 text-xs">{fmt(r.requestedAt)}</p>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className={`text-xs px-2.5 py-1 rounded-full ${EA_STATUS_STYLES[r.status]}`}>
-                {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-              </span>
-              {r.status === 'pending' && (
-                <button
-                  onClick={() => setReviewing(r)}
-                  className="text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  Review
-                </button>
-              )}
+          <div key={r.id} className="bg-background-900 border border-background-700 rounded-lg px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-white text-sm font-medium">{r.studentName}</p>
+                  <IdBadge id={r.studentUserId} />
+                </div>
+                <p className="text-gray-500 text-xs mt-0.5">{fmt(r.requestedAt)}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className={`text-xs px-2.5 py-1 rounded-full ${EA_STATUS_STYLES[r.status]}`}>
+                  {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                </span>
+                {r.status === 'pending' && (
+                  <button onClick={() => setReviewing(r)}
+                    className="text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    Review
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))
@@ -399,7 +371,8 @@ const EarlyAccessPanel = ({ featureId, featureTitle, adminId }: EarlyAccessPanel
       {reviewing && (
         <EarlyAccessReviewModal
           request={reviewing}
-          adminId={adminId}
+          actor={actor}
+          featureTitle={featureTitle}
           onDone={() => { setReviewing(null); load(); }}
           onClose={() => setReviewing(null)}
         />
@@ -408,19 +381,18 @@ const EarlyAccessPanel = ({ featureId, featureTitle, adminId }: EarlyAccessPanel
   );
 };
 
-// ─── Feature Row ──────────────────────────────────────────────────────────────
+// ─── Feature Row ───────────────────────────────────────────────────────────────
 interface FeatureRowProps {
   feature: ComingSoonFeature;
-  adminId: string;
+  actor: { uid: string; userId?: string; name: string };
   onEdit: (f: ComingSoonFeature) => void;
-  onDelete: (id: string) => void;
+  onDelete: (f: ComingSoonFeature) => void;
 }
 
-const FeatureRow = ({ feature, adminId, onEdit, onDelete }: FeatureRowProps) => {
+const FeatureRow = ({ feature, actor, onEdit, onDelete }: FeatureRowProps) => {
   const [expanded, setExpanded] = useState(false);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
 
-  // Load pending early-access count eagerly so the badge is always visible
   useEffect(() => {
     comingSoonService.getEarlyAccessByFeature(feature.id).then(reqs => {
       setPendingCount(reqs.filter(r => r.status === 'pending').length);
@@ -431,7 +403,7 @@ const FeatureRow = ({ feature, adminId, onEdit, onDelete }: FeatureRowProps) => 
     <div className="bg-background-800 border border-background-700 rounded-xl overflow-hidden">
       <div className="flex items-center gap-4 p-4">
         <div className="h-10 w-10 rounded-full bg-background-900 flex items-center justify-center flex-shrink-0 text-primary-400">
-          {ICON_PREVIEW[feature.iconName] ?? <Zap size={18} />}
+          {getIconNode(feature.iconName)}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -440,18 +412,25 @@ const FeatureRow = ({ feature, adminId, onEdit, onDelete }: FeatureRowProps) => 
               {feature.expectedDate}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-1.5">
-            <div className="flex-1 max-w-[200px] bg-background-900 rounded-full h-1.5">
-              <div className="h-1.5 rounded-full bg-primary-500" style={{ width: `${feature.progress}%` }} />
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <div className="flex items-center gap-2">
+              <div className="max-w-[160px] w-full bg-background-900 rounded-full h-1.5">
+                <div className="h-1.5 rounded-full bg-primary-500" style={{ width: `${feature.progress}%` }} />
+              </div>
+              <span className="text-xs text-gray-400">{feature.progress}%</span>
             </div>
-            <span className="text-xs text-gray-400">{feature.progress}%</span>
+            {/* Creator info */}
+            {(feature.createdByName || feature.createdByUserId) && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <span>by {feature.createdByName}</span>
+                <IdBadge id={feature.createdByUserId} />
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-background-900 hover:bg-background-700 border border-background-700 px-3 py-1.5 rounded-lg transition-colors relative"
-          >
+          <button onClick={() => setExpanded(v => !v)}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-background-900 hover:bg-background-700 border border-background-700 px-3 py-1.5 rounded-lg transition-colors">
             <Users size={12} /> Requests
             {pendingCount !== null && pendingCount > 0 && (
               <span className="bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
@@ -460,34 +439,37 @@ const FeatureRow = ({ feature, adminId, onEdit, onDelete }: FeatureRowProps) => 
             )}
             {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
-          <button
-            onClick={() => onEdit(feature)}
-            className="p-2 text-gray-400 hover:text-white hover:bg-background-700 rounded-lg transition-colors"
-          >
+          <button onClick={() => onEdit(feature)}
+            className="p-2 text-gray-400 hover:text-white hover:bg-background-700 rounded-lg transition-colors">
             <Edit2 size={16} />
           </button>
-          <button
-            onClick={() => onDelete(feature.id)}
-            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-          >
+          <button onClick={() => onDelete(feature)}
+            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
             <Trash2 size={16} />
           </button>
         </div>
       </div>
       {expanded && (
         <div className="px-4 pb-4 border-t border-background-700 pt-3">
-          <EarlyAccessPanel featureId={feature.id} featureTitle={feature.title} adminId={adminId} />
+          <EarlyAccessPanel featureId={feature.id} featureTitle={feature.title} actor={actor} />
         </div>
       )}
     </div>
   );
 };
 
-// ─── Feature Requests Tab ─────────────────────────────────────────────────────
-const FeatureRequestsTab = ({ adminId, onCountChange }: { adminId: string; onCountChange?: (n: number) => void }) => {
+// ─── Feature Requests Tab ──────────────────────────────────────────────────────
+const FeatureRequestsTab = ({
+  actor,
+  onCountChange,
+}: {
+  actor: { uid: string; userId?: string; name: string };
+  onCountChange?: (n: number) => void;
+}) => {
   const [requests, setRequests] = useState<FeatureRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [noteEditing, setNoteEditing] = useState<Record<string, string>>({});
 
   const load = () => {
@@ -500,14 +482,21 @@ const FeatureRequestsTab = ({ adminId, onCountChange }: { adminId: string; onCou
 
   useEffect(() => { load(); }, []);
 
-  const handleStatusUpdate = async (requestId: string, status: FeatureRequestStatus) => {
-    setUpdating(requestId);
+  const handleStatusUpdate = async (r: FeatureRequest, status: FeatureRequestStatus) => {
+    setUpdating(r.id);
     try {
-      await comingSoonService.updateFeatureRequestStatus(requestId, status, noteEditing[requestId]);
+      await comingSoonService.updateFeatureRequestStatus(r.id, status, actor, noteEditing[r.id], r.studentName);
       load();
-    } finally {
-      setUpdating(null);
-    }
+    } finally { setUpdating(null); }
+  };
+
+  const handleDelete = async (r: FeatureRequest) => {
+    if (!confirm(`Delete this request by ${r.studentName}? This cannot be undone.`)) return;
+    setDeleting(r.id);
+    try {
+      await comingSoonService.adminDeleteFeatureRequest(r.id, actor, r.studentName);
+      load();
+    } finally { setDeleting(null); }
   };
 
   if (loading) return <div className="flex justify-center py-16"><Spinner /></div>;
@@ -528,14 +517,13 @@ const FeatureRequestsTab = ({ adminId, onCountChange }: { adminId: string; onCou
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="text-white font-medium text-sm">{r.studentName}</p>
+                    <IdBadge id={r.studentUserId} />
                     <span className={`text-xs px-2.5 py-0.5 rounded-full ${statusMeta?.color}`}>
                       {statusMeta?.label}
                     </span>
                   </div>
                   <p className="text-gray-300 text-sm leading-relaxed">{r.description}</p>
                   <p className="text-gray-500 text-xs mt-2">{fmt(r.requestedAt)}</p>
-
-                  {/* Admin note */}
                   <div className="mt-3">
                     <input
                       value={noteEditing[r.id] ?? (r.adminNote || '')}
@@ -545,23 +533,22 @@ const FeatureRequestsTab = ({ adminId, onCountChange }: { adminId: string; onCou
                     />
                   </div>
                 </div>
-
-                {/* Status selector */}
                 <div className="flex flex-col gap-1.5 flex-shrink-0">
                   {FR_STATUS_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleStatusUpdate(r.id, opt.value)}
+                    <button key={opt.value}
+                      onClick={() => handleStatusUpdate(r, opt.value)}
                       disabled={updating === r.id || r.status === opt.value}
                       className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-                        ${r.status === opt.value
-                          ? opt.color + ' cursor-default'
-                          : 'bg-background-900 border-background-700 text-gray-400 hover:border-primary-500 hover:text-white'
-                        }`}
-                    >
+                        ${r.status === opt.value ? opt.color + ' cursor-default' : 'bg-background-900 border-background-700 text-gray-400 hover:border-primary-500 hover:text-white'}`}>
                       {updating === r.id && r.status !== opt.value ? <Spinner /> : opt.label}
                     </button>
                   ))}
+                  <button
+                    onClick={() => handleDelete(r)}
+                    disabled={deleting === r.id}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-1">
+                    {deleting === r.id ? <Spinner /> : <Trash2 size={11} />} Delete
+                  </button>
                 </div>
               </div>
             </div>
@@ -572,22 +559,77 @@ const FeatureRequestsTab = ({ adminId, onCountChange }: { adminId: string; onCou
   );
 };
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-type Tab = 'features' | 'feature_requests';
+// ─── Activity Log Tab ──────────────────────────────────────────────────────────
+const ActivityLogTab = () => {
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    comingSoonService.getActivityLogs(150).then(setLogs).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-16"><Spinner /></div>;
+
+  return (
+    <div className="space-y-2">
+      {logs.length === 0 ? (
+        <div className="text-center py-16 text-gray-500">
+          <Activity size={40} className="mx-auto mb-3 opacity-40" />
+          <p>No activity logged yet.</p>
+        </div>
+      ) : (
+        logs.map(log => {
+          const color = LOG_ACTION_COLORS[log.action] ?? 'bg-gray-500/20 text-gray-400 border border-gray-500/30';
+          return (
+            <div key={log.id} className="bg-background-800 border border-background-700 rounded-xl px-4 py-3 flex items-start gap-4">
+              <div className="flex-shrink-0 mt-0.5">
+                <Clock size={14} className="text-gray-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${color}`}>
+                    {LOG_ACTION_LABELS[log.action]}
+                  </span>
+                  {log.targetTitle && (
+                    <span className="text-white text-sm font-medium truncate">{log.targetTitle}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-gray-400 flex-wrap">
+                  <span>by {log.actorName}</span>
+                  <IdBadge id={log.actorUserId} />
+                </div>
+                {log.details && (
+                  <p className="text-gray-500 text-xs mt-1">{log.details}</p>
+                )}
+              </div>
+              <p className="text-gray-600 text-xs flex-shrink-0 text-right">{fmtTime(log.timestamp)}</p>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+};
+
+// ─── Main Page ─────────────────────────────────────────────────────────────────
+type Tab = 'features' | 'feature_requests' | 'activity_log';
 
 const ComingSoonManagement = () => {
   const { user } = useDashboard();
+  const actor = {
+    uid: user?.uid ?? '',
+    userId: user?.userId,
+    name: user ? `${user.name}${user.surname ? ' ' + user.surname : ''}` : '',
+  };
 
   const [activeTab, setActiveTab] = useState<Tab>('features');
   const [features, setFeatures] = useState<ComingSoonFeature[]>([]);
   const [loadingFeatures, setLoadingFeatures] = useState(true);
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingFeature, setEditingFeature] = useState<ComingSoonFeature | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [featuresSubTab, setFeaturesSubTab] = useState<'mine' | 'all'>('mine');
   const [pendingFeatureRequestCount, setPendingFeatureRequestCount] = useState(0);
 
-  // Load pending feature request count for the tab badge
   const loadPendingCount = () => {
     comingSoonService.getAllFeatureRequests().then(reqs => {
       setPendingFeatureRequestCount(reqs.filter(r => r.status === 'pending').length);
@@ -604,15 +646,10 @@ const ComingSoonManagement = () => {
     loadPendingCount();
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this feature? This cannot be undone.')) return;
-    setDeletingId(id);
-    try {
-      await comingSoonService.deleteFeature(id);
-      loadFeatures();
-    } finally {
-      setDeletingId(null);
-    }
+  const handleDelete = async (feature: ComingSoonFeature) => {
+    if (!confirm(`Delete "${feature.title}"? This cannot be undone.`)) return;
+    await comingSoonService.deleteFeature(feature.id, feature.title, actor);
+    loadFeatures();
   };
 
   const handleSaved = () => {
@@ -620,6 +657,12 @@ const ComingSoonManagement = () => {
     setEditingFeature(null);
     loadFeatures();
   };
+
+  const tabs: { id: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: 'features',         label: 'Features',         icon: <Layers size={15} /> },
+    { id: 'feature_requests', label: 'Feature Requests', icon: <Inbox size={15} />,    badge: pendingFeatureRequestCount },
+    { id: 'activity_log',     label: 'Activity Log',     icon: <Activity size={15} /> },
+  ];
 
   return (
     <div className="space-y-6">
@@ -630,10 +673,8 @@ const ComingSoonManagement = () => {
           <p className="text-gray-400 text-sm mt-1">Manage upcoming features, early access, and feature requests.</p>
         </div>
         {activeTab === 'features' && (
-          <button
-            onClick={() => { setEditingFeature(null); setShowFormModal(true); }}
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-lg transition-colors text-sm font-medium self-start sm:self-auto"
-          >
+          <button onClick={() => { setEditingFeature(null); setShowFormModal(true); }}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white px-5 py-2.5 rounded-lg transition-colors text-sm font-medium self-start sm:self-auto">
             <Plus size={16} /> Add Feature
           </button>
         )}
@@ -642,9 +683,9 @@ const ComingSoonManagement = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {[
-          { label: 'Total Features', value: features.length, icon: <Layers size={20} className="text-primary-400" /> },
-          { label: 'In Development', value: features.filter(f => f.status === 'in_development').length, icon: <Cpu size={20} className="text-yellow-400" /> },
-          { label: 'Beta / Released', value: features.filter(f => f.status !== 'in_development').length, icon: <CheckCircle size={20} className="text-green-400" /> },
+          { label: 'Total Features',    value: features.length,                                          icon: <Layers size={20} className="text-primary-400" /> },
+          { label: 'In Development',    value: features.filter(f => f.status === 'in_development').length, icon: <Cpu size={20} className="text-yellow-400" /> },
+          { label: 'Beta / Released',   value: features.filter(f => f.status !== 'in_development').length, icon: <CheckCircle size={20} className="text-green-400" /> },
         ].map(s => (
           <Card key={s.label} className="p-4">
             <div className="flex items-center gap-3">
@@ -659,20 +700,11 @@ const ComingSoonManagement = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-background-700">
-        {([
-          { id: 'features', label: 'Features', icon: <Layers size={15} /> },
-          { id: 'feature_requests', label: 'Feature Requests', icon: <Inbox size={15} />, badge: pendingFeatureRequestCount },
-        ] as { id: Tab; label: string; icon: React.ReactNode; badge?: number }[]).map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px
-              ${activeTab === tab.id
-                ? 'border-primary-500 text-primary-400'
-                : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-          >
+      <div className="flex border-b border-background-700 overflow-x-auto">
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap
+              ${activeTab === tab.id ? 'border-primary-500 text-primary-400' : 'border-transparent text-gray-400 hover:text-white'}`}>
             {tab.icon} {tab.label}
             {tab.badge !== undefined && tab.badge > 0 && (
               <span className="bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
@@ -683,33 +715,18 @@ const ComingSoonManagement = () => {
         ))}
       </div>
 
-      {/* Tab Content */}
+      {/* Tab content */}
       {activeTab === 'features' ? (
         <>
-          {/* Sub-tabs: My Features / All Features */}
           <div className="flex gap-1 bg-background-900 border border-background-700 rounded-lg p-1 w-fit">
-            {([
-              { id: 'mine', label: 'My Features' },
-              { id: 'all',  label: 'All Features' },
-            ] as { id: 'mine' | 'all'; label: string }[]).map(st => (
-              <button
-                key={st.id}
-                onClick={() => setFeaturesSubTab(st.id)}
+            {(['mine', 'all'] as const).map(st => (
+              <button key={st} onClick={() => setFeaturesSubTab(st)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors
-                  ${featuresSubTab === st.id
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-400 hover:text-white'
-                  }`}
-              >
-                {st.label}
-                {st.id === 'mine' && (
-                  <span className="ml-1.5 text-xs opacity-70">
-                    ({features.filter(f => f.createdBy === user?.uid).length})
-                  </span>
-                )}
-                {st.id === 'all' && (
-                  <span className="ml-1.5 text-xs opacity-70">({features.length})</span>
-                )}
+                  ${featuresSubTab === st ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                {st === 'mine' ? 'My Features' : 'All Features'}
+                <span className="ml-1.5 text-xs opacity-70">
+                  ({st === 'mine' ? features.filter(f => f.createdBy === user?.uid).length : features.length})
+                </span>
               </button>
             ))}
           </div>
@@ -717,53 +734,39 @@ const ComingSoonManagement = () => {
           {loadingFeatures ? (
             <div className="flex justify-center py-16"><Spinner /></div>
           ) : (() => {
-            const visibleFeatures = featuresSubTab === 'mine'
-              ? features.filter(f => f.createdBy === user?.uid)
-              : features;
-            return visibleFeatures.length === 0 ? (
+            const visible = featuresSubTab === 'mine' ? features.filter(f => f.createdBy === user?.uid) : features;
+            return visible.length === 0 ? (
               <div className="text-center py-20 text-gray-500">
                 <Layers size={40} className="mx-auto mb-3 opacity-40" />
-                {featuresSubTab === 'mine'
-                  ? <p>You haven't added any features yet.</p>
-                  : <p>No features added yet.</p>
-                }
+                <p>{featuresSubTab === 'mine' ? "You haven't added any features yet." : 'No features added yet.'}</p>
                 {featuresSubTab === 'mine' && (
-                  <button
-                    onClick={() => setShowFormModal(true)}
-                    className="mt-4 text-primary-400 hover:text-primary-300 text-sm underline"
-                  >
+                  <button onClick={() => setShowFormModal(true)} className="mt-4 text-primary-400 hover:text-primary-300 text-sm underline">
                     Add your first feature
                   </button>
                 )}
               </div>
             ) : (
               <div className="space-y-3">
-                {visibleFeatures.map(f => (
-                  <FeatureRow
-                    key={f.id}
-                    feature={f}
-                    adminId={user?.uid ?? ''}
+                {visible.map(f => (
+                  <FeatureRow key={f.id} feature={f} actor={actor}
                     onEdit={feat => { setEditingFeature(feat); setShowFormModal(true); }}
-                    onDelete={handleDelete}
-                  />
+                    onDelete={handleDelete} />
                 ))}
               </div>
             );
           })()}
         </>
+      ) : activeTab === 'feature_requests' ? (
+        <FeatureRequestsTab actor={actor} onCountChange={setPendingFeatureRequestCount} />
       ) : (
-        <FeatureRequestsTab
-          adminId={user?.uid ?? ''}
-          onCountChange={setPendingFeatureRequestCount}
-        />
+        <ActivityLogTab />
       )}
 
-      {/* Feature Form Modal */}
       {showFormModal && (
         <FeatureFormModal
           feature={editingFeature}
           existingCount={features.length}
-          adminId={user?.uid ?? ''}
+          actor={actor}
           onSave={handleSaved}
           onClose={() => { setShowFormModal(false); setEditingFeature(null); }}
         />
