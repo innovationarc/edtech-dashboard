@@ -58,59 +58,50 @@ import ExamEvaluation from './pages/ExamEvaluation';
 
 import { useDashboard } from './contexts/DashboardContext';
 
+// Returns the correct home dashboard path for any role
+const getRoleDashboard = (role?: string): string => {
+  if (role === 'student') return '/student-dashboard';
+  if (role === 'teacher') return '/teacher-dashboard';
+  return '/dashboard';
+};
+
 // Protected Route Component for Admin-only pages
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, loading } = useDashboard();
-  
-  // Wait for user profile to load before checking role
   if (loading || (isAuthenticated && !user)) return null;
-  
   if (!isAuthenticated || user?.role !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getRoleDashboard(user?.role)} replace />;
   }
-  
   return <>{children}</>;
 };
 
 // Protected Route Component for Teacher and Admin pages
 const TeacherAdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, loading } = useDashboard();
-  
-  // Wait for user profile to load before checking role
   if (loading || (isAuthenticated && !user)) return null;
-  
   if (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'teacher')) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getRoleDashboard(user?.role)} replace />;
   }
-  
   return <>{children}</>;
 };
 
 // Protected Route Component for Student-only pages
 const StudentRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, loading } = useDashboard();
-  
-  // Wait for user profile to load before checking role
   if (loading || (isAuthenticated && !user)) return null;
-  
   if (!isAuthenticated || user?.role !== 'student') {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getRoleDashboard(user?.role)} replace />;
   }
-  
   return <>{children}</>;
 };
 
 // Protected Route Component for Teacher-only pages
 const TeacherRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, loading } = useDashboard();
-  
-  // Wait for user profile to load before checking role
   if (loading || (isAuthenticated && !user)) return null;
-  
   if (!isAuthenticated || user?.role !== 'teacher') {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getRoleDashboard(user?.role)} replace />;
   }
-  
   return <>{children}</>;
 };
 
@@ -169,47 +160,33 @@ const AdminManagerRoute = ({ children }: { children: React.ReactNode }) => {
 // Protected Route Component for Exam Evaluation — teachers, admins, managers, coordinators
 const EvaluatorRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, loading } = useDashboard();
-
-  // Wait for user profile to load before checking role
   if (loading || (isAuthenticated && !user)) return null;
-
   const allowed = ['admin', 'teacher', 'manager', 'coordinator'];
   if (!isAuthenticated || !user?.role || !allowed.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getRoleDashboard(user?.role)} replace />;
   }
-
   return <>{children}</>;
 };
 
 // Protected Route for Leaderboard — all non-student staff roles
 const LeaderboardRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, loading } = useDashboard();
-
   if (loading || (isAuthenticated && !user)) return null;
-
   const allowed = ['admin', 'manager', 'teacher', 'coordinator', 'student_manager', 'course_manager'];
   if (!isAuthenticated || !user?.role || !allowed.includes(user.role)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={getRoleDashboard(user?.role)} replace />;
   }
-
   return <>{children}</>;
 };
 
 // Smart index redirect: waits for user profile before deciding which dashboard to show
 const DefaultRedirect = () => {
   const { user, isAuthenticated, loading } = useDashboard();
-
-  // While authenticated but user profile not yet loaded, render nothing (brief flash-free wait)
   if (isAuthenticated && (loading || !user)) return null;
-
-  if (!isAuthenticated) return <Navigate to="/dashboard" replace />;
-  if (user?.role === 'student') return <Navigate to="/student-dashboard" replace />;
-  if (user?.role === 'teacher') return <Navigate to="/teacher-dashboard" replace />;
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to={getRoleDashboard(isAuthenticated ? user?.role : undefined)} replace />;
 };
 
 const AppRoutes = () => {
-
   return (
     <Routes>
       {/* Public routes - OUTSIDE DashboardLayout for clean display */}
