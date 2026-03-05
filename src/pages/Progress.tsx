@@ -1,442 +1,603 @@
-import { useState } from 'react';
-import { Search, ChevronDown, ChevronUp, Award, Edit2 } from 'lucide-react';
-import Card from '../components/ui/Card';
+// src/pages/Progress.tsx
+// Student Leaderboard — production grade
+// Shows enrolled courses; clicking reveals Top-3, student's rank, per-exam breakdown.
+// Only 1-time limited exams count.
 
-interface Student {
-  id: number;
-  name: string;
-  email: string;
-  score: number;
-  progress: number;
-  avatar: string;
-  course?: string;
-  notes?: string;
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Trophy, Medal, Award, ChevronDown, ChevronUp, Search,
+  BookOpen, Clock, Target, TrendingUp, RefreshCw, X,
+  Star, BarChart2, User, Filter, Loader
+} from 'lucide-react';
+import { useDashboard } from '../contexts/DashboardContext';
+import {
+  leaderboardService,
+  CourseLeaderboardData,
+  CourseLeaderboardEntry,
+  ExamLeaderboardData,
+} from '../services/leaderboardService';
+import { Enrollment } from '../services/courseEnrollmentService';
+import { Course } from '../services/courseService';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface CourseSummary {
+  enrollment: Enrollment;
+  course: Course;
+  courseLeaderboard: CourseLeaderboardData;
+  myRank: number | null;
+  myPercentage: number | null;
+  top3: CourseLeaderboardEntry[];
 }
 
-const Progress = () => {
-  const [selectedCourse, setSelectedCourse] = useState('all');
-  const [sortField, setSortField] = useState<'rank' | 'name' | 'score' | 'progress'>('rank');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
-  const [students, setStudents] = useState<Student[]>([
-    { id: 1, name: 'John Smith', email: 'john@example.com', score: 92, progress: 85, avatar: 'JS', course: 'Mathematics 101' },
-    { id: 2, name: 'Emily Johnson', email: 'emily@example.com', score: 88, progress: 78, avatar: 'EJ', course: 'Advanced Physics' },
-    { id: 3, name: 'Michael Brown', email: 'michael@example.com', score: 95, progress: 90, avatar: 'MB', course: 'Mathematics 101' },
-    { id: 4, name: 'Sophia Williams', email: 'sophia@example.com', score: 84, progress: 72, avatar: 'SW', course: 'Introduction to Biology' },
-    { id: 5, name: 'Daniel Jones', email: 'daniel@example.com', score: 91, progress: 88, avatar: 'DJ', course: 'Computer Science Fundamentals' },
-    { id: 6, name: 'Olivia Davis', email: 'olivia@example.com', score: 87, progress: 76, avatar: 'OD', course: 'Advanced Physics' },
-    { id: 7, name: 'Alexander Miller', email: 'alexander@example.com', score: 90, progress: 82, avatar: 'AM', course: 'Mathematics 101' },
-    { id: 8, name: 'Emma Wilson', email: 'emma@example.com', score: 89, progress: 79, avatar: 'EW', course: 'Introduction to Biology' },
-    { id: 9, name: 'James Taylor', email: 'james@example.com', score: 93, progress: 87, avatar: 'JT', course: 'Computer Science Fundamentals' },
-    { id: 10, name: 'Ava Martinez', email: 'ava@example.com', score: 86, progress: 75, avatar: 'AM', course: 'Advanced Physics' },
-  ]);
-  
-  const courses = [
-    { id: 'all', name: 'All Courses' },
-    { id: 'math101', name: 'Mathematics 101' },
-    { id: 'physics', name: 'Advanced Physics' },
-    { id: 'biology', name: 'Introduction to Biology' },
-    { id: 'cs', name: 'Computer Science Fundamentals' },
-  ];
-  
-  const handleSort = (field: 'rank' | 'name' | 'score' | 'progress') => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
-  };
-  
-  const getSortIcon = (field: 'rank' | 'name' | 'score' | 'progress') => {
-    if (sortField !== field) return null;
-    return sortDirection === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />;
-  };
-  
-  const filteredStudents = students.filter(student => {
-    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         student.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCourse = selectedCourse === 'all' || 
-                         (student.course && student.course.toLowerCase().includes(courses.find(c => c.id === selectedCourse)?.name.toLowerCase() || ''));
-    return matchesSearch && matchesCourse;
-  });
-  
-  const sortedStudents = [...filteredStudents].sort((a, b) => {
-    if (sortField === 'rank') {
-      return sortDirection === 'asc' ? a.score - b.score : b.score - a.score;
-    } else if (sortField === 'name') {
-      return sortDirection === 'asc' 
-        ? a.name.localeCompare(b.name) 
-        : b.name.localeCompare(a.name);
-    } else if (sortField === 'score') {
-      return sortDirection === 'asc' ? a.score - b.score : b.score - a.score;
-    } else { // progress
-      return sortDirection === 'asc' ? a.progress - b.progress : b.progress - a.progress;
-    }
-  });
-  
-  const handleUpdateProgress = (student: Student) => {
-    setCurrentStudent(student);
-    setShowModal(true);
-  };
+// ─── Medal helpers ────────────────────────────────────────────────────────────
+const RANK_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
+const RANK_LABELS = ['1st', '2nd', '3rd'];
 
-  const handleSaveProgress = (updatedData: Partial<Student>) => {
-    if (currentStudent) {
-      setStudents(prevStudents => 
-        prevStudents.map(student => 
-          student.id === currentStudent.id 
-            ? { ...student, ...updatedData }
-            : student
-        )
-      );
-      setShowModal(false);
-      setCurrentStudent(null);
-    }
-  };
+function RankBadge({ rank }: { rank: number }) {
+  if (rank === 1) return <Trophy size={16} color="#FFD700" />;
+  if (rank === 2) return <Medal size={16} color="#C0C0C0" />;
+  if (rank === 3) return <Award size={16} color="#CD7F32" />;
+  return <span style={{ color: '#888', fontWeight: 700, fontSize: 13 }}>#{rank}</span>;
+}
 
+function Avatar({ name, size = 38 }: { name: string; size?: number }) {
+  const initials = name.split(' ').map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b'];
+  const color = colors[name.charCodeAt(0) % colors.length];
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Progress & Leaderboard</h1>
-      
-      <Card>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div className="relative flex-1 max-w-xs">
-            <input
-              type="text"
-              placeholder="Search students..."
-              className="w-full bg-background-800 text-white rounded-lg py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <Search size={18} className="absolute left-3 top-2.5 text-gray-400" />
-          </div>
-          
-          <div className="w-full md:w-auto">
-            <select
-              value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
-              className="w-full bg-background-800 text-white rounded-lg py-2 px-3 pr-9 focus:outline-none focus:ring-2 focus:ring-primary-500 appearance-none"
-              style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%236b7280%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
-            >
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        
-        <div className="bg-card-light rounded-lg overflow-hidden mb-6">
-          <div className="p-5 flex items-center justify-between">
-            <h3 className="text-white font-medium">Course Leaderboard</h3>
-            <div className="text-sm text-gray-400">
-              {selectedCourse !== 'all' ? 
-                `Showing results for ${courses.find(c => c.id === selectedCourse)?.name}` : 
-                'Showing results for all courses'}
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left border-b border-background-800">
-                  <th 
-                    className="p-4 text-xs uppercase text-gray-400 font-medium cursor-pointer"
-                    onClick={() => handleSort('rank')}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Rank</span>
-                      {getSortIcon('rank')}
-                    </div>
-                  </th>
-                  <th 
-                    className="p-4 text-xs uppercase text-gray-400 font-medium cursor-pointer"
-                    onClick={() => handleSort('name')}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Student</span>
-                      {getSortIcon('name')}
-                    </div>
-                  </th>
-                  <th 
-                    className="p-4 text-xs uppercase text-gray-400 font-medium cursor-pointer"
-                    onClick={() => handleSort('score')}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Score</span>
-                      {getSortIcon('score')}
-                    </div>
-                  </th>
-                  <th 
-                    className="p-4 text-xs uppercase text-gray-400 font-medium cursor-pointer"
-                    onClick={() => handleSort('progress')}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Progress</span>
-                      {getSortIcon('progress')}
-                    </div>
-                  </th>
-                  <th className="p-4 text-xs uppercase text-gray-400 font-medium">Course</th>
-                  <th className="p-4 text-xs uppercase text-gray-400 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedStudents.map((student, index) => (
-                  <tr key={student.id} className="border-b border-background-800 last:border-0">
-                    <td className="p-4">
-                      <div className="flex items-center">
-                        {index < 3 ? (
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center ${
-                            index === 0 ? 'bg-yellow-500' : 
-                            index === 1 ? 'bg-gray-400' : 'bg-amber-700'
-                          }`}>
-                            <Award size={16} className="text-white" />
-                          </div>
-                        ) : (
-                          <div className="h-7 w-7 rounded-full bg-background-700 flex items-center justify-center">
-                            <span className="text-xs text-white">{index + 1}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary-700 flex items-center justify-center">
-                          <span className="text-white font-medium">{student.avatar}</span>
-                        </div>
-                        <div>
-                          <p className="text-white">{student.name}</p>
-                          <p className="text-xs text-gray-400">{student.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-1">
-                        <div className="h-5 w-5 rounded-full bg-primary-500 flex items-center justify-center">
-                          <span className="text-xs text-white">{index < 3 ? index + 1 : ''}</span>
-                        </div>
-                        <span className="text-white font-medium">{student.score}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full max-w-[120px] bg-background-800 rounded-full h-2">
-                          <div
-                            className="h-2 rounded-full bg-accent-500"
-                            style={{ width: `${student.progress}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-white">{student.progress}%</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-xs bg-background-700 px-2 py-1 rounded text-primary-300">
-                        {student.course || 'Not assigned'}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <button
-                        onClick={() => handleUpdateProgress(student)}
-                        className="flex items-center gap-1 text-sm bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded transition-colors"
-                      >
-                        <Edit2 size={14} />
-                        <span>Update</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          
-          {sortedStudents.length === 0 && (
-            <div className="py-8 text-center text-gray-400">
-              No students found matching your search criteria.
-            </div>
-          )}
-        </div>
-        
-        <div className="flex justify-between items-center text-sm text-gray-400">
-          <div>Showing {sortedStudents.length} of {students.length} students</div>
-          <div>Last updated: {new Date().toLocaleDateString()}</div>
-        </div>
-      </Card>
-      
-      {showModal && currentStudent && (
-        <ProgressUpdateModal
-          student={currentStudent}
-          courses={courses}
-          onClose={() => {
-            setShowModal(false);
-            setCurrentStudent(null);
-          }}
-          onSave={handleSaveProgress}
-        />
-      )}
+    <div style={{
+      width: size, height: size, borderRadius: '50%',
+      background: `${color}33`, border: `1.5px solid ${color}55`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontWeight: 700, fontSize: size * 0.35, color, flexShrink: 0,
+    }}>
+      {initials || '?'}
     </div>
   );
-};
-
-interface ProgressUpdateModalProps {
-  student: Student;
-  courses: { id: string; name: string }[];
-  onClose: () => void;
-  onSave: (data: Partial<Student>) => void;
 }
 
-const ProgressUpdateModal = ({ student, courses, onClose, onSave }: ProgressUpdateModalProps) => {
-  const [formData, setFormData] = useState({
-    score: student.score,
-    progress: student.progress,
-    course: student.course || '',
-    notes: student.notes || ''
-  });
+function PercentBar({ value, color = '#6366f1' }: { value: number; color?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+      <div style={{ flex: 1, height: 6, background: '#ffffff12', borderRadius: 99, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 99, transition: 'width 0.6s ease' }} />
+      </div>
+      <span style={{ fontSize: 12, color: '#aaa', minWidth: 42, textAlign: 'right' }}>{value.toFixed(1)}%</span>
+    </div>
+  );
+}
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
+// ─── Course Card ──────────────────────────────────────────────────────────────
+function CourseCard({ summary, onOpen }: { summary: CourseSummary; onOpen: () => void }) {
+  const { course, myRank, myPercentage, top3, courseLeaderboard } = summary;
 
-  const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    setFormData(prev => ({ ...prev, progress: value }));
-  };
+  const rankColor = myRank === 1 ? '#FFD700' : myRank === 2 ? '#C0C0C0' : myRank === 3 ? '#CD7F32' : '#6366f1';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-      <div className="bg-card w-full max-w-md rounded-xl overflow-hidden shadow-lg">
-        <div className="p-5 border-b border-background-800">
-          <h3 className="text-white font-medium">Update Student Progress</h3>
+    <div
+      onClick={onOpen}
+      style={{
+        background: '#111', border: '1px solid rgba(255,255,255,0.07)',
+        borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+        transition: 'border-color 0.2s, transform 0.2s',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(99,102,241,0.4)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLDivElement).style.transform = 'none'; }}
+    >
+      {/* Thumbnail */}
+      <div style={{ position: 'relative', height: 130, background: '#1a1a2e', overflow: 'hidden' }}>
+        {(course.thumbnailUrl || course.thumbnail) ? (
+          <img
+            src={course.thumbnailUrl ?? course.thumbnail}
+            alt={course.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <BookOpen size={40} color="#333" />
+          </div>
+        )}
+        {course.class && (
+          <span style={{
+            position: 'absolute', top: 10, left: 10,
+            background: 'rgba(99,102,241,0.85)', color: '#fff',
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+          }}>
+            Class {course.class}
+          </span>
+        )}
+        {myRank !== null && myRank <= 3 && (
+          <div style={{
+            position: 'absolute', top: 10, right: 10,
+            background: RANK_COLORS[myRank - 1] + '22',
+            border: `1px solid ${RANK_COLORS[myRank - 1]}`,
+            borderRadius: 8, padding: '3px 8px', display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <Trophy size={12} color={RANK_COLORS[myRank - 1]} />
+            <span style={{ color: RANK_COLORS[myRank - 1], fontSize: 11, fontWeight: 700 }}>{RANK_LABELS[myRank - 1]}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: '14px 16px' }}>
+        <h3 style={{ color: '#fff', fontSize: 14, fontWeight: 700, marginBottom: 4, lineHeight: 1.4 }}>{course.title}</h3>
+
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: '#666' }}>{course.category}</span>
+          <span style={{ fontSize: 11, color: '#444' }}>·</span>
+          <span style={{ fontSize: 11, color: '#555' }}>{courseLeaderboard.totalExams} exam{courseLeaderboard.totalExams !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 11, color: '#444' }}>·</span>
+          <span style={{ fontSize: 11, color: '#555' }}>{courseLeaderboard.totalParticipants} students</span>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-5">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-12 w-12 rounded-full bg-primary-700 flex items-center justify-center">
-              <span className="text-white font-medium">{student.avatar}</span>
-            </div>
-            <div>
-              <p className="text-white font-medium">{student.name}</p>
-              <p className="text-sm text-gray-400">{student.email}</p>
+
+        {/* Top 3 mini */}
+        {top3.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <p style={{ fontSize: 10, color: '#555', fontWeight: 600, letterSpacing: '0.05em', marginBottom: 6 }}>TOP 3</p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {top3.map((entry, i) => (
+                <div key={entry.studentId} style={{
+                  flex: 1, background: '#ffffff08', borderRadius: 8, padding: '6px 8px',
+                  border: `1px solid ${RANK_COLORS[i]}22`,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                }}>
+                  <span style={{ fontSize: 9, color: RANK_COLORS[i], fontWeight: 700 }}>{RANK_LABELS[i]}</span>
+                  <Avatar name={entry.studentName} size={28} />
+                  <span style={{ fontSize: 9, color: '#ccc', textAlign: 'center', lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {entry.studentName.split(' ')[0]}
+                  </span>
+                  <span style={{ fontSize: 9, color: '#888' }}>{entry.percentage.toFixed(0)}%</span>
+                </div>
+              ))}
             </div>
           </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Score</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={formData.score}
-                onChange={(e) => setFormData(prev => ({ ...prev, score: parseInt(e.target.value) || 0 }))}
-                className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+        )}
+
+        {/* My rank */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: '#ffffff06', borderRadius: 8, padding: '8px 10px',
+          border: '1px solid rgba(255,255,255,0.05)',
+        }}>
+          {myRank !== null ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <RankBadge rank={myRank} />
+                <span style={{ fontSize: 12, color: rankColor, fontWeight: 700 }}>
+                  Rank #{myRank}
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: '#aaa' }}>{myPercentage?.toFixed(1)}%</span>
+            </>
+          ) : (
+            <span style={{ fontSize: 11, color: '#555' }}>Not yet ranked — take an exam!</span>
+          )}
+        </div>
+
+        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>View Details →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Detail Modal ─────────────────────────────────────────────────────────────
+function CourseDetailModal({
+  summary, studentId, onClose,
+}: {
+  summary: CourseSummary;
+  studentId: string;
+  onClose: () => void;
+}) {
+  const { course, courseLeaderboard, myRank, myPercentage, top3 } = summary;
+  const [tab, setTab] = useState<'overview' | 'exams'>('overview');
+
+  const myEntry = courseLeaderboard.entries.find(e => e.studentId === studentId);
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: '#0e0e0e', border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 18, width: '100%', maxWidth: 640,
+        maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <BookOpen size={18} color="#6366f1" />
+          <div style={{ flex: 1 }}>
+            <h2 style={{ color: '#fff', fontSize: 15, fontWeight: 700 }}>{course.title}</h2>
+            <p style={{ color: '#555', fontSize: 11, marginTop: 1 }}>{course.category}{course.class ? ` · Class ${course.class}` : ''}</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4 }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: 'flex', gap: 1, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          {[
+            { icon: Trophy, label: 'My Rank', value: myRank !== null ? `#${myRank}` : '—', color: myRank && myRank <= 3 ? RANK_COLORS[myRank - 1] : '#6366f1' },
+            { icon: Target, label: 'My Score', value: myPercentage !== null ? `${myPercentage.toFixed(1)}%` : '—', color: '#10b981' },
+            { icon: BarChart2, label: 'Total Exams', value: courseLeaderboard.totalExams, color: '#f59e0b' },
+            { icon: User, label: 'Participants', value: courseLeaderboard.totalParticipants, color: '#8b5cf6' },
+          ].map(({ icon: Icon, label, value, color }) => (
+            <div key={label} style={{ flex: 1, padding: '12px 8px', textAlign: 'center', background: '#111' }}>
+              <Icon size={14} color={color} style={{ marginBottom: 4 }} />
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{value}</div>
+              <div style={{ fontSize: 10, color: '#555' }}>{label}</div>
             </div>
-            
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          {(['overview', 'exams'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                flex: 1, padding: '10px', border: 'none', background: 'none', cursor: 'pointer',
+                color: tab === t ? '#6366f1' : '#555',
+                borderBottom: tab === t ? '2px solid #6366f1' : '2px solid transparent',
+                fontWeight: 600, fontSize: 12, textTransform: 'capitalize',
+              }}
+            >
+              {t === 'overview' ? '🏆 Course Leaderboard' : '📊 Exam Breakdown'}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+          {tab === 'overview' && (
             <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Progress ({formData.progress}%)
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={formData.progress}
-                onChange={handleProgressChange}
-                className="w-full h-2 bg-background-800 rounded-lg appearance-none cursor-pointer slider"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>0%</span>
-                <span>25%</span>
-                <span>50%</span>
-                <span>75%</span>
-                <span>100%</span>
+              {/* Top 3 podium */}
+              {top3.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ fontSize: 11, color: '#555', fontWeight: 700, marginBottom: 12, letterSpacing: '0.05em' }}>🥇 TOP 3 STUDENTS</p>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+                    {/* Reorder: 2nd, 1st, 3rd for podium effect */}
+                    {[top3[1], top3[0], top3[2]].map((entry, idx) => {
+                      if (!entry) return <div key={idx} style={{ flex: 1 }} />;
+                      const podiumRank = idx === 1 ? 0 : idx === 0 ? 1 : 2;
+                      const heights = [100, 130, 85];
+                      return (
+                        <div key={entry.studentId} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                          <Avatar name={entry.studentName} size={idx === 1 ? 48 : 36} />
+                          <p style={{ fontSize: 11, color: '#ccc', fontWeight: 600, textAlign: 'center', maxWidth: '100%' }}>
+                            {entry.studentName.split(' ').slice(0, 2).join(' ')}
+                          </p>
+                          <p style={{ fontSize: 11, color: '#888' }}>{entry.percentage.toFixed(1)}%</p>
+                          <div style={{
+                            width: '100%', height: heights[idx],
+                            background: `${RANK_COLORS[podiumRank]}18`,
+                            border: `1px solid ${RANK_COLORS[podiumRank]}44`,
+                            borderRadius: '8px 8px 0 0',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <span style={{ fontSize: 22 }}>
+                              {podiumRank === 0 ? '🥇' : podiumRank === 1 ? '🥈' : '🥉'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* My position */}
+              {myEntry && (
+                <div style={{
+                  background: '#6366f115', border: '1px solid #6366f133',
+                  borderRadius: 12, padding: '14px 16px', marginBottom: 16,
+                }}>
+                  <p style={{ fontSize: 11, color: '#6366f1', fontWeight: 700, marginBottom: 8 }}>YOUR POSITION</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Avatar name={myEntry.studentName} size={40} />
+                    <div style={{ flex: 1 }}>
+                      <p style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{myEntry.studentName}</p>
+                      <PercentBar value={myEntry.percentage} color="#6366f1" />
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: '#6366f1' }}>#{myEntry.rank}</p>
+                      <p style={{ fontSize: 10, color: '#555' }}>of {courseLeaderboard.totalParticipants}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {courseLeaderboard.totalExams === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: '#555' }}>
+                  <Trophy size={32} color="#333" style={{ margin: '0 auto 10px' }} />
+                  <p>No leaderboard data yet.</p>
+                  <p style={{ fontSize: 12, marginTop: 4 }}>Complete a 1-time exam to appear here.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'exams' && (
+            <ExamBreakdownTab
+              breakdowns={courseLeaderboard.examBreakdowns}
+              studentId={studentId}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExamBreakdownTab({
+  breakdowns, studentId,
+}: {
+  breakdowns: ExamLeaderboardData[];
+  studentId: string;
+}) {
+  if (!breakdowns.length) {
+    return (
+      <div style={{ textAlign: 'center', padding: 40, color: '#555' }}>
+        <BarChart2 size={32} color="#333" style={{ margin: '0 auto 10px' }} />
+        <p>No exam data available.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {breakdowns.map(exam => {
+        const myEntry = exam.entries.find(e => e.studentId === studentId);
+        const topEntry = exam.entries.find(e => e.rank === 1);
+        const rankColor = myEntry
+          ? (myEntry.rank === 1 ? '#FFD700' : myEntry.rank === 2 ? '#C0C0C0' : myEntry.rank === 3 ? '#CD7F32' : '#6366f1')
+          : '#555';
+
+        return (
+          <div key={exam.contentId} style={{
+            background: '#111', border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: 12, padding: '14px 16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: '#fff', fontWeight: 700, fontSize: 13, marginBottom: 2 }}>{exam.examTitle}</p>
+                <p style={{ fontSize: 11, color: '#555' }}>{exam.totalParticipants} participants · Max {exam.maxMarks} marks</p>
+              </div>
+              {myEntry ? (
+                <div style={{ textAlign: 'right', marginLeft: 12 }}>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: rankColor }}>#{myEntry.rank}</p>
+                  <p style={{ fontSize: 10, color: '#555' }}>my rank</p>
+                </div>
+              ) : (
+                <span style={{ fontSize: 11, color: '#444', marginLeft: 12 }}>Not attempted</span>
+              )}
+            </div>
+
+            {myEntry && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', marginBottom: 2 }}>
+                  <span>Your score: <strong style={{ color: '#ccc' }}>{myEntry.totalMarks}/{myEntry.maxMarks}</strong></span>
+                  {topEntry && topEntry.studentId !== studentId && (
+                    <span>Top score: <strong style={{ color: '#FFD700' }}>{topEntry.totalMarks}/{topEntry.maxMarks}</strong></span>
+                  )}
+                </div>
+                <PercentBar value={myEntry.percentage} color={rankColor} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+const Progress = () => {
+  const { user } = useDashboard();
+  const [summaries, setSummaries] = useState<CourseSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filterClass, setFilterClass] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [selectedSummary, setSelectedSummary] = useState<CourseSummary | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (force = false) => {
+    if (!user?.uid) return;
+    try {
+      setLoading(true); setError(null);
+      if (force) leaderboardService.invalidateCache?.();
+      const data = await leaderboardService.getStudentLeaderboardSummaries(user.uid);
+      setSummaries(data);
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to load leaderboard');
+    } finally {
+      setLoading(false); setRefreshing(false);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await load(true);
+  };
+
+  const classes = useMemo(() => {
+    const s = new Set(summaries.map(s => s.course.class).filter(Boolean));
+    return [...s].sort();
+  }, [summaries]);
+
+  const categories = useMemo(() => {
+    const s = new Set(summaries.map(s => s.course.category).filter(Boolean));
+    return [...s].sort();
+  }, [summaries]);
+
+  const filtered = useMemo(() => {
+    return summaries.filter(s => {
+      if (search && !s.course.title.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterClass && s.course.class !== filterClass) return false;
+      if (filterCategory && s.course.category !== filterCategory) return false;
+      return true;
+    });
+  }, [summaries, search, filterClass, filterCategory]);
+
+  const stats = useMemo(() => {
+    const ranked = summaries.filter(s => s.myRank !== null);
+    const top3Count = summaries.filter(s => s.myRank !== null && s.myRank <= 3).length;
+    const avgPct = ranked.length
+      ? ranked.reduce((acc, s) => acc + (s.myPercentage ?? 0), 0) / ranked.length
+      : 0;
+    return { totalCourses: summaries.length, ranked: ranked.length, top3Count, avgPct };
+  }, [summaries]);
+
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 12 }}>
+      <Loader size={32} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
+      <p style={{ color: '#555' }}>Loading your leaderboard...</p>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+
+  if (error) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, gap: 12 }}>
+      <p style={{ color: '#ef4444' }}>{error}</p>
+      <button onClick={() => load()} style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 8, cursor: 'pointer' }}>
+        Retry
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ color: '#fff', minHeight: '100vh', padding: '0 0 40px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>🏆 My Leaderboard</h1>
+          <p style={{ color: '#555', fontSize: 13, marginTop: 4 }}>Track your performance across all enrolled courses</p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, background: '#ffffff0a',
+            border: '1px solid rgba(255,255,255,0.1)', color: '#aaa',
+            borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 12,
+          }}
+        >
+          <RefreshCw size={13} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Stats */}
+      {summaries.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
+          {[
+            { icon: BookOpen, label: 'Enrolled Courses', value: stats.totalCourses, color: '#6366f1' },
+            { icon: TrendingUp, label: 'Courses Ranked', value: stats.ranked, color: '#10b981' },
+            { icon: Trophy, label: 'Top 3 Finishes', value: stats.top3Count, color: '#FFD700' },
+            { icon: Target, label: 'Avg. Score', value: `${stats.avgPct.toFixed(1)}%`, color: '#f59e0b' },
+          ].map(({ icon: Icon, label, value, color }) => (
+            <div key={label} style={{
+              background: '#111', border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 12, padding: '14px 16px',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon size={17} color={color} />
+              </div>
+              <div>
+                <p style={{ fontSize: 20, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{value}</p>
+                <p style={{ fontSize: 10, color: '#555', marginTop: 2 }}>{label}</p>
               </div>
             </div>
-            
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Course</label>
-              <select
-                value={formData.course}
-                onChange={(e) => setFormData(prev => ({ ...prev, course: e.target.value }))}
-                className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">Select a course</option>
-                {courses.filter(course => course.id !== 'all').map((course) => (
-                  <option key={course.id} value={course.name}>
-                    {course.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Notes</label>
-              <textarea
-                placeholder="Add any notes about the student's progress..."
-                rows={3}
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              ></textarea>
-            </div>
-          </div>
-          
-          <div className="flex justify-end gap-3 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-background-800 hover:bg-background-700 text-white rounded transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors"
-            >
-              Update Progress
-            </button>
-          </div>
-        </form>
+          ))}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#555' }} />
+          <input
+            placeholder="Search courses..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%', background: '#111', border: '1px solid rgba(255,255,255,0.07)',
+              borderRadius: 8, padding: '8px 10px 8px 32px', color: '#fff', fontSize: 13,
+              outline: 'none', boxSizing: 'border-box',
+            }}
+          />
+        </div>
+        {classes.length > 0 && (
+          <select value={filterClass} onChange={e => setFilterClass(e.target.value)}
+            style={{ background: '#111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px', color: filterClass ? '#fff' : '#555', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
+            <option value="">All Classes</option>
+            {classes.map(c => <option key={c} value={c}>Class {c}</option>)}
+          </select>
+        )}
+        {categories.length > 0 && (
+          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+            style={{ background: '#111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px', color: filterCategory ? '#fff' : '#555', fontSize: 12, outline: 'none', cursor: 'pointer' }}>
+            <option value="">All Categories</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+        {(search || filterClass || filterCategory) && (
+          <button onClick={() => { setSearch(''); setFilterClass(''); setFilterCategory(''); }}
+            style={{ background: 'none', border: '1px solid #ef444433', color: '#ef4444', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontSize: 12 }}>
+            <X size={12} style={{ marginRight: 4 }} />Clear
+          </button>
+        )}
       </div>
-      
-      <style jsx>{`
-        .slider::-webkit-slider-thumb {
-          appearance: none;
-          height: 20px;
-          width: 20px;
-          border-radius: 50%;
-          background: var(--color-primary, #6366f1);
-          cursor: pointer;
-          border: 2px solid #ffffff;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-        
-        .slider::-moz-range-thumb {
-          height: 20px;
-          width: 20px;
-          border-radius: 50%;
-          background: var(--color-primary, #6366f1);
-          cursor: pointer;
-          border: 2px solid #ffffff;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-        
-        .slider::-webkit-slider-track {
-          height: 8px;
-          border-radius: 4px;
-          background: #374151;
-        }
-        
-        .slider::-moz-range-track {
-          height: 8px;
-          border-radius: 4px;
-          background: #374151;
-        }
-      `}</style>
+
+      {/* Course Grid */}
+      {summaries.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#555' }}>
+          <BookOpen size={40} color="#333" style={{ margin: '0 auto 12px' }} />
+          <p style={{ fontSize: 16, fontWeight: 600, color: '#444' }}>No enrolled courses</p>
+          <p style={{ fontSize: 13, marginTop: 4 }}>Enroll in courses to see your leaderboard rankings.</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#555' }}>
+          <Search size={40} color="#333" style={{ margin: '0 auto 12px' }} />
+          <p>No courses match your filters.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+          {filtered.map(summary => (
+            <CourseCard
+              key={summary.course.id}
+              summary={summary}
+              onOpen={() => setSelectedSummary(summary)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selectedSummary && (
+        <CourseDetailModal
+          summary={selectedSummary}
+          studentId={user!.uid}
+          onClose={() => setSelectedSummary(null)}
+        />
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };
