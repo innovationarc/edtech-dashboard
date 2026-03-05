@@ -15,6 +15,7 @@ import {
   Timestamp,
   addDoc,
   writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -158,36 +159,65 @@ export const courseAssignmentService = {
     globalPermissions?: GlobalPermission[]
   ): Promise<string> {
     try {
+      // Query for existing assignment outside the transaction (queries can't run inside transactions)
       const existing = await this.getAssignment(teacher.uid, course.id);
 
+      let assignmentId: string;
+      let isNew: boolean;
+      let previousPermissions: CoursePermission[] = [];
+
       if (existing?.id) {
-        await this.updateAssignmentPermissions(existing.id, permissions, allowedSubjects, assignedByUser, notes, globalPermissions);
-        return existing.id;
+        // UPDATE path — use a transaction to safely read-then-write
+        assignmentId = existing.id;
+        isNew = false;
+        previousPermissions = existing.permissions || [];
+
+        const ref = doc(db, 'course_assignments', assignmentId);
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          if (!snap.exists()) throw new Error('Assignment not found');
+          tx.update(ref, {
+            permissions,
+            globalPermissions: globalPermissions !== undefined
+              ? globalPermissions
+              : (snap.data().globalPermissions || []),
+            allowedSubjects,
+            isActive: true,
+            updatedAt: Timestamp.now(),
+            updatedByUid: assignedByUser.uid,
+            updatedByUserId: assignedByUser.userId,
+            ...(notes !== undefined ? { notes } : {}),
+          });
+        });
+      } else {
+        // CREATE path — addDoc is atomic by nature (no duplicate risk)
+        isNew = true;
+        const ref = await addDoc(collection(db, 'course_assignments'), {
+          teacherUid: teacher.uid,
+          teacherUserId: teacher.userId,
+          teacherSurname: teacher.surname,
+          teacherFullName: teacher.fullName || '',
+          teacherPhone: teacher.phoneNumber || '',
+          courseId: course.id,
+          courseTitle: course.title,
+          courseCategory: course.category || '',
+          courseThumbnail: course.thumbnail || '',
+          permissions,
+          globalPermissions: globalPermissions || [],
+          allowedSubjects,
+          assignedAt: Timestamp.now(),
+          assignedByUid: assignedByUser.uid,
+          assignedByUserId: assignedByUser.userId,
+          assignedBySurname: assignedByUser.surname,
+          notes: notes || '',
+          isActive: true,
+        });
+        assignmentId = ref.id;
       }
 
-      const ref = await addDoc(collection(db, 'course_assignments'), {
-        teacherUid: teacher.uid,
-        teacherUserId: teacher.userId,
-        teacherSurname: teacher.surname,
-        teacherFullName: teacher.fullName || '',
-        teacherPhone: teacher.phoneNumber || '',
-        courseId: course.id,
-        courseTitle: course.title,
-        courseCategory: course.category || '',
-        courseThumbnail: course.thumbnail || '',
-        permissions,
-        globalPermissions: globalPermissions || [],
-        allowedSubjects,
-        assignedAt: Timestamp.now(),
-        assignedByUid: assignedByUser.uid,
-        assignedByUserId: assignedByUser.userId,
-        assignedBySurname: assignedByUser.surname,
-        notes: notes || '',
-        isActive: true,
-      });
-
-      await this._log({
-        action: 'assigned',
+      // Fire-and-forget audit log — never block the save on it
+      this._log({
+        action: isNew ? 'assigned' : 'permissions_updated',
         teacherUid: teacher.uid,
         teacherUserId: teacher.userId,
         teacherSurname: teacher.surname,
@@ -197,11 +227,14 @@ export const courseAssignmentService = {
         performedByUserId: assignedByUser.userId,
         performedBySurname: assignedByUser.surname,
         timestamp: new Date(),
-        details: `${teacher.surname} assigned to "${course.title}" with [${permissions.join(', ')}]${allowedSubjects.length ? ` — subjects: [${allowedSubjects.join(', ')}]` : ''}`,
+        details: isNew
+          ? `${teacher.surname} assigned to "${course.title}" with [${permissions.join(', ')}]${allowedSubjects.length ? ` — subjects: [${allowedSubjects.join(', ')}]` : ''}`
+          : `Permissions changed: [${previousPermissions.join(', ')}] → [${permissions.join(', ')}]`,
+        previousPermissions: isNew ? undefined : previousPermissions,
         newPermissions: permissions,
-      });
+      }).catch(console.error);
 
-      return ref.id;
+      return assignmentId;
     } catch (error: any) {
       throw new Error(error.message || 'Failed to assign teacher');
     }
@@ -220,37 +253,46 @@ export const courseAssignmentService = {
   ): Promise<void> {
     try {
       const ref = doc(db, 'course_assignments', assignmentId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) throw new Error('Assignment not found');
+      let previousPermissions: CoursePermission[] = [];
+      let teacherInfo = { uid: '', userId: '', surname: '', courseId: '', courseTitle: '' };
 
-      const old = snap.data() as CourseAssignment;
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error('Assignment not found');
+        const old = snap.data() as CourseAssignment;
+        previousPermissions = old.permissions || [];
+        teacherInfo = {
+          uid: old.teacherUid, userId: old.teacherUserId, surname: old.teacherSurname,
+          courseId: old.courseId, courseTitle: old.courseTitle,
+        };
+        tx.update(ref, {
+          permissions: newPermissions,
+          globalPermissions: globalPermissions !== undefined ? globalPermissions : (old.globalPermissions || []),
+          allowedSubjects,
+          isActive: true,
+          updatedAt: Timestamp.now(),
+          updatedByUid: updatedByUser.uid,
+          updatedByUserId: updatedByUser.userId,
+          ...(notes !== undefined ? { notes } : {}),
+        });
+      }).catch(console.error);
 
-      await updateDoc(ref, {
-        permissions: newPermissions,
-        globalPermissions: globalPermissions !== undefined ? globalPermissions : (old.globalPermissions || []),
-        allowedSubjects,
-        isActive: true,
-        updatedAt: Timestamp.now(),
-        updatedByUid: updatedByUser.uid,
-        updatedByUserId: updatedByUser.userId,
-        ...(notes !== undefined ? { notes } : {}),
-      });
-
-      await this._log({
+      // Fire-and-forget audit log
+      this._log({
         action: 'permissions_updated',
-        teacherUid: old.teacherUid,
-        teacherUserId: old.teacherUserId,
-        teacherSurname: old.teacherSurname,
-        courseId: old.courseId,
-        courseTitle: old.courseTitle,
+        teacherUid: teacherInfo.uid,
+        teacherUserId: teacherInfo.userId,
+        teacherSurname: teacherInfo.surname,
+        courseId: teacherInfo.courseId,
+        courseTitle: teacherInfo.courseTitle,
         performedByUid: updatedByUser.uid,
         performedByUserId: updatedByUser.userId,
         performedBySurname: updatedByUser.surname,
         timestamp: new Date(),
-        details: `Permissions changed: [${old.permissions?.join(', ')}] → [${newPermissions.join(', ')}]`,
-        previousPermissions: old.permissions,
+        details: `Permissions changed: [${previousPermissions.join(', ')}] → [${newPermissions.join(', ')}]`,
+        previousPermissions,
         newPermissions,
-      });
+      }).catch(console.error);
     } catch (error: any) {
       throw new Error(error.message || 'Failed to update permissions');
     }
@@ -271,7 +313,8 @@ export const courseAssignmentService = {
       const data = snap.data() as CourseAssignment;
       await deleteDoc(ref);
 
-      await this._log({
+      // Fire-and-forget audit log
+      this._log({
         action: 'unassigned',
         teacherUid: data.teacherUid,
         teacherUserId: data.teacherUserId,
@@ -285,7 +328,7 @@ export const courseAssignmentService = {
         details: `${data.teacherSurname} removed from "${data.courseTitle}"`,
         previousPermissions: data.permissions,
         newPermissions: [],
-      });
+      }).catch(console.error);
     } catch (error: any) {
       throw new Error(error.message || 'Failed to revoke access');
     }
@@ -312,7 +355,7 @@ export const courseAssignmentService = {
         updatedByUserId: byUser.userId,
       });
 
-      await this._log({
+      this._log({
         action: isActive ? 'reactivated' : 'deactivated',
         teacherUid: data.teacherUid,
         teacherUserId: data.teacherUserId,
@@ -324,7 +367,7 @@ export const courseAssignmentService = {
         performedBySurname: byUser.surname,
         timestamp: new Date(),
         details: `Access for "${data.courseTitle}" was ${isActive ? 'reactivated' : 'deactivated'} for ${data.teacherSurname}`,
-      });
+      }).catch(console.error);
     } catch (error: any) {
       throw new Error(error.message || 'Failed to toggle status');
     }
@@ -345,7 +388,7 @@ export const courseAssignmentService = {
       const existing = await this.getTeacherAssignments(teacher.uid);
 
       if (existing.length > 0) {
-        // Update globalPermissions on every existing assignment for this teacher
+        // Batch-update globalPermissions on every existing assignment for this teacher
         const batch = writeBatch(db);
         for (const a of existing) {
           if (!a.id) continue;
@@ -358,7 +401,7 @@ export const courseAssignmentService = {
         }
         await batch.commit();
       } else {
-        // No assignments yet — create a sentinel record keyed to '__global__'
+        // No assignments yet — upsert a sentinel record keyed to '__global__'
         const sentinelRef = await this.getAssignment(teacher.uid, '__global__');
         if (sentinelRef?.id) {
           await updateDoc(doc(db, 'course_assignments', sentinelRef.id), {
@@ -391,7 +434,8 @@ export const courseAssignmentService = {
         }
       }
 
-      await this._log({
+      // Fire-and-forget audit log
+      this._log({
         action: 'permissions_updated',
         teacherUid: teacher.uid,
         teacherUserId: teacher.userId,
@@ -403,7 +447,7 @@ export const courseAssignmentService = {
         performedBySurname: byUser.surname,
         timestamp: new Date(),
         details: `Global permissions updated: [${globalPermissions.join(', ')}]`,
-      });
+      }).catch(console.error);
     } catch (error: any) {
       throw new Error(error.message || 'Failed to save global permissions');
     }
@@ -457,7 +501,7 @@ export const courseAssignmentService = {
 
       await batch.commit();
 
-      await this._log({
+      this._log({
         action: 'assigned',
         teacherUid: teacher.uid,
         teacherUserId: teacher.userId,
@@ -469,7 +513,7 @@ export const courseAssignmentService = {
         performedBySurname: byUser.surname,
         timestamp: new Date(),
         details: `Bulk: ${teacher.surname} assigned to ${courses.length} courses`,
-      });
+      }).catch(console.error);
     } catch (error: any) {
       throw new Error(error.message || 'Bulk assignment failed');
     }
