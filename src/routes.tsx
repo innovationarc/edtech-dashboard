@@ -42,7 +42,7 @@ import ManageAdmin from './pages/ManageAdmin';
 import CouponManagement from './pages/CouponManagement';
 
 // Coming Soon Management
-import ComingSoonManagement from './pages/admin/ComingSoonManagement';
+import ComingSoonManagement from './pages/ComingSoonManagement';
 
 // NEW: Course Assignment Management
 import CourseAssignment from './pages/CourseAssignment';
