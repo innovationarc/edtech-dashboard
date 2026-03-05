@@ -455,15 +455,14 @@ const ComingSoon = () => {
   };
 
   const handleCancelEarlyAccess = async (featureId: string, requestId: string) => {
-    // Optimistic update
+    // Optimistic update — remove from map immediately so button resets
     setEarlyAccessMap(prev => {
       const next = { ...prev };
-      if (next[featureId]) next[featureId] = { ...next[featureId], status: 'cancelled' };
+      delete next[featureId];
       return next;
     });
     try {
       await comingSoonService.cancelEarlyAccess(requestId);
-      refreshEarlyAccessMap(user!.uid);
     } catch {
       // Revert on failure
       refreshEarlyAccessMap(user!.uid);
