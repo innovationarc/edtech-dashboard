@@ -331,6 +331,85 @@ export const courseAssignmentService = {
   },
 
   /**
+   * Save global permissions (course_creation, task_creation_global) for a teacher.
+   * Updates globalPermissions on ALL existing assignments for that teacher.
+   * If the teacher has no assignments yet, creates a sentinel record with courseId='__global__'
+   * so the global flags are persisted independently.
+   */
+  async saveGlobalPermissions(
+    teacher: { uid: string; userId: string; surname: string; fullName?: string; phoneNumber?: string },
+    globalPermissions: GlobalPermission[],
+    byUser: { uid: string; userId: string; surname: string }
+  ): Promise<void> {
+    try {
+      const existing = await this.getTeacherAssignments(teacher.uid);
+
+      if (existing.length > 0) {
+        // Update globalPermissions on every existing assignment for this teacher
+        const batch = writeBatch(db);
+        for (const a of existing) {
+          if (!a.id) continue;
+          batch.update(doc(db, 'course_assignments', a.id), {
+            globalPermissions,
+            updatedAt: Timestamp.now(),
+            updatedByUid: byUser.uid,
+            updatedByUserId: byUser.userId,
+          });
+        }
+        await batch.commit();
+      } else {
+        // No assignments yet — create a sentinel record keyed to '__global__'
+        const sentinelRef = await this.getAssignment(teacher.uid, '__global__');
+        if (sentinelRef?.id) {
+          await updateDoc(doc(db, 'course_assignments', sentinelRef.id), {
+            globalPermissions,
+            updatedAt: Timestamp.now(),
+            updatedByUid: byUser.uid,
+            updatedByUserId: byUser.userId,
+          });
+        } else {
+          await addDoc(collection(db, 'course_assignments'), {
+            teacherUid: teacher.uid,
+            teacherUserId: teacher.userId,
+            teacherSurname: teacher.surname,
+            teacherFullName: teacher.fullName || '',
+            teacherPhone: teacher.phoneNumber || '',
+            courseId: '__global__',
+            courseTitle: '__global__',
+            courseCategory: '',
+            courseThumbnail: '',
+            permissions: [],
+            globalPermissions,
+            allowedSubjects: [],
+            assignedAt: Timestamp.now(),
+            assignedByUid: byUser.uid,
+            assignedByUserId: byUser.userId,
+            assignedBySurname: byUser.surname,
+            notes: '',
+            isActive: true,
+          });
+        }
+      }
+
+      await this._log({
+        action: 'permissions_updated',
+        teacherUid: teacher.uid,
+        teacherUserId: teacher.userId,
+        teacherSurname: teacher.surname,
+        courseId: '__global__',
+        courseTitle: 'Global Permissions',
+        performedByUid: byUser.uid,
+        performedByUserId: byUser.userId,
+        performedBySurname: byUser.surname,
+        timestamp: new Date(),
+        details: `Global permissions updated: [${globalPermissions.join(', ')}]`,
+      });
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to save global permissions');
+    }
+  },
+
+  /**
    * Bulk assign a teacher to multiple courses at once
    */
   async bulkAssign(
