@@ -289,6 +289,12 @@ const EarlyAccessReviewModal = ({ request, actor, featureTitle, onDone, onClose 
               <IdBadge id={request.studentUserId} />
             </div>
             <p className="text-white font-medium">{request.studentName}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-gray-400 text-xs">Current status:</p>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${EA_STATUS_STYLES[request.status]}`}>
+                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+              </span>
+            </div>
           </div>
           <div>
             <label className="text-sm text-gray-400 flex items-center gap-1.5 mb-1.5"><Link size={13} /> Access Link *</label>
@@ -357,12 +363,10 @@ const EarlyAccessPanel = ({ featureId, featureTitle, actor }: EarlyAccessPanelPr
                 <span className={`text-xs px-2.5 py-1 rounded-full ${EA_STATUS_STYLES[r.status]}`}>
                   {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                 </span>
-                {r.status === 'pending' && (
-                  <button onClick={() => setReviewing(r)}
-                    className="text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-                    Review
-                  </button>
-                )}
+                <button onClick={() => setReviewing(r)}
+                  className="text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                  {r.status === 'pending' ? 'Review' : 'Change'}
+                </button>
               </div>
             </div>
           </div>
