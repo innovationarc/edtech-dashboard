@@ -418,6 +418,14 @@ interface FeatureRowProps {
 
 const FeatureRow = ({ feature, adminId, onEdit, onDelete }: FeatureRowProps) => {
   const [expanded, setExpanded] = useState(false);
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+
+  // Load pending early-access count eagerly so the badge is always visible
+  useEffect(() => {
+    comingSoonService.getEarlyAccessByFeature(feature.id).then(reqs => {
+      setPendingCount(reqs.filter(r => r.status === 'pending').length);
+    });
+  }, [feature.id]);
 
   return (
     <div className="bg-background-800 border border-background-700 rounded-xl overflow-hidden">
@@ -442,9 +450,15 @@ const FeatureRow = ({ feature, adminId, onEdit, onDelete }: FeatureRowProps) => 
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setExpanded(v => !v)}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-background-900 hover:bg-background-700 border border-background-700 px-3 py-1.5 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-background-900 hover:bg-background-700 border border-background-700 px-3 py-1.5 rounded-lg transition-colors relative"
           >
-            <Users size={12} /> Requests {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            <Users size={12} /> Requests
+            {pendingCount !== null && pendingCount > 0 && (
+              <span className="bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {pendingCount}
+              </span>
+            )}
+            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
           <button
             onClick={() => onEdit(feature)}
@@ -470,7 +484,7 @@ const FeatureRow = ({ feature, adminId, onEdit, onDelete }: FeatureRowProps) => 
 };
 
 // ─── Feature Requests Tab ─────────────────────────────────────────────────────
-const FeatureRequestsTab = ({ adminId }: { adminId: string }) => {
+const FeatureRequestsTab = ({ adminId, onCountChange }: { adminId: string; onCountChange?: (n: number) => void }) => {
   const [requests, setRequests] = useState<FeatureRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -478,7 +492,10 @@ const FeatureRequestsTab = ({ adminId }: { adminId: string }) => {
 
   const load = () => {
     setLoading(true);
-    comingSoonService.getAllFeatureRequests().then(setRequests).finally(() => setLoading(false));
+    comingSoonService.getAllFeatureRequests().then(reqs => {
+      setRequests(reqs);
+      onCountChange?.(reqs.filter(r => r.status === 'pending').length);
+    }).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
@@ -568,13 +585,24 @@ const ComingSoonManagement = () => {
   const [editingFeature, setEditingFeature] = useState<ComingSoonFeature | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [featuresSubTab, setFeaturesSubTab] = useState<'mine' | 'all'>('mine');
+  const [pendingFeatureRequestCount, setPendingFeatureRequestCount] = useState(0);
+
+  // Load pending feature request count for the tab badge
+  const loadPendingCount = () => {
+    comingSoonService.getAllFeatureRequests().then(reqs => {
+      setPendingFeatureRequestCount(reqs.filter(r => r.status === 'pending').length);
+    });
+  };
 
   const loadFeatures = () => {
     setLoadingFeatures(true);
     comingSoonService.getFeatures().then(setFeatures).finally(() => setLoadingFeatures(false));
   };
 
-  useEffect(() => { loadFeatures(); }, []);
+  useEffect(() => {
+    loadFeatures();
+    loadPendingCount();
+  }, []);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this feature? This cannot be undone.')) return;
@@ -634,8 +662,8 @@ const ComingSoonManagement = () => {
       <div className="flex border-b border-background-700">
         {([
           { id: 'features', label: 'Features', icon: <Layers size={15} /> },
-          { id: 'feature_requests', label: 'Feature Requests', icon: <Inbox size={15} /> },
-        ] as { id: Tab; label: string; icon: React.ReactNode }[]).map(tab => (
+          { id: 'feature_requests', label: 'Feature Requests', icon: <Inbox size={15} />, badge: pendingFeatureRequestCount },
+        ] as { id: Tab; label: string; icon: React.ReactNode; badge?: number }[]).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -646,6 +674,11 @@ const ComingSoonManagement = () => {
               }`}
           >
             {tab.icon} {tab.label}
+            {tab.badge !== undefined && tab.badge > 0 && (
+              <span className="bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                {tab.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -719,7 +752,10 @@ const ComingSoonManagement = () => {
           })()}
         </>
       ) : (
-        <FeatureRequestsTab adminId={user?.uid ?? ''} />
+        <FeatureRequestsTab
+          adminId={user?.uid ?? ''}
+          onCountChange={setPendingFeatureRequestCount}
+        />
       )}
 
       {/* Feature Form Modal */}
