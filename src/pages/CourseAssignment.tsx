@@ -761,7 +761,7 @@ export default function CourseAssignmentPage() {
     setSavingAssignment(true);
     try {
       const course = courses.find(c=>c.id===courseId);
-      await courseAssignmentService.assignTeacherToCourse(
+      const assignmentId = await courseAssignmentService.assignTeacherToCourse(
         { uid:assignModal.teacher.uid, userId:assignModal.teacher.userId,
           surname:assignModal.teacher.surname, fullName:assignModal.teacher.fullName,
           phoneNumber:assignModal.teacher.phoneNumber },
@@ -773,8 +773,40 @@ export default function CourseAssignmentPage() {
         globalPerms
       );
       toast('success', `Access saved for ${assignModal.teacher.surname}`);
+
+      // Optimistically update local teacher state — no need to wait for Firestore read propagation
+      const teacherUid = assignModal.teacher.uid;
+      setTeachers(prev => prev.map(t => {
+        if (t.uid !== teacherUid) return t;
+        const updatedAssignment: CourseAssignment = {
+          id: assignmentId,
+          teacherUid,
+          teacherUserId: assignModal.teacher!.userId,
+          teacherSurname: assignModal.teacher!.surname,
+          courseId,
+          courseTitle,
+          courseThumbnail: thumbnail,
+          permissions: perms,
+          globalPermissions: globalPerms,
+          allowedSubjects,
+          notes,
+          isActive: true,
+          assignedAt: new Date(),
+          assignedByUid: currentUser.uid,
+          assignedByUserId: currentUser.userId||'',
+          assignedBySurname: currentUser.surname||'',
+          updatedAt: new Date(),
+        };
+        const existingIdx = t.assignments.findIndex(a => a.courseId === courseId);
+        const newAssignments = existingIdx >= 0
+          ? t.assignments.map((a,i) => i === existingIdx ? updatedAssignment : a)
+          : [...t.assignments, updatedAssignment];
+        return { ...t, assignments: newAssignments };
+      }));
+
       setAssignModal({open:false,teacher:null,existingAssignments:[]});
-      await load(true);
+      // Background refresh to sync any other changes (stats, etc.) — non-blocking
+      load(true);
     } catch(e:any) { toast('error', e.message||'Failed to save'); }
     finally { setSavingAssignment(false); }
   };
@@ -791,32 +823,56 @@ export default function CourseAssignmentPage() {
         { uid:currentUser.uid, userId:currentUser.userId||'', surname:currentUser.surname||'' }
       );
       toast('success', `Global options saved for ${assignModal.teacher.surname}`);
-      await load(true);
+
+      // Optimistically patch globalPermissions on all local assignments for this teacher
+      const teacherUid = assignModal.teacher.uid;
+      setTeachers(prev => prev.map(t => {
+        if (t.uid !== teacherUid) return t;
+        return {
+          ...t,
+          assignments: t.assignments.map(a => ({ ...a, globalPermissions: globalPerms })),
+        };
+      }));
+
+      // Background refresh — non-blocking
+      load(true);
     } catch(e:any) { toast('error', e.message||'Failed to save global options'); }
     finally { setSavingGlobal(false); }
   };
 
   const handleRevoke = async() => {
     if(!currentUser) return;
-    setRevokingId(confirmRevoke.assignmentId);
+    const aid = confirmRevoke.assignmentId;
+    setRevokingId(aid);
     try {
-      await courseAssignmentService.revokeAccess(confirmRevoke.assignmentId,
+      await courseAssignmentService.revokeAccess(aid,
         {uid:currentUser.uid,userId:currentUser.userId||'',surname:currentUser.surname||''});
       toast('success','Access revoked');
       setConfirmRevoke({open:false,assignmentId:'',label:''});
-      await load(true);
+      // Optimistically remove the assignment from local state
+      setTeachers(prev => prev.map(t => ({
+        ...t,
+        assignments: t.assignments.filter(a => a.id !== aid),
+      })));
+      load(true);
     } catch(e:any) { toast('error',e.message||'Failed'); }
     finally { setRevokingId(null); }
   };
 
   const handleToggleActive = async(a:CourseAssignment) => {
     if(!currentUser||!a.id) return;
+    const newActive = !a.isActive;
     setTogglingId(a.id);
     try {
-      await courseAssignmentService.toggleActive(a.id,!a.isActive,
+      await courseAssignmentService.toggleActive(a.id, newActive,
         {uid:currentUser.uid,userId:currentUser.userId||'',surname:currentUser.surname||''});
-      toast('success',`Access ${!a.isActive?'enabled':'paused'}`);
-      await load(true);
+      toast('success',`Access ${newActive?'enabled':'paused'}`);
+      // Optimistically update isActive in local state
+      setTeachers(prev => prev.map(t => ({
+        ...t,
+        assignments: t.assignments.map(x => x.id===a.id ? {...x, isActive: newActive} : x),
+      })));
+      load(true);
     } catch(e:any) { toast('error',e.message); }
     finally { setTogglingId(null); }
   };
