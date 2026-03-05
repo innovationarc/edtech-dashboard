@@ -1,4 +1,4 @@
-// src/pages/admin/ComingSoonManagement.tsx
+// src/pages/ComingSoonManagement.tsx
 import { useState, useEffect } from 'react';
 import {
   Plus, Edit2, Trash2, ChevronDown, ChevronUp, X, Save,
@@ -6,15 +6,15 @@ import {
   Zap, BookOpen, Star, Upload, GitMerge, BarChart2, Cpu,
   Layers, Smartphone, Link, FileText,
 } from 'lucide-react';
-import Card from '../../components/ui/Card';
+import Card from '../components/ui/Card';
 import {
   comingSoonService,
   ComingSoonFeature,
   EarlyAccessRequest,
   FeatureRequest,
   FeatureRequestStatus,
-} from '../../services/comingSoonService';
-import { useDashboard } from '../../contexts/DashboardContext';
+} from '../services/comingSoonService';
+import { useDashboard } from '../contexts/DashboardContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ICON_OPTIONS = [
