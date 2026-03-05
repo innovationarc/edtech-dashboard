@@ -334,9 +334,30 @@ const ComingSoon = () => {
     comingSoonService.getFeatureRequestsByStudent(user.uid).then(setMyFeatureRequests);
   }, [user?.uid]);
 
+  const refreshEarlyAccessMap = (uid: string) => {
+    comingSoonService.getEarlyAccessByStudent(uid).then(requests => {
+      const map: Record<string, EarlyAccessRequest> = {};
+      requests.forEach(r => { map[r.featureId] = r; });
+      setEarlyAccessMap(map);
+    });
+  };
+
   const handleRequestAccess = async (feature: ComingSoonFeature) => {
     if (!user) return;
     setRequestingId(feature.id);
+    // Optimistic update so button changes instantly
+    setEarlyAccessMap(prev => ({
+      ...prev,
+      [feature.id]: {
+        id: 'temp',
+        featureId: feature.id,
+        featureTitle: feature.title,
+        studentId: user.uid,
+        studentName: user.name,
+        status: 'pending',
+        requestedAt: new Date(),
+      },
+    }));
     try {
       await comingSoonService.requestEarlyAccess(
         feature.id,
@@ -345,20 +366,15 @@ const ComingSoon = () => {
         user.name + (user.surname ? ' ' + user.surname : ''),
         user.email,
       );
-      setEarlyAccessMap(prev => ({
-        ...prev,
-        [feature.id]: {
-          id: 'temp',
-          featureId: feature.id,
-          featureTitle: feature.title,
-          studentId: user.uid,
-          studentName: user.name,
-          status: 'pending',
-          requestedAt: new Date(),
-        },
-      }));
+      // Refresh with real Firestore data (gets real doc ID)
+      refreshEarlyAccessMap(user.uid);
     } catch {
-      // silent fail
+      // Roll back optimistic update on failure
+      setEarlyAccessMap(prev => {
+        const next = { ...prev };
+        delete next[feature.id];
+        return next;
+      });
     } finally {
       setRequestingId(null);
     }
