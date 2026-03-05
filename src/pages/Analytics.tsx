@@ -22,7 +22,6 @@ import { userService } from '../services/userService';
 import { contentService } from '../services/contentService';
 import { courseService } from '../services/courseService';
 import { paymentService } from '../services/paymentService'; // Added this
-import { mcqService } from '../services/mcqService';
 
 ChartJS.register(
   CategoryScale,
@@ -67,17 +66,13 @@ const Analytics = () => {
       const [
         allUsers,
         allContent,
-        allMCQs,
         allCourses,
-        allQuizSessions,
         allEnrollments,
         allTransactions // Added this
       ] = await Promise.all([
         userService.getAllUsers().catch(() => []),
         contentService.getAllContent().catch(() => []),
-        mcqService.getAllMCQQuestions().catch(() => []),
         courseService.getAllCourses().catch(() => []),
-        mcqService.getAllQuizSessions().catch(() => []),
         courseService.getAllEnrollments().catch(() => []),
         paymentService.getAllTransactions().catch(() => []) // Added this
       ]);
@@ -85,7 +80,7 @@ const Analytics = () => {
       // --- Process Stats Cards Data ---
       setTotalVisitors(allUsers.length);
       setActiveStudents(allUsers.filter(u => u.role === 'student' && u.status === 'active').length);
-      setContentUploads(allContent.length + allMCQs.length);
+      setContentUploads(allContent.length);
       setCourseCompletions(allEnrollments.filter(e => e.progress === 100).length);
       setTotalTeachers(allUsers.filter(u => u.role === 'teacher').length); // New calculation
       setTotalRevenue(allTransactions.filter(t => t.status === 'success').reduce((sum, t) => sum + t.amount, 0)); // New calculation
@@ -135,7 +130,7 @@ const Analytics = () => {
       });
 
       // --- Process User Activity Data ---
-      const quizAttemptsCount = allQuizSessions.length;
+      const quizAttemptsCount = 0; // quiz sessions no longer fetched
       const lessonCompletionsCount = allEnrollments.reduce((sum, enrollment) => sum + (enrollment.completedLessons?.length || 0), 0);
       // Placeholder for other activities as there's no direct service for this
       const contentViewsCount = 800;
@@ -159,8 +154,8 @@ const Analytics = () => {
       const lessonCount = allContent.filter(c => c.type === 'lesson').length;
       const noteCount = allContent.filter(c => c.type === 'note').length;
       const trickCount = allContent.filter(c => c.type === 'trick').length;
-      const mcqCount = allMCQs.length;
-      const otherCount = allContent.filter(c => !['lesson', 'note', 'trick'].includes(c.type)).length;
+      const mcqCount = allContent.filter(c => c.type === 'mcq').length;
+      const otherCount = allContent.filter(c => !['lesson', 'note', 'trick', 'mcq'].includes(c.type)).length;
 
       setUploadChartData({
         labels: ['Lessons', 'Notes', 'MCQs', 'Tricks & Hacks', 'Other'],
