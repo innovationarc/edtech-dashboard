@@ -391,14 +391,15 @@ const ComingSoon = () => {
       .finally(() => setLoadingFeatures(false));
   }, []);
 
-  // Load student's early access requests
+  // Realtime listener for student's early access requests — stays in sync with admin changes
   useEffect(() => {
     if (!user?.uid) return;
-    comingSoonService.getEarlyAccessByStudent(user.uid).then(requests => {
+    const unsub = comingSoonService.subscribeEarlyAccessByStudent(user.uid, requests => {
       const map: Record<string, EarlyAccessRequest> = {};
       requests.forEach(r => { map[r.featureId] = r; });
       setEarlyAccessMap(map);
     });
+    return () => unsub();
   }, [user?.uid]);
 
   // Load student's feature requests
@@ -408,11 +409,8 @@ const ComingSoon = () => {
   }, [user?.uid]);
 
   const refreshEarlyAccessMap = (uid: string) => {
-    comingSoonService.getEarlyAccessByStudent(uid).then(requests => {
-      const map: Record<string, EarlyAccessRequest> = {};
-      requests.forEach(r => { map[r.featureId] = r; });
-      setEarlyAccessMap(map);
-    });
+    // No-op — map is now kept live by the onSnapshot listener above
+    // Kept for compatibility with cancel error rollback
   };
 
   const handleRequestAccess = async (feature: ComingSoonFeature) => {
