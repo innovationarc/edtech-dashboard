@@ -28,6 +28,7 @@ export interface ComingSoonFeature {
   expectedDate: string; // e.g. "Q2 2025"
   status: FeatureStatus;
   order: number;
+  createdBy?: string; // uid of admin who created it
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,6 +85,7 @@ const mapFeature = (id: string, data: any): ComingSoonFeature => ({
   expectedDate: data.expectedDate ?? '',
   status: data.status ?? 'in_development',
   order: data.order ?? 0,
+  createdBy: data.createdBy,
   createdAt: toDate(data.createdAt),
   updatedAt: toDate(data.updatedAt),
 });
@@ -124,9 +126,10 @@ export const comingSoonService = {
     return snap.docs.map(d => mapFeature(d.id, d.data()));
   },
 
-  async addFeature(data: Omit<ComingSoonFeature, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  async addFeature(data: Omit<ComingSoonFeature, 'id' | 'createdAt' | 'updatedAt'>, createdBy?: string): Promise<string> {
     const ref = await addDoc(collection(db, FEATURES_COL), {
       ...data,
+      ...(createdBy ? { createdBy } : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
