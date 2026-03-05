@@ -65,6 +65,19 @@ const getRoleDashboard = (role?: string): string => {
   return '/dashboard';
 };
 
+// Route guard specifically for /dashboard — redirects teachers/students to their own dashboard
+const AdminDashboardRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated, loading } = useDashboard();
+  if (loading || (isAuthenticated && !user)) return null;
+  if (!isAuthenticated) return <Navigate to="/dashboard" replace />;
+  // Only admin, manager, coordinator, student_manager, course_manager can see /dashboard
+  const allowed = ['admin', 'manager', 'coordinator', 'student_manager', 'course_manager'];
+  if (!allowed.includes(user?.role ?? '')) {
+    return <Navigate to={getRoleDashboard(user?.role)} replace />;
+  }
+  return <>{children}</>;
+};
+
 // Protected Route Component for Admin-only pages
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, loading } = useDashboard();
@@ -204,11 +217,11 @@ const AppRoutes = () => {
       <Route path="/" element={<DashboardLayout />}>
         <Route index element={<DefaultRedirect />} />
         
-        {/* Admin + Teacher dashboard */}
+        {/* Admin dashboard - teachers/students are redirected to their own dashboard */}
         <Route path="dashboard" element={
-          <TeacherAdminRoute>
+          <AdminDashboardRoute>
             <Dashboard />
-          </TeacherAdminRoute>
+          </AdminDashboardRoute>
         } />
         
         {/* Student-only routes */}
