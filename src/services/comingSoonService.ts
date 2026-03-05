@@ -10,6 +10,7 @@ import {
   where,
   orderBy,
   limit,
+  onSnapshot,
   Timestamp,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -270,6 +271,23 @@ export const comingSoonService = {
     const q = query(collection(db, EARLY_ACCESS_COL), where('studentId', '==', studentId));
     const snap = await getDocs(q);
     return snap.docs.map(d => mapEarlyAccess(d.id, d.data()));
+  },
+
+  // Real-time listener for a student's early access requests
+  // Returns an unsubscribe function — call it on component unmount
+  subscribeEarlyAccessByStudent(
+    studentId: string,
+    callback: (requests: EarlyAccessRequest[]) => void,
+  ): () => void {
+    const q = query(
+      collection(db, EARLY_ACCESS_COL),
+      where('studentId', '==', studentId),
+    );
+    return onSnapshot(q, snap => {
+      callback(snap.docs.map(d => mapEarlyAccess(d.id, d.data())));
+    }, () => {
+      // On error fall back silently
+    });
   },
 
   async getEarlyAccessByFeature(featureId: string): Promise<EarlyAccessRequest[]> {
