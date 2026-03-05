@@ -6,15 +6,15 @@ import {
   Zap, BookOpen, Star, Upload, GitMerge, BarChart2, Cpu,
   Layers, Smartphone, Link, FileText,
 } from 'lucide-react';
-import Card from '../../components/ui/Card';
+import Card from '../components/ui/Card';
 import {
   comingSoonService,
   ComingSoonFeature,
   EarlyAccessRequest,
   FeatureRequest,
   FeatureRequestStatus,
-} from '../../services/comingSoonService';
-import { useDashboard } from '../../contexts/DashboardContext';
+} from '../services/comingSoonService';
+import { useDashboard } from '../contexts/DashboardContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ICON_OPTIONS = [
