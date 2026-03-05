@@ -3,27 +3,76 @@ import { useState, useEffect } from 'react';
 import {
   Clock, Star, BookOpen, GitMerge, Zap, Upload, Smartphone,
   BarChart2, Cpu, Users, Layers, CheckCircle, X, ExternalLink,
-  AlertCircle, ChevronRight, Send, Eye,
+  AlertCircle, Send, Eye, Trash2,
+  Wifi, Globe, Shield, Lock, Bell, Camera, Code, Database,
+  Download, Filter, Flag, Gift, Hash, Heart, Home, Image,
+  Mail, Map, MessageSquare, Monitor, Music, Package, Play,
+  Search, Settings, Share2, Sliders, Tag, Target, Terminal,
+  Truck, Video, Wrench, Aperture, Award,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { comingSoonService, ComingSoonFeature, EarlyAccessRequest, FeatureRequest } from '../services/comingSoonService';
 import { useDashboard } from '../contexts/DashboardContext';
 
-// ─── Icon map ────────────────────────────────────────────────────────────────
-const ICON_MAP: Record<string, React.ReactNode> = {
-  Zap:      <Zap size={24} className="text-primary-400" />,
-  BookOpen: <BookOpen size={24} className="text-secondary-400" />,
-  Star:     <Star size={24} className="text-accent-400" />,
-  Upload:   <Upload size={24} className="text-warning-DEFAULT" />,
-  GitMerge: <GitMerge size={24} className="text-error-DEFAULT" />,
-  BarChart2:<BarChart2 size={24} className="text-primary-400" />,
-  Cpu:      <Cpu size={24} className="text-accent-400" />,
-  Users:    <Users size={24} className="text-secondary-400" />,
-  Layers:   <Layers size={24} className="text-warning-DEFAULT" />,
-  Smartphone:<Smartphone size={24} className="text-primary-400" />,
+// ─── Icon map (matches management picker) ────────────────────────────────────
+const ICON_COLORS = [
+  'text-primary-400', 'text-secondary-400', 'text-accent-400',
+  'text-warning-DEFAULT', 'text-error-DEFAULT', 'text-green-400',
+  'text-purple-400', 'text-pink-400', 'text-orange-400',
+];
+// Deterministic colour per icon name
+const iconColor = (name: string) => ICON_COLORS[name.charCodeAt(0) % ICON_COLORS.length];
+
+const ICON_MAP: Record<string, (size?: number) => React.ReactNode> = {
+  Zap:          (s = 24) => <Zap size={s} className={iconColor('Zap')} />,
+  BookOpen:     (s = 24) => <BookOpen size={s} className={iconColor('BookOpen')} />,
+  Star:         (s = 24) => <Star size={s} className={iconColor('Star')} />,
+  Upload:       (s = 24) => <Upload size={s} className={iconColor('Upload')} />,
+  GitMerge:     (s = 24) => <GitMerge size={s} className={iconColor('GitMerge')} />,
+  BarChart2:    (s = 24) => <BarChart2 size={s} className={iconColor('BarChart2')} />,
+  Cpu:          (s = 24) => <Cpu size={s} className={iconColor('Cpu')} />,
+  Users:        (s = 24) => <Users size={s} className={iconColor('Users')} />,
+  Layers:       (s = 24) => <Layers size={s} className={iconColor('Layers')} />,
+  Smartphone:   (s = 24) => <Smartphone size={s} className={iconColor('Smartphone')} />,
+  Wifi:         (s = 24) => <Wifi size={s} className={iconColor('Wifi')} />,
+  Globe:        (s = 24) => <Globe size={s} className={iconColor('Globe')} />,
+  Shield:       (s = 24) => <Shield size={s} className={iconColor('Shield')} />,
+  Lock:         (s = 24) => <Lock size={s} className={iconColor('Lock')} />,
+  Bell:         (s = 24) => <Bell size={s} className={iconColor('Bell')} />,
+  Camera:       (s = 24) => <Camera size={s} className={iconColor('Camera')} />,
+  Code:         (s = 24) => <Code size={s} className={iconColor('Code')} />,
+  Database:     (s = 24) => <Database size={s} className={iconColor('Database')} />,
+  Download:     (s = 24) => <Download size={s} className={iconColor('Download')} />,
+  Filter:       (s = 24) => <Filter size={s} className={iconColor('Filter')} />,
+  Flag:         (s = 24) => <Flag size={s} className={iconColor('Flag')} />,
+  Gift:         (s = 24) => <Gift size={s} className={iconColor('Gift')} />,
+  Hash:         (s = 24) => <Hash size={s} className={iconColor('Hash')} />,
+  Heart:        (s = 24) => <Heart size={s} className={iconColor('Heart')} />,
+  Home:         (s = 24) => <Home size={s} className={iconColor('Home')} />,
+  Image:        (s = 24) => <Image size={s} className={iconColor('Image')} />,
+  Mail:         (s = 24) => <Mail size={s} className={iconColor('Mail')} />,
+  Map:          (s = 24) => <Map size={s} className={iconColor('Map')} />,
+  MessageSquare:(s = 24) => <MessageSquare size={s} className={iconColor('MessageSquare')} />,
+  Monitor:      (s = 24) => <Monitor size={s} className={iconColor('Monitor')} />,
+  Music:        (s = 24) => <Music size={s} className={iconColor('Music')} />,
+  Package:      (s = 24) => <Package size={s} className={iconColor('Package')} />,
+  Play:         (s = 24) => <Play size={s} className={iconColor('Play')} />,
+  Search:       (s = 24) => <Search size={s} className={iconColor('Search')} />,
+  Settings:     (s = 24) => <Settings size={s} className={iconColor('Settings')} />,
+  Share2:       (s = 24) => <Share2 size={s} className={iconColor('Share2')} />,
+  Sliders:      (s = 24) => <Sliders size={s} className={iconColor('Sliders')} />,
+  Tag:          (s = 24) => <Tag size={s} className={iconColor('Tag')} />,
+  Target:       (s = 24) => <Target size={s} className={iconColor('Target')} />,
+  Terminal:     (s = 24) => <Terminal size={s} className={iconColor('Terminal')} />,
+  Truck:        (s = 24) => <Truck size={s} className={iconColor('Truck')} />,
+  Video:        (s = 24) => <Video size={s} className={iconColor('Video')} />,
+  Wrench:       (s = 24) => <Wrench size={s} className={iconColor('Wrench')} />,
+  Aperture:     (s = 24) => <Aperture size={s} className={iconColor('Aperture')} />,
+  Award:        (s = 24) => <Award size={s} className={iconColor('Award')} />,
 };
 
-const getIcon = (name: string) => ICON_MAP[name] ?? <Zap size={24} className="text-primary-400" />;
+const getIcon = (name: string) =>
+  (ICON_MAP[name] ?? ICON_MAP['Zap'])(24);
 
 // ─── Status badge colours ─────────────────────────────────────────────────────
 const REQUEST_STATUS_STYLES: Record<string, string> = {
@@ -87,10 +136,11 @@ const EarlyAccessModal = ({ request, onClose }: EarlyAccessModalProps) => (
 interface FeatureRequestModalProps {
   studentId: string;
   studentName: string;
+  studentUserId?: string;
   onClose: () => void;
 }
 
-const FeatureRequestModal = ({ studentId, studentName, onClose }: FeatureRequestModalProps) => {
+const FeatureRequestModal = ({ studentId, studentName, studentUserId, onClose }: FeatureRequestModalProps) => {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -99,7 +149,7 @@ const FeatureRequestModal = ({ studentId, studentName, onClose }: FeatureRequest
     if (!description.trim()) return;
     setLoading(true);
     try {
-      await comingSoonService.submitFeatureRequest(description.trim(), studentId, studentName);
+      await comingSoonService.submitFeatureRequest(description.trim(), studentId, studentName, studentUserId);
       setSubmitted(true);
     } catch {
       // handle error silently
@@ -177,10 +227,11 @@ const FeatureRequestModal = ({ studentId, studentName, onClose }: FeatureRequest
 // ─── My Requests Modal ────────────────────────────────────────────────────────
 interface MyRequestsModalProps {
   requests: FeatureRequest[];
+  onDelete: (id: string) => void;
   onClose: () => void;
 }
 
-const MyRequestsModal = ({ requests, onClose }: MyRequestsModalProps) => (
+const MyRequestsModal = ({ requests, onDelete, onClose }: MyRequestsModalProps) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
     <div className="bg-background-800 border border-background-700 rounded-xl w-full max-w-lg shadow-2xl">
       <div className="flex items-center justify-between p-6 border-b border-background-700">
@@ -209,6 +260,16 @@ const MyRequestsModal = ({ requests, onClose }: MyRequestsModalProps) => (
               <p className="text-gray-500 text-xs mt-2">
                 {new Date(r.requestedAt).toLocaleDateString()}
               </p>
+              <div className="mt-3 flex justify-end">
+                {r.status === 'pending' && (
+                  <button
+                    onClick={() => onDelete(r.id)}
+                    className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={11} /> Delete Request
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}
@@ -223,10 +284,11 @@ interface FeatureCardProps {
   earlyAccess?: EarlyAccessRequest;
   onRequestAccess: (feature: ComingSoonFeature) => void;
   onTryAccess: (request: EarlyAccessRequest) => void;
+  onCancelAccess: (featureId: string, requestId: string) => void;
   requestingId: string | null;
 }
 
-const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, requestingId }: FeatureCardProps) => {
+const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCancelAccess, requestingId }: FeatureCardProps) => {
   const isRequested = !!earlyAccess;
   const isApproved = earlyAccess?.status === 'approved';
   const isLoading = requestingId === feature.id;
@@ -272,13 +334,24 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, reque
             <ExternalLink size={14} /> Try Early Access
           </button>
         ) : isRequested ? (
-          <button
-            disabled
-            className="w-full bg-background-700 text-gray-500 py-2 rounded cursor-not-allowed text-sm flex items-center justify-center gap-2"
-          >
-            <CheckCircle size={14} className="text-primary-400" />
-            <span className="text-primary-400">Requested</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              disabled
+              className="flex-1 bg-background-700 text-gray-500 py-2 rounded cursor-not-allowed text-sm flex items-center justify-center gap-2"
+            >
+              <CheckCircle size={14} className="text-primary-400" />
+              <span className="text-primary-400">Requested</span>
+            </button>
+            {earlyAccess?.status === 'pending' && (
+              <button
+                onClick={() => onCancelAccess(feature.id, earlyAccess.id)}
+                className="bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 px-3 py-2 rounded text-xs transition-colors"
+                title="Cancel request"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         ) : (
           <button
             onClick={() => onRequestAccess(feature)}
@@ -364,6 +437,7 @@ const ComingSoon = () => {
         feature.title,
         user.uid,
         user.name + (user.surname ? ' ' + user.surname : ''),
+        user.userId,
         user.email,
       );
       // Refresh with real Firestore data (gets real doc ID)
@@ -377,6 +451,34 @@ const ComingSoon = () => {
       });
     } finally {
       setRequestingId(null);
+    }
+  };
+
+  const handleCancelEarlyAccess = async (featureId: string, requestId: string) => {
+    // Optimistic update
+    setEarlyAccessMap(prev => {
+      const next = { ...prev };
+      if (next[featureId]) next[featureId] = { ...next[featureId], status: 'cancelled' };
+      return next;
+    });
+    try {
+      await comingSoonService.cancelEarlyAccess(requestId);
+      refreshEarlyAccessMap(user!.uid);
+    } catch {
+      // Revert on failure
+      refreshEarlyAccessMap(user!.uid);
+    }
+  };
+
+  const handleDeleteFeatureRequest = async (requestId: string) => {
+    if (!confirm('Delete this request?')) return;
+    try {
+      await comingSoonService.deleteFeatureRequest(requestId);
+      if (user?.uid) {
+        comingSoonService.getFeatureRequestsByStudent(user.uid).then(setMyFeatureRequests);
+      }
+    } catch {
+      // silent fail
     }
   };
 
@@ -420,6 +522,7 @@ const ComingSoon = () => {
               earlyAccess={earlyAccessMap[feature.id]}
               onRequestAccess={handleRequestAccess}
               onTryAccess={req => setActiveEarlyAccess(req)}
+              onCancelAccess={handleCancelEarlyAccess}
               requestingId={requestingId}
             />
           ))}
@@ -455,12 +558,14 @@ const ComingSoon = () => {
         <FeatureRequestModal
           studentId={user.uid}
           studentName={user.name + (user.surname ? ' ' + user.surname : '')}
+          studentUserId={user.userId}
           onClose={handleFeatureRequestSubmitted}
         />
       )}
       {showMyRequestsModal && (
         <MyRequestsModal
           requests={myFeatureRequests}
+          onDelete={handleDeleteFeatureRequest}
           onClose={() => setShowMyRequestsModal(false)}
         />
       )}
