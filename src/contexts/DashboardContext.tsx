@@ -180,6 +180,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             if (storedDeviceId && storedDeviceId !== currentDeviceId) {
               // This is informational only - useful for admins monitoring sessions
               // But we DON'T logout the user here
+            }
             
             // CRITICAL FIX: Set ALL auth states BEFORE clearing loading
             setUser(userProfile);
