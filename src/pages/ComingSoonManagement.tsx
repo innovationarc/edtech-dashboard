@@ -270,7 +270,7 @@ const EarlyAccessReviewModal = ({ request, actor, featureTitle, onDone, onClose 
   const handleReject = async () => {
     setAction('reject'); setLoading(true);
     try {
-      await comingSoonService.rejectEarlyAccess(request.id, actor, featureTitle, request.studentName);
+      await comingSoonService.rejectEarlyAccess(request.id, actor, featureTitle, request.studentName, request.rejectionCount);
       onDone();
     } finally { setLoading(false); }
   };
@@ -323,6 +323,57 @@ const EarlyAccessReviewModal = ({ request, actor, featureTitle, onDone, onClose 
   );
 };
 
+// ─── Bulk Approve Modal ───────────────────────────────────────────────────────
+interface BulkApproveModalProps {
+  count: number;
+  actor: { uid: string; userId?: string; name: string };
+  onConfirm: (link: string, guidelines: string) => Promise<void>;
+  onClose: () => void;
+}
+
+const BulkApproveModal = ({ count, actor, onConfirm, onClose }: BulkApproveModalProps) => {
+  const [link, setLink] = useState('');
+  const [guidelines, setGuidelines] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handle = async () => {
+    if (!link.trim()) return;
+    setLoading(true);
+    try { await onConfirm(link.trim(), guidelines.trim()); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-background-800 border border-background-700 rounded-xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between p-6 border-b border-background-700">
+          <h3 className="text-white font-semibold">Bulk Approve {count} Request{count !== 1 ? 's' : ''}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-sm text-gray-400 block mb-1.5 flex items-center gap-1.5"><Link size={13} /> Access Link *</label>
+            <input value={link} onChange={e => setLink(e.target.value)} placeholder="https://..."
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors" />
+          </div>
+          <div>
+            <label className="text-sm text-gray-400 block mb-1.5 flex items-center gap-1.5"><FileText size={13} /> Guidelines (optional)</label>
+            <textarea value={guidelines} onChange={e => setGuidelines(e.target.value)} rows={3}
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors" />
+          </div>
+        </div>
+        <div className="flex gap-3 p-6 border-t border-background-700">
+          <button onClick={onClose} className="flex-1 bg-background-700 hover:bg-background-600 text-white py-2 rounded-lg text-sm transition-colors">Cancel</button>
+          <button onClick={handle} disabled={loading || !link.trim()}
+            className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+            {loading ? <Spinner /> : <CheckCircle size={14} />} Approve All
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Early Access Panel ────────────────────────────────────────────────────────
 interface EarlyAccessPanelProps {
   featureId: string;
@@ -334,44 +385,144 @@ const EarlyAccessPanel = ({ featureId, featureTitle, actor }: EarlyAccessPanelPr
   const [requests, setRequests] = useState<EarlyAccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState<EarlyAccessRequest | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<'approve' | 'reject' | 'delete' | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const load = () => {
     setLoading(true);
+    setSelected(new Set());
     comingSoonService.getEarlyAccessByFeature(featureId).then(setRequests).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, [featureId]);
 
+  const toggle = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => setSelected(
+    selected.size === requests.length ? new Set() : new Set(requests.map(r => r.id))
+  );
+
+  const selectedRequests = requests.filter(r => selected.has(r.id));
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selected.size} request(s)? This cannot be undone.`)) return;
+    setBulkLoading(true);
+    try {
+      await comingSoonService.bulkDeleteEarlyAccess([...selected]);
+      load();
+    } finally { setBulkLoading(false); }
+  };
+
+  const handleBulkReject = async () => {
+    if (!confirm(`Reject ${selected.size} request(s)?`)) return;
+    setBulkLoading(true);
+    try {
+      await comingSoonService.bulkRejectEarlyAccess(
+        selectedRequests.map(r => ({ id: r.id, rejectionCount: r.rejectionCount })),
+        actor,
+        featureTitle,
+      );
+      load();
+    } finally { setBulkLoading(false); }
+  };
+
+  const handleBulkApprove = async (link: string, guidelines: string) => {
+    await comingSoonService.bulkApproveEarlyAccess(
+      selectedRequests.map(r => ({ id: r.id, featureTitle, studentName: r.studentName })),
+      link,
+      guidelines,
+      actor,
+    );
+    setBulkAction(null);
+    load();
+  };
+
+  const handleAdminDelete = async (r: EarlyAccessRequest) => {
+    if (!confirm(`Delete request from ${r.studentName}?`)) return;
+    await comingSoonService.adminDeleteEarlyAccess(r.id, actor, featureTitle, r.studentName);
+    load();
+  };
+
   if (loading) return <div className="py-4 text-center"><Spinner /></div>;
 
   return (
-    <div className="space-y-2 mt-4">
+    <div className="mt-4 space-y-2">
       {requests.length === 0 ? (
         <p className="text-gray-500 text-sm py-4 text-center">No early access requests yet.</p>
       ) : (
-        requests.map(r => (
-          <div key={r.id} className="bg-background-900 border border-background-700 rounded-lg px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-white text-sm font-medium">{r.studentName}</p>
-                  <IdBadge id={r.studentUserId} />
-                </div>
-                <p className="text-gray-500 text-xs mt-0.5">{fmt(r.requestedAt)}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`text-xs px-2.5 py-1 rounded-full ${EA_STATUS_STYLES[r.status]}`}>
-                  {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                </span>
-                <button onClick={() => setReviewing(r)}
-                  className="text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-                  {r.status === 'pending' ? 'Review' : 'Change'}
+        <>
+          {/* Bulk toolbar */}
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-400 hover:text-white transition-colors">
+              <input type="checkbox"
+                checked={selected.size === requests.length && requests.length > 0}
+                onChange={toggleAll}
+                className="accent-primary-500 w-3.5 h-3.5" />
+              Select all ({requests.length})
+            </label>
+            {selected.size > 0 && (
+              <div className="flex items-center gap-2 ml-auto flex-wrap">
+                <span className="text-xs text-gray-400">{selected.size} selected</span>
+                <button onClick={() => setBulkAction('approve')} disabled={bulkLoading}
+                  className="flex items-center gap-1 text-xs bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 text-green-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                  <CheckCircle size={11} /> Approve
+                </button>
+                <button onClick={handleBulkReject} disabled={bulkLoading}
+                  className="flex items-center gap-1 text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                  <XCircle size={11} /> Reject
+                </button>
+                <button onClick={handleBulkDelete} disabled={bulkLoading}
+                  className="flex items-center gap-1 text-xs bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-400 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                  {bulkLoading ? <Spinner /> : <Trash2 size={11} />} Delete
                 </button>
               </div>
-            </div>
+            )}
           </div>
-        ))
+
+          {/* Request rows */}
+          {requests.map(r => (
+            <div key={r.id}
+              className={`bg-background-900 border rounded-lg px-4 py-3 transition-colors
+                ${selected.has(r.id) ? 'border-primary-500/50 bg-primary-500/5' : 'border-background-700'}`}>
+              <div className="flex items-center gap-3">
+                <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)}
+                  className="accent-primary-500 w-3.5 h-3.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-white text-sm font-medium">{r.studentName}</p>
+                    <IdBadge id={r.studentUserId} />
+                    {r.rejectionCount > 0 && (
+                      <span className="text-[10px] bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 rounded">
+                        Rejected {r.rejectionCount}×{r.rejectionCount >= 3 ? ' (final)' : ''}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-gray-500 text-xs mt-0.5">{fmt(r.requestedAt)}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`text-xs px-2.5 py-1 rounded-full ${EA_STATUS_STYLES[r.status]}`}>
+                    {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                  </span>
+                  <button onClick={() => setReviewing(r)}
+                    className="text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+                    {r.status === 'pending' ? 'Review' : 'Change'}
+                  </button>
+                  <button onClick={() => handleAdminDelete(r)}
+                    className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
       )}
+
       {reviewing && (
         <EarlyAccessReviewModal
           request={reviewing}
@@ -379,6 +530,14 @@ const EarlyAccessPanel = ({ featureId, featureTitle, actor }: EarlyAccessPanelPr
           featureTitle={featureTitle}
           onDone={() => { setReviewing(null); load(); }}
           onClose={() => setReviewing(null)}
+        />
+      )}
+      {bulkAction === 'approve' && (
+        <BulkApproveModal
+          count={selected.size}
+          actor={actor}
+          onConfirm={handleBulkApprove}
+          onClose={() => setBulkAction(null)}
         />
       )}
     </div>
