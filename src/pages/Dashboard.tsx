@@ -19,7 +19,6 @@ import { userService } from '../services/userService';
 import { contentService } from '../services/contentService';
 import { courseService } from '../services/courseService';
 import { paymentService } from '../services/paymentService';
-import { mcqService } from '../services/mcqService'; // Import mcqService
 import { announcementService } from '../services/announcementService';
 
 interface DashboardStats {
@@ -28,7 +27,6 @@ interface DashboardStats {
   pendingUsers: number;
   totalContent: number;
   totalCourses: number;
-  totalMCQs: number;
   totalAnnouncements: number;
   recentTransactions: any[];
   contentBySubject: { name: string; lessons: number; notes: number; mcqs: number; total: number }[];
@@ -83,7 +81,6 @@ const Dashboard = () => {
     pendingUsers: 0,
     totalContent: 0,
     totalCourses: 0,
-    totalMCQs: 0,
     totalAnnouncements: 0,
     recentTransactions: [],
     contentBySubject: [],
@@ -105,14 +102,12 @@ const Dashboard = () => {
       const [
         allUsers,
         allContent,
-        allMCQs, // Fetch MCQs from mcqService
         allCourses,
         allTransactions,
         allAnnouncements
       ] = await Promise.all([
         userService.getAllUsers().catch(() => []),
         contentService.getAllContent().catch(() => []),
-        mcqService.getAllMCQQuestions().catch(() => []), // Use mcqService
         courseService.getAllCourses().catch(() => []),
         paymentService.getAllTransactions().catch(() => []),
         announcementService.getAllAnnouncements().catch(() => [])
@@ -123,7 +118,7 @@ const Dashboard = () => {
       const pendingUsers = allUsers.filter(u => u.status === 'pending').length;
 
       // Process content by subject
-      const contentBySubject = processContentBySubject([...allContent, ...allMCQs]);
+      const contentBySubject = processContentBySubject(allContent);
 
       // Calculate satisfaction rate from course ratings
       const coursesWithRatings = allCourses.filter(c => c.rating > 0);
@@ -135,7 +130,7 @@ const Dashboard = () => {
       const userGrowth = generateUserGrowthData(allUsers);
 
       // Process recent activity
-      const recentActivity = processRecentActivity(allContent, allCourses, allUsers, allMCQs);
+      const recentActivity = processRecentActivity(allContent, allCourses, allUsers);
 
       // Get recent transactions
       const recentTransactions = allTransactions
@@ -148,7 +143,6 @@ const Dashboard = () => {
         pendingUsers,
         totalContent: allContent.length,
         totalCourses: allCourses.length,
-        totalMCQs: allMCQs.length,
         totalAnnouncements: allAnnouncements.length,
         recentTransactions,
         contentBySubject,
@@ -214,20 +208,17 @@ const Dashboard = () => {
     return orderedData;
   };
 
-  const processRecentActivity = (content: any[], courses: any[], users: any[], mcqs: any[]) => {
+  const processRecentActivity = (content: any[], courses: any[], users: any[]) => {
     const activities = [];
 
-    // Combine all content and MCQs
-    const combinedContent = [...content, ...mcqs];
-
-    // Recent content uploads (lessons, notes, tricks, MCQs)
-    combinedContent.forEach(item => {
+    // Recent content uploads (lessons, notes, tricks)
+    content.forEach(item => {
       const user = users.find(u => u.uid === item.createdBy);
       activities.push({
         id: `content-${item.id}`,
-        type: item.type === 'mcq' ? 'mcq_upload' : 'content_upload',
-        title: item.type === 'mcq' ? `New MCQ uploaded` : `New ${item.type} uploaded`,
-        description: item.type === 'mcq' ? item.question : item.title,
+        type: 'content_upload',
+        title: `New ${item.type} uploaded`,
+        description: item.title,
         user: user?.name || 'Unknown User',
         timestamp: item.createdAt,
         icon: getContentIcon(item.type)
@@ -380,7 +371,7 @@ const Dashboard = () => {
           colorScheme="primary" />
         <StatsCard title="Content Items"  value={stats.totalContent}
           icon={<FileText size={16}/>}
-          change={{ value: `${stats.totalMCQs} MCQs`, positive: true }}
+          change={{ value: 'Published', positive: true }}
           colorScheme="secondary" />
         <StatsCard title="Active Courses" value={stats.totalCourses}
           icon={<BookOpen size={16}/>}
