@@ -263,10 +263,7 @@ export const comingSoonService = {
   },
 
   async cancelEarlyAccess(requestId: string): Promise<void> {
-    await updateDoc(doc(db, EARLY_ACCESS_COL, requestId), {
-      status: 'cancelled',
-      cancelledAt: serverTimestamp(),
-    });
+    await deleteDoc(doc(db, EARLY_ACCESS_COL, requestId));
   },
 
   async getEarlyAccessByStudent(studentId: string): Promise<EarlyAccessRequest[]> {
