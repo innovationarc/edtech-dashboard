@@ -9,7 +9,6 @@ import CreateAnnouncementModal from '../components/announcements/CreateAnnouncem
 import { useDashboard } from '../contexts/DashboardContext';
 import { userService } from '../services/userService';
 import { courseService } from '../services/courseService';
-import { mcqService } from '../services/mcqService';
 import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService'; // Import studyPlanService
 import { qaService } from '../services/qaService'; // Import qaService for real-time Q&A notifications
 
@@ -66,14 +65,12 @@ export default function TeacherDashboard() {
       const [
         allUsers,
         teacherCourses,
-        allQuizSessions,
         allEnrollments,
         teacherStudyPlanEvents, // Fetch study plan events
         pendingQuestions // Fetch pending questions
       ] = await Promise.all([
         userService.getAllUsers().catch(() => []),
         courseService.getCoursesByInstructor(user.uid).catch(() => [],),
-        mcqService.getAllQuizSessions().catch(() => []),
         courseService.getAllEnrollments().catch(() => []),
         studyPlanService.getEventsByTeacher(user.uid).catch(() => []), // Fetch events for this teacher
         qaService.getQuestions(undefined, 'pending').catch(() => []) // Fetch pending questions
@@ -85,26 +82,11 @@ export default function TeacherDashboard() {
       // Active Courses (created by this teacher)
       setActiveCourses(teacherCourses.length);
 
-      // Average Performance (from quiz sessions related to this teacher's courses or all if no specific course link)
-      const relevantQuizSessions = allQuizSessions.filter(session =>
-        teacherCourses.some(course => course.title === session.course) // Assuming quiz sessions have a course field
-      );
-      const totalAccuracy = relevantQuizSessions.reduce((sum, session) => sum + session.accuracy, 0);
-      setAvgPerformance(relevantQuizSessions.length > 0 ? Math.round(totalAccuracy / relevantQuizSessions.length) : 0);
+      // Avg performance not available without quiz sessions
+      setAvgPerformance(0);
 
-      // Recent Student Activity
-      const recentActivities = [];
-      // Add recent quiz sessions
-      allQuizSessions.sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime()).slice(0, 3).forEach(session => {
-        recentActivities.push({
-          id: `quiz-${session.id}`,
-          studentName: session.studentName,
-          description: `Completed ${session.subject} Quiz`,
-          status: `${session.accuracy.toFixed(0)}%`,
-          statusColor: session.accuracy >= 70 ? 'text-success-DEFAULT' : 'text-warning-DEFAULT'
-        });
-      });
-      // Add recent enrollments (if relevant to this teacher's courses)
+      // Recent Student Activity — enrollments only
+      const recentActivities: any[] = [];
       allEnrollments.filter(enrollment =>
         teacherCourses.some(course => course.id === enrollment.courseId)
       ).sort((a, b) => b.enrolledAt.getTime() - a.enrolledAt.getTime()).slice(0, 2).forEach(enrollment => {
