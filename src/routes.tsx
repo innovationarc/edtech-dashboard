@@ -41,6 +41,9 @@ import ManageAdmin from './pages/ManageAdmin';
 // NEW: Coupon Management
 import CouponManagement from './pages/CouponManagement';
 
+// Coming Soon Management
+import ComingSoonManagement from './pages/admin/ComingSoonManagement';
+
 // NEW: Course Assignment Management
 import CourseAssignment from './pages/CourseAssignment';
 
@@ -288,6 +291,13 @@ const AppRoutes = () => {
           <AdminManagerRoute>
             <CouponManagement />
           </AdminManagerRoute>
+        } />
+
+        {/* Coming Soon Management - Admin only */}
+        <Route path="coming-soon-management" element={
+          <AdminRoute>
+            <ComingSoonManagement />
+          </AdminRoute>
         } />
 
         {/* Course Assignment Management - Admin and Manager */}
