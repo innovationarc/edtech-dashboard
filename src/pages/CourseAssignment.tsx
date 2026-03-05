@@ -127,13 +127,15 @@ function PermToggle({ perm, checked, onChange }: { perm:CoursePermission; checke
 
 // ── Assign Modal ────────────────────────────────────────────────────────────────
 function AssignModal({
-  state, courses, onClose, onSave, saving
+  state, courses, onClose, onSave, onSaveGlobal, saving, savingGlobal
 }: {
   state: AssignModalState;
   courses: Course[];
   onClose:()=>void;
   onSave:(courseId:string,courseTitle:string,thumbnail:string|undefined,perms:CoursePermission[],allowedSubjects:string[],notes:string,globalPerms:GlobalPermission[])=>Promise<void>;
+  onSaveGlobal:(globalPerms:GlobalPermission[])=>Promise<void>;
   saving:boolean;
+  savingGlobal:boolean;
 }) {
   const [step, setStep] = useState<'course'|'perms'>('course');
   const [search, setSearch] = useState('');
@@ -144,7 +146,12 @@ function AssignModal({
   const [notes, setNotes] = useState('');
 
   useEffect(()=>{
-    if(state.open){ setStep('course'); setSel(null); setPerms(new Set()); setGlobalPerms(new Set()); setAllowedSubjects(new Set()); setNotes(''); setSearch(''); }
+    if(state.open){
+      setStep('course'); setSel(null); setPerms(new Set()); setAllowedSubjects(new Set()); setNotes(''); setSearch('');
+      // Initialize global perms from any existing assignment (they are stored on every assignment)
+      const existingGlobal = state.existingAssignments.find(a=>a.globalPermissions && a.globalPermissions.length>0);
+      setGlobalPerms(existingGlobal ? new Set(existingGlobal.globalPermissions!) : new Set());
+    }
   },[state.open]);
 
   const existingIds = new Set(state.existingAssignments.map(a=>a.courseId));
@@ -377,7 +384,29 @@ function AssignModal({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — Course step: save global perms */}
+        {step==='course' && (
+          <div style={{padding:'14px 22px',borderTop:'1px solid rgba(255,255,255,0.07)',display:'flex',gap:9}}>
+            <button onClick={onClose} style={{
+              flex:1,padding:'10px',borderRadius:9,fontSize:13,
+              background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.09)',color:'#888',cursor:'pointer'}}>
+              Cancel
+            </button>
+            <button onClick={()=>onSaveGlobal(Array.from(globalPerms))}
+              disabled={savingGlobal} style={{
+              flex:2,padding:'10px',borderRadius:9,fontSize:13,fontWeight:700,
+              background:'linear-gradient(135deg,#7c3aed,#a855f7)',
+              border:'none',color:'#fff',
+              cursor:savingGlobal?'not-allowed':'pointer',
+              display:'flex',alignItems:'center',justifyContent:'center',gap:7,
+            }}>
+              {savingGlobal?<Loader size={14} style={{animation:'spin 0.8s linear infinite'}}/>:<Check size={14}/>}
+              {savingGlobal?'Saving...':'Save Global Options'}
+            </button>
+          </div>
+        )}
+
+        {/* Footer — Perms step: save course-specific permissions */}
         {step==='perms' && (
           <div style={{padding:'14px 22px',borderTop:'1px solid rgba(255,255,255,0.07)',display:'flex',gap:9}}>
             <button onClick={onClose} style={{
@@ -586,8 +615,8 @@ function TeacherRow({ teacher,onToggleExpand,onAssign,onEditAssignment,
   onEditAssignment:(a:CourseAssignment)=>void;onRevokeAssignment:(a:CourseAssignment)=>void;
   onToggleActive:(a:CourseAssignment)=>void;onViewLogs:()=>void;togglingId:string|null;
 }) {
-  const active = teacher.assignments.filter(a=>a.isActive).length;
-  const total = teacher.assignments.length;
+  const active = teacher.assignments.filter(a=>a.isActive && a.courseId!=='__global__').length;
+  const total = teacher.assignments.filter(a=>a.courseId!=='__global__').length;
   const initial = (teacher.surname||'T').charAt(0).toUpperCase();
 
   return (
@@ -649,13 +678,13 @@ function TeacherRow({ teacher,onToggleExpand,onAssign,onEditAssignment,
       {/* Expanded Assignments */}
       {teacher.isExpanded && (
         <div style={{borderTop:'1px solid rgba(255,255,255,0.06)',padding:'10px 17px 14px'}}>
-          {teacher.assignments.length===0 ? (
+          {teacher.assignments.filter(a=>a.courseId!=='__global__').length===0 ? (
             <div style={{textAlign:'center',padding:'18px',background:'#111',borderRadius:9,color:'#333',fontSize:12}}>
               No courses assigned. Click "Assign Course" to get started.
             </div>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:7}}>
-              {teacher.assignments.map(a=>(
+              {teacher.assignments.filter(a=>a.courseId!=='__global__').map(a=>(
                 <AssignmentCard key={a.id} assignment={a}
                   onEdit={()=>onEditAssignment(a)}
                   onRevoke={()=>onRevokeAssignment(a)}
@@ -690,6 +719,7 @@ export default function CourseAssignmentPage() {
   const [logsModal, setLogsModal] = useState<LogsModalState>({ open:false });
   const [confirmRevoke, setConfirmRevoke] = useState<ConfirmState>({ open:false, assignmentId:'', label:'' });
   const [savingAssignment, setSavingAssignment] = useState(false);
+  const [savingGlobal, setSavingGlobal] = useState(false);
   const [revokingId, setRevokingId] = useState<string|null>(null);
   const [togglingId, setTogglingId] = useState<string|null>(null);
 
@@ -747,6 +777,23 @@ export default function CourseAssignmentPage() {
       await load(true);
     } catch(e:any) { toast('error', e.message||'Failed to save'); }
     finally { setSavingAssignment(false); }
+  };
+
+  const handleSaveGlobal = async(globalPerms: GlobalPermission[]) => {
+    if(!assignModal.teacher||!currentUser) return;
+    setSavingGlobal(true);
+    try {
+      await courseAssignmentService.saveGlobalPermissions(
+        { uid:assignModal.teacher.uid, userId:assignModal.teacher.userId,
+          surname:assignModal.teacher.surname, fullName:assignModal.teacher.fullName,
+          phoneNumber:assignModal.teacher.phoneNumber },
+        globalPerms,
+        { uid:currentUser.uid, userId:currentUser.userId||'', surname:currentUser.surname||'' }
+      );
+      toast('success', `Global options saved for ${assignModal.teacher.surname}`);
+      await load(true);
+    } catch(e:any) { toast('error', e.message||'Failed to save global options'); }
+    finally { setSavingGlobal(false); }
   };
 
   const handleRevoke = async() => {
@@ -816,7 +863,8 @@ export default function CourseAssignmentPage() {
 
       <AssignModal state={assignModal} courses={courses}
         onClose={()=>setAssignModal({open:false,teacher:null,existingAssignments:[]})}
-        onSave={handleSaveAssignment} saving={savingAssignment}/>
+        onSave={handleSaveAssignment} saving={savingAssignment}
+        onSaveGlobal={handleSaveGlobal} savingGlobal={savingGlobal}/>
 
       <LogsModal state={logsModal} onClose={()=>setLogsModal({open:false})}/>
 
