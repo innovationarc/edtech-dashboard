@@ -1,361 +1,150 @@
-// src/pages/Analytics.tsx
 import { useState, useEffect } from 'react';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
+import { 
+  Trophy, 
+  Star, 
+  Award, 
+  Target, 
+  Zap, 
+  Calendar,
+  Users,
+  TrendingUp,
+  Medal,
+  Crown,
+  Flame,
+  BookOpen,
+  Brain,
+  Clock,
+  Loader,
+  Lock,
+  CheckCircle
+} from 'lucide-react';
 import Card from '../components/ui/Card';
-import { Calendar, Users, Upload, BookOpen, Activity, ArrowUp, ArrowDown, Loader, DollarSign } from 'lucide-react'; // Added DollarSign import
+import { useDashboard } from '../contexts/DashboardContext';
+import { 
+  gamificationService, 
+  Achievement, 
+  UserAchievement, 
+  UserStats, 
+  Challenge,
+  LeaderboardEntry 
+} from '../services/gamificationService';
 
-// Import services
-import { userService } from '../services/userService';
-import { contentService } from '../services/contentService';
-import { courseService } from '../services/courseService';
-import { paymentService } from '../services/paymentService'; // Added this
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
-
-const Analytics = () => {
-  const [timeRange, setTimeRange] = useState('month');
+const Achievements = () => {
+  const { user } = useDashboard();
+  const [activeTab, setActiveTab] = useState<'achievements' | 'leaderboard' | 'challenges'>('achievements');
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [userAchievements, setUserAchievements] = useState<UserAchievement[]>([]);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // State for dynamic data
-  const [totalVisitors, setTotalVisitors] = useState(0);
-  const [activeStudents, setActiveStudents] = useState(0);
-  const [contentUploads, setContentUploads] = useState(0);
-  const [courseCompletions, setCourseCompletions] = useState(0);
-  const [totalTeachers, setTotalTeachers] = useState(0); // New state
-  const [totalRevenue, setTotalRevenue] = useState(0); // New state
-  const [enrollmentByCourse, setEnrollmentByCourse] = useState<Record<string, number>>({}); // New state
-  const [enrollmentBySubject, setEnrollmentBySubject] = useState<Record<string, number>>({}); // New state
-
-  const [trafficChartData, setTrafficChartData] = useState<any>({ labels: [], datasets: [] });
-  const [activityChartData, setActivityChartData] = useState<any>({ labels: [], datasets: [] });
-  const [uploadChartData, setUploadChartData] = useState<any>({ labels: [], datasets: [] });
-
   useEffect(() => {
-    loadAnalyticsData();
-  }, [timeRange]);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
-  const loadAnalyticsData = async () => {
-    setLoading(true);
-    setError('');
+  const loadData = async () => {
+    if (!user) return;
+    
     try {
+      setLoading(true);
+      setError('');
+      
       const [
-        allUsers,
-        allContent,
-        allCourses,
-        allEnrollments,
-        allTransactions // Added this
+        achievementsData,
+        userAchievementsData,
+        userStatsData,
+        leaderboardData,
+        challengesData
       ] = await Promise.all([
-        userService.getAllUsers().catch(() => []),
-        contentService.getAllContent().catch(() => []),
-        courseService.getAllCourses().catch(() => []),
-        courseService.getAllEnrollments().catch(() => []),
-        paymentService.getAllTransactions().catch(() => []) // Added this
+        gamificationService.getAllAchievements(),
+        gamificationService.getUserAchievements(user.uid),
+        gamificationService.getUserStats(user.uid),
+        gamificationService.getLeaderboard('all_time', 20),
+        gamificationService.getActiveChallenges()
       ]);
-
-      // --- Process Stats Cards Data ---
-      setTotalVisitors(allUsers.length);
-      setActiveStudents(allUsers.filter(u => u.role === 'student' && u.status === 'active').length);
-      setContentUploads(allContent.length);
-      setCourseCompletions(allEnrollments.filter(e => e.progress === 100).length);
-      setTotalTeachers(allUsers.filter(u => u.role === 'teacher').length); // New calculation
-      setTotalRevenue(allTransactions.filter(t => t.status === 'success').reduce((sum, t) => sum + t.amount, 0)); // New calculation
-
-      // --- Process Enrollment Data ---
-      const enrollmentCountsByCourse: Record<string, number> = {};
-      const enrollmentCountsBySubject: Record<string, number> = {};
-
-      allEnrollments.forEach(enrollment => {
-        const course = allCourses.find(c => c.id === enrollment.courseId);
-        if (course) {
-          enrollmentCountsByCourse[course.title] = (enrollmentCountsByCourse[course.title] || 0) + 1;
-          enrollmentCountsBySubject[course.category] = (enrollmentCountsBySubject[course.category] || 0) + 1;
-        }
-      });
-      setEnrollmentByCourse(enrollmentCountsByCourse);
-      setEnrollmentBySubject(enrollmentCountsBySubject);
-
-      // --- Process Traffic Data (Visitors) ---
-      // Simplified for example, would need more sophisticated date filtering for real data
-      const trafficLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const visitorsData = [1200, 1900, 1500, 2100, 1800, 1350, 1600]; // Placeholder, derive from user sign-ups/logins
-      const pageViewsData = [2200, 3000, 2700, 3500, 3200, 2400, 2800]; // Placeholder, no direct service for this
-
-      setTrafficChartData({
-        labels: trafficLabels,
-        datasets: [
-          {
-            label: 'Visitors',
-            data: visitorsData,
-            borderColor: '#6366f1',
-            backgroundColor: 'rgba(99, 102, 241, 0.1)',
-            tension: 0.4,
-            fill: true,
-            pointBackgroundColor: '#6366f1',
-          },
-          {
-            label: 'Page Views',
-            data: pageViewsData,
-            borderColor: '#8b5cf6',
-            backgroundColor: 'rgba(139, 92, 246, 0.1)',
-            tension: 0.4,
-            fill: true,
-            pointBackgroundColor: '#8b5cf6',
-          },
-        ],
-      });
-
-      // --- Process User Activity Data ---
-      const quizAttemptsCount = 0; // quiz sessions no longer fetched
-      const lessonCompletionsCount = allEnrollments.reduce((sum, enrollment) => sum + (enrollment.completedLessons?.length || 0), 0);
-      // Placeholder for other activities as there's no direct service for this
-      const contentViewsCount = 800;
-      const forumPostsCount = 150;
-      const downloadsCount = 200;
-
-      setActivityChartData({
-        labels: ['Content Views', 'Quiz Attempts', 'Lesson Completions', 'Forum Posts', 'Downloads'],
-        datasets: [
-          {
-            data: [contentViewsCount, quizAttemptsCount, lessonCompletionsCount, forumPostsCount, downloadsCount],
-            backgroundColor: ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'],
-            borderWidth: 0,
-            borderRadius: 4,
-            barThickness: 24,
-          },
-        ],
-      });
-
-      // --- Process Upload Stats Data ---
-      const lessonCount = allContent.filter(c => c.type === 'lesson').length;
-      const noteCount = allContent.filter(c => c.type === 'note').length;
-      const trickCount = allContent.filter(c => c.type === 'trick').length;
-      const mcqCount = allContent.filter(c => c.type === 'mcq').length;
-      const otherCount = allContent.filter(c => !['lesson', 'note', 'trick', 'mcq'].includes(c.type)).length;
-
-      setUploadChartData({
-        labels: ['Lessons', 'Notes', 'MCQs', 'Tricks & Hacks', 'Other'],
-        datasets: [
-          {
-            data: [lessonCount, noteCount, mcqCount, trickCount, otherCount],
-            backgroundColor: ['#6366f1', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'],
-            borderWidth: 0,
-            hoverOffset: 4,
-          },
-        ],
-      });
-
-    } catch (err: any) {
-      console.error('Error loading analytics data:', err);
-      setError('Failed to load analytics data. Please try again.');
+      
+      setAchievements(achievementsData);
+      setUserAchievements(userAchievementsData);
+      setUserStats(userStatsData);
+      setLeaderboard(leaderboardData);
+      setChallenges(challengesData);
+    } catch (error: any) {
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const getTimeLabel = () => {
-    switch (timeRange) {
-      case 'week': return 'This Week';
-      case 'month': return 'This Month';
-      case 'quarter': return 'This Quarter';
-      case 'year': return 'This Year';
-      default: return 'This Month';
+  const getAchievementIcon = (iconName: string) => {
+    const iconMap: Record<string, JSX.Element> = {
+      'trophy': <Trophy size={24} className="text-yellow-400" />,
+      'star': <Star size={24} className="text-yellow-400" />,
+      'award': <Award size={24} className="text-yellow-400" />,
+      'target': <Target size={24} className="text-blue-400" />,
+      'zap': <Zap size={24} className="text-purple-400" />,
+      'flame': <Flame size={24} className="text-orange-400" />,
+      'book': <BookOpen size={24} className="text-green-400" />,
+      'brain': <Brain size={24} className="text-pink-400" />,
+      'clock': <Clock size={24} className="text-indigo-400" />,
+      'medal': <Medal size={24} className="text-yellow-400" />,
+      'crown': <Crown size={24} className="text-yellow-400" />
+    };
+    return iconMap[iconName] || <Award size={24} className="text-gray-400" />;
+  };
+
+  const getAchievementTypeColor = (type: string) => {
+    switch (type) {
+      case 'bronze': return 'from-amber-700 to-amber-500';
+      case 'silver': return 'from-gray-400 to-gray-200';
+      case 'gold': return 'from-yellow-500 to-yellow-300';
+      case 'platinum': return 'from-purple-500 to-purple-300';
+      case 'special': return 'from-pink-500 to-pink-300';
+      default: return 'from-gray-600 to-gray-400';
     }
   };
 
-  const statsCards = [
-    { // New card
-      title: 'Total Students',
-      value: totalVisitors.toLocaleString(), // totalVisitors is now total users
-      change: '+12.5%',
-      positive: true,
-      icon: <Users size={20} className="text-white" />,
-      color: 'bg-primary-500',
-    },
-    { // New card
-      title: 'Total Teachers',
-      value: totalTeachers.toLocaleString(),
-      change: '+5%',
-      positive: true,
-      icon: <BookOpen size={20} className="text-white" />,
-      color: 'bg-secondary-500',
-    },
-    { // New card
-      title: 'Total Revenue',
-      value: `$${totalRevenue.toLocaleString()}`,
-      change: '+18%',
-      positive: true,
-      icon: <DollarSign size={20} className="text-white" />,
-      color: 'bg-accent-500',
-    },
-    { // Existing card, re-positioned
-      title: 'Active Students',
-      value: activeStudents.toLocaleString(),
-      change: '+7.2%',
-      positive: true,
-      icon: <Activity size={20} className="text-white" />,
-      color: 'bg-warning-DEFAULT',
-    },
-    { // Existing card, re-positioned
-      title: 'Content Uploads',
-      value: contentUploads.toLocaleString(),
-      change: '+22.5%',
-      positive: true,
-      icon: <Upload size={20} className="text-white" />,
-      color: 'bg-error-DEFAULT',
-    },
-    { // Existing card, re-positioned
-      title: 'Course Completions',
-      value: courseCompletions.toLocaleString(),
-      change: '-3.8%',
-      positive: false,
-      icon: <BookOpen size={20} className="text-white" />,
-      color: 'bg-purple-500',
-    },
-  ];
-
-  const trafficOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top' as const,
-        labels: {
-          color: '#e5e7eb',
-          font: {
-            size: 12,
-          },
-        },
-      },
-      tooltip: {
-        backgroundColor: '#1f2937',
-        titleColor: '#fff',
-        bodyColor: '#e5e7eb',
-        borderColor: '#374151',
-        borderWidth: 1,
-        padding: 10,
-      },
-    },
-    scales: {
-      x: {
-        grid: {
-          display: false,
-          drawBorder: false,
-        },
-        ticks: {
-          color: '#9ca3af',
-        },
-      },
-      y: {
-        grid: {
-          color: 'rgba(75, 85, 99, 0.2)',
-          drawBorder: false,
-        },
-        ticks: {
-          color: '#9ca3af',
-          padding: 10,
-        },
-      },
-    },
+  const isAchievementUnlocked = (achievementId: string) => {
+    return userAchievements.some(ua => ua.achievementId === achievementId);
   };
 
-  const activityOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      tooltip: {
-        backgroundColor: '#1f2937',
-        titleColor: '#fff',
-        bodyColor: '#e5e7eb',
-        borderColor: '#374151',
-        borderWidth: 1,
-        padding: 10,
-      },
-    },
-    scales: {
-      x: {
-        grid: {
-          display: false,
-          drawBorder: false,
-        },
-        ticks: {
-          color: '#9ca3af',
-        },
-      },
-      y: {
-        grid: {
-          color: 'rgba(75, 85, 99, 0.2)',
-          drawBorder: false,
-        },
-        ticks: {
-          color: '#9ca3af',
-          padding: 10,
-        },
-      },
-    },
+  const getProgressTowardsAchievement = (achievement: Achievement) => {
+    if (!userStats) return 0;
+    
+    switch (achievement.requirements.type) {
+      case 'mcq_streak':
+        return Math.min((userStats.currentStreak / achievement.requirements.target) * 100, 100);
+      case 'course_completion':
+        return Math.min((userStats.coursesCompleted / achievement.requirements.target) * 100, 100);
+      case 'study_days':
+        return Math.min((userStats.studyDays / achievement.requirements.target) * 100, 100);
+      case 'perfect_score':
+        return Math.min((userStats.perfectScores / achievement.requirements.target) * 100, 100);
+      case 'time_spent':
+        return Math.min((userStats.totalStudyTime / achievement.requirements.target) * 100, 100);
+      default:
+        return 0;
+    }
   };
 
-  const uploadOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '70%',
-    plugins: {
-      legend: {
-        position: 'bottom' as const,
-        labels: {
-          color: '#e5e7eb',
-          font: {
-            size: 12,
-          },
-          padding: 20,
-        },
-      },
-      tooltip: {
-        backgroundColor: '#1f2937',
-        titleColor: '#fff',
-        bodyColor: '#e5e7eb',
-        borderColor: '#374151',
-        borderWidth: 1,
-        padding: 10,
-      },
-    },
+  const joinChallenge = async (challengeId: string) => {
+    if (!user) return;
+    
+    try {
+      await gamificationService.joinChallenge(challengeId, user.uid);
+      await loadData(); // Refresh data
+    } catch (error: any) {
+      console.error('Error joining challenge:', error);
+    }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="flex flex-col items-center gap-4">
-          <Loader size={32} className="animate-spin text-primary-500" />
-          <p className="text-gray-400">Loading analytics data...</p>
-        </div>
+        <Loader size={32} className="animate-spin text-primary-500" />
       </div>
     );
   }
@@ -363,10 +152,11 @@ const Analytics = () => {
   if (error) {
     return (
       <div className="text-center py-12">
-        <h3 className="text-lg font-medium text-white mb-2">Error Loading Analytics</h3>
+        <Trophy size={48} className="mx-auto text-gray-500 mb-4" />
+        <h3 className="text-lg font-medium text-white mb-2">Error Loading Achievements</h3>
         <p className="text-gray-400 mb-4">{error}</p>
         <button
-          onClick={loadAnalyticsData}
+          onClick={loadData}
           className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors"
         >
           Try Again
@@ -377,127 +167,295 @@ const Analytics = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h1 className="text-2xl font-bold text-white">Analytics Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Achievements & Gamification</h1>
+          <p className="text-gray-400 mt-1">Track your progress and compete with others</p>
+        </div>
+        
+        {userStats && (
+          <div className="text-right">
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-400">{userStats.totalPoints}</div>
+                <div className="text-xs text-gray-400">Total Points</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-primary-400">Level {userStats.level}</div>
+                <div className="text-xs text-gray-400">Current Level</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-400">{userStats.currentStreak}</div>
+                <div className="text-xs text-gray-400">Day Streak</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
-        <div className="flex p-1 bg-background-800 rounded-lg">
-          {['week', 'month', 'quarter', 'year'].map((range) => (
+      {/* Tab Navigation */}
+      <div className="border-b border-background-800">
+        <div className="flex gap-6">
+          {[
+            { id: 'achievements', label: 'Achievements', icon: <Trophy size={18} /> },
+            { id: 'leaderboard', label: 'Leaderboard', icon: <TrendingUp size={18} /> },
+            { id: 'challenges', label: 'Challenges', icon: <Target size={18} /> }
+          ].map(tab => (
             <button
-              key={range}
-              className={`px-4 py-1.5 text-sm rounded-md ${
-                timeRange === range
-                  ? 'bg-primary-600 text-white'
-                  : 'text-gray-400 hover:text-white'
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 pb-3 border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? 'border-primary-500 text-primary-500'
+                  : 'border-transparent text-gray-400 hover:text-white'
               }`}
-              onClick={() => setTimeRange(range)}
             >
-              {range.charAt(0).toUpperCase() + range.slice(1)}
+              {tab.icon}
+              <span>{tab.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {statsCards.map((card, index) => (
-          <Card key={index} className="p-0">
-            <div className="p-5 flex items-center justify-between">
-              <div>
-                <h3 className="text-gray-400 text-sm">{card.title}</h3>
-                <p className="text-2xl font-semibold text-white mt-1">{card.value}</p>
-                <div className="flex items-center mt-1">
-                  {card.positive ? (
-                    <ArrowUp size={14} className="text-success-DEFAULT mr-1" />
-                  ) : (
-                    <ArrowDown size={14} className="text-error-DEFAULT mr-1" />
-                  )}
-                  <span
-                    className={`text-xs ${
-                      card.positive ? "text-success-DEFAULT" : "text-error-DEFAULT"
-                    }`}
-                  >
-                    {card.change} {getTimeLabel()}
-                  </span>
+      {/* Tab Content */}
+      {activeTab === 'achievements' && (
+        <div className="space-y-6">
+          {/* User Progress Overview */}
+          {userStats && (
+            <Card title="Your Progress" className="p-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="text-center">
+                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-300 flex items-center justify-center mx-auto mb-2">
+                    <Brain size={24} className="text-white" />
+                  </div>
+                  <div className="text-lg font-bold text-white">{userStats.mcqsCorrect}/{userStats.mcqsAnswered}</div>
+                  <div className="text-xs text-gray-400">MCQs Correct</div>
+                </div>
+                
+                <div className="text-center">
+                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-green-500 to-green-300 flex items-center justify-center mx-auto mb-2">
+                    <BookOpen size={24} className="text-white" />
+                  </div>
+                  <div className="text-lg font-bold text-white">{userStats.coursesCompleted}</div>
+                  <div className="text-xs text-gray-400">Courses Completed</div>
+                </div>
+                
+                <div className="text-center">
+                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-purple-500 to-purple-300 flex items-center justify-center mx-auto mb-2">
+                    <Clock size={24} className="text-white" />
+                  </div>
+                  <div className="text-lg font-bold text-white">{Math.floor(userStats.totalStudyTime / 60)}h</div>
+                  <div className="text-xs text-gray-400">Study Time</div>
+                </div>
+                
+                <div className="text-center">
+                  <div className="h-16 w-16 rounded-full bg-gradient-to-br from-orange-500 to-orange-300 flex items-center justify-center mx-auto mb-2">
+                    <Flame size={24} className="text-white" />
+                  </div>
+                  <div className="text-lg font-bold text-white">{userStats.longestStreak}</div>
+                  <div className="text-xs text-gray-400">Longest Streak</div>
                 </div>
               </div>
-              <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${card.color}`}>
-                {card.icon}
+            </Card>
+          )}
+
+          {/* Achievements Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {achievements.map(achievement => {
+              const isUnlocked = isAchievementUnlocked(achievement.id);
+              const progress = getProgressTowardsAchievement(achievement);
+              
+              return (
+                <Card key={achievement.id} className="p-0 overflow-hidden">
+                  <div className={`h-2 bg-gradient-to-r ${getAchievementTypeColor(achievement.type)}`}></div>
+                  
+                  <div className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className={`h-16 w-16 rounded-full bg-gradient-to-br ${getAchievementTypeColor(achievement.type)} flex items-center justify-center flex-shrink-0 ${!isUnlocked && 'opacity-50'}`}>
+                        {isUnlocked ? (
+                          getAchievementIcon(achievement.icon)
+                        ) : (
+                          <Lock size={24} className="text-white" />
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className={`font-medium ${isUnlocked ? 'text-white' : 'text-gray-400'}`}>
+                            {achievement.name}
+                          </h3>
+                          {isUnlocked && (
+                            <CheckCircle size={16} className="text-success-DEFAULT" />
+                          )}
+                        </div>
+                        
+                        <p className={`text-sm mb-3 ${isUnlocked ? 'text-gray-300' : 'text-gray-500'}`}>
+                          {achievement.description}
+                        </p>
+                        
+                        <div className="flex items-center justify-between text-xs">
+                          <span className={`px-2 py-1 rounded-full ${isUnlocked ? 'bg-success-dark text-success-light' : 'bg-background-700 text-gray-400'}`}>
+                            {achievement.points} points
+                          </span>
+                          <span className={`capitalize ${isUnlocked ? 'text-primary-400' : 'text-gray-500'}`}>
+                            {achievement.type}
+                          </span>
+                        </div>
+                        
+                        {!isUnlocked && progress > 0 && (
+                          <div className="mt-3">
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-gray-400">Progress</span>
+                              <span className="text-white">{Math.round(progress)}%</span>
+                            </div>
+                            <div className="w-full bg-background-700 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full bg-gradient-to-r ${getAchievementTypeColor(achievement.type)}`}
+                                style={{ width: `${progress}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'leaderboard' && (
+        <Card title="Global Leaderboard" subtitle="Top performers across the platform">
+          <div className="space-y-4">
+            {leaderboard.map((entry, index) => (
+              <div
+                key={entry.userId}
+                className={`flex items-center gap-4 p-4 rounded-lg transition-colors ${
+                  entry.userId === user?.uid ? 'bg-primary-900/20 border border-primary-500/30' : 'bg-background-800'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold ${
+                    index === 0 ? 'bg-yellow-500 text-white' :
+                    index === 1 ? 'bg-gray-400 text-white' :
+                    index === 2 ? 'bg-amber-600 text-white' :
+                    'bg-background-700 text-gray-300'
+                  }`}>
+                    {index < 3 ? (
+                      index === 0 ? <Crown size={16} /> :
+                      index === 1 ? <Medal size={16} /> :
+                      <Award size={16} />
+                    ) : (
+                      entry.rank
+                    )}
+                  </div>
+                  
+                  <div className="h-10 w-10 rounded-full bg-primary-700 flex items-center justify-center">
+                    <span className="text-white font-medium">{entry.userAvatar}</span>
+                  </div>
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-white font-medium truncate">{entry.userName}</h3>
+                    {entry.userId === user?.uid && (
+                      <span className="text-xs bg-primary-900 text-primary-300 px-2 py-0.5 rounded">You</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-400">
+                    <span>Level {entry.level}</span>
+                    <span>{entry.achievements} achievements</span>
+                    <span>{entry.currentStreak} day streak</span>
+                  </div>
+                </div>
+                
+                <div className="text-right">
+                  <div className="text-lg font-bold text-yellow-400">{entry.totalPoints}</div>
+                  <div className="text-xs text-gray-400">points</div>
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card title="Traffic Overview" subtitle="Website traffic analytics">
-            <div className="h-80">
-              <Line data={trafficChartData} options={trafficOptions} />
+      {activeTab === 'challenges' && (
+        <div className="space-y-6">
+          <Card title="Active Challenges" subtitle="Join challenges to earn extra points and rewards">
+            <div className="space-y-4">
+              {challenges.length === 0 ? (
+                <div className="text-center py-8">
+                  <Target size={48} className="mx-auto text-gray-500 mb-4" />
+                  <h3 className="text-lg font-medium text-white mb-2">No Active Challenges</h3>
+                  <p className="text-gray-400">Check back later for new challenges from your teachers!</p>
+                </div>
+              ) : (
+                challenges.map(challenge => {
+                  const isParticipating = challenge.participants.includes(user?.uid || '');
+                  const daysLeft = Math.ceil((challenge.endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                  
+                  return (
+                    <div key={challenge.id} className="p-4 bg-background-800 rounded-lg border-l-4 border-primary-500">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-12 rounded-full bg-primary-600 flex items-center justify-center">
+                            <Target size={20} className="text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-white font-medium">{challenge.name}</h3>
+                            <p className="text-sm text-gray-400">by {challenge.createdByName}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className="text-sm text-primary-400 font-medium">
+                            {challenge.rewards.points} points
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {daysLeft} days left
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <p className="text-gray-300 text-sm mb-4">{challenge.description}</p>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-sm text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <Users size={14} />
+                            {challenge.participants.length} participants
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Calendar size={14} />
+                            Ends {challenge.endDate.toLocaleDateString()}
+                          </span>
+                        </div>
+                        
+                        {isParticipating ? (
+                          <span className="px-3 py-1 bg-success-dark text-success-light rounded-full text-sm">
+                            Participating
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => joinChallenge(challenge.id)}
+                            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
+                          >
+                            Join Challenge
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </Card>
         </div>
-
-        <div className="lg:col-span-1">
-          <Card title="Upload Statistics" subtitle="Content type distribution">
-            <div className="h-80 flex items-center justify-center">
-              <Doughnut data={uploadChartData} options={uploadOptions} />
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="User Activity" subtitle="Student interactions by category">
-          <div className="h-80">
-            <Bar data={activityChartData} options={activityOptions} />
-          </div>
-        </Card>
-
-        <Card title="Usage Calendar" subtitle="Peak usage times">
-          <div className="h-80 flex flex-col items-center justify-center text-center">
-            <Calendar size={64} className="text-primary-400 mb-4" />
-            <h3 className="text-white font-medium mb-2">Calendar View Coming Soon</h3>
-            <p className="text-gray-400 max-w-md">
-              Detailed calendar view of usage patterns is currently in development.
-              This feature will show peak usage times and help you optimize content scheduling.
-            </p>
-          </div>
-        </Card>
-      </div>
-
-      {/* New Section: Enrollment Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Enrollment by Course" subtitle="Number of students enrolled in each course">
-            <div className="space-y-3">
-                {Object.entries(enrollmentByCourse).length > 0 ? (
-                    Object.entries(enrollmentByCourse).sort(([, a], [, b]) => b - a).map(([courseName, count]) => (
-                        <div key={courseName} className="flex justify-between items-center bg-background-800 p-3 rounded-lg">
-                            <span className="text-white text-sm">{courseName}</span>
-                            <span className="text-primary-300 font-medium">{count} students</span>
-                        </div>
-                    ))
-                ) : (
-                    <div className="text-center text-gray-400 py-4">No course enrollment data available.</div>
-                )}
-            </div>
-        </Card>
-
-        <Card title="Enrollment by Subject" subtitle="Number of students enrolled in courses per subject">
-            <div className="space-y-3">
-                {Object.entries(enrollmentBySubject).length > 0 ? (
-                    Object.entries(enrollmentBySubject).sort(([, a], [, b]) => b - a).map(([subjectName, count]) => (
-                        <div key={subjectName} className="flex justify-between items-center bg-background-800 p-3 rounded-lg">
-                            <span className="text-white text-sm">{subjectName}</span>
-                            <span className="text-primary-300 font-medium">{count} students</span>
-                        </div>
-                    ))
-                ) : (
-                    <div className="text-center text-gray-400 py-4">No subject enrollment data available.</div>
-                )}
-            </div>
-        </Card>
-    </div>
+      )}
     </div>
   );
 };
 
-export default Analytics;
+export default Achievements;
