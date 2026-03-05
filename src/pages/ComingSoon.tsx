@@ -1,7 +1,7 @@
 // src/pages/ComingSoon.tsx
 import { useState, useEffect } from 'react';
 import {
-  Clock, Star, BookOpen, GitMerge, Zap, Upload, Smartphone,
+  Clock, Star, BookOpen, GitMerge, Zap, Upload, Smartphone, XCircle,
   BarChart2, Cpu, Users, Layers, CheckCircle, X, ExternalLink,
   AlertCircle, Send, Eye, Trash2,
   Wifi, Globe, Shield, Lock, Bell, Camera, Code, Database,
@@ -285,12 +285,15 @@ interface FeatureCardProps {
   onRequestAccess: (feature: ComingSoonFeature) => void;
   onTryAccess: (request: EarlyAccessRequest) => void;
   onCancelAccess: (featureId: string, requestId: string) => void;
+  onReRequestAccess: (feature: ComingSoonFeature, oldRequestId: string) => void;
   requestingId: string | null;
 }
 
-const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCancelAccess, requestingId }: FeatureCardProps) => {
+const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCancelAccess, onReRequestAccess, requestingId }: FeatureCardProps) => {
   const isRequested = !!earlyAccess && earlyAccess.status !== 'cancelled';
   const isApproved = earlyAccess?.status === 'approved';
+  const isRejected = earlyAccess?.status === 'rejected';
+  const isFinalRejection = isRejected && (earlyAccess?.rejectionCount ?? 0) >= 3;
   const isLoading = requestingId === feature.id;
 
   return (
@@ -333,6 +336,34 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
           >
             <ExternalLink size={14} /> Try Early Access
           </button>
+        ) : isRejected ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 py-2 rounded text-sm">
+              <XCircle size={14} />
+              <span>Request Rejected</span>
+              {(earlyAccess?.rejectionCount ?? 0) > 0 && (
+                <span className="text-xs text-red-500 opacity-70">
+                  ({earlyAccess!.rejectionCount}/3)
+                </span>
+              )}
+            </div>
+            {isFinalRejection ? (
+              <p className="text-center text-gray-500 text-xs py-1">
+                Final rejection — no further requests allowed
+              </p>
+            ) : (
+              <button
+                onClick={() => onReRequestAccess(feature, earlyAccess!.id)}
+                disabled={isLoading}
+                className="w-full bg-background-700 hover:bg-background-600 text-white py-2 rounded transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : null}
+                Request Again
+              </button>
+            )}
+          </div>
         ) : isRequested ? (
           <div className="flex gap-2">
             <button
@@ -452,6 +483,43 @@ const ComingSoon = () => {
     }
   };
 
+  const handleReRequestAccess = async (feature: ComingSoonFeature, oldRequestId: string) => {
+    if (!user) return;
+    // Guard — prevent double-tap while in flight
+    if (requestingId === feature.id) return;
+    setRequestingId(feature.id);
+    // Carry over the current rejectionCount from the existing doc
+    const existing = earlyAccessMap[feature.id];
+    const rejectionCount = existing?.rejectionCount ?? 0;
+    // Optimistically remove old entry so button shows spinner
+    setEarlyAccessMap(prev => {
+      const next = { ...prev };
+      delete next[feature.id];
+      return next;
+    });
+    try {
+      // Delete old rejected doc first, then create new one
+      await comingSoonService.cancelEarlyAccess(oldRequestId);
+      await comingSoonService.requestEarlyAccess(
+        feature.id,
+        feature.title,
+        user.uid,
+        user.name + (user.surname ? ' ' + user.surname : ''),
+        user.userId,
+        user.email,
+        rejectionCount,
+      );
+      // onSnapshot will update map automatically
+    } catch {
+      // Revert — put old entry back
+      if (existing) {
+        setEarlyAccessMap(prev => ({ ...prev, [feature.id]: existing }));
+      }
+    } finally {
+      setRequestingId(null);
+    }
+  };
+
   const handleCancelEarlyAccess = async (featureId: string, requestId: string) => {
     // Optimistic update — remove from map immediately so button resets
     setEarlyAccessMap(prev => {
@@ -520,6 +588,7 @@ const ComingSoon = () => {
               onRequestAccess={handleRequestAccess}
               onTryAccess={req => setActiveEarlyAccess(req)}
               onCancelAccess={handleCancelEarlyAccess}
+              onReRequestAccess={handleReRequestAccess}
               requestingId={requestingId}
             />
           ))}
