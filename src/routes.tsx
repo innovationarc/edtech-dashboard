@@ -10,6 +10,7 @@ import CourseEnrollment from './pages/CourseEnrollment';
 import PaymentSuccess from './pages/PaymentSuccess';
 import StudyPlan from './pages/StudyPlan';
 import Progress from './pages/Progress';
+import Leaderboard from './pages/Leaderboard';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import ComingSoon from './pages/ComingSoon';
@@ -173,6 +174,20 @@ const EvaluatorRoute = ({ children }: { children: React.ReactNode }) => {
   if (loading || (isAuthenticated && !user)) return null;
 
   const allowed = ['admin', 'teacher', 'manager', 'coordinator'];
+  if (!isAuthenticated || !user?.role || !allowed.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Protected Route for Leaderboard — all non-student staff roles
+const LeaderboardRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated, loading } = useDashboard();
+
+  if (loading || (isAuthenticated && !user)) return null;
+
+  const allowed = ['admin', 'manager', 'teacher', 'coordinator', 'student_manager', 'course_manager'];
   if (!isAuthenticated || !user?.role || !allowed.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -379,9 +394,14 @@ const AppRoutes = () => {
           </TeacherAdminRoute>
         } />
         <Route path="progress" element={
-          <TeacherAdminRoute>
+          <StudentRoute>
             <Progress />
-          </TeacherAdminRoute>
+          </StudentRoute>
+        } />
+        <Route path="leaderboard" element={
+          <LeaderboardRoute>
+            <Leaderboard />
+          </LeaderboardRoute>
         } />
         
         {/* Public routes (all authenticated users) */}
