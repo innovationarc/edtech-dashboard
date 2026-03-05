@@ -1,4 +1,4 @@
-// src/pages/ComingSoonManagement.tsx
+// src/pages/admin/ComingSoonManagement.tsx
 import { useState, useEffect } from 'react';
 import {
   Plus, Edit2, Trash2, ChevronDown, ChevronUp, X, Save,
@@ -6,15 +6,15 @@ import {
   Zap, BookOpen, Star, Upload, GitMerge, BarChart2, Cpu,
   Layers, Smartphone, Link, FileText,
 } from 'lucide-react';
-import Card from '../components/ui/Card';
+import Card from '../../components/ui/Card';
 import {
   comingSoonService,
   ComingSoonFeature,
   EarlyAccessRequest,
   FeatureRequest,
   FeatureRequestStatus,
-} from '../services/comingSoonService';
-import { useDashboard } from '../contexts/DashboardContext';
+} from '../../services/comingSoonService';
+import { useDashboard } from '../../contexts/DashboardContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ICON_OPTIONS = [
@@ -60,6 +60,7 @@ const Spinner = () => (
 interface FeatureFormModalProps {
   feature?: ComingSoonFeature | null;
   existingCount: number;
+  adminId: string;
   onSave: () => void;
   onClose: () => void;
 }
@@ -74,7 +75,7 @@ const EMPTY_FORM = {
   order: 0,
 };
 
-const FeatureFormModal = ({ feature, existingCount, onSave, onClose }: FeatureFormModalProps) => {
+const FeatureFormModal = ({ feature, existingCount, adminId, onSave, onClose }: FeatureFormModalProps) => {
   const [form, setForm] = useState(
     feature
       ? {
@@ -101,7 +102,7 @@ const FeatureFormModal = ({ feature, existingCount, onSave, onClose }: FeatureFo
       if (feature) {
         await comingSoonService.updateFeature(feature.id, form);
       } else {
-        await comingSoonService.addFeature(form);
+        await comingSoonService.addFeature(form, adminId);
       }
       onSave();
     } catch (e: any) {
@@ -153,31 +154,39 @@ const FeatureFormModal = ({ feature, existingCount, onSave, onClose }: FeatureFo
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-gray-400 block mb-1.5">Icon</label>
-              <select
-                value={form.iconName}
-                onChange={e => set('iconName', e.target.value)}
-                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-              >
-                {ICON_OPTIONS.map(i => (
-                  <option key={i} value={i}>{i}</option>
-                ))}
-              </select>
+          <div>
+            <label className="text-sm text-gray-400 block mb-2">Icon</label>
+            <div className="grid grid-cols-5 gap-2">
+              {ICON_OPTIONS.map(i => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => set('iconName', i)}
+                  title={i}
+                  className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border transition-all
+                    ${form.iconName === i
+                      ? 'border-primary-500 bg-primary-500/15 text-primary-400'
+                      : 'border-background-700 bg-background-900 text-gray-400 hover:border-background-600 hover:text-white'
+                    }`}
+                >
+                  {ICON_PREVIEW[i]}
+                  <span className="text-[10px] leading-none truncate w-full text-center">{i}</span>
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="text-sm text-gray-400 block mb-1.5">Status</label>
-              <select
-                value={form.status}
-                onChange={e => set('status', e.target.value)}
-                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-              >
-                <option value="in_development">In Development</option>
-                <option value="beta">Beta</option>
-                <option value="released">Released</option>
-              </select>
-            </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-gray-400 block mb-1.5">Status</label>
+            <select
+              value={form.status}
+              onChange={e => set('status', e.target.value)}
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
+            >
+              <option value="in_development">In Development</option>
+              <option value="beta">Beta</option>
+              <option value="released">Released</option>
+            </select>
           </div>
 
           <div>
@@ -558,6 +567,7 @@ const ComingSoonManagement = () => {
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingFeature, setEditingFeature] = useState<ComingSoonFeature | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [featuresSubTab, setFeaturesSubTab] = useState<'mine' | 'all'>('mine');
 
   const loadFeatures = () => {
     setLoadingFeatures(true);
@@ -642,32 +652,72 @@ const ComingSoonManagement = () => {
 
       {/* Tab Content */}
       {activeTab === 'features' ? (
-        loadingFeatures ? (
-          <div className="flex justify-center py-16"><Spinner /></div>
-        ) : features.length === 0 ? (
-          <div className="text-center py-20 text-gray-500">
-            <Layers size={40} className="mx-auto mb-3 opacity-40" />
-            <p>No features added yet.</p>
-            <button
-              onClick={() => setShowFormModal(true)}
-              className="mt-4 text-primary-400 hover:text-primary-300 text-sm underline"
-            >
-              Add your first feature
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {features.map(f => (
-              <FeatureRow
-                key={f.id}
-                feature={f}
-                adminId={user?.uid ?? ''}
-                onEdit={feat => { setEditingFeature(feat); setShowFormModal(true); }}
-                onDelete={handleDelete}
-              />
+        <>
+          {/* Sub-tabs: My Features / All Features */}
+          <div className="flex gap-1 bg-background-900 border border-background-700 rounded-lg p-1 w-fit">
+            {([
+              { id: 'mine', label: 'My Features' },
+              { id: 'all',  label: 'All Features' },
+            ] as { id: 'mine' | 'all'; label: string }[]).map(st => (
+              <button
+                key={st.id}
+                onClick={() => setFeaturesSubTab(st.id)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors
+                  ${featuresSubTab === st.id
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-400 hover:text-white'
+                  }`}
+              >
+                {st.label}
+                {st.id === 'mine' && (
+                  <span className="ml-1.5 text-xs opacity-70">
+                    ({features.filter(f => f.createdBy === user?.uid).length})
+                  </span>
+                )}
+                {st.id === 'all' && (
+                  <span className="ml-1.5 text-xs opacity-70">({features.length})</span>
+                )}
+              </button>
             ))}
           </div>
-        )
+
+          {loadingFeatures ? (
+            <div className="flex justify-center py-16"><Spinner /></div>
+          ) : (() => {
+            const visibleFeatures = featuresSubTab === 'mine'
+              ? features.filter(f => f.createdBy === user?.uid)
+              : features;
+            return visibleFeatures.length === 0 ? (
+              <div className="text-center py-20 text-gray-500">
+                <Layers size={40} className="mx-auto mb-3 opacity-40" />
+                {featuresSubTab === 'mine'
+                  ? <p>You haven't added any features yet.</p>
+                  : <p>No features added yet.</p>
+                }
+                {featuresSubTab === 'mine' && (
+                  <button
+                    onClick={() => setShowFormModal(true)}
+                    className="mt-4 text-primary-400 hover:text-primary-300 text-sm underline"
+                  >
+                    Add your first feature
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {visibleFeatures.map(f => (
+                  <FeatureRow
+                    key={f.id}
+                    feature={f}
+                    adminId={user?.uid ?? ''}
+                    onEdit={feat => { setEditingFeature(feat); setShowFormModal(true); }}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </div>
+            );
+          })()}
+        </>
       ) : (
         <FeatureRequestsTab adminId={user?.uid ?? ''} />
       )}
@@ -677,6 +727,7 @@ const ComingSoonManagement = () => {
         <FeatureFormModal
           feature={editingFeature}
           existingCount={features.length}
+          adminId={user?.uid ?? ''}
           onSave={handleSaved}
           onClose={() => { setShowFormModal(false); setEditingFeature(null); }}
         />
