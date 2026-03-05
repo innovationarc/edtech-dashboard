@@ -20,9 +20,19 @@ import { db } from '../config/firebase';
 
 // ==================== INTERFACES ====================
 
-export type CoursePermission = 'course_creation' | 'editing' | 'qna' | 'tasks' | 'exams';
+// Global permissions (stored on CourseAssignment for cross-course access)
+export type GlobalPermission = 'course_creation' | 'task_creation_global';
 
-export const ALL_PERMISSIONS: CoursePermission[] = ['course_creation', 'editing', 'qna', 'tasks', 'exams'];
+// Per-course permissions (stored in CourseAssignment.permissions for a specific course)
+export type CoursePermission =
+  | 'editing'
+  | 'qna'
+  | 'task_creation'
+  | 'task_editing'
+  | 'task_evaluation'
+  | 'exams';
+
+export const ALL_PERMISSIONS: CoursePermission[] = ['editing', 'qna', 'task_creation', 'task_editing', 'task_evaluation', 'exams'];
 
 export const PERMISSION_META: Record<CoursePermission, {
   label: string;
@@ -30,12 +40,6 @@ export const PERMISSION_META: Record<CoursePermission, {
   color: string;
   bgColor: string;
 }> = {
-  course_creation: {
-    label: 'Course Creation',
-    description: 'Create new courses on the platform',
-    color: '#a855f7',
-    bgColor: 'rgba(168,85,247,0.12)',
-  },
   editing: {
     label: 'Course Editing',
     description: 'Edit content, lessons, and materials',
@@ -48,11 +52,23 @@ export const PERMISSION_META: Record<CoursePermission, {
     color: '#0ea5e9',
     bgColor: 'rgba(14,165,233,0.12)',
   },
-  tasks: {
-    label: 'Tasks',
-    description: 'Create and grade assignments',
+  task_creation: {
+    label: 'Task Creation',
+    description: 'Create tasks for this specific course',
     color: '#f59e0b',
     bgColor: 'rgba(245,158,11,0.12)',
+  },
+  task_editing: {
+    label: 'Task Editing',
+    description: 'Edit tasks belonging to this course',
+    color: '#f97316',
+    bgColor: 'rgba(249,115,22,0.12)',
+  },
+  task_evaluation: {
+    label: 'Task Evaluation',
+    description: 'Evaluate and grade tasks for this course',
+    color: '#22c55e',
+    bgColor: 'rgba(34,197,94,0.12)',
   },
   exams: {
     label: 'Exams',
@@ -74,6 +90,8 @@ export interface CourseAssignment {
   courseCategory?: string;
   courseThumbnail?: string;
   permissions: CoursePermission[];
+  // Global permissions that apply across all courses (e.g. course_creation, task_creation_global)
+  globalPermissions?: GlobalPermission[];
   // Subjects this teacher can access for Q&A and Exams. Empty = all subjects.
   allowedSubjects: string[];
   assignedAt: Date;
@@ -136,13 +154,14 @@ export const courseAssignmentService = {
     permissions: CoursePermission[],
     allowedSubjects: string[],
     assignedByUser: { uid: string; userId: string; surname: string },
-    notes?: string
+    notes?: string,
+    globalPermissions?: GlobalPermission[]
   ): Promise<string> {
     try {
       const existing = await this.getAssignment(teacher.uid, course.id);
 
       if (existing?.id) {
-        await this.updateAssignmentPermissions(existing.id, permissions, allowedSubjects, assignedByUser, notes);
+        await this.updateAssignmentPermissions(existing.id, permissions, allowedSubjects, assignedByUser, notes, globalPermissions);
         return existing.id;
       }
 
@@ -157,6 +176,7 @@ export const courseAssignmentService = {
         courseCategory: course.category || '',
         courseThumbnail: course.thumbnail || '',
         permissions,
+        globalPermissions: globalPermissions || [],
         allowedSubjects,
         assignedAt: Timestamp.now(),
         assignedByUid: assignedByUser.uid,
@@ -195,7 +215,8 @@ export const courseAssignmentService = {
     newPermissions: CoursePermission[],
     allowedSubjects: string[],
     updatedByUser: { uid: string; userId: string; surname: string },
-    notes?: string
+    notes?: string,
+    globalPermissions?: GlobalPermission[]
   ): Promise<void> {
     try {
       const ref = doc(db, 'course_assignments', assignmentId);
@@ -206,6 +227,7 @@ export const courseAssignmentService = {
 
       await updateDoc(ref, {
         permissions: newPermissions,
+        globalPermissions: globalPermissions !== undefined ? globalPermissions : (old.globalPermissions || []),
         allowedSubjects,
         isActive: true,
         updatedAt: Timestamp.now(),
@@ -462,7 +484,7 @@ export const courseAssignmentService = {
   async getStats(): Promise<AssignmentStats> {
     const all = await this.getAllAssignments();
     const active = all.filter(a => a.isActive);
-    const breakdown: Record<CoursePermission, number> = { course_creation: 0, editing: 0, qna: 0, tasks: 0, exams: 0 };
+    const breakdown: Record<CoursePermission, number> = { editing: 0, qna: 0, task_creation: 0, task_editing: 0, task_evaluation: 0, exams: 0 };
     active.forEach(a => a.permissions.forEach(p => breakdown[p]++));
     return {
       totalAssignments: all.length,
