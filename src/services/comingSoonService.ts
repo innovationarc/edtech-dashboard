@@ -47,6 +47,7 @@ export interface EarlyAccessRequest {
   studentUserId?: string; // human-readable e.g. ST-2601-00001
   studentEmail?: string;
   status: EarlyAccessStatus;
+  rejectionCount: number; // 0–3; locked at 3 (final request)
   accessLink?: string;
   guidelines?: string;
   requestedAt: Date;
@@ -133,6 +134,7 @@ const mapEarlyAccess = (id: string, d: any): EarlyAccessRequest => ({
   studentUserId: d.studentUserId,
   studentEmail: d.studentEmail,
   status: d.status ?? 'pending',
+  rejectionCount: d.rejectionCount ?? 0,
   accessLink: d.accessLink,
   guidelines: d.guidelines,
   requestedAt: toDate(d.requestedAt),
@@ -249,6 +251,7 @@ export const comingSoonService = {
     studentName: string,
     studentUserId?: string,
     studentEmail?: string,
+    rejectionCount = 0,
   ): Promise<string> {
     const ref = await addDoc(collection(db, EARLY_ACCESS_COL), {
       featureId,
@@ -258,6 +261,7 @@ export const comingSoonService = {
       studentUserId: studentUserId ?? null,
       studentEmail: studentEmail ?? '',
       status: 'pending',
+      rejectionCount,
       requestedAt: serverTimestamp(),
     });
     return ref.id;
@@ -331,11 +335,13 @@ export const comingSoonService = {
     actor: Actor,
     featureTitle?: string,
     studentName?: string,
+    currentRejectionCount = 0,
   ): Promise<void> {
     await updateDoc(doc(db, EARLY_ACCESS_COL, requestId), {
       status: 'rejected',
       reviewedBy: actor.uid,
       reviewedAt: serverTimestamp(),
+      rejectionCount: currentRejectionCount + 1,
     });
     await writeLog(
       'early_access_rejected',
@@ -413,6 +419,63 @@ export const comingSoonService = {
       actor,
       { id: requestId, title: `Request by ${studentName ?? '?'}` },
     );
+  },
+
+  // ── Admin single delete early access ─────────────────────────────────────
+
+  async adminDeleteEarlyAccess(
+    requestId: string,
+    actor: Actor,
+    featureTitle?: string,
+    studentName?: string,
+  ): Promise<void> {
+    await deleteDoc(doc(db, EARLY_ACCESS_COL, requestId));
+    await writeLog(
+      'early_access_cancelled',
+      actor,
+      { id: requestId, title: featureTitle },
+      `Admin deleted request by ${studentName ?? '?'}`,
+    );
+  },
+
+  // ── Bulk operations on early access requests ──────────────────────────────
+
+  async bulkDeleteEarlyAccess(requestIds: string[]): Promise<void> {
+    await Promise.all(requestIds.map(id => deleteDoc(doc(db, EARLY_ACCESS_COL, id))));
+  },
+
+  async bulkApproveEarlyAccess(
+    requests: { id: string; featureTitle?: string; studentName?: string }[],
+    accessLink: string,
+    guidelines: string,
+    actor: Actor,
+  ): Promise<void> {
+    await Promise.all(requests.map(r =>
+      updateDoc(doc(db, EARLY_ACCESS_COL, r.id), {
+        status: 'approved',
+        accessLink,
+        guidelines,
+        reviewedBy: actor.uid,
+        reviewedAt: serverTimestamp(),
+      })
+    ));
+    await writeLog('early_access_approved', actor, undefined, `Bulk approved ${requests.length} request(s)`);
+  },
+
+  async bulkRejectEarlyAccess(
+    requests: { id: string; rejectionCount: number }[],
+    actor: Actor,
+    featureTitle?: string,
+  ): Promise<void> {
+    await Promise.all(requests.map(r =>
+      updateDoc(doc(db, EARLY_ACCESS_COL, r.id), {
+        status: 'rejected',
+        reviewedBy: actor.uid,
+        reviewedAt: serverTimestamp(),
+        rejectionCount: r.rejectionCount + 1,
+      })
+    ));
+    await writeLog('early_access_rejected', actor, { title: featureTitle }, `Bulk rejected ${requests.length} request(s)`);
   },
 
   // ── Activity Log ──────────────────────────────────────────────────────────
