@@ -45,6 +45,9 @@ import CouponManagement from './pages/CouponManagement';
 // Coming Soon Management
 import ComingSoonManagement from './pages/ComingSoonManagement';
 
+// AI Model Settings (Admin only)
+import AIModelSettings from './pages/AIModelSettings';
+
 // NEW: Course Assignment Management
 import CourseAssignment from './pages/CourseAssignment';
 
@@ -301,6 +304,13 @@ const AppRoutes = () => {
         <Route path="coming-soon-management" element={
           <AdminRoute>
             <ComingSoonManagement />
+          </AdminRoute>
+        } />
+
+        {/* AI Model Settings - Admin only */}
+        <Route path="ai-settings" element={
+          <AdminRoute>
+            <AIModelSettings />
           </AdminRoute>
         } />
 
