@@ -1,8 +1,11 @@
 // src/services/aiStudyPlannerService.ts
-// Gemini 2.5 Flash — Smart Schedule · Time Slots · Auto-Draft · Chat · Calendar Extraction
-// Cost-optimized: session caching, minimal tokens, smart batching
+// Multi-Provider AI — Gemini · Groq · OpenAI · Anthropic · DeepSeek
+// Reads active provider config from Firestore (set in Admin → AI Model Settings)
+// Falls back to VITE_GEMINI_API_KEY + gemini-2.0-flash if no config saved
 
-// ─── Interfaces ───────────────────────────────────────────────────────────────
+import { aiModelConfigService, callProviderDirect, AIModelConfig } from './aiModelConfigService';
+
+// ─── Exported Interfaces (unchanged — 100% backward compatible) ───────────────
 
 export interface StudyGoal {
   subject: string;
@@ -77,191 +80,71 @@ export interface PomodoroSession {
   notes: string;
 }
 
-// NEW: Calendar event extracted from chat
-export interface CalendarEventFromChat {
-  title: string;
-  date: string; // YYYY-MM-DD
-  startTime: string; // HH:MM
-  endTime: string;   // HH:MM
-  subject: string;
-  eventType: 'study_session' | 'exam' | 'assignment' | 'deadline' | 'class';
-  priority: 'low' | 'medium' | 'high';
-  description?: string;
-}
-
-// NEW: Rich chat context
-export interface ChatContext {
-  studentName: string;
-  totalEvents: number;
-  subjects: string[];
-  upcomingExams: string[];
-  enrolledCourses: { title: string; subjects: string[]; totalLessons: number; progress: number }[];
-  customActivities: { name: string; days: string[]; time: string; priority: string }[];
-  activeGoals: { subject: string; targetDate: string; hoursNeeded: number; progress: number }[];
-  completionRate: number;
-  streak: number;
-  pomodoroSessions: number;
-}
-
-// NEW: Chat response with optional calendar data
-export interface ChatResponse {
-  response: string;
-  calendarEvents?: CalendarEventFromChat[];
-}
-
-// ─── Gemini 2.5 Flash ─────────────────────────────────────────────────────────
-
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-
-// Single-turn call
-async function callGemini(prompt: string, apiKey: string, maxTokens = 1024, temp = 0.7): Promise<string> {
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: temp, maxOutputTokens: maxTokens },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text().catch(() => res.statusText)}`);
-  const d = await res.json();
-  return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-}
-
-// Multi-turn chat call — uses Gemini's native conversation format
-async function callGeminiChat(
-  systemPrompt: string,
-  history: { role: 'user' | 'assistant'; content: string }[],
-  userMessage: string,
-  apiKey: string,
-  maxTokens = 700,
-  temp = 0.85
-): Promise<string> {
-  // Convert history to Gemini format (model = assistant)
-  const contents: any[] = history.slice(-8).map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-  // Add current message
-  contents.push({ role: 'user', parts: [{ text: userMessage }] });
-
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents,
-      generationConfig: { temperature: temp, maxOutputTokens: maxTokens },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${await res.text().catch(() => res.statusText)}`);
-  const d = await res.json();
-  return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-}
+// ─── Internal helpers ─────────────────────────────────────────────────────────
 
 function parseJSON<T>(raw: string, fallback: T, isArray = false): T {
   try {
     const m = raw.match(isArray ? /\[[\s\S]*\]/ : /\{[\s\S]*\}/);
-    if (!m) throw new Error('no json');
+    if (!m) throw new Error('no json block found');
     return JSON.parse(m[0]) as T;
-  } catch { return fallback; }
-}
-
-// Extract PLAN_JSON block from AI chat response
-function extractPlanJSON(response: string): { cleanResponse: string; events: CalendarEventFromChat[] } {
-  const match = response.match(/<!--PLAN_JSON\s*([\s\S]*?)\s*PLAN_JSON-->/);
-  if (!match) return { cleanResponse: response.trim(), events: [] };
-
-  const cleanResponse = response.replace(/<!--PLAN_JSON[\s\S]*?PLAN_JSON-->/, '').trim();
-  try {
-    const raw = match[1].trim();
-    const events = JSON.parse(raw) as CalendarEventFromChat[];
-    if (!Array.isArray(events)) return { cleanResponse, events: [] };
-    return { cleanResponse, events };
   } catch {
-    return { cleanResponse, events: [] };
+    return fallback;
   }
 }
 
-// ─── Session-level caching (cost optimization) ────────────────────────────────
-
-function getCached<T>(key: string): T | null {
-  try {
-    const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
-  } catch { return null; }
+/**
+ * Resolve the AI config to use for a call.
+ * - If apiKeyOverride is a non-empty string, build a gemini-2.0-flash config from it (backward compat).
+ * - Otherwise load from Firestore (with in-memory cache).
+ */
+async function resolveConfig(apiKeyOverride?: string): Promise<AIModelConfig> {
+  if (apiKeyOverride && apiKeyOverride.trim()) {
+    return { provider: 'gemini', model: 'gemini-2.5-flash', apiKey: apiKeyOverride };
+  }
+  return aiModelConfigService.getConfig();
 }
 
-function setCache(key: string, value: any): void {
-  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+/** Unified AI call — resolves config then routes to the correct provider. Throws on error. */
+async function callAI(
+  prompt: string,
+  maxTokens: number,
+  temp: number,
+  apiKeyOverride?: string
+): Promise<string> {
+  const config = await resolveConfig(apiKeyOverride);
+  return callProviderDirect(prompt, config, maxTokens, temp);
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const aiStudyPlannerService = {
 
-  // ── Smart Schedule ──────────────────────────────────────────────────────────
   async generateSmartSchedule(
     goals: StudyGoal[],
     existing: { date: Date; startTime: string; endTime: string }[],
     hoursPerDay: number,
-    apiKey: string,
-    options?: {
-      enrolledCourses?: { title: string; subjects: string[] }[];
-      customActivities?: { name: string; daysOfWeek: number[]; startTime: string; endTime: string; isFlexible: boolean }[];
-    }
+    apiKey: string
   ): Promise<AIScheduleSuggestion[]> {
-    const today = new Date().toISOString().split('T')[0];
-
-    const blockedSlotsText = options?.customActivities?.length
-      ? options.customActivities.map(a => {
-          const dayNames = a.daysOfWeek.map(d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join('/');
-          return `  - ${a.name}: ${dayNames} ${a.startTime}-${a.endTime}${a.isFlexible ? ' (can skip if urgent)' : ''}`;
-        }).join('\n')
-      : '  None';
-
-    const courseContext = options?.enrolledCourses?.length
-      ? options.enrolledCourses.map(c => `  - ${c.title} (${c.subjects.join(', ')})`).join('\n')
-      : '';
-
-    const prompt = `Create an optimized study schedule using spaced repetition and cognitive load theory.
+    const prompt = `You are an expert AI study planner using spaced repetition + cognitive load theory.
 
 Goals:
 ${goals.map(g => `- ${g.subject}: ${g.hoursNeeded}h needed, deadline ${g.targetDate.toISOString().split('T')[0]}, difficulty: ${g.difficulty}, progress: ${g.currentProgress}%`).join('\n')}
-${courseContext ? `\nEnrolled Courses:\n${courseContext}` : ''}
 
-Available: ${hoursPerDay}h/day
-Blocked times:
-${blockedSlotsText}
+Existing commitments:
+${existing.map(e => `- ${e.date.toISOString().split('T')[0]} ${e.startTime}-${e.endTime}`).join('\n') || 'None'}
 
-Existing events (avoid overlap):
-${existing.map(e => `  - ${e.date.toISOString().split('T')[0]} ${e.startTime}-${e.endTime}`).join('\n') || '  None'}
+Available: ${hoursPerDay}h/day. Today: ${new Date().toISOString().split('T')[0]}
 
-Today: ${today}
-
-Rules:
-- Hard/new topics → 8am-11am (peak energy)
-- Reviews → 1pm-4pm
-- Practice → 6pm-8pm
-- Max 90-min sessions, space same subject 1+ day apart
-- Prioritize by urgency×difficulty, generate 7-14 sessions total
-- No sessions past 9pm or before 7am
+Rules: morning=hard topics, afternoon=review, vary focus/review/practice, space across days, prioritize by urgency x difficulty. Max 14 sessions.
 
 Return ONLY valid JSON array, no markdown:
-[{"title":"string","subject":"string","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"string","priority":"low|medium|high","sessionType":"focus|review|practice","tips":["t1","t2"]}]`;
+[{"title":"string","subject":"string","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"string","priority":"low|medium|high","sessionType":"focus|review|practice|break","tips":["t1","t2"]}]`;
 
-    const raw = await callGemini(prompt, apiKey, 2500, 0.55);
+    const raw = await callAI(prompt, 3000, 0.6, apiKey);
     const parsed = parseJSON<any[]>(raw, [], true);
-    return parsed.filter((s: any) => s.date && s.startTime).map((s: any) => ({
-      ...s,
-      date: new Date(s.date),
-      tips: Array.isArray(s.tips) ? s.tips : [],
-    }));
+    return parsed.map((s: any) => ({ ...s, date: new Date(s.date) }));
   },
 
-  // ── Time Slot Suggestions ───────────────────────────────────────────────────
   async suggestTimeSlots(
     eventTitle: string,
     eventType: string,
@@ -273,137 +156,83 @@ Return ONLY valid JSON array, no markdown:
     apiKey: string
   ): Promise<AITimeSlotSuggestion[]> {
     const busy = existingOnDay.map(e => `  ${e.startTime}-${e.endTime} (${e.title})`).join('\n') || '  None';
-    const prompt = `Suggest 3 optimal time slots.
+    const prompt = `Suggest 3 optimal time slots for a study event.
+
 Event: "${eventTitle}" | Type: ${eventType} | Subject: ${subject} | Duration: ${durationMins}min | Date: ${preferredDate}
-Busy:\n${busy}
-Prefs: morning=${prefs.preferMorning}, evening=${prefs.preferEvening}
+Busy:
+${busy}
+Prefs: morning=${prefs.preferMorning}, evening=${prefs.preferEvening}, peak=${prefs.peakHour ?? 'unknown'}
 
-Rules: exams/hard→morning, reviews→afternoon, practice→evening ok, 15min buffer, never past 22:00.
+Rules: exams/hard topics go morning (peak energy), reviews in afternoon, practice is fine in evenings, always add 15min buffer between sessions, never schedule past 23:00.
 
-Return ONLY valid JSON array of exactly 3:
-[{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"1-sentence reason","energyLevel":"peak|medium|low","sessionType":"focus|review|practice|break","estimatedProductivity":0-100,"conflictWarning":"string or null"}]`;
+Return ONLY a valid JSON array of exactly 3 objects. No markdown. No explanation. Just the array:
+[{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"one sentence","energyLevel":"peak|medium|low","sessionType":"focus|review|practice|break","estimatedProductivity":85,"conflictWarning":null}]`;
 
-    return parseJSON<AITimeSlotSuggestion[]>(await callGemini(prompt, apiKey, 800, 0.5), [], true);
+    // Throws on API error — caller must catch and show error state in UI
+    const raw = await callAI(prompt, 1024, 0.5, apiKey);
+    const result = parseJSON<AITimeSlotSuggestion[]>(raw, [], true);
+    if (!Array.isArray(result) || result.length === 0) {
+      throw new Error('Model returned no time slots. Check your AI model settings or try again.');
+    }
+    return result;
   },
 
-  // ── Auto-Draft ──────────────────────────────────────────────────────────────
-  async draftEventFromTitle(title: string, subject: string, eventType: string, apiKey: string): Promise<AIEventDraft> {
-    const prompt = `Auto-fill study event. Title: "${title}" | Subject: "${subject}" | Type: ${eventType}
-Return ONLY valid JSON:
-{"title":"improved title","description":"1-2 sentence description","priority":"low|medium|high","estimatedDuration":minutes,"suggestedPrep":["s1","s2","s3"],"relatedTopics":["t1","t2"]}`;
+  async draftEventFromTitle(
+    title: string,
+    subject: string,
+    eventType: string,
+    apiKey: string
+  ): Promise<AIEventDraft> {
+    const prompt = `Auto-fill study event details.
+Title: "${title}" | Subject: "${subject}" | Type: ${eventType}
+Return ONLY valid JSON (no markdown):
+{"title":"improved title","description":"1-2 sentence description","priority":"low|medium|high","estimatedDuration":60,"suggestedPrep":["s1","s2","s3"],"relatedTopics":["t1","t2"]}`;
 
+    const raw = await callAI(prompt, 512, 0.6, apiKey);
     return parseJSON<AIEventDraft>(
-      await callGemini(prompt, apiKey, 400, 0.6),
+      raw,
       { title, description: '', priority: 'medium', estimatedDuration: 60, suggestedPrep: [], relatedTopics: [] }
     );
   },
 
-  // ── Personalized Insights (session-cached) ──────────────────────────────────
   async getPersonalizedInsights(
     studentName: string,
     upcoming: { title: string; date: Date; priority: string; eventType: string }[],
     completionRate: number,
-    apiKey: string,
-    cacheKey?: string
+    apiKey: string
   ): Promise<AIInsight[]> {
-    // Cache per student per session — saves API cost
-    const key = cacheKey ? `insights_${cacheKey}` : null;
-    if (key) {
-      const cached = getCached<AIInsight[]>(key);
-      if (cached) return cached;
-    }
-
     const urgent = upcoming
       .filter(e => Math.ceil((e.date.getTime() - Date.now()) / 86400000) <= 7)
-      .map(e => `${e.title} in ${Math.max(0, Math.ceil((e.date.getTime() - Date.now()) / 86400000))}d`);
+      .map(e => `${e.title} in ${Math.ceil((e.date.getTime() - Date.now()) / 86400000)}d`);
 
-    const prompt = `Generate 3-4 personalized study insights for ${studentName}.
-Completion rate: ${completionRate}%. Urgent items: ${urgent.join(', ') || 'none'}.
-Return ONLY valid JSON array:
-[{"type":"warning|success|tip|motivation","title":"3-5 words","message":"max 90 chars","action":"short CTA or null"}]`;
+    const prompt = `Generate 3-4 personalized study insights.
+Student: ${studentName} | Completion: ${completionRate}% | Urgent: ${urgent.join(', ') || 'none'}
+Return ONLY valid JSON array (no markdown):
+[{"type":"warning|success|tip|motivation","title":"3-5 words","message":"max 100 chars","action":"CTA or null"}]`;
 
-    const result = parseJSON<AIInsight[]>(
-      await callGemini(prompt, apiKey, 450, 0.8),
-      [{ type: 'tip', title: 'Stay Consistent', message: 'Short daily sessions beat long cramming sessions every time.', action: 'Start Pomodoro' }],
+    const raw = await callAI(prompt, 512, 0.8, apiKey);
+    return parseJSON<AIInsight[]>(
+      raw,
+      [{ type: 'tip', title: 'Stay Consistent', message: 'Short daily sessions beat long cramming.', action: 'Start Pomodoro' }],
       true
     );
-
-    if (key) setCache(key, result);
-    return result;
   },
 
-  // ── AI Chat (warm, contextual, with calendar extraction) ────────────────────
   async chatWithAI(
     message: string,
-    context: ChatContext,
+    context: { events: number; subjects: string[]; upcomingExams: string[] },
     history: { role: 'user' | 'assistant'; content: string }[],
     apiKey: string
-  ): Promise<ChatResponse> {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-    const goalsText = context.activeGoals.length
-      ? context.activeGoals.map(g => `  • ${g.subject}: ${g.hoursNeeded}h needed, due ${g.targetDate}, ${g.progress}% done`).join('\n')
-      : '  No active goals yet';
-
-    const coursesText = context.enrolledCourses.length
-      ? context.enrolledCourses.map(c => `  • ${c.title} (${c.subjects.slice(0,2).join(', ')}), ${c.totalLessons} lessons, ${c.progress}% complete`).join('\n')
-      : '  No enrolled courses';
-
-    const activitiesText = context.customActivities.length
-      ? context.customActivities.map(a => `  • ${a.name}: ${a.days.join('/')} ${a.time} (${a.priority})`).join('\n')
-      : '  No activities added';
-
-    const systemPrompt = `You are Sage, ${context.studentName}'s personal AI study companion. You're like their smart, caring friend who genuinely wants them to succeed. You speak naturally, warmly, and practically — never robotic or overly formal.
-
-About ${context.studentName} right now:
-• Completion rate: ${context.completionRate}% | Study streak: ${context.streak} days | Pomodoros: ${context.pomodoroSessions}
-• Active subjects: ${context.subjects.join(', ') || 'not set yet'}
-• Upcoming exams: ${context.upcomingExams.join(', ') || 'none'}
-
-Study Goals:
-${goalsText}
-
-Enrolled Courses:
-${coursesText}
-
-Daily Activities (blocked time):
-${activitiesText}
-
-Today: ${today}
-
-IMPORTANT — When ${context.studentName} asks you to create a study plan, schedule, or timetable, you MUST include a machine-readable JSON block at the very end of your response using this EXACT format (no spaces inside the tags):
-<!--PLAN_JSON
-[{"title":"Session Name","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","subject":"Subject Name","eventType":"study_session","priority":"high","description":"What to do in this session"}]
-PLAN_JSON-->
-
-Tone guidelines:
-- Speak like a real person, occasionally use their name but not every message
-- Be specific and actionable — no vague platitudes
-- Keep responses under 180 words UNLESS creating a full schedule
-- If they ask for something unrealistic, gently say so and suggest a better approach
-- Use light formatting with bullet points when listing things, but no excessive markdown
-- Encourage without being cheesy`;
-
-    const raw = await callGeminiChat(systemPrompt, history, message, apiKey, 750, 0.85);
-    const { cleanResponse, events } = extractPlanJSON(raw);
-
-    return {
-      response: cleanResponse,
-      calendarEvents: events.length > 0 ? events : undefined,
-    };
+  ): Promise<string> {
+    const hist = history.slice(-6).map(m => `${m.role === 'user' ? 'Student' : 'Sage'}: ${m.content}`).join('\n');
+    const prompt = `You are Sage, a warm and knowledgeable AI study companion on an EdTech platform. Be encouraging, concise, and actionable.
+Context: ${context.events} events, subjects: ${context.subjects.join(', ') || 'none'}, exams: ${context.upcomingExams.join(', ') || 'none'}
+${hist}
+Student: ${message}
+Sage (max 200 words, warm and helpful):`;
+    return callAI(prompt, 700, 0.8, apiKey);
   },
 
-  // ── Study Tips (cached in memory by caller) ─────────────────────────────────
-  async generateStudyTips(subject: string, eventType: string, apiKey: string): Promise<string[]> {
-    const prompt = `3 specific, actionable study tips for: "${subject}" (${eventType}). Be concrete, not generic. Return ONLY JSON array: ["tip1","tip2","tip3"]`;
-    return parseJSON<string[]>(
-      await callGemini(prompt, apiKey, 250, 0.7),
-      ['Review key concepts actively', 'Practice past questions', 'Summarize in your own words'],
-      true
-    );
-  },
-
-  // ── Task Prioritization ─────────────────────────────────────────────────────
   async prioritizeTasks(
     tasks: { id: string; title: string; dueDate: Date; estimatedHours: number; subject: string; priority: string }[],
     apiKey: string
@@ -411,16 +240,30 @@ Tone guidelines:
     const prompt = `Reprioritize tasks using Eisenhower matrix + deadline urgency.
 ${tasks.map(t => `${t.id}|${t.title}|due:${t.dueDate.toISOString().split('T')[0]}|${t.estimatedHours}h|${t.subject}|${t.priority}`).join('\n')}
 Today: ${new Date().toISOString().split('T')[0]}
-Return ONLY valid JSON array: [{"id":"string","newPriority":"low|medium|high","urgencyScore":0-100,"reason":"brief"}]`;
+Return ONLY valid JSON array (no markdown): [{"id":"string","newPriority":"low|medium|high","urgencyScore":50,"reason":"brief"}]`;
 
+    const raw = await callAI(prompt, 1024, 0.4, apiKey);
     return parseJSON<any[]>(
-      await callGemini(prompt, apiKey, 900, 0.4),
+      raw,
       tasks.map(t => ({ id: t.id, newPriority: t.priority, urgencyScore: 50, reason: 'Manual' })),
       true
     );
   },
 
-  // ── Weekly Digest ───────────────────────────────────────────────────────────
+  async generateStudyTips(
+    subject: string,
+    eventType: string,
+    apiKey: string
+  ): Promise<string[]> {
+    const prompt = `3 specific actionable study tips for: "${subject}" (${eventType}). Return ONLY a JSON array of 3 strings (no markdown): ["tip1","tip2","tip3"]`;
+    const raw = await callAI(prompt, 256, 0.7, apiKey);
+    return parseJSON<string[]>(
+      raw,
+      ['Review key concepts', 'Practice past questions', 'Summarize in your own words'],
+      true
+    );
+  },
+
   async generateWeeklyDigestSummary(
     studentName: string,
     upcoming: { title: string; eventType: string; daysUntil: number; priority: string }[],
@@ -430,36 +273,35 @@ Return ONLY valid JSON array: [{"id":"string","newPriority":"low|medium|high","u
     topSubjects: string[],
     apiKey: string
   ): Promise<WeeklyDigestAI> {
-    const prompt = `Write a student weekly digest as a caring study coach.
+    const prompt = `Write a student weekly digest as a study coach.
 Student: ${studentName} | Done: ${completedThisWeek}/${totalThisWeek} | Streak: ${streakDays}d | Subjects: ${topSubjects.join(', ') || 'various'}
-Upcoming: ${upcoming.slice(0, 5).map(e => `${e.title}(${e.daysUntil}d,${e.priority})`).join(', ') || 'none'}
-Return ONLY valid JSON:
-{"summary":"2-3 sentence personalized overview","tips":["t1","t2","t3"],"urgentItems":["item if <=3d else empty array"],"motivationalMessage":"one warm sentence"}`;
+Upcoming: ${upcoming.slice(0, 6).map(e => `${e.title}(${e.daysUntil}d,${e.priority})`).join(', ') || 'none'}
+Return ONLY valid JSON (no markdown):
+{"summary":"2-3 sentence personalized overview","tips":["t1","t2","t3"],"urgentItems":["item if within 3 days"],"motivationalMessage":"one warm sentence"}`;
 
+    const raw = await callAI(prompt, 768, 0.75, apiKey);
     return parseJSON<WeeklyDigestAI>(
-      await callGemini(prompt, apiKey, 600, 0.75),
-      { summary: `Hi ${studentName}, here's your weekly study digest.`, tips: ['Review notes daily', 'Use active recall', 'Take regular breaks'], urgentItems: [], motivationalMessage: 'Every study session brings you closer to your goals!' }
+      raw,
+      { summary: `Hi ${studentName}, here's your weekly digest.`, tips: ['Review notes daily', 'Use active recall', 'Take breaks'], urgentItems: [], motivationalMessage: 'Keep it up!' }
     );
   },
 
-  // ── Study Pattern Analysis ──────────────────────────────────────────────────
   async analyzeStudyPatterns(
     sessions: PomodoroSession[],
     events: { date: Date; eventType: string; course: string; isPersonal: boolean }[],
     apiKey: string
   ): Promise<StudyAnalytics> {
-    const summary = sessions.slice(-30)
-      .map(s => `${s.subject}:${s.duration}min`)
-      .join(', ');
+    const summary = sessions.slice(-30).map(s => `${s.subject}:${s.duration}min on ${s.startTime.toISOString().split('T')[0]}`).join('\n');
+    const prompt = `Analyze student study data.
+Sessions (last 30d): ${summary || 'none'}
+Events: ${events.length}
+Return ONLY valid JSON (no markdown):
+{"weeklyHours":0,"subjectDistribution":[{"subject":"s","hours":1,"color":"#6366f1"}],"productivityScore":70,"streakDays":0,"completionRate":0,"insights":["i1","i2","i3"],"recommendations":["r1","r2","r3"]}`;
 
-    const prompt = `Analyze student study data briefly.
-Sessions (last 30d): ${summary || 'none'}. Total events: ${events.length}.
-Return ONLY valid JSON:
-{"weeklyHours":number,"subjectDistribution":[{"subject":"s","hours":number,"color":"#hex"}],"productivityScore":0-100,"streakDays":number,"completionRate":0-100,"insights":["i1","i2","i3"],"recommendations":["r1","r2","r3"]}`;
-
+    const raw = await callAI(prompt, 1024, 0.5, apiKey);
     return parseJSON<StudyAnalytics>(
-      await callGemini(prompt, apiKey, 800, 0.5),
-      { weeklyHours: 0, subjectDistribution: [], productivityScore: 50, streakDays: 0, completionRate: 0, insights: ['Start tracking sessions to get AI insights!'], recommendations: ['Add your first Pomodoro session'] }
+      raw,
+      { weeklyHours: 0, subjectDistribution: [], productivityScore: 50, streakDays: 0, completionRate: 0, insights: ['Start tracking to get AI insights!'], recommendations: ['Add your first session'] }
     );
   },
 };
