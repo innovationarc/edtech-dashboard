@@ -4,7 +4,7 @@
 // Only counts sessions: status in ['submitted','auto_submitted'], resultVisibility === 'visible', writtenEvaluationPending === false
 
 import {
-  collection, query, where, getDocs, orderBy
+  collection, query, where, getDocs
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { ExamSession } from './examService';
@@ -128,11 +128,12 @@ export const leaderboardService = {
     contents: Map<string, Content>;
   }> {
     // 1. Get all submitted/visible sessions for this course
+    // Note: no orderBy here to avoid requiring a composite Firestore index.
+    // Sorting is done in-memory via assignRanks().
     const q = query(
       collection(db, 'examSessions'),
       where('courseId', '==', courseId),
-      where('resultVisibility', '==', 'visible'),
-      orderBy('percentage', 'desc')
+      where('resultVisibility', '==', 'visible')
     );
     const snap = await getDocs(q);
 
@@ -310,16 +311,43 @@ export const leaderboardService = {
     myPercentage: number | null;
     top3: CourseLeaderboardEntry[];
   }[]> {
-    const enrollments = await courseEnrollmentService.getStudentEnrollments(studentId);
+    // Fetch enrollments — do NOT swallow the error so Progress.tsx can surface it
+    let enrollments = await courseEnrollmentService.getStudentEnrollments(studentId);
+
+    // Fallback: if service returns empty, query Firestore directly trying both field names
+    if (!enrollments.length) {
+      try {
+        // Try studentId field first
+        const q1 = query(collection(db, 'enrollments'), where('studentId', '==', studentId));
+        const snap1 = await getDocs(q1);
+        if (!snap1.empty) {
+          enrollments = snap1.docs.map(d => ({ id: d.id, ...d.data() } as any));
+        } else {
+          // Try userId field (legacy enrollment format)
+          const q2 = query(collection(db, 'enrollments'), where('userId', '==', studentId));
+          const snap2 = await getDocs(q2);
+          if (!snap2.empty) {
+            enrollments = snap2.docs.map(d => ({ id: d.id, ...d.data() } as any));
+          }
+        }
+        console.log('[leaderboardService] Fallback found enrollments:', enrollments.length);
+      } catch (e) {
+        console.warn('[leaderboardService] Fallback enrollment query failed:', e);
+      }
+    }
+
     if (!enrollments.length) return [];
 
+    // Fetch all courses in parallel with enrollments resolution
     const courses = await courseService.getAllCourses();
     const courseMap = new Map(courses.map(c => [c.id, c]));
 
     const results = await Promise.allSettled(
       enrollments.map(async (enr) => {
-        const course = courseMap.get(enr.courseId);
-        if (!course) throw new Error('Course not found');
+        // Try all possible courseId field names used by different enrollment formats
+        const resolvedCourseId = enr.courseId ?? (enr as any).course ?? (enr as any).id;
+        const course = courseMap.get(resolvedCourseId);
+        if (!course) throw new Error(`Course not found: ${resolvedCourseId}`);
 
         const lb = await this.getCourseLeaderboard(
           course.id, course.title, course.thumbnailUrl ?? course.thumbnail,
@@ -337,6 +365,13 @@ export const leaderboardService = {
         };
       })
     );
+
+    // Log any rejections for debugging without hiding them from the UI
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        console.warn(`[leaderboardService] Course ${enrollments[i]?.courseId} failed:`, r.reason);
+      }
+    });
 
     return results
       .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
@@ -378,8 +413,7 @@ export const leaderboardService = {
 
     return results
       .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-      .map(r => r.value)
-      .filter(r => r.leaderboard.totalExams > 0 || r.leaderboard.entries.length === 0);
+      .map(r => r.value);
   },
 
   // Enrich course entries with userId/surname from enrollments (for admin view)
