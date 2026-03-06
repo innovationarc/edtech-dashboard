@@ -89,6 +89,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
   const [draftLoading, setDraftLoading]   = useState(false);
   const [draft, setDraft]                 = useState<AIEventDraft | null>(null);
   const [draftApplied, setDraftApplied]   = useState(false);
+  const [isSaving, setIsSaving]           = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Auto-draft on title change ─────────────────────────────────────────────
@@ -153,11 +154,12 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
     setAiPanel(null);
   };
 
-  // ── Submit (same logic as original) ───────────────────────────────────────
-  const handleSubmit = (e: React.FormEvent) => {
+  // ── Submit — guarded against double-click duplicates via isSaving ──────────
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
+    if (!currentUser || isSaving) return;
 
+    setIsSaving(true);
     const eventData = {
       title:       formData.title.trim(),
       description: formData.description.trim(),
@@ -186,7 +188,11 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
       }),
     };
 
-    onSave(eventData);
+    try {
+      await Promise.resolve(onSave(eventData));
+    } finally {
+      setIsSaving(false); // reset on error so user can retry; parent closes modal on success
+    }
   };
 
   // ── Input styles ───────────────────────────────────────────────────────────
@@ -554,26 +560,28 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
               <div className="flex gap-2">
                 {GEMINI_KEY && aiPanel === null && (
                   <>
-                    <button type="button" onClick={handleGetSlots}
-                      className="flex items-center gap-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 px-3 py-2 rounded-lg transition-all">
+                    <button type="button" onClick={handleGetSlots} disabled={slotsLoading || isSaving}
+                      className="flex items-center gap-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 px-3 py-2 rounded-lg transition-all disabled:opacity-50">
                       <Brain size={12} /> AI Times
                     </button>
-                    <button type="button" onClick={handleGetTips}
-                      className="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 px-3 py-2 rounded-lg transition-all">
+                    <button type="button" onClick={handleGetTips} disabled={tipsLoading || isSaving}
+                      className="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 px-3 py-2 rounded-lg transition-all disabled:opacity-50">
                       <Lightbulb size={12} /> Tips
                     </button>
                   </>
                 )}
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={onClose}
-                  className="px-5 py-2.5 bg-background-800 hover:bg-background-700 text-white rounded-lg transition-colors text-sm font-medium">
+                <button type="button" onClick={onClose} disabled={isSaving}
+                  className="px-5 py-2.5 bg-background-800 hover:bg-background-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50">
                   Cancel
                 </button>
-                <button type="submit"
-                  className="px-6 py-2.5 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 text-white rounded-lg transition-all text-sm font-semibold shadow-lg flex items-center gap-2">
-                  <CheckCircle2 size={15} />
-                  {isEditing ? 'Update Event' : 'Create Event'}
+                <button type="submit" disabled={isSaving}
+                  className="px-6 py-2.5 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 text-white rounded-lg transition-all text-sm font-semibold shadow-lg flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                  {isSaving
+                    ? <><Loader size={15} className="animate-spin" />{isEditing ? 'Updating…' : 'Creating…'}</>
+                    : <><CheckCircle2 size={15} />{isEditing ? 'Update Event' : 'Create Event'}</>
+                  }
                 </button>
               </div>
             </div>
