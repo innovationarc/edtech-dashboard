@@ -12,6 +12,7 @@ import {
 import { useDashboard } from '../contexts/DashboardContext';
 import {
   leaderboardService,
+  invalidateCache,
   CourseLeaderboardData,
   CourseLeaderboardEntry,
   ExamLeaderboardData,
@@ -417,10 +418,12 @@ const Progress = () => {
     if (!user?.uid) return;
     try {
       setLoading(true); setError(null);
-      if (force) leaderboardService.invalidateCache?.();
+      if (force) invalidateCache();
       const data = await leaderboardService.getStudentLeaderboardSummaries(user.uid);
+      console.log('[Progress] Loaded summaries:', data.length, 'for uid:', user.uid);
       setSummaries(data);
     } catch (e: any) {
+      console.error('[Progress] Load error:', e);
       setError(e.message ?? 'Failed to load leaderboard');
     } finally {
       setLoading(false); setRefreshing(false);
@@ -568,8 +571,11 @@ const Progress = () => {
       {summaries.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: '#555' }}>
           <BookOpen size={40} color="#333" style={{ margin: '0 auto 12px' }} />
-          <p style={{ fontSize: 16, fontWeight: 600, color: '#444' }}>No enrolled courses</p>
+          <p style={{ fontSize: 16, fontWeight: 600, color: '#444' }}>No enrolled courses found</p>
           <p style={{ fontSize: 13, marginTop: 4 }}>Enroll in courses to see your leaderboard rankings.</p>
+          <button onClick={() => load(true)} style={{ marginTop: 16, background: '#6366f1', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 13 }}>
+            Retry
+          </button>
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: '#555' }}>
