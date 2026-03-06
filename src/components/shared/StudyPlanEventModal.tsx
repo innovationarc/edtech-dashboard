@@ -90,6 +90,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
   const [draft, setDraft]                 = useState<AIEventDraft | null>(null);
   const [draftApplied, setDraftApplied]   = useState(false);
   const [isSaving, setIsSaving]           = useState(false);
+  const [slotsError, setSlotsError]       = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Auto-draft on title change ─────────────────────────────────────────────
@@ -125,6 +126,8 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
   const handleGetSlots = async () => {
     if (!GEMINI_KEY) return;
     setSlotsLoading(true);
+    setSlotsError(null);
+    setSlots([]);
     setAiPanel('slots');
     try {
       const result = await aiStudyPlannerService.suggestTimeSlots(
@@ -133,7 +136,11 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
         { preferMorning: true, preferEvening: false }, GEMINI_KEY
       );
       setSlots(result);
-    } catch { /* silent */ } finally { setSlotsLoading(false); }
+    } catch (err: any) {
+      setSlotsError(err?.message || 'AI request failed. Check Admin → AI Model Settings.');
+    } finally {
+      setSlotsLoading(false);
+    }
   };
 
   const handleGetTips = async () => {
@@ -154,12 +161,12 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
     setAiPanel(null);
   };
 
-  // ── Submit — guarded against double-click duplicates via isSaving ──────────
+  // ── Submit (same logic as original) ───────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || isSaving) return;
-
     setIsSaving(true);
+
     const eventData = {
       title:       formData.title.trim(),
       description: formData.description.trim(),
@@ -191,7 +198,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
     try {
       await Promise.resolve(onSave(eventData));
     } finally {
-      setIsSaving(false); // reset on error so user can retry; parent closes modal on success
+      setIsSaving(false);
     }
   };
 
@@ -379,8 +386,19 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
                       </div>
                     ))}
                   </div>
+                ) : slotsError ? (
+                  <div className="p-5 flex flex-col items-center gap-3 text-center">
+                    <AlertTriangle size={20} className="text-red-400" />
+                    <div>
+                      <p className="text-sm font-medium text-red-300">AI request failed</p>
+                      <p className="text-xs text-red-400/70 mt-1 font-mono">{slotsError}</p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Go to <strong className="text-gray-400">Admin → AI Model Settings</strong> to verify your provider and API key.
+                    </p>
+                  </div>
                 ) : (
-                  <p className="py-6 text-center text-gray-500 text-sm">No suggestions available</p>
+                  <p className="py-6 text-center text-gray-500 text-sm">No suggestions available — enter a title first</p>
                 )}
               </div>
             )}
@@ -560,20 +578,20 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
               <div className="flex gap-2">
                 {GEMINI_KEY && aiPanel === null && (
                   <>
-                    <button type="button" onClick={handleGetSlots} disabled={slotsLoading || isSaving}
-                      className="flex items-center gap-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 px-3 py-2 rounded-lg transition-all disabled:opacity-50">
+                    <button type="button" onClick={handleGetSlots}
+                      className="flex items-center gap-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 px-3 py-2 rounded-lg transition-all">
                       <Brain size={12} /> AI Times
                     </button>
-                    <button type="button" onClick={handleGetTips} disabled={tipsLoading || isSaving}
-                      className="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 px-3 py-2 rounded-lg transition-all disabled:opacity-50">
+                    <button type="button" onClick={handleGetTips}
+                      className="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 px-3 py-2 rounded-lg transition-all">
                       <Lightbulb size={12} /> Tips
                     </button>
                   </>
                 )}
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={onClose} disabled={isSaving}
-                  className="px-5 py-2.5 bg-background-800 hover:bg-background-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50">
+                <button type="button" onClick={onClose}
+                  className="px-5 py-2.5 bg-background-800 hover:bg-background-700 text-white rounded-lg transition-colors text-sm font-medium">
                   Cancel
                 </button>
                 <button type="submit" disabled={isSaving}
