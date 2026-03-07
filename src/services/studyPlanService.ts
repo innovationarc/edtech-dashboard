@@ -506,6 +506,29 @@ export const studyPlanService = {
     return toDelete.length;
   },
 
+  /**
+   * Full reset: delete ALL uncompleted AI events for a goal (past + future).
+   * Used when accepting a brand-new schedule or reschedule to prevent duplicates
+   * and reset the "behind" tracker to zero.
+   */
+  async clearAllAIEventsForGoal(
+    goalSubject: string,
+    events: StudyPlanEvent[],
+    studentId: string
+  ): Promise<number> {
+    const baseSubject = goalSubject.split(' (')[0];
+    const toDelete = events.filter(
+      e =>
+        e.isPersonal &&
+        e.studentId === studentId &&
+        e.isAIGenerated &&
+        !e.completed &&
+        (e.course === goalSubject || e.course === baseSubject || e.course?.startsWith(baseSubject))
+    );
+    await Promise.all(toDelete.map(e => studyPlanService.deleteEvent(e.id))).catch(() => {});
+    return toDelete.length;
+  },
+
   // ── NEW: Enrolled Courses For Planning ────────────────────────────────────
 
   async getEnrolledCoursesForPlanning(studentId: string): Promise<EnrolledCourseForPlanning[]> {
