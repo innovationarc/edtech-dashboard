@@ -1,6 +1,6 @@
 // src/components/shared/StudyPlanEventModal.tsx
-// Enhanced with AI Time Slots · Auto-Draft · Study Tips — Gemini 2.5 Flash
-// Fully backwards compatible with original prop interface
+// Enhanced with AI Time Slots · Auto-Draft · Study Tips
+// Uses admin-configured AI provider (Firestore aiModelConfig/current)
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -11,6 +11,7 @@ import {
 import { format, addMinutes, parse } from 'date-fns';
 import { StudyPlanEvent } from '../../services/studyPlanService';
 import { aiStudyPlannerService, AITimeSlotSuggestion, AIEventDraft } from '../../services/aiStudyPlannerService';
+import { aiModelConfigService, callProviderDirect, AIModelConfig } from '../../services/aiModelConfigService';
 
 // ─── Props (100% backwards compatible with original) ──────────────────────────
 
@@ -26,8 +27,6 @@ interface StudyPlanEventModalProps {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 const EVENT_TYPES = [
   { value: 'class',         label: 'Class',         emoji: '🏫' },
@@ -79,6 +78,16 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
   const setField = (key: string, value: any) =>
     setFormData(p => ({ ...p, [key]: value }));
 
+  // ── AI config (loaded from Firestore — supports all providers) ──────────────
+  const [aiConfig, setAiConfig] = useState<AIModelConfig | null>(null);
+  const aiReady = !!aiConfig?.apiKey;
+
+  useEffect(() => {
+    aiModelConfigService.getConfig()
+      .then(cfg => { if (cfg?.apiKey) setAiConfig(cfg); })
+      .catch(() => {});
+  }, []);
+
   // ── AI state ─────────────────────────────────────────────────────────────────
   const [aiPanel, setAiPanel]             = useState<'slots' | 'tips' | null>(null);
   const [slotsLoading, setSlotsLoading]   = useState(false);
@@ -95,19 +104,22 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
 
   // ── Auto-draft on title change ─────────────────────────────────────────────
   useEffect(() => {
-    if (!formData.title || formData.title.length < 5 || !GEMINI_KEY || draftApplied || isEditing) return;
+    if (!formData.title || formData.title.length < 5 || !aiReady || draftApplied || isEditing) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setDraftLoading(true);
       try {
-        const d = await aiStudyPlannerService.draftEventFromTitle(
-          formData.title, formData.course || 'General', formData.eventType, GEMINI_KEY
-        );
+        const prompt = `Suggest details for a study event titled "${formData.title}" (type: ${formData.eventType}, subject: ${formData.course || 'General'}).
+Return ONLY valid JSON — no markdown, no explanation:
+{"title":"improved title","description":"2-3 sentence description of what to cover in this session","priority":"low|medium|high","estimatedDuration":60,"suggestedPrep":["prep step 1","prep step 2"]}`;
+        const raw = await callProviderDirect(prompt, aiConfig!, 400, 0.5);
+        const cleaned = raw.replace(/```json|```/g, '').trim();
+        const d: AIEventDraft = JSON.parse(cleaned);
         setDraft(d);
       } catch { /* silent */ } finally { setDraftLoading(false); }
     }, 900);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [formData.title, formData.eventType, formData.course]);
+  }, [formData.title, formData.eventType, formData.course, aiReady]);
 
   const applyDraft = () => {
     if (!draft) return;
@@ -124,34 +136,68 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
   };
 
   const handleGetSlots = async () => {
-    if (!GEMINI_KEY) return;
+    if (!aiReady) return;
     setSlotsLoading(true);
     setSlotsError(null);
     setSlots([]);
     setAiPanel('slots');
     try {
-      const result = await aiStudyPlannerService.suggestTimeSlots(
-        formData.title || 'Study Session', formData.eventType,
-        formData.course || 'General', 60, formData.date, [],
-        { preferMorning: true, preferEvening: false }, GEMINI_KEY
-      );
-      setSlots(result);
+      const prompt = `Today is ${new Date().toLocaleDateString('en-CA')}.
+Generate 4 optimal study time slots for: "${formData.title || 'Study Session'}" (${formData.eventType}) — subject: "${formData.course || 'General'}".
+Preferred date: ${formData.date}. Session duration: 60 minutes.
+Consider: peak focus morning (7–10 AM), solid afternoon (2–5 PM), calm evening (7–9 PM).
+
+Return ONLY a valid JSON array — no markdown, no explanation:
+[
+  {
+    "startTime": "HH:MM",
+    "endTime": "HH:MM",
+    "date": "YYYY-MM-DD",
+    "reason": "2-sentence explanation of why this slot maximises learning for this subject and type",
+    "energyLevel": "peak",
+    "sessionType": "focus",
+    "estimatedProductivity": 85,
+    "conflictWarning": null
+  }
+]
+energyLevel must be one of: peak, medium, low.
+sessionType must be one of: focus, review, practice.`;
+
+      const raw = await callProviderDirect(prompt, aiConfig!, 800, 0.5);
+      const cleaned = raw.replace(/```json|```/g, '').trim();
+      const parsed: AITimeSlotSuggestion[] = JSON.parse(cleaned);
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Model returned no time slots. Check your AI model settings or try again.');
+      setSlots(parsed);
     } catch (err: any) {
-      setSlotsError(err?.message || 'AI request failed. Check Admin → AI Model Settings.');
+      setSlotsError(err?.message || 'AI request failed. Check Admin > AI Model Settings.');
     } finally {
       setSlotsLoading(false);
     }
   };
 
   const handleGetTips = async () => {
-    if (!GEMINI_KEY) return;
+    if (!aiReady) return;
     setTipsLoading(true);
     setAiPanel('tips');
     try {
-      const result = await aiStudyPlannerService.generateStudyTips(
-        formData.course || formData.title || 'General', formData.eventType, GEMINI_KEY
-      );
-      setTips(result);
+      const subject = formData.course || formData.title || 'General';
+      const prompt = `You are an expert academic coach specialising in ${subject}.
+Generate 5 highly specific, detailed, and actionable study tips for: "${subject}" — session type: ${formData.eventType}.
+
+STRICT RULES:
+- Every tip MUST be directly relevant to ${subject}, not generic advice
+- Reference concrete techniques used in this specific field (e.g., for mathematics: worked-example method; for history: causal chain mapping; for languages: spaced repetition with context sentences)
+- Each tip must be 2–4 sentences: explain WHAT to do AND exactly HOW to do it
+- Mention specific strategies, tools, or cognitive techniques appropriate for this discipline
+- Do NOT include generic advice such as "take breaks", "stay organised", "review notes", or "get enough sleep"
+
+Return ONLY a valid JSON array of 5 strings — no markdown, no explanation:
+["full detailed tip 1", "full detailed tip 2", "full detailed tip 3", "full detailed tip 4", "full detailed tip 5"]`;
+
+      const raw = await callProviderDirect(prompt, aiConfig!, 1000, 0.7);
+      const cleaned = raw.replace(/```json|```/g, '').trim();
+      const parsed: string[] = JSON.parse(cleaned);
+      setTips(Array.isArray(parsed) ? parsed : []);
     } catch { /* silent */ } finally { setTipsLoading(false); }
   };
 
@@ -228,7 +274,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
                 <h2 className="text-xl font-bold text-white">
                   {isEditing ? 'Edit Event' : `Create ${isPersonalEvent ? 'Personal ' : ''}Event`}
                 </h2>
-                {GEMINI_KEY && (
+                {aiReady && (
                   <span className="text-xs flex items-center gap-1 bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2 py-0.5 rounded-full">
                     <Sparkles size={9} /> AI Enhanced
                   </span>
@@ -250,9 +296,9 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
                     <Brain size={15} className="text-purple-300" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-purple-200 mb-0.5">✨ AI Draft Ready</p>
+                    <p className="text-sm font-semibold text-purple-200 mb-0.5">AI Draft Ready</p>
                     <p className="text-xs text-purple-300/70 leading-relaxed">
-                      Gemini suggests: <span className="text-white font-medium">"{draft.title}"</span>
+                      Suggested: <span className="text-white font-medium">"{draft.title}"</span>
                       {' · '}{draft.estimatedDuration}min · {draft.priority} priority
                     </p>
                     {draft.suggestedPrep.length > 0 && (
@@ -275,7 +321,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
 
             {draftLoading && (
               <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-500/8 border border-purple-500/20 rounded-lg px-4 py-2.5">
-                <Loader size={12} className="animate-spin" /> Gemini is drafting details…
+                <Loader size={12} className="animate-spin" /> AI is drafting details…
               </div>
             )}
 
@@ -311,11 +357,11 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className={labelCls + ' mb-0'}>Date & Time *</label>
-                {GEMINI_KEY && (
+                {aiReady && (
                   <button type="button" onClick={handleGetSlots} disabled={slotsLoading}
                     className="flex items-center gap-1.5 text-xs bg-purple-600/15 hover:bg-purple-600/25 border border-purple-500/30 text-purple-300 px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-50">
                     {slotsLoading ? <Loader size={11} className="animate-spin" /> : <Brain size={11} />}
-                    {slotsLoading ? 'Finding…' : '✨ AI Suggest Times'}
+                    {slotsLoading ? 'Finding…' : 'AI Suggest Times'}
                   </button>
                 )}
               </div>
@@ -342,7 +388,6 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
                   <div className="flex items-center gap-2">
                     <Brain size={14} className="text-purple-400" />
                     <span className="text-sm font-semibold text-white">AI Suggested Time Slots</span>
-                    <span className="text-xs text-gray-500">Gemini 2.5 Flash</span>
                   </div>
                   <button type="button" onClick={() => setAiPanel(null)} className="text-gray-500 hover:text-white"><X size={14} /></button>
                 </div>
@@ -463,7 +508,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className={labelCls + ' mb-0'}>Study Tips</label>
-                {GEMINI_KEY && (
+                {aiReady && (
                   <button type="button" onClick={handleGetTips} disabled={tipsLoading}
                     className="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 px-3 py-1.5 rounded-lg transition-all font-medium disabled:opacity-50">
                     {tipsLoading ? <Loader size={11} className="animate-spin" /> : <Lightbulb size={11} />}
@@ -576,7 +621,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
             {/* Footer */}
             <div className="flex items-center justify-between pt-4 border-t border-background-700">
               <div className="flex gap-2">
-                {GEMINI_KEY && aiPanel === null && (
+                {aiReady && aiPanel === null && (
                   <>
                     <button type="button" onClick={handleGetSlots}
                       className="flex items-center gap-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 px-3 py-2 rounded-lg transition-all">
