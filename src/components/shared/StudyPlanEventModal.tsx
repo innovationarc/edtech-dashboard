@@ -216,7 +216,7 @@ Return ONLY a valid JSON array of 5 strings — no markdown, no explanation:
     const eventData = {
       title:       formData.title.trim(),
       description: formData.description.trim(),
-      date:        new Date(formData.date),
+      date:        new Date(formData.date + 'T12:00:00'),
       startTime:   formData.startTime,
       endTime:     formData.endTime,
       course:      formData.course.trim(),
