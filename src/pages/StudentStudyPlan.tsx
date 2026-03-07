@@ -2,6 +2,7 @@
 // AI Study Planner — Calendar · Goals · Analytics · AI Chat
 // Fixes: duplicate creation, broken AI, no loading states
 // New: enrolled course planning, custom activities, chat persistence, add-to-calendar from chat
+// AI provider loaded from Firestore (Admin → AI Model Settings) — supports Groq, Gemini, OpenAI, Anthropic, DeepSeek
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -21,10 +22,10 @@ import {
 import {
   aiStudyPlannerService, AIInsight, AIScheduleSuggestion, CalendarEventFromChat,
 } from '../services/aiStudyPlannerService';
+import { aiModelConfigService } from '../services/aiModelConfigService';
 import StudyPlanEventModal from '../components/shared/StudyPlanEventModal';
 import Card from '../components/ui/Card';
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 type View = 'calendar' | 'list' | 'analytics' | 'chat';
 type Value = Date | null | [Date | null, Date | null];
@@ -67,6 +68,7 @@ const StudentStudyPlan = () => {
   const [streak, setStreak]     = useState({ current: 0, longest: 0, totalSessions: 0 });
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
+  const [aiReady, setAiReady]   = useState(false);
 
   // Enrolled courses & custom activities
   const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourseForPlanning[]>([]);
@@ -140,6 +142,11 @@ const StudentStudyPlan = () => {
     finally { setLoading(false); }
   }, [user]);
 
+  // Load AI config from Firestore once on mount
+  useEffect(() => {
+    aiModelConfigService.getConfig().then(cfg => setAiReady(!!cfg.apiKey)).catch(() => {});
+  }, []);
+
   useEffect(() => { if (user) loadAll(); }, [user, loadAll]);
 
   // Load chat history once
@@ -156,18 +163,18 @@ const StudentStudyPlan = () => {
 
   // Load AI insights once per session
   useEffect(() => {
-    if (events.length > 0 && GEMINI_KEY && insights.length === 0 && user) loadInsights();
+    if (events.length > 0 && aiReady && insights.length === 0 && user) loadInsights();
   }, [events]);
 
   const loadInsights = async () => {
-    if (!user || !GEMINI_KEY) return;
+    if (!user || !aiReady) return;
     setInsightsLoading(true);
     try {
       const upcoming  = events.filter(e => e.date >= new Date() && !e.completed);
       const completed = events.filter(e => e.completed).length;
       const rate      = events.length > 0 ? Math.round((completed / events.length) * 100) : 0;
       setInsights(await aiStudyPlannerService.getPersonalizedInsights(
-        user.displayName || user.name || 'Student', upcoming, rate, GEMINI_KEY,
+        user.displayName || user.name || 'Student', upcoming, rate, '',
         user.uid // cache key
       ));
     } catch { /* silent */ } finally { setInsightsLoading(false); }
@@ -212,14 +219,14 @@ const StudentStudyPlan = () => {
   // ── AI Schedule ─────────────────────────────────────────────────────────────
 
   const handleGenerateSchedule = async () => {
-    if (!GEMINI_KEY || !goals.length || scheduleLoading) return;
+    if (!aiReady || !goals.length || scheduleLoading) return;
     setScheduleLoading(true);
     try {
       const result = await aiStudyPlannerService.generateSmartSchedule(
         goals.map(g => ({ subject: g.subject, targetDate: g.targetDate, hoursNeeded: g.hoursNeeded, difficulty: g.difficulty, currentProgress: g.currentProgress })),
         events.map(e => ({ date: e.date, startTime: e.startTime, endTime: e.endTime })),
         freeHoursPerDay,
-        GEMINI_KEY,
+        '',
         {
           enrolledCourses: enrolledCourses.map(c => ({ title: c.title, subjects: c.subjects })),
           customActivities: customActivities.map(a => ({
@@ -391,7 +398,7 @@ const StudentStudyPlan = () => {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
   const handleSendChat = async () => {
-    if (!chatInput.trim() || !GEMINI_KEY || chatLoading) return;
+    if (!chatInput.trim() || !aiReady || chatLoading) return;
     const msg = chatInput.trim();
     setChatInput('');
 
@@ -431,7 +438,7 @@ const StudentStudyPlan = () => {
           pomodoroSessions: streak.totalSessions,
         },
         chatMessages.slice(-8),
-        GEMINI_KEY
+        ''
       );
 
       const assistantMsg = { role: 'assistant' as const, content: response, calendarEvents };
@@ -521,13 +528,13 @@ const StudentStudyPlan = () => {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             My Study Plan
-            {GEMINI_KEY && <span className="text-xs bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2 py-1 rounded-full flex items-center gap-1"><Sparkles size={10} /> AI</span>}
+            {aiReady && <span className="text-xs bg-purple-500/15 border border-purple-500/30 text-purple-300 px-2 py-1 rounded-full flex items-center gap-1"><Sparkles size={10} /> AI</span>}
           </h1>
           <p className="text-gray-400 mt-1 text-sm">Manage your schedule and track your progress</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Free hours selector (feeds into AI schedule) */}
-          {GEMINI_KEY && goals.length > 0 && (
+          {aiReady && goals.length > 0 && (
             <div className="flex items-center gap-2 bg-background-800 border border-background-700 rounded-xl px-3 py-2">
               <Clock size={12} className="text-gray-400" />
               <span className="text-xs text-gray-400">Free hrs/day:</span>
@@ -542,7 +549,7 @@ const StudentStudyPlan = () => {
               </select>
             </div>
           )}
-          {GEMINI_KEY && goals.length > 0 && (
+          {aiReady && goals.length > 0 && (
             <button
               onClick={handleGenerateSchedule}
               disabled={scheduleLoading}
@@ -1184,12 +1191,12 @@ const StudentStudyPlan = () => {
               placeholder="Ask Sage anything about your studies…"
               className={inputCls + ' flex-1'}
             />
-            <button onClick={handleSendChat} disabled={!chatInput.trim() || chatLoading || !GEMINI_KEY}
+            <button onClick={handleSendChat} disabled={!chatInput.trim() || chatLoading || !aiReady}
               className="bg-primary-600 hover:bg-primary-700 text-white p-2.5 rounded-xl transition-colors disabled:opacity-50 flex-shrink-0">
               <Send size={15} />
             </button>
           </div>
-          {!GEMINI_KEY && <p className="text-xs text-amber-400 mt-2">⚠️ Add VITE_GEMINI_API_KEY to enable AI chat</p>}
+          {!aiReady && <p className="text-xs text-amber-400 mt-2">⚠️ AI not configured — Admin → AI Model Settings</p>}
         </Card>
       )}
 
