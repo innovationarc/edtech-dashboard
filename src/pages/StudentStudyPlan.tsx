@@ -11,6 +11,7 @@ import {
   CheckCircle2, X, Flame, BookOpen, Play, Pause, RotateCcw, Send,
   ListTodo, Timer, AlertOctagon, Lightbulb, Heart, GraduationCap,
   Zap, ChevronDown, ChevronUp, Award, TrendingUp, RefreshCw, Trash,
+  AlertTriangle, BarChart,
 } from 'lucide-react';
 import Calendar from 'react-calendar';
 import { format, differenceInDays, startOfWeek, endOfWeek, isToday, isTomorrow } from 'date-fns';
@@ -22,7 +23,7 @@ import {
 import {
   aiStudyPlannerService, AIInsight, AIScheduleSuggestion, CalendarEventFromChat,
 } from '../services/aiStudyPlannerService';
-import { aiModelConfigService } from '../services/aiModelConfigService';
+import { aiModelConfigService, callProviderDirect, AIModelConfig } from '../services/aiModelConfigService';
 import StudyPlanEventModal from '../components/shared/StudyPlanEventModal';
 import Card from '../components/ui/Card';
 
@@ -78,7 +79,10 @@ const StudentStudyPlan = () => {
   const [showActivityForm, setShowActivityForm] = useState(false);
   const [newActivity, setNewActivity] = useState({
     name: '', category: 'other' as CustomActivity['category'],
-    daysOfWeek: [] as number[], startTime: '08:00', endTime: '09:00',
+    scheduleType: 'recurring' as 'recurring' | 'specific_dates',
+    daysOfWeek: [] as number[],
+    specificDates: [] as string[],
+    startTime: '08:00', endTime: '09:00',
     isFlexible: false, notes: '',
   });
   const [savingActivity, setSavingActivity] = useState(false);
@@ -98,6 +102,18 @@ const StudentStudyPlan = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [freeHoursPerDay, setFreeHoursPerDay]     = useState(4);
   const [addingSchedule, setAddingSchedule]       = useState(false);
+  // Cache: avoid re-calling AI when nothing changed
+  const [scheduleHash, setScheduleHash]           = useState('');
+  const [cachedSuggestions, setCachedSuggestions] = useState<AIScheduleSuggestion[]>([]);
+  // AI config (for direct calls)
+  const [aiConfig, setAiConfig]                   = useState<AIModelConfig | null>(null);
+
+  // Reschedule
+  const [rescheduleGoal, setRescheduleGoal]             = useState<StudyGoal | null>(null);
+  const [showRescheduleModal, setShowRescheduleModal]   = useState(false);
+  const [rescheduling, setRescheduling]                 = useState(false);
+  const [reschedulePreview, setReschedulePreview]       = useState<AIScheduleSuggestion[]>([]);
+  const [addingReschedule, setAddingReschedule]         = useState(false);
 
   // Chat
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string; calendarEvents?: CalendarEventFromChat[] }[]>([]);
@@ -107,6 +123,7 @@ const StudentStudyPlan = () => {
   const [addingChatEvents, setAddingChatEvents] = useState(false);
   const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const dayEventsRef = useRef<HTMLDivElement>(null); // Fix #8: scroll to day events on calendar click
 
   // Pomodoro
   const [pomodoroActive, setPomodoroActive]     = useState(false);
@@ -119,6 +136,19 @@ const StudentStudyPlan = () => {
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [newGoal, setNewGoal] = useState({ subject: '', targetDate: '', hoursNeeded: 10, difficulty: 'medium' as StudyGoal['difficulty'] });
   const [savingGoal, setSavingGoal] = useState(false);
+  // Goal editing
+  const [editingGoal, setEditingGoal]   = useState<StudyGoal | null>(null);
+  const [editGoalData, setEditGoalData] = useState({ subject: '', targetDate: '', hoursNeeded: 10, difficulty: 'medium' as StudyGoal['difficulty'] });
+  const [savingEditGoal, setSavingEditGoal] = useState(false);
+  // Activity editing
+  const [editingActivity, setEditingActivity]   = useState<CustomActivity | null>(null);
+  const [editActivityData, setEditActivityData] = useState({
+    name: '', category: 'other' as CustomActivity['category'],
+    scheduleType: 'recurring' as 'recurring' | 'specific_dates',
+    daysOfWeek: [] as number[], specificDates: [] as string[],
+    startTime: '08:00', endTime: '09:00', isFlexible: false, notes: '',
+  });
+  const [savingEditActivity, setSavingEditActivity] = useState(false);
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -126,13 +156,28 @@ const StudentStudyPlan = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [evts, gls, stk, acts, courses] = await Promise.all([
+      let [evts, gls, stk, acts, courses] = await Promise.all([
         studyPlanService.getEventsForStudent(user.uid),
         studyPlanService.getGoalsForStudent(user.uid),
         studyPlanService.getStreak(user.uid),
         studyPlanService.getCustomActivities(user.uid),
         studyPlanService.getEnrolledCoursesForPlanning(user.uid),
       ]);
+
+      // Fix #9: auto-delete personal events expired > 24h, respecting AI event goal deadlines
+      const deletedIds = await studyPlanService.deleteExpiredPersonalEvents(user.uid, evts, gls);
+      if (deletedIds.length > 0) evts = evts.filter(e => !deletedIds.includes(e.id));
+
+      // Fix #2: remove specific-date activities whose all dates have passed
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const expiredActs = acts.filter(a =>
+        a.scheduleType === 'specific_dates' &&
+        (a.specificDates?.length ?? 0) > 0 &&
+        (a.specificDates ?? []).every(d => new Date(d + 'T00:00:00') < today)
+      );
+      await Promise.all(expiredActs.map(a => studyPlanService.deleteCustomActivity(a.id))).catch(() => {});
+      acts = acts.filter(a => !expiredActs.find(ea => ea.id === a.id));
+
       setEvents(evts);
       setGoals(gls);
       setCustomActivities(acts);
@@ -144,7 +189,10 @@ const StudentStudyPlan = () => {
 
   // Load AI config from Firestore once on mount
   useEffect(() => {
-    aiModelConfigService.getConfig().then(cfg => setAiReady(!!cfg.apiKey)).catch(() => {});
+    aiModelConfigService.getConfig().then(cfg => {
+      setAiReady(!!cfg.apiKey);
+      if (cfg.apiKey) setAiConfig(cfg);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => { if (user) loadAll(); }, [user, loadAll]);
@@ -218,8 +266,24 @@ const StudentStudyPlan = () => {
 
   // ── AI Schedule ─────────────────────────────────────────────────────────────
 
+  // Fix #1: stable hash of inputs — skip AI if nothing changed
+  const computeScheduleHash = () => JSON.stringify({
+    freeHours: freeHoursPerDay,
+    goals: goals.map(g => ({ s: g.subject, t: g.targetDate.toISOString().slice(0, 10), h: g.hoursNeeded, d: g.difficulty, p: g.currentProgress })),
+    activities: customActivities.map(a => ({ n: a.name, days: a.daysOfWeek, st: a.startTime, et: a.endTime })),
+  });
+
   const handleGenerateSchedule = async () => {
     if (!aiReady || !goals.length || scheduleLoading) return;
+
+    // Return cached schedule if inputs haven't changed
+    const hash = computeScheduleHash();
+    if (hash === scheduleHash && cachedSuggestions.length > 0) {
+      setSuggestions(cachedSuggestions);
+      setShowScheduleModal(true);
+      return;
+    }
+
     setScheduleLoading(true);
     try {
       const result = await aiStudyPlannerService.generateSmartSchedule(
@@ -236,6 +300,8 @@ const StudentStudyPlan = () => {
         }
       );
       setSuggestions(result);
+      setCachedSuggestions(result);
+      setScheduleHash(hash);
       setShowScheduleModal(true);
     } catch (e: any) { setError('AI schedule error: ' + e.message); }
     finally { setScheduleLoading(false); }
@@ -262,6 +328,8 @@ const StudentStudyPlan = () => {
       );
       setShowScheduleModal(false);
       setSuggestions([]);
+      setCachedSuggestions([]);
+      setScheduleHash(''); // reset so next change triggers fresh AI call
       await loadAll();
     } catch (e: any) { setError(e.message); }
     finally { setAddingSchedule(false); }
@@ -294,9 +362,14 @@ const StudentStudyPlan = () => {
     }
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + 30);
+    // Fix #7: use the course's actual subjects in the goal description
+    const subjectLabel = course.subjects.length > 0
+      ? `${course.title} (${course.subjects.slice(0, 3).join(', ')})`
+      : course.title;
     try {
       await studyPlanService.createGoal({
-        studentId: user.uid, subject: course.title,
+        studentId: user.uid,
+        subject: subjectLabel,
         targetDate: deadline,
         hoursNeeded: Math.max(8, (course.totalLessons - course.completedLessons)),
         hoursCompleted: 0, difficulty: 'medium',
@@ -322,23 +395,197 @@ const StudentStudyPlan = () => {
     } catch { /* silent */ }
   };
 
+  const handleOpenEditGoal = (g: StudyGoal) => {
+    setEditingGoal(g);
+    setEditGoalData({
+      subject:     g.subject,
+      targetDate:  g.targetDate.toISOString().slice(0, 10),
+      hoursNeeded: g.hoursNeeded,
+      difficulty:  g.difficulty,
+    });
+  };
+
+  const handleSaveEditGoal = async () => {
+    if (!editingGoal || !editGoalData.subject || !editGoalData.targetDate || savingEditGoal) return;
+    setSavingEditGoal(true);
+    try {
+      await studyPlanService.updateGoal(editingGoal.id, {
+        subject:     editGoalData.subject,
+        targetDate:  new Date(editGoalData.targetDate),
+        hoursNeeded: editGoalData.hoursNeeded,
+        difficulty:  editGoalData.difficulty,
+      });
+      setEditingGoal(null);
+      setGoals(await studyPlanService.getGoalsForStudent(user!.uid));
+      setScheduleHash(''); // bust schedule cache so changes are reflected
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingEditGoal(false); }
+  };
+
+  // ── AI Plan Progress ─────────────────────────────────────────────────────────
+
+  /** Returns progress stats for AI-generated events linked to a goal */
+  const getGoalAIProgress = (goal: StudyGoal) => {
+    const baseSubject = goal.subject.split(' (')[0];
+    const goalEvents = events.filter(
+      e => e.isAIGenerated && (e.course === goal.subject || e.course === baseSubject || e.course?.startsWith(baseSubject))
+    );
+    const now = new Date();
+    const completedSessions  = goalEvents.filter(e => e.completed).length;
+    const totalSessions      = goalEvents.length;
+    const pastSessions       = goalEvents.filter(e => e.date <= now).length;   // sessions that should have happened by now
+    const remainingSessions  = goalEvents.filter(e => !e.completed && e.date > now).length;
+    const completedPast      = goalEvents.filter(e => e.completed && e.date <= now).length;
+    const behind             = pastSessions > 0 && completedPast < pastSessions;
+    const missedSessions     = Math.max(0, pastSessions - completedPast);
+    const daysLeft           = differenceInDays(goal.targetDate, now);
+    const sessionRate        = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
+    return {
+      goalEvents, completedSessions, totalSessions, pastSessions, remainingSessions,
+      completedPast, behind, missedSessions, daysLeft, sessionRate,
+    };
+  };
+
+  // ── Reschedule ───────────────────────────────────────────────────────────────
+
+  const handleOpenReschedule = (goal: StudyGoal) => {
+    setRescheduleGoal(goal);
+    setReschedulePreview([]);
+    setShowRescheduleModal(true);
+  };
+
+  const handleGenerateReschedule = async () => {
+    if (!rescheduleGoal || !aiConfig || rescheduling) return;
+    setRescheduling(true);
+    try {
+      const prog           = getGoalAIProgress(rescheduleGoal);
+      const daysLeft       = Math.max(1, differenceInDays(rescheduleGoal.targetDate, new Date()));
+      const todayStr       = new Date().toISOString().slice(0, 10);
+      const deadlineStr    = rescheduleGoal.targetDate.toISOString().slice(0, 10);
+      const hoursRemaining = Math.max(1, Math.round(
+        rescheduleGoal.hoursNeeded * (1 - rescheduleGoal.currentProgress / 100)
+      ));
+
+      const prompt = `You are an expert study planner. A student needs to RESCHEDULE their study plan because they fell behind.
+
+GOAL: ${rescheduleGoal.subject}
+DEADLINE: ${deadlineStr} (${daysLeft} days from today: ${todayStr})
+Original hours needed: ${rescheduleGoal.hoursNeeded}h | Current progress: ${rescheduleGoal.currentProgress}%
+Estimated hours still needed: ${hoursRemaining}h
+Sessions completed so far: ${prog.completedSessions} / ${prog.totalSessions}
+Missed/incomplete sessions: ${prog.missedSessions}
+Free hours per day available: ${freeHoursPerDay}h
+Difficulty: ${rescheduleGoal.difficulty}
+
+TASK: Generate a REALISTIC catch-up schedule from today (${todayStr}) to deadline (${deadlineStr}).
+- Spread ${hoursRemaining}h of study across the available days
+- Use ${freeHoursPerDay}h/day max
+- Prioritise harder topics and reviews closer to deadline
+- Each session should be 60–90 minutes
+- Vary session types: focus (deep learning), review (revise completed work), practice (exercises/problems)
+- Since time is short, be efficient — prioritise the highest-impact sessions first
+
+Return ONLY a valid JSON array — no markdown, no explanation:
+[
+  {
+    "title": "concise session title with specific topic",
+    "subject": "${rescheduleGoal.subject}",
+    "date": "YYYY-MM-DD",
+    "startTime": "HH:MM",
+    "endTime": "HH:MM",
+    "priority": "high|medium|low",
+    "sessionType": "focus|review|practice",
+    "reason": "2-sentence explanation of what to cover in this session and why it's important given the remaining time",
+    "tips": ["one concrete tip specific to this session's topic"]
+  }
+]`;
+
+      const raw     = await callProviderDirect(prompt, aiConfig, 2000, 0.6);
+      const cleaned = raw.replace(/```json|```/g, '').trim();
+      const parsed: AIScheduleSuggestion[] = JSON.parse(cleaned);
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('AI returned an empty schedule. Try again.');
+      // Parse dates in results
+      const withDates = parsed.map(s => ({ ...s, date: new Date(s.date as any) }));
+      setReschedulePreview(withDates as any);
+    } catch (e: any) {
+      setError('Reschedule error: ' + e.message);
+    } finally {
+      setRescheduling(false);
+    }
+  };
+
+  const handleAcceptReschedule = async () => {
+    if (!user || !rescheduleGoal || !reschedulePreview.length || addingReschedule) return;
+    setAddingReschedule(true);
+    try {
+      // 1. Delete all future uncompleted AI events for this goal
+      await studyPlanService.clearFutureAIEventsForGoal(rescheduleGoal.subject, events, user.uid);
+
+      // 2. Create the new rescheduled sessions
+      await studyPlanService.createBulkAIEvents(
+        reschedulePreview.map((s: any) => ({
+          title: s.title,
+          description: s.reason,
+          date: s.date instanceof Date ? s.date : new Date(s.date),
+          startTime: s.startTime,
+          endTime: s.endTime,
+          course: rescheduleGoal.subject,
+          instructorId: user.uid,
+          instructorName: user.displayName || user.name || '',
+          isPersonal: true,
+          studentId: user.uid,
+          targetAudience: 'specific_student' as const,
+          targetStudentIds: [user.uid],
+          targetCourseIds: [],
+          eventType: 'study_session' as const,
+          priority: s.priority || 'medium',
+          isAIGenerated: true,
+          aiReason: s.reason,
+          aiTips: s.tips || [],
+          sessionType: s.sessionType || 'focus',
+          completed: false,
+        })),
+        user.uid
+      );
+
+      setShowRescheduleModal(false);
+      setReschedulePreview([]);
+      setRescheduleGoal(null);
+      setScheduleHash(''); // Bust cache so full reschedule also regenerates if triggered
+      await loadAll();
+    } catch (e: any) {
+      setError('Failed to apply reschedule: ' + e.message);
+    } finally {
+      setAddingReschedule(false);
+    }
+  };
+
   // ── Custom Activities ────────────────────────────────────────────────────────
 
   const handleSaveActivity = async () => {
-    if (!user || !newActivity.name || !newActivity.daysOfWeek.length || savingActivity) return;
+    const hasSchedule = newActivity.scheduleType === 'recurring'
+      ? newActivity.daysOfWeek.length > 0
+      : newActivity.specificDates.length > 0;
+    if (!user || !newActivity.name || !hasSchedule || savingActivity) return;
     setSavingActivity(true);
     try {
-      await studyPlanService.createCustomActivity({
+      const payload: Omit<CustomActivity, 'id' | 'createdAt'> = {
         studentId: user.uid,
         name: newActivity.name,
         category: newActivity.category,
-        daysOfWeek: newActivity.daysOfWeek,
+        scheduleType: newActivity.scheduleType,
+        daysOfWeek: newActivity.scheduleType === 'recurring' ? newActivity.daysOfWeek : [],
         startTime: newActivity.startTime,
         endTime: newActivity.endTime,
         isFlexible: newActivity.isFlexible,
-        notes: newActivity.notes || undefined,
-      });
-      setNewActivity({ name: '', category: 'other', daysOfWeek: [], startTime: '08:00', endTime: '09:00', isFlexible: false, notes: '' });
+        // only include notes + specificDates if non-empty to avoid Firestore undefined error
+        ...(newActivity.notes ? { notes: newActivity.notes } : {}),
+        ...(newActivity.scheduleType === 'specific_dates' && newActivity.specificDates.length
+          ? { specificDates: newActivity.specificDates }
+          : {}),
+      };
+      await studyPlanService.createCustomActivity(payload);
+      setNewActivity({ name: '', category: 'other', scheduleType: 'recurring', daysOfWeek: [], specificDates: [], startTime: '08:00', endTime: '09:00', isFlexible: false, notes: '' });
       setShowActivityForm(false);
       setCustomActivities(await studyPlanService.getCustomActivities(user.uid));
     } catch (e: any) { setError(e.message); }
@@ -350,6 +597,55 @@ const StudentStudyPlan = () => {
       await studyPlanService.deleteCustomActivity(id);
       setCustomActivities(prev => prev.filter(a => a.id !== id));
     } catch { /* silent */ }
+  };
+
+  const handleOpenEditActivity = (a: CustomActivity) => {
+    setEditingActivity(a);
+    setEditActivityData({
+      name:          a.name,
+      category:      a.category,
+      scheduleType:  a.scheduleType || 'recurring',
+      daysOfWeek:    a.daysOfWeek || [],
+      specificDates: a.specificDates || [],
+      startTime:     a.startTime,
+      endTime:       a.endTime,
+      isFlexible:    a.isFlexible,
+      notes:         a.notes || '',
+    });
+  };
+
+  const handleSaveEditActivity = async () => {
+    const hasSchedule = editActivityData.scheduleType === 'recurring'
+      ? editActivityData.daysOfWeek.length > 0
+      : editActivityData.specificDates.length > 0;
+    if (!editingActivity || !editActivityData.name || !hasSchedule || savingEditActivity) return;
+    setSavingEditActivity(true);
+    try {
+      const updates: Partial<CustomActivity> = {
+        name:         editActivityData.name,
+        category:     editActivityData.category,
+        scheduleType: editActivityData.scheduleType,
+        daysOfWeek:   editActivityData.scheduleType === 'recurring' ? editActivityData.daysOfWeek : [],
+        startTime:    editActivityData.startTime,
+        endTime:      editActivityData.endTime,
+        isFlexible:   editActivityData.isFlexible,
+        ...(editActivityData.notes      ? { notes:         editActivityData.notes }         : {}),
+        ...(editActivityData.scheduleType === 'specific_dates' && editActivityData.specificDates.length
+          ? { specificDates: editActivityData.specificDates } : {}),
+      };
+      await studyPlanService.updateCustomActivity(editingActivity.id, updates);
+      setEditingActivity(null);
+      setCustomActivities(await studyPlanService.getCustomActivities(user!.uid));
+      setScheduleHash(''); // bust cache so AI schedule reflects changes
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingEditActivity(false); }
+  };
+
+  const toggleEditActivityDay = (day: number) => {
+    setEditActivityData(p => ({
+      ...p,
+      daysOfWeek: p.daysOfWeek.includes(day) ? p.daysOfWeek.filter(d => d !== day) : [...p.daysOfWeek, day],
+    }));
   };
 
   const toggleActivityDay = (day: number) => {
@@ -450,10 +746,10 @@ const StudentStudyPlan = () => {
       if (calendarEvents && calendarEvents.length > 0) {
         setPendingCalendarEvents(calendarEvents);
       }
-    } catch {
+    } catch (err: any) {
       setChatMessages(p => [...p, {
         role: 'assistant',
-        content: "I had a moment there! Could you rephrase that, or try again in a second?",
+        content: `Something went wrong. Please try again.${err?.message ? ` (${err.message})` : ''}`,
       }]);
     } finally {
       setChatLoading(false);
@@ -492,7 +788,7 @@ const StudentStudyPlan = () => {
 
       setChatMessages(p => [...p, {
         role: 'assistant',
-        content: `Done! ✅ I've added ${count} study session${count > 1 ? 's' : ''} to your calendar. Head to the Calendar tab to see them. You've got this! 🎯`,
+        content: `Done! Added ${count} study session${count > 1 ? 's' : ''} to your calendar. Head to the Calendar tab to see them.`,
       }]);
     } catch (e: any) {
       setError('Failed to add events: ' + e.message);
@@ -579,10 +875,10 @@ const StudentStudyPlan = () => {
       {/* ── Stats Row ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Streak',      value: streak.current,        extra: `🔥 Best: ${streak.longest}d`,          cls: 'from-orange-600/20 to-red-600/20 border-orange-500/20' },
-          { label: 'This Week',   value: thisWeekEvents.length,  extra: `📅 ${todayEvents.length} today`,        cls: 'from-blue-600/20 to-indigo-600/20 border-blue-500/20' },
-          { label: 'Completion',  value: `${completionRate}%`,   extra: `✅ ${completedCount}/${events.length}`, cls: 'from-emerald-600/20 to-green-600/20 border-emerald-500/20' },
-          { label: 'Goals',       value: goals.length,           extra: `🎯 ${goals.filter(g => g.currentProgress >= 100).length} done`, cls: 'from-purple-600/20 to-violet-600/20 border-purple-500/20' },
+          { label: 'Streak',      value: streak.current,        extra: `Best: ${streak.longest}d`,          cls: 'from-orange-600/20 to-red-600/20 border-orange-500/20' },
+          { label: 'This Week',   value: thisWeekEvents.length,  extra: `${todayEvents.length} today`,        cls: 'from-blue-600/20 to-indigo-600/20 border-blue-500/20' },
+          { label: 'Completion',  value: `${completionRate}%`,   extra: `${completedCount}/${events.length} done`, cls: 'from-emerald-600/20 to-green-600/20 border-emerald-500/20' },
+          { label: 'Goals',       value: goals.length,           extra: `${goals.filter(g => g.currentProgress >= 100).length} completed`, cls: 'from-purple-600/20 to-violet-600/20 border-purple-500/20' },
         ].map(s => (
           <div key={s.label} className={`bg-gradient-to-br ${s.cls} border rounded-2xl p-4`}>
             <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">{s.label}</p>
@@ -641,7 +937,7 @@ const StudentStudyPlan = () => {
             <Card>
               <h2 className="text-base font-semibold text-white mb-4">Calendar</h2>
               <div className="custom-calendar">
-                <Calendar onChange={setDate} value={date}
+                <Calendar onChange={(val) => { setDate(val); setTimeout(() => dayEventsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); }} value={date}
                   className="bg-transparent text-white rounded-lg w-full"
                   tileClassName={({ date: d }) => events.some(e => e.date.toDateString() === d.toDateString()) ? 'has-event' : null}
                   prevLabel={<ChevronLeft size={15} />} nextLabel={<ChevronRight size={15} />}
@@ -703,6 +999,7 @@ const StudentStudyPlan = () => {
           <div className="lg:col-span-2 space-y-4">
 
             {/* Events for selected day */}
+            <div ref={dayEventsRef}>
             <Card>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-white">
@@ -721,7 +1018,22 @@ const StudentStudyPlan = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {dayEvents.map(ev => (
+                  {dayEvents.map(ev => {
+                    const now = new Date();
+                    // For AI events: show expired only if goal deadline has passed
+                    // For regular events: show expired if 0–24h past event date
+                    let isExpired = false;
+                    if (ev.isAIGenerated) {
+                      const linkedGoal = goals.find(
+                        g => g.subject === ev.course || ev.course?.startsWith(g.subject.split(' (')[0])
+                      );
+                      isExpired = linkedGoal
+                        ? now > linkedGoal.targetDate && !ev.completed
+                        : ev.date < now && ev.date > new Date(now.getTime() - 24 * 60 * 60 * 1000) && !ev.completed;
+                    } else {
+                      isExpired = ev.date < now && ev.date > new Date(now.getTime() - 24 * 60 * 60 * 1000) && !ev.completed;
+                    }
+                    return (
                     <div key={ev.id} className={`bg-background-800 rounded-xl p-4 border-l-4 ${TYPE_COLOR[ev.eventType] || 'border-gray-500'} ${ev.completed ? 'opacity-60' : ''}`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -730,6 +1042,7 @@ const StudentStudyPlan = () => {
                             <span className={`text-sm font-semibold ${ev.completed ? 'line-through text-gray-500' : 'text-white'}`}>{ev.title}</span>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${TYPE_BG[ev.eventType]}`}>{ev.eventType.replace('_', ' ')}</span>
                             {ev.isAIGenerated && <span className="text-xs bg-purple-500/15 text-purple-300 px-1.5 py-0.5 rounded-full flex items-center gap-1"><Sparkles size={9} />AI</span>}
+                            {isExpired && <span className="text-xs bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded-full border border-red-500/30">Expired</span>}
                           </div>
                           {ev.description && <p className="text-xs text-gray-400 mb-1.5 line-clamp-1">{ev.description}</p>}
                           <div className="flex flex-wrap gap-3 text-xs text-gray-400">
@@ -737,7 +1050,7 @@ const StudentStudyPlan = () => {
                             {ev.course && <span className="flex items-center gap-1"><BookOpen size={11} />{ev.course}</span>}
                             {!ev.isPersonal && <span className="text-gray-500">by {ev.instructorName}</span>}
                           </div>
-                          {ev.aiTips?.[0] && <p className="text-xs text-purple-300/60 mt-1.5">💡 {ev.aiTips[0]}</p>}
+                          {ev.aiTips?.[0] && <p className="text-xs text-purple-300/60 mt-1.5">{ev.aiTips[0]}</p>}
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button onClick={() => handleToggleComplete(ev)}
@@ -753,10 +1066,12 @@ const StudentStudyPlan = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </Card>
+            </div>
 
             {/* Enrolled Courses */}
             {enrolledCourses.length > 0 && (
@@ -852,26 +1167,88 @@ const StudentStudyPlan = () => {
               ) : (
                 <div className="space-y-3">
                   {goals.map(g => {
-                    const d = differenceInDays(g.targetDate, new Date());
+                    const d    = differenceInDays(g.targetDate, new Date());
+                    const prog = getGoalAIProgress(g);
                     return (
                       <div key={g.id} className="bg-background-800 rounded-xl p-4">
+                        {/* ── Inline edit form ── */}
+                        {editingGoal?.id === g.id ? (
+                          <div className="space-y-3">
+                            <p className="text-xs font-semibold text-primary-400 mb-1">Edit Goal</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                value={editGoalData.subject}
+                                onChange={e => setEditGoalData(p => ({ ...p, subject: e.target.value }))}
+                                placeholder="Subject / Course"
+                                className={inputCls}
+                              />
+                              <input
+                                type="date"
+                                value={editGoalData.targetDate}
+                                onChange={e => setEditGoalData(p => ({ ...p, targetDate: e.target.value }))}
+                                className={inputCls}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-xs text-gray-400 mb-1 block">Hours needed</label>
+                                <input
+                                  type="number" min={1}
+                                  value={editGoalData.hoursNeeded}
+                                  onChange={e => setEditGoalData(p => ({ ...p, hoursNeeded: Number(e.target.value) }))}
+                                  className={inputCls}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-400 mb-1 block">Difficulty</label>
+                                <select
+                                  value={editGoalData.difficulty}
+                                  onChange={e => setEditGoalData(p => ({ ...p, difficulty: e.target.value as any }))}
+                                  className={inputCls}
+                                >
+                                  <option value="easy">Easy</option>
+                                  <option value="medium">Medium</option>
+                                  <option value="hard">Hard</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSaveEditGoal}
+                                disabled={savingEditGoal || !editGoalData.subject || !editGoalData.targetDate}
+                                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              >
+                                {savingEditGoal ? <Loader size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                                Save
+                              </button>
+                              <button onClick={() => setEditingGoal(null)} className="px-4 bg-background-600 text-gray-400 py-2 rounded-xl text-sm transition-colors">
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                        {/* Goal header */}
                         <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-semibold text-white">{g.subject}</span>
                             <span className={`text-xs px-1.5 py-0.5 rounded ${g.difficulty === 'hard' ? 'bg-red-500/15 text-red-400' : g.difficulty === 'medium' ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'}`}>{g.difficulty}</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs ${d <= 3 ? 'text-red-400' : d <= 7 ? 'text-amber-400' : 'text-gray-400'}`}>{d > 0 ? `${d}d left` : 'Past due'}</span>
-                            <button onClick={() => handleDeleteGoal(g.id)} className="p-1 text-gray-600 hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-xs ${d <= 3 ? 'text-red-400' : d <= 7 ? 'text-amber-400' : 'text-gray-400'}`}>{d > 0 ? `${d}d left` : d === 0 ? 'Due today' : 'Past due'}</span>
+                            <button onClick={() => handleOpenEditGoal(g)} className="p-1 text-gray-500 hover:text-primary-400 transition-colors" title="Edit goal"><Edit size={11} /></button>
+                            <button onClick={() => handleDeleteGoal(g.id)} className="p-1 text-gray-500 hover:text-red-400 transition-colors" title="Delete goal"><Trash2 size={11} /></button>
                           </div>
                         </div>
+
+                        {/* Manual progress bar */}
                         <div className="flex items-center gap-2 mb-2">
                           <div className="flex-1 bg-background-700 rounded-full h-1.5 overflow-hidden">
                             <div className="h-full bg-gradient-to-r from-primary-600 to-purple-600 rounded-full transition-all" style={{ width: `${g.currentProgress}%` }} />
                           </div>
                           <span className="text-xs text-gray-400 w-8 text-right">{g.currentProgress}%</span>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 mb-3">
                           {[25, 50, 75, 100].map(p => (
                             <button key={p} onClick={() => handleUpdateGoalProgress(g.id, p)}
                               className={`flex-1 py-1 rounded text-xs transition-colors ${g.currentProgress >= p ? 'bg-primary-600 text-white' : 'bg-background-700 text-gray-500 hover:text-white'}`}>
@@ -879,6 +1256,62 @@ const StudentStudyPlan = () => {
                             </button>
                           ))}
                         </div>
+
+                        {/* AI Plan Progress Tracker */}
+                        {prog.totalSessions > 0 && (
+                          <div className={`rounded-lg p-3 mb-2 border ${prog.behind ? 'bg-red-500/8 border-red-500/25' : 'bg-background-700 border-background-600'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <BarChart size={11} className={prog.behind ? 'text-red-400' : 'text-primary-400'} />
+                                <span className={`text-xs font-semibold ${prog.behind ? 'text-red-300' : 'text-gray-300'}`}>
+                                  AI Plan: {prog.completedSessions}/{prog.totalSessions} sessions
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-500">{prog.sessionRate}% done</span>
+                            </div>
+                            {/* Session progress bar */}
+                            <div className="h-1 bg-background-600 rounded-full overflow-hidden mb-2">
+                              <div
+                                className={`h-full rounded-full transition-all ${prog.behind ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${prog.sessionRate}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex gap-3 text-xs text-gray-400">
+                                {prog.behind && (
+                                  <span className="flex items-center gap-1 text-red-400">
+                                    <AlertTriangle size={10} /> {prog.missedSessions} missed
+                                  </span>
+                                )}
+                                {prog.remainingSessions > 0 && (
+                                  <span>{prog.remainingSessions} remaining</span>
+                                )}
+                              </div>
+                              {/* Reschedule button — shown when behind or has remaining sessions */}
+                              {(prog.behind || prog.remainingSessions > 0) && aiReady && (
+                                <button
+                                  onClick={() => handleOpenReschedule(g)}
+                                  className="flex items-center gap-1 text-xs bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 hover:text-amber-200 px-2.5 py-1 rounded-lg transition-all whitespace-nowrap"
+                                >
+                                  <RefreshCw size={10} />
+                                  {prog.behind ? 'Replan' : 'Reschedule'}
+                                </button>
+                              )}
+                            </div>
+                            {prog.behind && (
+                              <p className="text-xs text-red-400/70 mt-1.5">
+                                You are behind schedule. Replanning will generate a fresh catch-up plan based on time remaining.
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* No AI sessions yet — nudge */}
+                        {prog.totalSessions === 0 && aiReady && (
+                          <p className="text-xs text-gray-600 mt-1">Generate an AI Schedule to track session progress here.</p>
+                        )}
+                          </>
+                        )}
                       </div>
                     );
                   })}
@@ -917,17 +1350,62 @@ const StudentStudyPlan = () => {
                           ))}
                         </select>
                       </div>
+
+                      {/* Fix #2: schedule type toggle */}
                       <div>
-                        <label className="text-xs text-gray-400 mb-2 block">Days of week</label>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {DAYS.map((day, i) => (
-                            <button key={i} type="button" onClick={() => toggleActivityDay(i)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${newActivity.daysOfWeek.includes(i) ? 'bg-primary-600 text-white' : 'bg-background-600 text-gray-400 hover:text-white'}`}>
-                              {day}
+                        <label className="text-xs text-gray-400 mb-2 block">Schedule Type</label>
+                        <div className="flex gap-2">
+                          {(['recurring', 'specific_dates'] as const).map(t => (
+                            <button key={t} type="button"
+                              onClick={() => setNewActivity(p => ({ ...p, scheduleType: t }))}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${newActivity.scheduleType === t ? 'bg-primary-600 text-white' : 'bg-background-600 text-gray-400 hover:text-white'}`}>
+                              {t === 'recurring' ? 'Recurring (weekly)' : 'Specific Dates'}
                             </button>
                           ))}
                         </div>
                       </div>
+
+                      {newActivity.scheduleType === 'recurring' ? (
+                        <div>
+                          <label className="text-xs text-gray-400 mb-2 block">Days of week</label>
+                          <div className="flex gap-1.5 flex-wrap">
+                            {DAYS.map((day, i) => (
+                              <button key={i} type="button" onClick={() => toggleActivityDay(i)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${newActivity.daysOfWeek.includes(i) ? 'bg-primary-600 text-white' : 'bg-background-600 text-gray-400 hover:text-white'}`}>
+                                {day}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-xs text-gray-400 mb-2 block">Select dates <span className="text-gray-500">(expired dates auto-removed)</span></label>
+                          <input
+                            type="date"
+                            min={new Date().toISOString().slice(0, 10)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val && !newActivity.specificDates.includes(val)) {
+                                setNewActivity(p => ({ ...p, specificDates: [...p.specificDates, val].sort() }));
+                              }
+                              e.target.value = '';
+                            }}
+                            className={inputCls}
+                          />
+                          {newActivity.specificDates.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {newActivity.specificDates.map(d => (
+                                <span key={d} className="flex items-center gap-1 bg-primary-600/20 text-primary-300 border border-primary-500/30 text-xs px-2 py-1 rounded-lg">
+                                  {d}
+                                  <button type="button" onClick={() => setNewActivity(p => ({ ...p, specificDates: p.specificDates.filter(x => x !== d) }))} className="text-gray-400 hover:text-red-400">
+                                    <X size={10} />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs text-gray-400 mb-1 block">Start time</label>
@@ -943,7 +1421,8 @@ const StudentStudyPlan = () => {
                         <span className="text-xs text-gray-300">Flexible — AI can schedule study over this if urgent</span>
                       </label>
                       <div className="flex gap-2">
-                        <button onClick={handleSaveActivity} disabled={savingActivity || !newActivity.name || !newActivity.daysOfWeek.length}
+                        <button onClick={handleSaveActivity}
+                          disabled={savingActivity || !newActivity.name || (newActivity.scheduleType === 'recurring' ? !newActivity.daysOfWeek.length : !newActivity.specificDates.length)}
                           className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1">
                           {savingActivity ? <Loader size={13} className="animate-spin" /> : null}
                           Save
@@ -956,20 +1435,125 @@ const StudentStudyPlan = () => {
                   {customActivities.length > 0 && (
                     <div className="space-y-2">
                       {customActivities.map(a => (
-                        <div key={a.id} className="flex items-center justify-between bg-background-800 rounded-xl p-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-base">{CATEGORY_EMOJI[a.category]}</span>
-                              <span className="text-sm font-medium text-white truncate">{a.name}</span>
-                              {a.isFlexible && <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">flexible</span>}
+                        <div key={a.id} className="bg-background-800 rounded-xl p-3">
+                          {editingActivity?.id === a.id ? (
+                            /* ── Inline activity edit form ── */
+                            <div className="space-y-3">
+                              <p className="text-xs font-semibold text-primary-400">Edit Activity</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input
+                                  value={editActivityData.name}
+                                  onChange={e => setEditActivityData(p => ({ ...p, name: e.target.value }))}
+                                  placeholder="Activity name"
+                                  className={inputCls}
+                                />
+                                <select
+                                  value={editActivityData.category}
+                                  onChange={e => setEditActivityData(p => ({ ...p, category: e.target.value as any }))}
+                                  className={inputCls}
+                                >
+                                  {(['sport', 'job', 'hobby', 'family', 'religious', 'social', 'transport', 'other'] as const).map(c => (
+                                    <option key={c} value={c}>{CATEGORY_EMOJI[c]} {c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              {/* Schedule type */}
+                              <div className="flex gap-2">
+                                {(['recurring', 'specific_dates'] as const).map(t => (
+                                  <button key={t} type="button"
+                                    onClick={() => setEditActivityData(p => ({ ...p, scheduleType: t }))}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${editActivityData.scheduleType === t ? 'bg-primary-600 text-white' : 'bg-background-600 text-gray-400 hover:text-white'}`}>
+                                    {t === 'recurring' ? 'Recurring' : 'Specific Dates'}
+                                  </button>
+                                ))}
+                              </div>
+                              {editActivityData.scheduleType === 'recurring' ? (
+                                <div className="flex gap-1.5 flex-wrap">
+                                  {DAYS.map((day, i) => (
+                                    <button key={i} type="button" onClick={() => toggleEditActivityDay(i)}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${editActivityData.daysOfWeek.includes(i) ? 'bg-primary-600 text-white' : 'bg-background-600 text-gray-400 hover:text-white'}`}>
+                                      {day}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div>
+                                  <input
+                                    type="date"
+                                    min={new Date().toISOString().slice(0, 10)}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      if (val && !editActivityData.specificDates.includes(val)) {
+                                        setEditActivityData(p => ({ ...p, specificDates: [...p.specificDates, val].sort() }));
+                                      }
+                                      e.target.value = '';
+                                    }}
+                                    className={inputCls}
+                                  />
+                                  {editActivityData.specificDates.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                      {editActivityData.specificDates.map(d => (
+                                        <span key={d} className="flex items-center gap-1 bg-primary-600/20 text-primary-300 border border-primary-500/30 text-xs px-2 py-1 rounded-lg">
+                                          {d}
+                                          <button type="button" onClick={() => setEditActivityData(p => ({ ...p, specificDates: p.specificDates.filter(x => x !== d) }))} className="text-gray-400 hover:text-red-400"><X size={10} /></button>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-xs text-gray-400 mb-1 block">Start time</label>
+                                  <input type="time" value={editActivityData.startTime} onChange={e => setEditActivityData(p => ({ ...p, startTime: e.target.value }))} className={inputCls} />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-400 mb-1 block">End time</label>
+                                  <input type="time" value={editActivityData.endTime} onChange={e => setEditActivityData(p => ({ ...p, endTime: e.target.value }))} className={inputCls} />
+                                </div>
+                              </div>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={editActivityData.isFlexible} onChange={e => setEditActivityData(p => ({ ...p, isFlexible: e.target.checked }))} className="h-4 w-4 rounded text-primary-600" />
+                                <span className="text-xs text-gray-300">Flexible — AI can schedule study over this if urgent</span>
+                              </label>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleSaveEditActivity}
+                                  disabled={savingEditActivity || !editActivityData.name || (editActivityData.scheduleType === 'recurring' ? !editActivityData.daysOfWeek.length : !editActivityData.specificDates.length)}
+                                  className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                                >
+                                  {savingEditActivity ? <Loader size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                                  Save
+                                </button>
+                                <button onClick={() => setEditingActivity(null)} className="px-4 bg-background-600 text-gray-400 py-2 rounded-xl text-sm transition-colors">Cancel</button>
+                              </div>
                             </div>
-                            <p className="text-xs text-gray-400 mt-0.5 ml-6">
-                              {a.daysOfWeek.map(d => DAYS[d]).join(', ')} · {a.startTime}–{a.endTime}
-                            </p>
-                          </div>
-                          <button onClick={() => handleDeleteActivity(a.id)} className="p-1.5 text-gray-500 hover:text-red-400 transition-colors flex-shrink-0">
-                            <Trash2 size={13} />
-                          </button>
+                          ) : (
+                            /* ── Normal view ── */
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-base">{CATEGORY_EMOJI[a.category]}</span>
+                                  <span className="text-sm font-medium text-white truncate">{a.name}</span>
+                                  {a.isFlexible && <span className="text-xs px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">flexible</span>}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-0.5 ml-6">
+                                  {a.scheduleType === 'specific_dates' && a.specificDates?.length
+                                    ? a.specificDates.join(', ')
+                                    : a.daysOfWeek.map(d => DAYS[d]).join(', ')
+                                  } · {a.startTime}–{a.endTime}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                                <button onClick={() => handleOpenEditActivity(a)} className="p-1.5 text-gray-500 hover:text-primary-400 transition-colors" title="Edit activity">
+                                  <Edit size={12} />
+                                </button>
+                                <button onClick={() => handleDeleteActivity(a.id)} className="p-1.5 text-gray-500 hover:text-red-400 transition-colors" title="Delete activity">
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1014,9 +1598,33 @@ const StudentStudyPlan = () => {
                               </span>
                             </div>
                           </div>
-                          <button onClick={() => handleToggleComplete(ev)} className="p-1.5 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-emerald-400 rounded-lg transition-colors flex-shrink-0">
-                            <CheckCircle2 size={13} />
-                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => handleToggleComplete(ev)}
+                              className={`p-1.5 rounded-lg transition-colors ${ev.completed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-background-700 text-gray-400 hover:text-emerald-400'}`}
+                              title="Mark complete"
+                            >
+                              <CheckCircle2 size={13} />
+                            </button>
+                            {ev.isPersonal && ev.studentId === user?.uid && (
+                              <>
+                                <button
+                                  onClick={() => { setEditingEvent(ev); setShowModal(true); }}
+                                  className="p-1.5 bg-background-700 hover:bg-background-600 text-gray-400 hover:text-white rounded-lg transition-colors"
+                                  title="Edit event"
+                                >
+                                  <Edit size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(ev.id)}
+                                  className="p-1.5 bg-background-700 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-lg transition-colors"
+                                  title="Delete event"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1030,7 +1638,14 @@ const StudentStudyPlan = () => {
               <h3 className="text-sm font-semibold text-white mb-3">Goals Progress</h3>
               {goals.length === 0 ? <p className="text-xs text-gray-500">No goals added</p> : goals.map(g => (
                 <div key={g.id} className="mb-3 last:mb-0">
-                  <div className="flex justify-between text-xs mb-1"><span className="text-gray-300 font-medium truncate">{g.subject}</span><span className="text-gray-500 flex-shrink-0">{g.currentProgress}%</span></div>
+                  <div className="flex justify-between items-center text-xs mb-1">
+                    <span className="text-gray-300 font-medium truncate flex-1">{g.subject}</span>
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                      <span className="text-gray-500 mr-1">{g.currentProgress}%</span>
+                      <button onClick={() => handleOpenEditGoal(g)} className="p-0.5 text-gray-600 hover:text-primary-400 transition-colors" title="Edit goal"><Edit size={10} /></button>
+                      <button onClick={() => handleDeleteGoal(g.id)} className="p-0.5 text-gray-600 hover:text-red-400 transition-colors" title="Delete goal"><Trash2 size={10} /></button>
+                    </div>
+                  </div>
                   <div className="h-1.5 bg-background-700 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-primary-600 to-purple-600 rounded-full" style={{ width: `${g.currentProgress}%` }} /></div>
                 </div>
               ))}
@@ -1104,7 +1719,7 @@ const StudentStudyPlan = () => {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-white">Sage — AI Study Companion</h2>
-                <p className="text-xs text-gray-400">Powered by Gemini 2.5 Flash · knows your schedule</p>
+                <p className="text-xs text-gray-400">Knows your schedule</p>
               </div>
             </div>
             {chatMessages.length > 0 && (
@@ -1143,7 +1758,7 @@ const StudentStudyPlan = () => {
             {chatHistoryLoaded && chatMessages.length === 0 && (
               <div className="space-y-2">
                 <p className="text-sm text-gray-400 text-center py-4">
-                  Hi {user?.name || user?.displayName || 'there'}! 👋 I'm Sage, your study companion. Ask me anything!
+                  Hi {user?.name || user?.displayName || 'there'}! I'm Sage, your study companion. Ask me anything!
                 </p>
                 {[
                   `Create a study plan for my upcoming exams`,
@@ -1224,7 +1839,7 @@ const StudentStudyPlan = () => {
                         {format(s.date, 'EEE, MMM d')} · {s.startTime}–{s.endTime} · {s.subject}
                         <span className="ml-2 capitalize text-gray-500">{s.sessionType}</span>
                       </p>
-                      <p className="text-xs text-purple-300/70 mt-1">💡 {s.reason}</p>
+                      <p className="text-xs text-purple-300/70 mt-1">{s.reason}</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${s.priority === 'high' ? 'bg-red-500/15 text-red-400' : s.priority === 'medium' ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'}`}>{s.priority}</span>
                   </div>
@@ -1261,6 +1876,183 @@ const StudentStudyPlan = () => {
           isPersonalEvent={true}
         />
       )}
+
+      {/* ─── Goal Edit Modal ─────────────────────────────────────────────────────── */}
+      {editingGoal && view !== 'calendar' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-background-900 border border-background-700 rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-background-700">
+              <div className="flex items-center gap-2">
+                <Target size={15} className="text-primary-400" />
+                <h3 className="text-base font-bold text-white">Edit Goal</h3>
+              </div>
+              <button onClick={() => setEditingGoal(null)} className="text-gray-400 hover:text-white"><X size={17} /></button>
+            </div>
+            <div className="p-6 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  value={editGoalData.subject}
+                  onChange={e => setEditGoalData(p => ({ ...p, subject: e.target.value }))}
+                  placeholder="Subject / Course"
+                  className={inputCls}
+                />
+                <input
+                  type="date"
+                  value={editGoalData.targetDate}
+                  onChange={e => setEditGoalData(p => ({ ...p, targetDate: e.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Hours needed</label>
+                  <input type="number" min={1} value={editGoalData.hoursNeeded} onChange={e => setEditGoalData(p => ({ ...p, hoursNeeded: Number(e.target.value) }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">Difficulty</label>
+                  <select value={editGoalData.difficulty} onChange={e => setEditGoalData(p => ({ ...p, difficulty: e.target.value as any }))} className={inputCls}>
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleSaveEditGoal}
+                  disabled={savingEditGoal || !editGoalData.subject || !editGoalData.targetDate}
+                  className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                >
+                  {savingEditGoal ? <Loader size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                  Save Changes
+                </button>
+                <button onClick={() => setEditingGoal(null)} className="px-5 bg-background-700 text-gray-400 py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Reschedule Modal ────────────────────────────────────────────────────── */}
+      {showRescheduleModal && rescheduleGoal && (() => {
+        const prog     = getGoalAIProgress(rescheduleGoal);
+        const daysLeft = Math.max(0, differenceInDays(rescheduleGoal.targetDate, new Date()));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div className="bg-background-900 border border-background-700 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-background-700">
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={16} className="text-amber-400" />
+                  <h3 className="text-base font-bold text-white">Replan: {rescheduleGoal.subject}</h3>
+                </div>
+                <button onClick={() => { setShowRescheduleModal(false); setReschedulePreview([]); }} className="text-gray-400 hover:text-white"><X size={17} /></button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+
+                {/* Current status summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Days Left',    value: daysLeft > 0 ? `${daysLeft}d` : 'Due today', warn: daysLeft <= 3 },
+                    { label: 'Completed',    value: `${prog.completedSessions}/${prog.totalSessions}`, warn: false },
+                    { label: 'Missed',       value: prog.missedSessions,                             warn: prog.missedSessions > 0 },
+                    { label: 'Remaining',    value: prog.remainingSessions,                          warn: false },
+                  ].map(s => (
+                    <div key={s.label} className={`rounded-xl p-3 border text-center ${s.warn ? 'bg-red-500/10 border-red-500/25' : 'bg-background-800 border-background-700'}`}>
+                      <p className={`text-lg font-bold ${s.warn ? 'text-red-300' : 'text-white'}`}>{s.value}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {prog.behind && (
+                  <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/25 rounded-xl p-3">
+                    <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-300">
+                      You are behind by <strong>{prog.missedSessions} session{prog.missedSessions !== 1 ? 's' : ''}</strong>.
+                      A new plan will redistribute the remaining work across the {daysLeft} day{daysLeft !== 1 ? 's' : ''} left,
+                      prioritising what matters most before the deadline.
+                    </p>
+                  </div>
+                )}
+
+                {/* Free hours selector */}
+                <div className="flex items-center gap-3">
+                  <label className="text-xs text-gray-400 whitespace-nowrap">Free hours per day:</label>
+                  <select
+                    value={freeHoursPerDay}
+                    onChange={e => setFreeHoursPerDay(Number(e.target.value))}
+                    className="bg-background-800 border border-background-700 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary-500"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 8].map(h => <option key={h} value={h}>{h}h</option>)}
+                  </select>
+                  <button
+                    onClick={handleGenerateReschedule}
+                    disabled={rescheduling}
+                    className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-4 py-2 rounded-xl font-semibold transition-all disabled:opacity-50"
+                  >
+                    {rescheduling ? <Loader size={12} className="animate-spin" /> : <Brain size={12} />}
+                    {rescheduling ? 'Planning…' : reschedulePreview.length > 0 ? 'Re-generate' : 'Generate Catch-up Plan'}
+                  </button>
+                </div>
+
+                {/* Preview sessions */}
+                {reschedulePreview.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-gray-300">{reschedulePreview.length} new sessions planned</p>
+                    {reschedulePreview.map((s: any, i: number) => (
+                      <div key={i} className={`bg-background-800 rounded-xl p-3 border-l-4 ${s.priority === 'high' ? 'border-red-500' : s.priority === 'medium' ? 'border-amber-500' : 'border-emerald-500'}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white">{s.title}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {s.date instanceof Date ? format(s.date, 'EEE, MMM d') : s.date}
+                              {' · '}{s.startTime}–{s.endTime}
+                              <span className="ml-2 capitalize text-gray-500">{s.sessionType}</span>
+                            </p>
+                            <p className="text-xs text-amber-300/70 mt-1">{s.reason}</p>
+                            {s.tips?.[0] && <p className="text-xs text-gray-500 mt-0.5 italic">{s.tips[0]}</p>}
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${s.priority === 'high' ? 'bg-red-500/15 text-red-400' : s.priority === 'medium' ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'}`}>
+                            {s.priority}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-background-700 flex items-center justify-between gap-3">
+                <p className="text-xs text-gray-500">
+                  {reschedulePreview.length > 0
+                    ? 'Applying will remove your future unfinished AI sessions for this goal and replace them with this plan.'
+                    : 'Generate a plan above to preview before applying.'}
+                </p>
+                <div className="flex gap-3 flex-shrink-0">
+                  <button
+                    onClick={() => { setShowRescheduleModal(false); setReschedulePreview([]); }}
+                    className="px-4 py-2 bg-background-700 hover:bg-background-600 text-gray-300 rounded-xl text-sm font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAcceptReschedule}
+                    disabled={addingReschedule || reschedulePreview.length === 0}
+                    className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {addingReschedule ? <Loader size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                    Apply New Plan
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
