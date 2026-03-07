@@ -166,6 +166,26 @@ const ContentUpload = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+
+  // Mirror uploadProgress to Dynamic Island
+  useEffect(() => {
+    if (!uploadProgress) return;
+    if (uploadProgress.percentage === 0) {
+      window.dispatchEvent(new CustomEvent('dynamic-island-show', {
+        detail: {
+          id: 'upload-progress',
+          type: 'info',
+          title: uploadProgress.fileName || 'Uploading…',
+          progress: 0,
+          duration: 999999,
+        },
+      }));
+    } else {
+      window.dispatchEvent(new CustomEvent('dynamic-island-progress', {
+        detail: { progress: uploadProgress.percentage },
+      }));
+    }
+  }, [uploadProgress]);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   // ==================== ANALYTICS STATE ====================
