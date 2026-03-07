@@ -395,6 +395,10 @@ const Navigation = () => {
     const n = { id: Date.now().toString(), message, type, timestamp: new Date() };
     setNotifications(prev => [n, ...prev.slice(0,4)]);
     setTimeout(() => setNotifications(prev => prev.filter(x => x.id !== n.id)), 5000);
+    // Also show on Dynamic Island
+    window.dispatchEvent(new CustomEvent('dynamic-island-show', {
+      detail: { id: n.id, type, title: message, duration: 4000 },
+    }));
   }, []);
   useEffect(() => {
     (window as any).addNotification = addNotification;
