@@ -103,7 +103,10 @@ export interface CustomActivity {
   studentId: string;
   name: string;
   category: 'sport' | 'job' | 'hobby' | 'family' | 'religious' | 'social' | 'transport' | 'other';
-  daysOfWeek: number[]; // 0=Sun … 6=Sat
+  /** 'recurring' = repeat on selected days of week; 'specific_dates' = one-off on chosen dates */
+  scheduleType: 'recurring' | 'specific_dates';
+  daysOfWeek: number[]; // 0=Sun … 6=Sat (used when scheduleType === 'recurring')
+  specificDates?: string[]; // YYYY-MM-DD list (used when scheduleType === 'specific_dates')
   startTime: string;    // HH:MM
   endTime: string;      // HH:MM
   isFlexible: boolean;  // true = AI can schedule over it if urgent
@@ -137,11 +140,14 @@ export const studyPlanService = {
   // ── Original methods (100% unchanged) ────────────────────────────────────
 
   async createEvent(event: Omit<StudyPlanEvent, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    const docRef = await addDoc(collection(db, 'studyPlanEvents'), {
-      ...event,
-      date: Timestamp.fromDate(event.date),
-      createdAt: Timestamp.now(),
-    });
+    // Firestore rejects undefined — strip before writing
+    const payload: Record<string, any> = { createdAt: Timestamp.now() };
+    for (const [k, v] of Object.entries(event)) {
+      if (v !== undefined) {
+        payload[k] = (k === 'date' && v instanceof Date) ? Timestamp.fromDate(v) : v;
+      }
+    }
+    const docRef = await addDoc(collection(db, 'studyPlanEvents'), payload);
     return docRef.id;
   },
 
@@ -395,10 +401,12 @@ export const studyPlanService = {
   async createCustomActivity(
     activity: Omit<CustomActivity, 'id' | 'createdAt'>
   ): Promise<string> {
-    const ref = await addDoc(collection(db, 'studentActivities'), {
-      ...activity,
-      createdAt: Timestamp.now(),
-    });
+    // Firestore rejects undefined values — strip them before writing
+    const payload: Record<string, any> = { createdAt: Timestamp.now() };
+    for (const [k, v] of Object.entries(activity)) {
+      if (v !== undefined) payload[k] = v;
+    }
+    const ref = await addDoc(collection(db, 'studentActivities'), payload);
     return ref.id;
   },
 
@@ -434,6 +442,68 @@ export const studyPlanService = {
 
   async deleteCustomActivity(id: string): Promise<void> {
     await deleteDoc(doc(db, 'studentActivities', id));
+  },
+
+  /**
+   * Auto-cleanup expired personal events.
+   * Rules:
+   *   - AI-generated events: only delete 24h AFTER their linked goal's deadline (not event date)
+   *   - Regular personal events: delete 24h after the event's own date
+   * Returns IDs that were deleted so the caller can filter them out.
+   */
+  async deleteExpiredPersonalEvents(
+    studentId: string,
+    events: StudyPlanEvent[],
+    goals?: import('./studyPlanService').StudyGoal[]
+  ): Promise<string[]> {
+    const now = Date.now();
+    const cutoff24h = new Date(now - 24 * 60 * 60 * 1000);
+
+    const toDelete = events.filter(e => {
+      if (!e.isPersonal || e.studentId !== studentId || e.completed) return false;
+
+      // AI-generated events: survive until 24h after the linked goal's deadline
+      if (e.isAIGenerated && goals && goals.length > 0) {
+        const linkedGoal = goals.find(
+          g => g.subject === e.course || e.course?.startsWith(g.subject.split(' (')[0])
+        );
+        if (linkedGoal) {
+          const goalDeadlineCutoff = new Date(linkedGoal.targetDate.getTime() + 24 * 60 * 60 * 1000);
+          return new Date() > goalDeadlineCutoff;
+        }
+        // AI event but no linked goal found → use event date + 24h grace
+        return e.date < cutoff24h;
+      }
+
+      // Regular personal events: 24h after event date
+      return e.date < cutoff24h;
+    });
+
+    await Promise.all(toDelete.map(e => studyPlanService.deleteEvent(e.id))).catch(() => {});
+    return toDelete.map(e => e.id);
+  },
+
+  /**
+   * Reschedule: delete all future uncompleted AI-generated events for a goal,
+   * returning the count of deleted sessions so the caller knows what was cleared.
+   */
+  async clearFutureAIEventsForGoal(
+    goalSubject: string,
+    events: StudyPlanEvent[],
+    studentId: string
+  ): Promise<number> {
+    const now = new Date();
+    const toDelete = events.filter(
+      e =>
+        e.isPersonal &&
+        e.studentId === studentId &&
+        e.isAIGenerated &&
+        !e.completed &&
+        e.date >= now &&
+        (e.course === goalSubject || e.course?.startsWith(goalSubject.split(' (')[0]))
+    );
+    await Promise.all(toDelete.map(e => studyPlanService.deleteEvent(e.id))).catch(() => {});
+    return toDelete.length;
   },
 
   // ── NEW: Enrolled Courses For Planning ────────────────────────────────────
