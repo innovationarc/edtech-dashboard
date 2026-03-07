@@ -1,11 +1,11 @@
 // src/services/aiStudyPlannerService.ts
-// Multi-Provider AI — Gemini · Groq · OpenAI · Anthropic · DeepSeek
-// Reads active provider config from Firestore (set in Admin → AI Model Settings)
-// Falls back to VITE_GEMINI_API_KEY + gemini-2.0-flash if no config saved
+// Multi-provider AI — Smart Schedule · Time Slots · Auto-Draft · Chat · Digest
+// Provider configured in Firestore via Admin → AI Model Settings
+// Supports: Gemini · Groq · OpenAI · Anthropic · DeepSeek
 
 import { aiModelConfigService, callProviderDirect, AIModelConfig } from './aiModelConfigService';
 
-// ─── Exported Interfaces (unchanged — 100% backward compatible) ───────────────
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface StudyGoal {
   subject: string;
@@ -80,51 +80,88 @@ export interface PomodoroSession {
   notes: string;
 }
 
+// CalendarEventFromChat — events the AI creates during chat
+export interface CalendarEventFromChat {
+  title: string;
+  date: string;           // YYYY-MM-DD
+  startTime: string;      // HH:MM
+  endTime: string;        // HH:MM
+  subject: string;
+  eventType?: string;
+  description?: string;
+  priority?: 'low' | 'medium' | 'high';
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+// Resolves config:
+// - non-empty legacyKey → Gemini fallback (backwards compat with any old call sites)
+// - empty string → load from Firestore (uses whatever admin saved: Groq, OpenAI, etc.)
+async function resolveConfig(legacyKey = ''): Promise<AIModelConfig> {
+  if (legacyKey) return { provider: 'gemini', model: 'gemini-2.0-flash', apiKey: legacyKey };
+  return aiModelConfigService.getConfig();
+}
+
+async function callAI(prompt: string, maxTokens = 2048, temp = 0.7, legacyKey = ''): Promise<string> {
+  const cfg = await resolveConfig(legacyKey);
+  if (!cfg.apiKey) throw new Error('No AI API key configured. Go to Admin → AI Model Settings.');
+  return callProviderDirect(prompt, cfg, maxTokens, temp);
+}
+
+// Robust JSON parser — handles markdown fences, extra text, nested structures
 function parseJSON<T>(raw: string, fallback: T, isArray = false): T {
+  if (!raw) return fallback;
   try {
-    const m = raw.match(isArray ? /\[[\s\S]*\]/ : /\{[\s\S]*\}/);
-    if (!m) throw new Error('no json block found');
-    return JSON.parse(m[0]) as T;
+    // 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
+    let cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1').trim();
+
+    // 2. Try direct parse first
+    try { return JSON.parse(cleaned) as T; } catch { /* continue */ }
+
+    // 3. Extract array or object with regex
+    const pattern = isArray ? /\[[\s\S]*\]/ : /\{[\s\S]*\}/;
+    const m = cleaned.match(pattern);
+    if (m) return JSON.parse(m[0]) as T;
+
+    // 4. Last resort: search raw string
+    const m2 = raw.match(pattern);
+    if (m2) return JSON.parse(m2[0]) as T;
+
+    return fallback;
   } catch {
     return fallback;
   }
 }
 
-/**
- * Resolve the AI config to use for a call.
- * - If apiKeyOverride is a non-empty string, build a gemini-2.0-flash config from it (backward compat).
- * - Otherwise load from Firestore (with in-memory cache).
- */
-async function resolveConfig(apiKeyOverride?: string): Promise<AIModelConfig> {
-  if (apiKeyOverride && apiKeyOverride.trim()) {
-    return { provider: 'gemini', model: 'gemini-2.5-flash', apiKey: apiKeyOverride };
-  }
-  return aiModelConfigService.getConfig();
-}
-
-/** Unified AI call — resolves config then routes to the correct provider. Throws on error. */
-async function callAI(
-  prompt: string,
-  maxTokens: number,
-  temp: number,
-  apiKeyOverride?: string
-): Promise<string> {
-  const config = await resolveConfig(apiKeyOverride);
-  return callProviderDirect(prompt, config, maxTokens, temp);
-}
+// Session-level insights cache (keyed by studentId)
+const _insightsCache: Record<string, { data: AIInsight[]; ts: number }> = {};
+const INSIGHTS_TTL = 30 * 60 * 1000; // 30 min
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const aiStudyPlannerService = {
 
+  // ── Smart schedule ──────────────────────────────────────────────────────────
+
   async generateSmartSchedule(
     goals: StudyGoal[],
     existing: { date: Date; startTime: string; endTime: string }[],
     hoursPerDay: number,
-    apiKey: string
+    apiKey = '',
+    options?: {
+      enrolledCourses?: { title: string; subjects: string[] }[];
+      customActivities?: { name: string; daysOfWeek: number[]; startTime: string; endTime: string; isFlexible: boolean }[];
+    }
   ): Promise<AIScheduleSuggestion[]> {
+    const courseCtx = options?.enrolledCourses?.length
+      ? `\nEnrolled courses: ${options.enrolledCourses.map(c => `${c.title} (${c.subjects.join(', ')})`).join('; ')}`
+      : '';
+    const activityCtx = options?.customActivities?.length
+      ? `\nFixed activities (avoid scheduling over these unless flexible):\n${options.customActivities.map(a =>
+          `- ${a.name}: days ${a.daysOfWeek.join(',')} ${a.startTime}-${a.endTime}${a.isFlexible ? ' (flexible)' : ' (fixed)'}`
+        ).join('\n')}`
+      : '';
+
     const prompt = `You are an expert AI study planner using spaced repetition + cognitive load theory.
 
 Goals:
@@ -132,18 +169,22 @@ ${goals.map(g => `- ${g.subject}: ${g.hoursNeeded}h needed, deadline ${g.targetD
 
 Existing commitments:
 ${existing.map(e => `- ${e.date.toISOString().split('T')[0]} ${e.startTime}-${e.endTime}`).join('\n') || 'None'}
+${courseCtx}${activityCtx}
 
 Available: ${hoursPerDay}h/day. Today: ${new Date().toISOString().split('T')[0]}
 
-Rules: morning=hard topics, afternoon=review, vary focus/review/practice, space across days, prioritize by urgency x difficulty. Max 14 sessions.
+Rules: morning=hard topics, afternoon=review, vary focus/review/practice, space across days, prioritize by urgency×difficulty.
 
-Return ONLY valid JSON array, no markdown:
+Return ONLY a valid JSON array with no markdown, no explanation:
 [{"title":"string","subject":"string","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"string","priority":"low|medium|high","sessionType":"focus|review|practice|break","tips":["t1","t2"]}]`;
 
     const raw = await callAI(prompt, 3000, 0.6, apiKey);
     const parsed = parseJSON<any[]>(raw, [], true);
+    if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('AI returned no schedule. Try adjusting your goals or free hours.');
     return parsed.map((s: any) => ({ ...s, date: new Date(s.date) }));
   },
+
+  // ── Time slot suggestions ───────────────────────────────────────────────────
 
   async suggestTimeSlots(
     eventTitle: string,
@@ -153,116 +194,184 @@ Return ONLY valid JSON array, no markdown:
     preferredDate: string,
     existingOnDay: { startTime: string; endTime: string; title: string }[],
     prefs: { preferMorning: boolean; preferEvening: boolean; peakHour?: number },
-    apiKey: string
+    apiKey = ''
   ): Promise<AITimeSlotSuggestion[]> {
     const busy = existingOnDay.map(e => `  ${e.startTime}-${e.endTime} (${e.title})`).join('\n') || '  None';
-    const prompt = `Suggest 3 optimal time slots for a study event.
+    const prompt = `Suggest exactly 3 optimal time slots for a study event.
 
 Event: "${eventTitle}" | Type: ${eventType} | Subject: ${subject} | Duration: ${durationMins}min | Date: ${preferredDate}
-Busy:
+Busy times:
 ${busy}
-Prefs: morning=${prefs.preferMorning}, evening=${prefs.preferEvening}, peak=${prefs.peakHour ?? 'unknown'}
+Preferences: morning=${prefs.preferMorning}, evening=${prefs.preferEvening}, peak hour=${prefs.peakHour ?? 'unknown'}
 
-Rules: exams/hard topics go morning (peak energy), reviews in afternoon, practice is fine in evenings, always add 15min buffer between sessions, never schedule past 23:00.
+Rules: exams/hard topics → peak energy (morning), reviews → afternoon, practice → evening ok, 15min buffer between slots, never past 23:00.
 
-Return ONLY a valid JSON array of exactly 3 objects. No markdown. No explanation. Just the array:
-[{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"one sentence","energyLevel":"peak|medium|low","sessionType":"focus|review|practice|break","estimatedProductivity":85,"conflictWarning":null}]`;
+Return ONLY a valid JSON array of exactly 3 objects with no markdown, no explanation:
+[{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"one sentence","energyLevel":"peak|medium|low","sessionType":"focus|review|practice|break","estimatedProductivity":75,"conflictWarning":null}]`;
 
-    // Throws on API error — caller must catch and show error state in UI
     const raw = await callAI(prompt, 1024, 0.5, apiKey);
-    const result = parseJSON<AITimeSlotSuggestion[]>(raw, [], true);
-    if (!Array.isArray(result) || result.length === 0) {
-      throw new Error('Model returned no time slots. Check your AI model settings or try again.');
+    const parsed = parseJSON<AITimeSlotSuggestion[]>(raw, [], true);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error('AI returned no time slots. Check your AI model settings or try again.');
     }
-    return result;
+    return parsed;
   },
 
-  async draftEventFromTitle(
-    title: string,
-    subject: string,
-    eventType: string,
-    apiKey: string
-  ): Promise<AIEventDraft> {
+  // ── Auto-draft event from title ─────────────────────────────────────────────
+
+  async draftEventFromTitle(title: string, subject: string, eventType: string, apiKey = ''): Promise<AIEventDraft> {
     const prompt = `Auto-fill study event details.
 Title: "${title}" | Subject: "${subject}" | Type: ${eventType}
-Return ONLY valid JSON (no markdown):
-{"title":"improved title","description":"1-2 sentence description","priority":"low|medium|high","estimatedDuration":60,"suggestedPrep":["s1","s2","s3"],"relatedTopics":["t1","t2"]}`;
+Return ONLY a valid JSON object with no markdown:
+{"title":"improved title","description":"1-2 sentence description","priority":"low|medium|high","estimatedDuration":60,"suggestedPrep":["step1","step2","step3"],"relatedTopics":["topic1","topic2"]}`;
 
-    const raw = await callAI(prompt, 512, 0.6, apiKey);
     return parseJSON<AIEventDraft>(
-      raw,
+      await callAI(prompt, 512, 0.6, apiKey),
       { title, description: '', priority: 'medium', estimatedDuration: 60, suggestedPrep: [], relatedTopics: [] }
     );
   },
+
+  // ── Personalised insights ───────────────────────────────────────────────────
 
   async getPersonalizedInsights(
     studentName: string,
     upcoming: { title: string; date: Date; priority: string; eventType: string }[],
     completionRate: number,
-    apiKey: string
+    apiKey = '',
+    cacheKey?: string  // e.g. user.uid — used to cache per student per session
   ): Promise<AIInsight[]> {
+    // Check session cache
+    if (cacheKey) {
+      const cached = _insightsCache[cacheKey];
+      if (cached && Date.now() - cached.ts < INSIGHTS_TTL) return cached.data;
+    }
+
     const urgent = upcoming
       .filter(e => Math.ceil((e.date.getTime() - Date.now()) / 86400000) <= 7)
       .map(e => `${e.title} in ${Math.ceil((e.date.getTime() - Date.now()) / 86400000)}d`);
 
-    const prompt = `Generate 3-4 personalized study insights.
-Student: ${studentName} | Completion: ${completionRate}% | Urgent: ${urgent.join(', ') || 'none'}
-Return ONLY valid JSON array (no markdown):
-[{"type":"warning|success|tip|motivation","title":"3-5 words","message":"max 100 chars","action":"CTA or null"}]`;
+    const prompt = `Generate 3-4 personalized study insights for a student.
+Student: ${studentName} | Completion rate: ${completionRate}% | Urgent items: ${urgent.join(', ') || 'none'}
+Return ONLY a valid JSON array with no markdown:
+[{"type":"warning|success|tip|motivation","title":"3-5 word title","message":"max 100 chars","action":"CTA string or null"}]`;
 
-    const raw = await callAI(prompt, 512, 0.8, apiKey);
-    return parseJSON<AIInsight[]>(
-      raw,
+    const result = parseJSON<AIInsight[]>(
+      await callAI(prompt, 512, 0.8, apiKey),
       [{ type: 'tip', title: 'Stay Consistent', message: 'Short daily sessions beat long cramming.', action: 'Start Pomodoro' }],
       true
     );
+
+    if (cacheKey) _insightsCache[cacheKey] = { data: result, ts: Date.now() };
+    return result;
   },
+
+  // ── AI Chat (returns response + optional calendar events to add) ────────────
 
   async chatWithAI(
     message: string,
-    context: { events: number; subjects: string[]; upcomingExams: string[] },
+    context: {
+      studentName?: string;
+      totalEvents?: number;
+      events?: number;  // legacy compat
+      subjects: string[];
+      upcomingExams: string[];
+      enrolledCourses?: { title: string; subjects: string[]; totalLessons?: number; progress?: number }[];
+      customActivities?: { name: string; days?: string[]; time?: string; priority?: string }[];
+      activeGoals?: { subject: string; targetDate: string; hoursNeeded: number; progress: number }[];
+      completionRate?: number;
+      streak?: number;
+      pomodoroSessions?: number;
+    },
     history: { role: 'user' | 'assistant'; content: string }[],
-    apiKey: string
-  ): Promise<string> {
-    const hist = history.slice(-6).map(m => `${m.role === 'user' ? 'Student' : 'Sage'}: ${m.content}`).join('\n');
-    const prompt = `You are Sage, a warm and knowledgeable AI study companion on an EdTech platform. Be encouraging, concise, and actionable.
-Context: ${context.events} events, subjects: ${context.subjects.join(', ') || 'none'}, exams: ${context.upcomingExams.join(', ') || 'none'}
+    apiKey = ''
+  ): Promise<{ response: string; calendarEvents: CalendarEventFromChat[] }> {
+    const name = context.studentName || 'Student';
+    const totalEvents = context.totalEvents ?? context.events ?? 0;
+    const hist = history.slice(-6).map(m => `${m.role === 'user' ? name : 'Sage'}: ${m.content}`).join('\n');
+
+    const courseCtx = context.enrolledCourses?.length
+      ? `\nEnrolled courses: ${context.enrolledCourses.map(c => `${c.title} (${c.progress ?? 0}% done)`).join(', ')}`
+      : '';
+    const activityCtx = context.customActivities?.length
+      ? `\nScheduled activities: ${context.customActivities.map(a => `${a.name} ${a.days?.join('/') ?? ''} ${a.time ?? ''}`).join(', ')}`
+      : '';
+    const goalCtx = context.activeGoals?.length
+      ? `\nActive goals: ${context.activeGoals.map(g => `${g.subject} (${g.progress}%, due ${g.targetDate})`).join(', ')}`
+      : '';
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const prompt = `You are Sage, a warm and expert AI study companion for an EdTech platform. Be encouraging, concise, and actionable.
+
+Student: ${name}
+Context: ${totalEvents} events, subjects: ${context.subjects.join(', ') || 'none'}, upcoming exams: ${context.upcomingExams.join(', ') || 'none'}
+Completion: ${context.completionRate ?? 0}%, Streak: ${context.streak ?? 0} days, Pomodoros: ${context.pomodoroSessions ?? 0}
+Today: ${today}${courseCtx}${activityCtx}${goalCtx}
+
+Conversation so far:
 ${hist}
-Student: ${message}
-Sage (max 200 words, warm and helpful):`;
-    return callAI(prompt, 700, 0.8, apiKey);
+
+${name}: ${message}
+
+Instructions:
+- Respond as Sage (max 200 words, warm and actionable)
+- If the student asks you to create, schedule, plan, or add study sessions/events to their calendar, include them in calendarEvents
+- Only include calendarEvents when explicitly creating/scheduling something
+
+Respond ONLY with this exact JSON structure (no markdown):
+{"response":"your reply text here","calendarEvents":[]}
+
+If creating events, include them like:
+{"response":"your reply","calendarEvents":[{"title":"Session title","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","subject":"Subject","eventType":"study_session","description":"brief desc","priority":"medium"}]}`;
+
+    const raw = await callAI(prompt, 768, 0.8, apiKey);
+
+    // Try to parse the structured response
+    const parsed = parseJSON<{ response: string; calendarEvents: CalendarEventFromChat[] }>(
+      raw,
+      { response: '', calendarEvents: [] }
+    );
+
+    // If parsing failed or response is empty, treat the whole raw output as the text response
+    const responseText = parsed.response || raw.replace(/```json[\s\S]*?```/g, '').replace(/\{[\s\S]*\}/g, '').trim() || raw;
+    const calendarEvents = Array.isArray(parsed.calendarEvents) ? parsed.calendarEvents : [];
+
+    return { response: responseText, calendarEvents };
   },
+
+  // ── Prioritize tasks ────────────────────────────────────────────────────────
 
   async prioritizeTasks(
     tasks: { id: string; title: string; dueDate: Date; estimatedHours: number; subject: string; priority: string }[],
-    apiKey: string
+    apiKey = ''
   ): Promise<{ id: string; newPriority: 'low' | 'medium' | 'high'; urgencyScore: number; reason: string }[]> {
     const prompt = `Reprioritize tasks using Eisenhower matrix + deadline urgency.
 ${tasks.map(t => `${t.id}|${t.title}|due:${t.dueDate.toISOString().split('T')[0]}|${t.estimatedHours}h|${t.subject}|${t.priority}`).join('\n')}
 Today: ${new Date().toISOString().split('T')[0]}
-Return ONLY valid JSON array (no markdown): [{"id":"string","newPriority":"low|medium|high","urgencyScore":50,"reason":"brief"}]`;
+Return ONLY a valid JSON array with no markdown:
+[{"id":"string","newPriority":"low|medium|high","urgencyScore":0-100,"reason":"brief reason"}]`;
 
-    const raw = await callAI(prompt, 1024, 0.4, apiKey);
     return parseJSON<any[]>(
-      raw,
+      await callAI(prompt, 1024, 0.4, apiKey),
       tasks.map(t => ({ id: t.id, newPriority: t.priority, urgencyScore: 50, reason: 'Manual' })),
       true
     );
   },
 
-  async generateStudyTips(
-    subject: string,
-    eventType: string,
-    apiKey: string
-  ): Promise<string[]> {
-    const prompt = `3 specific actionable study tips for: "${subject}" (${eventType}). Return ONLY a JSON array of 3 strings (no markdown): ["tip1","tip2","tip3"]`;
-    const raw = await callAI(prompt, 256, 0.7, apiKey);
+  // ── Study tips ──────────────────────────────────────────────────────────────
+
+  async generateStudyTips(subject: string, eventType: string, apiKey = ''): Promise<string[]> {
+    const prompt = `Give 3 specific actionable study tips for: "${subject}" (${eventType}).
+Return ONLY a valid JSON array with no markdown:
+["tip one here","tip two here","tip three here"]`;
     return parseJSON<string[]>(
-      raw,
+      await callAI(prompt, 256, 0.7, apiKey),
       ['Review key concepts', 'Practice past questions', 'Summarize in your own words'],
       true
     );
   },
+
+  // ── Weekly digest ───────────────────────────────────────────────────────────
 
   async generateWeeklyDigestSummary(
     studentName: string,
@@ -271,36 +380,36 @@ Return ONLY valid JSON array (no markdown): [{"id":"string","newPriority":"low|m
     totalThisWeek: number,
     streakDays: number,
     topSubjects: string[],
-    apiKey: string
+    apiKey = ''
   ): Promise<WeeklyDigestAI> {
-    const prompt = `Write a student weekly digest as a study coach.
+    const prompt = `Write a student's weekly digest as a study coach.
 Student: ${studentName} | Done: ${completedThisWeek}/${totalThisWeek} | Streak: ${streakDays}d | Subjects: ${topSubjects.join(', ') || 'various'}
 Upcoming: ${upcoming.slice(0, 6).map(e => `${e.title}(${e.daysUntil}d,${e.priority})`).join(', ') || 'none'}
-Return ONLY valid JSON (no markdown):
-{"summary":"2-3 sentence personalized overview","tips":["t1","t2","t3"],"urgentItems":["item if within 3 days"],"motivationalMessage":"one warm sentence"}`;
+Return ONLY a valid JSON object with no markdown:
+{"summary":"2-3 sentence personalized overview","tips":["t1","t2","t3"],"urgentItems":["item if <=3d, else empty array"],"motivationalMessage":"one warm sentence"}`;
 
-    const raw = await callAI(prompt, 768, 0.75, apiKey);
     return parseJSON<WeeklyDigestAI>(
-      raw,
+      await callAI(prompt, 768, 0.75, apiKey),
       { summary: `Hi ${studentName}, here's your weekly digest.`, tips: ['Review notes daily', 'Use active recall', 'Take breaks'], urgentItems: [], motivationalMessage: 'Keep it up!' }
     );
   },
 
+  // ── Analyze study patterns ──────────────────────────────────────────────────
+
   async analyzeStudyPatterns(
     sessions: PomodoroSession[],
     events: { date: Date; eventType: string; course: string; isPersonal: boolean }[],
-    apiKey: string
+    apiKey = ''
   ): Promise<StudyAnalytics> {
     const summary = sessions.slice(-30).map(s => `${s.subject}:${s.duration}min on ${s.startTime.toISOString().split('T')[0]}`).join('\n');
     const prompt = `Analyze student study data.
 Sessions (last 30d): ${summary || 'none'}
 Events: ${events.length}
-Return ONLY valid JSON (no markdown):
-{"weeklyHours":0,"subjectDistribution":[{"subject":"s","hours":1,"color":"#6366f1"}],"productivityScore":70,"streakDays":0,"completionRate":0,"insights":["i1","i2","i3"],"recommendations":["r1","r2","r3"]}`;
+Return ONLY a valid JSON object with no markdown:
+{"weeklyHours":0,"subjectDistribution":[{"subject":"name","hours":0,"color":"#6366f1"}],"productivityScore":0-100,"streakDays":0,"completionRate":0-100,"insights":["i1","i2","i3"],"recommendations":["r1","r2","r3"]}`;
 
-    const raw = await callAI(prompt, 1024, 0.5, apiKey);
     return parseJSON<StudyAnalytics>(
-      raw,
+      await callAI(prompt, 1024, 0.5, apiKey),
       { weeklyHours: 0, subjectDistribution: [], productivityScore: 50, streakDays: 0, completionRate: 0, insights: ['Start tracking to get AI insights!'], recommendations: ['Add your first session'] }
     );
   },
