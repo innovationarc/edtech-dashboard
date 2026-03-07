@@ -3,6 +3,8 @@ import { Outlet } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
 import { useDashboard } from '../../contexts/DashboardContext';
+import DynamicIsland from '../ui/DynamicIsland';
+import { useStudyPlanReminders } from '../../hooks/useStudyPlanReminders';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
@@ -13,7 +15,15 @@ import { onAuthStateChanged } from 'firebase/auth';
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated } = useDashboard();
+  const { sidebarOpen, isAuthenticated, theme, primaryColor } = useDashboard();
+  const darkMode = theme !== 'light';
+  const hexRgb = (hex: string) => {
+    if (!hex || hex.length < 7) return '99,102,241';
+    return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
+  };
+  const pRgb = hexRgb(primaryColor);
+  const gradient = `linear-gradient(135deg,${primaryColor},${primaryColor}cc)`;
+  useStudyPlanReminders(isAuthenticated);
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
@@ -271,6 +281,16 @@ const DashboardLayout = () => {
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
       `}</style>
+
+      {/* Dynamic Island — always mounted, centered top */}
+      {isAuthenticated && (
+        <DynamicIsland
+          darkMode={darkMode}
+          primaryColor={primaryColor}
+          gradient={gradient}
+          pRgb={pRgb}
+        />
+      )}
 
       <Navigation />
 
