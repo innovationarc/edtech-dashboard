@@ -529,6 +529,36 @@ export const studyPlanService = {
     return toDelete.length;
   },
 
+  /**
+   * Nuclear option: query Firestore DIRECTLY to delete all uncompleted AI events
+   * for a student (optionally filtered to specific goal subjects).
+   * Bypasses stale React state — always works on fresh data.
+   */
+  async clearAllStudentAIEventsFromFirestore(
+    studentId: string,
+    goalSubjects?: string[]
+  ): Promise<number> {
+    const snap = await getDocs(
+      query(
+        collection(db, 'studyPlanEvents'),
+        where('studentId', '==', studentId),
+        where('isAIGenerated', '==', true),
+        where('isPersonal', '==', true),
+        where('completed', '==', false)
+      )
+    );
+    const toDelete = snap.docs.filter(doc => {
+      if (!goalSubjects || goalSubjects.length === 0) return true;
+      const course: string = doc.data().course || '';
+      return goalSubjects.some(subj => {
+        const base = subj.split(' (')[0];
+        return course === subj || course === base || course.startsWith(base);
+      });
+    });
+    await Promise.all(toDelete.map(doc => studyPlanService.deleteEvent(doc.id))).catch(() => {});
+    return toDelete.length;
+  },
+
   // ── NEW: Enrolled Courses For Planning ────────────────────────────────────
 
   async getEnrolledCoursesForPlanning(studentId: string): Promise<EnrolledCourseForPlanning[]> {
