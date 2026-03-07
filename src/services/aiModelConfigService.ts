@@ -3,7 +3,7 @@
 // Supports: Gemini · Groq · OpenAI · Anthropic · DeepSeek
 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../config/firebase';
 
 export type ProviderKey = 'gemini' | 'groq' | 'openai' | 'anthropic' | 'deepseek';
 
