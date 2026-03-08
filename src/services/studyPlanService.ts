@@ -36,6 +36,7 @@ export interface StudyPlanEvent {
   sessionType?: 'focus' | 'review' | 'practice' | 'break';
   completed?: boolean;
   completedAt?: Date;
+  completionPercent?: number;  // 0–100 partial completion; 100 = fully done
   expired?: boolean;   // true when the linked goal has passed its deadline
   color?: string;
   reminderMinutes?: number;
@@ -233,6 +234,19 @@ export const studyPlanService = {
     await studyPlanService.updateEvent(id, {
       completed,
       completedAt: completed ? new Date() : undefined,
+    } as any);
+  },
+
+  /**
+   * Set partial or full completion % on an event.
+   * 100% automatically flips completed=true; anything below resets it to false.
+   */
+  async updateEventCompletionPercent(id: string, percent: number): Promise<void> {
+    const clamped = Math.max(0, Math.min(100, percent));
+    await studyPlanService.updateEvent(id, {
+      completionPercent: clamped,
+      completed: clamped === 100,
+      ...(clamped === 100 ? { completedAt: new Date() } : { completedAt: undefined }),
     } as any);
   },
 
