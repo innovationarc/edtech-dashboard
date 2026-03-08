@@ -1,6 +1,6 @@
 // src/services/studySchedulerService.ts
 // Deterministic Study Planner — zero AI, zero network calls, instant results.
-//
+
 // ALGORITHM OVERVIEW
 // ------------------
 // 1. For each goal: compute exact hours remaining by measuring real completed
