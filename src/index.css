@@ -89,8 +89,8 @@
   position: relative;
   background-color: var(--color-background, #0d1117);
   background-image:
-    linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
+    linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px);
   background-size: 40px 40px;
   background-position: center center;
 }
@@ -108,32 +108,32 @@
 .theme-light .border-background-800 { border-color: #e5e7eb !important; }
 
 .theme-purple body { background-color: #1e1b4b !important; }
-.theme-purple .dl-main { background-image: linear-gradient(rgba(167,139,250,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,0.06) 1px, transparent 1px); background-size: 40px 40px; background-color: #1e1b4b !important; }
+.theme-purple .dl-main { background-image: linear-gradient(rgba(167,139,250,0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,0.14) 1px, transparent 1px); background-size: 40px 40px; background-color: #1e1b4b !important; }
 .theme-purple .bg-background-800, .theme-purple .bg-background-900 { background-color: #312e81 !important; }
 .theme-purple .bg-card { background-color: #312e81 !important; }
 
 .theme-pink body { background-color: #831843 !important; }
-.theme-pink .dl-main { background-image: linear-gradient(rgba(249,168,212,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(249,168,212,0.06) 1px, transparent 1px); background-size: 40px 40px; background-color: #831843 !important; }
+.theme-pink .dl-main { background-image: linear-gradient(rgba(249,168,212,0.14) 1px, transparent 1px), linear-gradient(90deg, rgba(249,168,212,0.14) 1px, transparent 1px); background-size: 40px 40px; background-color: #831843 !important; }
 .theme-pink .bg-background-800, .theme-pink .bg-background-900 { background-color: #9d174d !important; }
 .theme-pink .bg-card { background-color: #9d174d !important; }
 
 .theme-ocean body { background-color: #0c1a2e !important; }
-.theme-ocean .dl-main { background-image: linear-gradient(rgba(56,189,248,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.05) 1px, transparent 1px); background-size: 40px 40px; background-color: #0c1a2e !important; }
+.theme-ocean .dl-main { background-image: linear-gradient(rgba(56,189,248,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.13) 1px, transparent 1px); background-size: 40px 40px; background-color: #0c1a2e !important; }
 .theme-ocean .bg-background-800, .theme-ocean .bg-background-900 { background-color: #0f2744 !important; }
 .theme-ocean .bg-card { background-color: #0f2744 !important; }
 
 .theme-forest body { background-color: #0a1f14 !important; }
-.theme-forest .dl-main { background-image: linear-gradient(rgba(74,222,128,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(74,222,128,0.05) 1px, transparent 1px); background-size: 40px 40px; background-color: #0a1f14 !important; }
+.theme-forest .dl-main { background-image: linear-gradient(rgba(74,222,128,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(74,222,128,0.13) 1px, transparent 1px); background-size: 40px 40px; background-color: #0a1f14 !important; }
 .theme-forest .bg-background-800, .theme-forest .bg-background-900 { background-color: #0f2d1e !important; }
 .theme-forest .bg-card { background-color: #0f2d1e !important; }
 
 .theme-sunset body { background-color: #1c0a00 !important; }
-.theme-sunset .dl-main { background-image: linear-gradient(rgba(251,146,60,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(251,146,60,0.05) 1px, transparent 1px); background-size: 40px 40px; background-color: #1c0a00 !important; }
+.theme-sunset .dl-main { background-image: linear-gradient(rgba(251,146,60,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(251,146,60,0.13) 1px, transparent 1px); background-size: 40px 40px; background-color: #1c0a00 !important; }
 .theme-sunset .bg-background-800, .theme-sunset .bg-background-900 { background-color: #431407 !important; }
 .theme-sunset .bg-card { background-color: #431407 !important; }
 
 .theme-slate body { background-color: #0f172a !important; }
-.theme-slate .dl-main { background-image: linear-gradient(rgba(148,163,184,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.04) 1px, transparent 1px); background-size: 40px 40px; background-color: #0f172a !important; }
+.theme-slate .dl-main { background-image: linear-gradient(rgba(148,163,184,0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.13) 1px, transparent 1px); background-size: 40px 40px; background-color: #0f172a !important; }
 .theme-slate .bg-background-800, .theme-slate .bg-background-900 { background-color: #1e293b !important; }
 .theme-slate .bg-card { background-color: #1e293b !important; }
 
