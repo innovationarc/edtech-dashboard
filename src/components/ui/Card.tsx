@@ -1,4 +1,4 @@
-// src/components/ui/Card.tsx — Glass-transparent theme, production-grade
+// src/components/ui/Card.tsx — iDraft Design System
 import { ReactNode } from 'react';
 import clsx from 'clsx';
 
@@ -11,8 +11,7 @@ interface CardProps {
   footer?: ReactNode;
   onClick?: () => void;
   hover?: boolean;
-  accent?: string; // optional left-border accent color
-  compact?: boolean;
+  variant?: 'dark' | 'white' | 'default';
 }
 
 const Card = ({
@@ -24,106 +23,120 @@ const Card = ({
   footer,
   onClick,
   hover = false,
-  accent,
-  compact = false,
+  variant = 'default',
 }: CardProps) => {
+  const isWhite = variant === 'white';
+  const isDark  = variant === 'dark';
+
+  const base: React.CSSProperties = {
+    fontFamily: "'DM Sans', sans-serif",
+    borderRadius: 'var(--radius-card)',
+    overflow: 'hidden',
+    transition: 'box-shadow 0.35s var(--ease-smooth), transform 0.35s var(--ease-spring)',
+    cursor: onClick ? 'pointer' : undefined,
+    ...(isWhite
+      ? {
+          background: '#FFFFFF',
+          boxShadow: 'var(--shadow-float)',
+          border: '1px solid rgba(0,0,0,0.04)',
+          color: '#111827',
+        }
+      : isDark
+      ? {
+          background: '#1A1A1E',
+          boxShadow: 'var(--shadow-dark-card)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          color: '#ffffff',
+        }
+      : {
+          background: 'var(--color-card, #1f2937)',
+          boxShadow: 'var(--shadow-dark-card)',
+          border: '1px solid rgba(255,255,255,0.05)',
+          color: '#ffffff',
+        }),
+  };
+
+  const hoverStyle =
+    hover || onClick
+      ? ({
+          ':hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: isWhite ? 'var(--shadow-float-hover)' : '0 12px 40px -8px rgba(0,0,0,0.7)',
+          },
+        } as React.CSSProperties)
+      : {};
+
+  const headerBorder = isWhite
+    ? '1px solid rgba(0,0,0,0.06)'
+    : '1px solid rgba(255,255,255,0.06)';
+
+  const titleColor  = isWhite ? '#111827' : '#ffffff';
+  const subColor    = isWhite ? '#6b7280' : 'rgba(156,163,175,1)';
+  const footerBg    = isWhite ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.2)';
+
   return (
     <div
       className={clsx(
-        'relative overflow-hidden rounded-2xl',
-        onClick && 'cursor-pointer',
-        (hover || onClick) && 'transition-all duration-300',
+        (hover || onClick) && (isWhite ? 'idraft-card-white' : 'idraft-card-dark'),
+        !hover && !onClick && 'responsive-card',
         className
       )}
-      style={{
-        fontFamily: "'Outfit', sans-serif",
-        background: 'rgba(255,255,255,0.04)',
-        backdropFilter: 'blur(20px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.06)',
-        ...(accent ? { borderLeft: `3px solid ${accent}` } : {}),
-      }}
-      onMouseEnter={hover || onClick ? (e) => {
-        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)';
-        (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08)';
-        (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)';
-      } : undefined}
-      onMouseLeave={hover || onClick ? (e) => {
-        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
-        (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.06)';
-        (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-      } : undefined}
+      style={base}
       onClick={onClick}
     >
-      {/* Top shimmer line */}
-      <div style={{
-        position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-        background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.12),transparent)',
-        pointerEvents: 'none',
-      }} />
-
       {(title || subtitle || icon) && (
-        <div style={{
-          padding: compact ? '10px 14px' : 'clamp(10px,1.5vw,16px) clamp(14px,2vw,20px)',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 10,
-        }}>
+        <div
+          style={{
+            padding: 'clamp(12px,2vw,18px) clamp(14px,2.5vw,20px)',
+            borderBottom: headerBorder,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <div style={{ minWidth: 0, flex: 1 }}>
             {title && (
-              <h3 style={{
-                fontSize: 'clamp(0.8rem,1.4vw,0.95rem)',
-                fontWeight: 650,
-                color: 'rgba(255,255,255,0.92)',
-                margin: 0,
-                letterSpacing: '-0.01em',
-                lineHeight: 1.3,
-              }}>
+              <h3
+                style={{
+                  fontSize: 'clamp(0.875rem, 1.5vw, 1rem)',
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                  color: titleColor,
+                  lineHeight: 1.3,
+                }}
+              >
                 {title}
               </h3>
             )}
             {subtitle && (
-              <p style={{
-                fontSize: 'clamp(0.68rem,1vw,0.76rem)',
-                color: 'rgba(255,255,255,0.42)',
-                margin: '2px 0 0',
-                lineHeight: 1.4,
-              }}>
+              <p
+                style={{
+                  fontSize: 'clamp(0.7rem, 1.1vw, 0.8rem)',
+                  color: subColor,
+                  marginTop: '3px',
+                  fontWeight: 400,
+                }}
+              >
                 {subtitle}
               </p>
             )}
           </div>
-          {icon && (
-            <div style={{
-              flexShrink: 0,
-              width: 32, height: 32,
-              borderRadius: 9,
-              background: 'rgba(255,255,255,0.05)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              {icon}
-            </div>
-          )}
+          {icon && <div style={{ marginLeft: '12px', flexShrink: 0 }}>{icon}</div>}
         </div>
       )}
 
-      <div style={{
-        padding: compact
-          ? '10px 14px'
-          : 'clamp(12px,1.8vw,20px) clamp(14px,2vw,20px)',
-      }}>
+      <div style={{ padding: 'clamp(12px,2vw,20px) clamp(14px,2.5vw,20px)' }}>
         {children}
       </div>
 
       {footer && (
-        <div style={{
-          padding: 'clamp(8px,1.2vw,12px) clamp(14px,2vw,20px)',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          background: 'rgba(0,0,0,0.08)',
-        }}>
+        <div
+          style={{
+            padding: '12px clamp(14px,2.5vw,20px)',
+            borderTop: headerBorder,
+            background: footerBg,
+          }}
+        >
           {footer}
         </div>
       )}
