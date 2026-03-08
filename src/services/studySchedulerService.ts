@@ -444,6 +444,9 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
   );
 
   // Step 5: assign sessions day by day
+  // THE KEY LOOP: for each day, keep placing sessions until the day is full
+  // or all goals have no time left. Without the while loop, only ONE session
+  // per goal per day is placed — which severely under-schedules single-goal plans.
   const sessions: ScheduledSession[] = [];
 
   for (const slot of daySlots) {
@@ -451,72 +454,81 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 
     const ds = slot.dateStr;
 
-    // Goals whose deadline hasn't passed on this day and still have time left
-    const eligible = workList.filter(
-      gw =>
-        gw.minsLeft >= MIN_SESSION_MINS &&
-        toDateStr(gw.goal.targetDate) >= ds
-    );
-    if (eligible.length === 0) continue;
+    // Keep looping until the day is full or no eligible goals remain.
+    // Each iteration places one session per eligible goal, then loops back
+    // to place another round of sessions if time still remains.
+    let anyPlacedThisRound = true;
+    while (anyPlacedThisRound && slot.freeBlocks.length > 0) {
+      anyPlacedThisRound = false;
 
-    // Most urgent first within this day
-    eligible.sort((a, b) => b.urgency - a.urgency);
-
-    for (const gw of eligible) {
-      if (gw.minsLeft < MIN_SESSION_MINS) continue;
-      if (slot.freeBlocks.length === 0) break;
-
-      const daysToDeadline = Math.max(
-        1,
-        calendarDayDiff(gw.goal.targetDate, new Date(ds + 'T12:00:00'))
+      // Re-filter each round so goals that just ran out are excluded
+      const eligible = workList.filter(
+        gw =>
+          gw.minsLeft >= MIN_SESSION_MINS &&
+          toDateStr(gw.goal.targetDate) >= ds
       );
-      const sessionMins = idealSessionMins(
-        gw.minsLeft / 60,
-        daysToDeadline,
-        freeHoursPerDay
-      );
+      if (eligible.length === 0) break;
 
-      // Find first block large enough
-      const bi = slot.freeBlocks.findIndex(
-        b => b.endMins - b.startMins >= sessionMins
-      );
-      if (bi === -1) continue;
+      // Most urgent first — re-sort each round as minsLeft changes
+      eligible.sort((a, b) => b.urgency - a.urgency);
 
-      const block = slot.freeBlocks[bi];
-      const start = block.startMins;
-      const end   = start + sessionMins;
+      for (const gw of eligible) {
+        if (gw.minsLeft < MIN_SESSION_MINS) continue;
+        if (slot.freeBlocks.length === 0) break;
 
-      const type   = SESSION_TYPES[gw.typeIdx % SESSION_TYPES.length];
-      const reason = REASONS[type][gw.newSessions % REASONS[type].length];
-      gw.typeIdx++;
+        const daysToDeadline = Math.max(
+          1,
+          calendarDayDiff(gw.goal.targetDate, new Date(ds + 'T12:00:00'))
+        );
+        const sessionMins = idealSessionMins(
+          gw.minsLeft / 60,
+          daysToDeadline,
+          freeHoursPerDay
+        );
 
-      const sessionNum = gw.nextSessionNum++;
+        // Find first block large enough for this session
+        const bi = slot.freeBlocks.findIndex(
+          b => b.endMins - b.startMins >= sessionMins
+        );
+        if (bi === -1) continue; // no room for this goal today — try next goal
 
-      sessions.push({
-        subject:      gw.goal.subject,
-        title:        `${gw.goal.subject} — Session ${sessionNum}`,
-        date:         new Date(ds + 'T12:00:00'),
-        startTime:    fromMins(start),
-        endTime:      fromMins(end),
-        sessionType:  type,
-        priority:     gw.priority,
-        reason,
-        durationMins: sessionMins,
-      });
+        const block = slot.freeBlocks[bi];
+        const start = block.startMins;
+        const end   = start + sessionMins;
 
-      // Shrink or remove the consumed block
-      const nextStart = end + GAP_MINS;
-      if (nextStart < block.endMins) {
-        slot.freeBlocks[bi] = { startMins: nextStart, endMins: block.endMins };
-      } else {
-        slot.freeBlocks.splice(bi, 1);
+        const type   = SESSION_TYPES[gw.typeIdx % SESSION_TYPES.length];
+        const reason = REASONS[type][gw.newSessions % REASONS[type].length];
+        gw.typeIdx++;
+
+        const sessionNum = gw.nextSessionNum++;
+
+        sessions.push({
+          subject:      gw.goal.subject,
+          title:        `${gw.goal.subject} — Session ${sessionNum}`,
+          date:         new Date(ds + 'T12:00:00'),
+          startTime:    fromMins(start),
+          endTime:      fromMins(end),
+          sessionType:  type,
+          priority:     gw.priority,
+          reason,
+          durationMins: sessionMins,
+        });
+
+        // Shrink the consumed block or remove it if exhausted
+        const nextStart = end + GAP_MINS;
+        if (nextStart < block.endMins) {
+          slot.freeBlocks[bi] = { startMins: nextStart, endMins: block.endMins };
+        } else {
+          slot.freeBlocks.splice(bi, 1);
+        }
+
+        gw.minsLeft      -= sessionMins;
+        gw.minsScheduled += sessionMins;
+        gw.newSessions++;
+        if (gw.minsLeft < MIN_SESSION_MINS) gw.minsLeft = 0;
+
+        anyPlacedThisRound = true; // at least one session placed → loop again
       }
-
-      gw.minsLeft    -= sessionMins;
-      gw.minsScheduled += sessionMins;
-      gw.newSessions++;
-
-      if (gw.minsLeft < MIN_SESSION_MINS) gw.minsLeft = 0;
     }
   }
 
