@@ -1,6 +1,6 @@
 // src/services/studySchedulerService.ts
 // Deterministic Study Planner — zero AI, zero network calls, instant results.
-
+//
 // ALGORITHM OVERVIEW
 // ------------------
 // 1. For each goal: compute exact hours remaining by measuring real completed
@@ -164,8 +164,15 @@ function fromMins(mins: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+// CRITICAL: use local date components — NOT toISOString() which returns UTC.
+// toISOString() on local midnight in UTC+X gives the previous day in UTC,
+// so "2026-03-08T00:00:00" local → "2026-03-07T..." UTC → "2026-03-07" slice.
+// This breaks isToday detection, deadline comparisons, and day-slot boundaries.
 function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function addDays(d: Date, n: number): Date {
