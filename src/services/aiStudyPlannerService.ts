@@ -151,8 +151,23 @@ export const aiStudyPlannerService = {
     options?: {
       enrolledCourses?: { title: string; subjects: string[] }[];
       customActivities?: { name: string; daysOfWeek: number[]; startTime: string; endTime: string; isFlexible: boolean }[];
+      /** Pass new Date() at call time so the AI never schedules in the past */
+      nowDateTime?: Date;
+      /** If provided, sessions are constrained to these windows each day */
+      timeRanges?: { start: string; end: string }[];
     }
   ): Promise<AIScheduleSuggestion[]> {
+    const now         = options?.nowDateTime ?? new Date();
+    const todayStr    = now.toISOString().slice(0, 10);
+    const currentTime = now.toTimeString().slice(0, 5); // HH:MM
+
+    const rangesDesc = options?.timeRanges?.length
+      ? options.timeRanges.map(r => `${r.start}–${r.end}`).join(', ')
+      : null;
+    const timeRangesRule = rangesDesc
+      ? `\nSCHEDULING WINDOWS: Sessions MUST fall within these time ranges each day: ${rangesDesc}. Do not schedule outside these windows.`
+      : '';
+
     const courseCtx = options?.enrolledCourses?.length
       ? `\nEnrolled courses: ${options.enrolledCourses.map(c => `${c.title} (${c.subjects.join(', ')})`).join('; ')}`
       : '';
@@ -164,6 +179,13 @@ export const aiStudyPlannerService = {
 
     const prompt = `You are an expert AI study planner using spaced repetition + cognitive load theory.
 
+TODAY: ${todayStr} | CURRENT TIME: ${currentTime}
+⚠️ CRITICAL TIME RULES:
+- Do NOT schedule any session on ${todayStr} that starts before ${currentTime}.
+- Do NOT schedule any session on a date that has already passed.
+- All sessions must be on ${todayStr} or later.
+TITLE FORMAT: Use exactly "<Subject> — Session N" (e.g. "Math — Session 1", "Physics — Session 2"). Never invent subtopics, chapters, or specific problems.${timeRangesRule}
+
 Goals:
 ${goals.map(g => `- ${g.subject}: ${g.hoursNeeded}h needed, deadline ${g.targetDate.toISOString().split('T')[0]}, difficulty: ${g.difficulty}, progress: ${g.currentProgress}%`).join('\n')}
 
@@ -171,9 +193,9 @@ Existing commitments:
 ${existing.map(e => `- ${e.date.toISOString().split('T')[0]} ${e.startTime}-${e.endTime}`).join('\n') || 'None'}
 ${courseCtx}${activityCtx}
 
-Available: ${hoursPerDay}h/day. Today: ${new Date().toISOString().split('T')[0]}
+Available: ${hoursPerDay}h/day.
 
-Rules: morning=hard topics, afternoon=review, vary focus/review/practice, space across days, prioritize by urgency×difficulty.
+Rules: morning=hard topics, afternoon=review, vary focus/review/practice, space across days, prioritize by urgency×difficulty. Sessions are 60–90 minutes each.
 
 Return ONLY a valid JSON array with no markdown, no explanation:
 [{"title":"string","subject":"string","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"string","priority":"low|medium|high","sessionType":"focus|review|practice|break","tips":["t1","t2"]}]`;
