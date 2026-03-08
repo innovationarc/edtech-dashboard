@@ -5,14 +5,12 @@ import {
   Bell, Search, LogOut, X,
   LayoutDashboard, Users, Upload, Calendar, Medal, BarChart3, Settings, Clock,
   CreditCard, Library, GraduationCap, BookOpen, Brain, ShoppingCart, Trophy,
-  Ticket, PlusCircle, Megaphone, FileText, MessageSquare, Sun, Moon, Loader2, ClipboardCheck, UserCheck, ListOrdered
+  Ticket, PlusCircle, Megaphone, FileText, MessageSquare, Sun, Moon, Loader2, ChevronRight, ClipboardCheck, UserCheck, ListOrdered
 } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import Profile from '../profile/Profile';
 import HamburgerMenuIcon from '../ui/HamburgerMenuIcon';
 import clsx from 'clsx';
-import { MobileIslandLogo } from '../ui/DynamicIsland';
-import type { DynamicIslandNotification, IslandMode } from '../ui/DynamicIsland';
 
 /* ─── colour helper ─── */
 const hexRgb = (hex: string) => {
@@ -54,117 +52,135 @@ const NavItem: React.FC<NavItemProps> = ({
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
       className={clsx(
-        'group relative flex items-center select-none outline-none',
-        sidebarOpen ? 'gap-3 px-2.5 py-2 rounded-2xl' : 'justify-center p-2.5 rounded-2xl',
+        'group relative flex items-center rounded-2xl select-none outline-none',
+        sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5',
       )}
       style={{
-        fontFamily: "'Outfit', sans-serif",
-        /* Clean borderless — only the bubble carries the state */
+        fontFamily: "'DM Sans', sans-serif",
+
+        /* ── raised glass card when active ── */
         background: isActive
           ? darkMode
-            ? 'rgba(255,255,255,0.05)'
-            : 'rgba(0,0,0,0.04)'
+            ? `linear-gradient(135deg, rgba(${pRgb},0.22) 0%, rgba(${aRgb},0.14) 55%, rgba(255,255,255,0.06) 100%)`
+            : `linear-gradient(135deg, rgba(255,255,255,0.97) 0%, rgba(255,255,255,0.88) 100%)`
           : isHovered
-            ? darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'
+            ? darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)'
             : 'transparent',
-        border: '1px solid transparent',
-        boxShadow: 'none',
-        transform: isHovered ? 'scale(1.01)' : 'scale(1)',
-        transition: 'all 0.2s cubic-bezier(0.34,1.2,0.64,1)',
-        color: isActive
-          ? darkMode ? 'rgba(255,255,255,0.95)' : 'rgba(17,24,39,0.95)'
+
+        border: isActive
+          ? darkMode
+            ? `1px solid rgba(${pRgb},0.38)`
+            : `1px solid rgba(${pRgb},0.22)`
           : isHovered
-            ? darkMode ? 'rgba(226,232,240,0.9)' : 'rgba(31,41,55,0.9)'
-            : darkMode ? 'rgba(148,163,184,0.7)' : 'rgba(100,116,139,0.85)',
+            ? darkMode ? '1px solid rgba(255,255,255,0.09)' : '1px solid rgba(0,0,0,0.07)'
+            : '1px solid transparent',
+
+        /* shadow lifts card above the gradient bar — the video "popup" */
+        boxShadow: isActive
+          ? darkMode
+            ? `0 4px 24px -4px rgba(${pRgb},0.5), 0 1px 0 rgba(255,255,255,0.12) inset`
+            : `0 4px 16px -4px rgba(${pRgb},0.28), 0 1px 0 rgba(255,255,255,1) inset`
+          : isHovered
+            ? darkMode
+              ? `0 2px 12px -4px rgba(${pRgb},0.3)`
+              : `0 2px 8px -4px rgba(${pRgb},0.15)`
+            : 'none',
+
+        backdropFilter: isActive ? 'blur(20px) saturate(180%)' : 'none',
+        WebkitBackdropFilter: isActive ? 'blur(20px) saturate(180%)' : 'none',
+
+        /* slight right-push: the "pop-out" from the video */
+        transform: isActive && sidebarOpen
+          ? 'translateX(3px) scale(1.01)'
+          : isHovered && sidebarOpen
+            ? 'translateX(2px) scale(1.005)'
+            : 'scale(1)',
+        transition: 'all 0.22s cubic-bezier(0.34,1.25,0.64,1)',
+
+        color: isActive
+          ? darkMode ? 'white' : primaryColor
+          : isHovered
+            ? darkMode ? 'rgba(226,232,240,0.95)' : 'rgba(31,41,55,0.95)'
+            : darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.9)',
       }}
     >
-      {/* ── icon bubble — carries all the visual weight ── */}
+      {/* ── icon bubble ── */}
       <span
         className="flex items-center justify-center flex-shrink-0 rounded-xl"
         style={{
-          width: 36, height: 36,
-          /* active: filled gradient bubble with glow */
+          width: 34, height: 34,
           background: isActive
             ? gradient
             : isHovered
-              ? darkMode ? `rgba(${pRgb},0.2)` : `rgba(${pRgb},0.14)`
-              : darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+              ? darkMode ? `rgba(${pRgb},0.18)` : `rgba(${pRgb},0.12)`
+              : darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
           border: isActive
-            ? 'none'
+            ? '1px solid rgba(255,255,255,0.28)'
             : isHovered
-              ? darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.18)`
-              : darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)',
-          /* glow on hover + active */
+              ? darkMode ? `1px solid rgba(${pRgb},0.3)` : `1px solid rgba(${pRgb},0.2)`
+              : darkMode ? '1px solid rgba(255,255,255,0.09)' : '1px solid rgba(0,0,0,0.09)',
           boxShadow: isActive
-            ? `0 0 0 4px rgba(${pRgb},0.15), 0 4px 16px rgba(${pRgb},0.5)`
+            ? `0 3px 14px rgba(${pRgb},0.55)`
             : isHovered
-              ? `0 0 0 3px rgba(${pRgb},0.1), 0 2px 10px rgba(${pRgb},0.3)`
+              ? `0 2px 8px rgba(${pRgb},0.25)`
               : 'none',
-          transform: isActive
-            ? 'scale(1.12)'
-            : isHovered
-              ? 'scale(1.1)'
-              : 'scale(1)',
-          transition: 'all 0.22s cubic-bezier(0.34,1.3,0.64,1)',
+          transform: isActive ? 'scale(1.09)' : isHovered ? 'scale(1.05)' : 'scale(1)',
+          transition: 'all 0.22s cubic-bezier(0.34,1.25,0.64,1)',
         }}
       >
-        <Icon
-          size={15}
-          strokeWidth={isActive ? 2.5 : isHovered ? 2.2 : 2}
-          style={{
-            color: isActive ? 'white' : isHovered
-              ? (darkMode ? `rgb(${pRgb})` : primaryColor)
-              : 'currentColor',
-            transition: 'color 0.2s ease',
-          }}
-        />
+        <Icon size={16} strokeWidth={isActive || isHovered ? 2.5 : 2}
+          style={{ color: isActive ? 'white' : isHovered ? (darkMode ? `rgb(${pRgb})` : primaryColor) : 'inherit',
+            transition: 'color 0.22s ease' }} />
       </span>
 
-      {/* ── label (expanded sidebar only) ── */}
+      {/* ── label ── */}
       {sidebarOpen && (
         <span style={{
-          fontSize: '0.8125rem',
-          fontWeight: isActive ? 650 : isHovered ? 580 : 500,
+          fontSize: 'clamp(0.75rem,1.1vw,0.8125rem)',
+          fontWeight: isActive ? 700 : isHovered ? 600 : 500,
+          letterSpacing: isActive ? '0.015em' : 0,
           flex: 1,
-          color: 'inherit',
-          transition: 'font-weight 0.15s ease',
-          letterSpacing: isActive ? '0.01em' : 0,
+          transition: 'font-weight 0.2s ease',
+          /* shaded gradient text on active */
+          ...(isActive ? {
+            background: darkMode
+              ? 'linear-gradient(90deg,#fff 0%,rgba(255,255,255,0.82) 100%)'
+              : `linear-gradient(90deg,${primaryColor},${accentColor})`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          } : {}),
         }}>
           {name}
         </span>
       )}
 
-      {/* active dot indicator on right when expanded */}
+      {/* chevron hint */}
       {sidebarOpen && isActive && (
-        <span style={{
-          width: 5, height: 5, borderRadius: '50%',
-          background: primaryColor,
-          boxShadow: `0 0 6px rgba(${pRgb},0.8)`,
-          flexShrink: 0,
-        }} />
+        <ChevronRight size={12} style={{ color: darkMode ? 'rgba(255,255,255,0.35)' : `rgba(${pRgb},0.45)`, flexShrink: 0 }} />
       )}
 
-      {/* collapsed: glowing bottom dot */}
+      {/* collapsed: glowing right-edge pill */}
       {!sidebarOpen && isActive && (
-        <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 rounded-full"
-          style={{ width: 4, height: 4, background: primaryColor, boxShadow: `0 0 8px rgba(${pRgb},0.9)` }} />
+        <span className="absolute right-0 top-1/2 -translate-y-1/2 rounded-l-full"
+          style={{ width: 3, height: 20, background: gradient, boxShadow: `0 0 10px rgba(${pRgb},0.9)` }} />
       )}
 
       {/* tooltip for collapsed mode */}
       {!sidebarOpen && (
         <span
-          className="pointer-events-none absolute px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap"
+          className="pointer-events-none absolute px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap"
           style={{
-            left: 58, zIndex: 99999,
+            left: 54, zIndex: 99999,
             opacity: isHovered ? 1 : 0,
-            transform: isHovered ? 'translateX(0) scale(1)' : 'translateX(-6px) scale(0.95)',
-            transition: 'opacity 0.15s ease, transform 0.15s cubic-bezier(0.34,1.25,0.64,1)',
-            background: darkMode ? 'rgba(8,12,24,0.96)' : 'rgba(17,24,39,0.94)',
+            transform: isHovered ? 'translateX(0) scale(1)' : 'translateX(-4px) scale(0.96)',
+            transition: 'opacity 0.18s ease, transform 0.18s cubic-bezier(0.34,1.25,0.64,1)',
+            background: darkMode ? 'rgba(8,12,24,0.97)' : '#1a1f2e',
             color: 'white',
-            border: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
             backdropFilter: 'blur(12px)',
-            fontFamily: "'Outfit', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
           }}
         >
           {name}
@@ -203,7 +219,7 @@ const NotifDropdown: React.FC<NotifDropdownProps> = ({
       border: `1px solid rgba(${pRgb},0.18)`,
       boxShadow: '0 16px 48px rgba(0,0,0,0.55)',
       backdropFilter: 'blur(24px)',
-      fontFamily: "'Outfit', sans-serif",
+      fontFamily: "'DM Sans', sans-serif",
     }}
   >
     <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
@@ -261,7 +277,7 @@ const NavList: React.FC<NavListProps> = ({
 
   return (
     <nav
-      className="relative h-full overflow-y-auto py-1.5 px-2 space-y-0.5"
+      className="relative h-full overflow-y-auto py-2 px-2 space-y-0.5"
       style={{ scrollbarWidth: 'none' }}
       onMouseLeave={() => setHoveredIndex(null)}
     >
@@ -310,14 +326,6 @@ const Navigation = () => {
   const [notifications, setNotifications] = useState<Array<{
     id: string; message: string; type: 'success'|'info'|'warning'|'error'; timestamp: Date;
   }>>([]);
-
-  // ── Mobile Dynamic Island state ──
-  const [diExpanded, setDiExpanded]   = useState(false);
-  const [diClosing,  setDiClosing]    = useState(false);
-  const [diNotif,    setDiNotif]      = useState<DynamicIslandNotification|null>(null);
-  const [diMode,     setDiMode]       = useState<IslandMode>('idle');
-  const [diProgress, setDiProgress]   = useState(0);
-  const [diRecTime,  setDiRecTime]    = useState(0);
   const [darkMode, setDarkMode]     = useState(() => (localStorage.getItem('theme') || 'dark') !== 'light');
   const [isSigningOut, setIsSigningOut] = useState(false);
   /* per-button hover for bottom row */
@@ -387,40 +395,11 @@ const Navigation = () => {
     const n = { id: Date.now().toString(), message, type, timestamp: new Date() };
     setNotifications(prev => [n, ...prev.slice(0,4)]);
     setTimeout(() => setNotifications(prev => prev.filter(x => x.id !== n.id)), 5000);
-    // Also show on Dynamic Island
-    window.dispatchEvent(new CustomEvent('dynamic-island-show', {
-      detail: { id: n.id, type, title: message, duration: 4000 },
-    }));
   }, []);
   useEffect(() => {
     (window as any).addNotification = addNotification;
     return () => { delete (window as any).addNotification; };
   }, [addNotification]);
-
-  // ── Listen for di-mobile-expand / di-mobile-idle events ──
-  useEffect(() => {
-    const onExpand = (e: CustomEvent) => {
-      setDiClosing(false);
-      setDiNotif(e.detail.notif);
-      setDiMode(e.detail.mode);
-      setDiProgress(e.detail.notif?.progress ?? 0);
-      setDiRecTime(0);
-      setDiExpanded(true);
-    };
-    const onIdle = () => {
-      setDiClosing(true);
-      setTimeout(() => { setDiExpanded(false); setDiClosing(false); setDiNotif(null); setDiMode('idle'); }, 450);
-    };
-    const onProgress = (e: CustomEvent) => setDiProgress(e.detail.progress);
-    window.addEventListener('di-mobile-expand',     onExpand as EventListener);
-    window.addEventListener('di-mobile-idle',       onIdle);
-    window.addEventListener('dynamic-island-progress', onProgress as EventListener);
-    return () => {
-      window.removeEventListener('di-mobile-expand',     onExpand as EventListener);
-      window.removeEventListener('di-mobile-idle',       onIdle);
-      window.removeEventListener('dynamic-island-progress', onProgress as EventListener);
-    };
-  }, []);
   const removeNotification = (id: string) => setNotifications(prev => prev.filter(n => n.id !== id));
   const notifIcon  = (t: string): string => ({ success:'✅', warning:'⚠️', error:'❌' }[t] ?? 'ℹ️');
   const notifColor = (t: string) => ({
@@ -455,22 +434,43 @@ const Navigation = () => {
 
   /* Shared glass style — tinted with primary colour, matching sidebar */
   const glassBtn: React.CSSProperties = {
-    background:           'transparent',
-    border:               '1px solid transparent',
-    backdropFilter:       'none',
-    WebkitBackdropFilter: 'none',
-    boxShadow:            'none',
-    transition:           'all 0.18s cubic-bezier(0.34,1.25,0.64,1)',
-    borderRadius:         10,
-    color:                darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(55,65,81,0.85)',
+    background:           darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+    border:               darkMode ? `1px solid rgba(${pRgb},0.15)` : `1px solid rgba(${pRgb},0.12)`,
+    backdropFilter:       'blur(16px) saturate(180%)',
+    WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+    transition:           'all 0.2s cubic-bezier(0.34,1.25,0.64,1)',
   };
   const glassBtnHov: React.CSSProperties = {
-    background:  darkMode ? `rgba(255,255,255,0.08)` : `rgba(0,0,0,0.06)`,
-    border:      darkMode ? `1px solid rgba(255,255,255,0.1)` : `1px solid rgba(0,0,0,0.08)`,
-    boxShadow:   'none',
-    color:       darkMode ? 'rgba(255,255,255,0.92)' : 'rgba(17,24,39,0.9)',
+    background:  darkMode ? `rgba(${pRgb},0.12)` : `rgba(${pRgb},0.07)`,
+    border:      darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.22)`,
+    boxShadow:   darkMode ? `0 4px 16px -4px rgba(${pRgb},0.3)` : `0 4px 12px -4px rgba(${pRgb},0.2)`,
   };
 
+  /* bottom-row button shared style */
+  const bottomBtnStyle = (hov: boolean, danger = false): React.CSSProperties => ({
+    fontFamily: "'DM Sans', sans-serif",
+    background: hov
+      ? danger ? 'rgba(239,68,68,0.1)' : (darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)')
+      : 'transparent',
+    border: hov
+      ? danger ? '1px solid rgba(239,68,68,0.2)' : (darkMode ? '1px solid rgba(255,255,255,0.09)' : '1px solid rgba(0,0,0,0.08)')
+      : '1px solid transparent',
+    backdropFilter: hov ? 'blur(8px)' : 'none',
+    color: hov && danger ? '#f87171' : (darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.9)'),
+    transition: 'all 0.2s ease',
+  });
+
+  const iconWrap = (hov: boolean, danger = false) => ({
+    width: 34, height: 34,
+    background: hov && danger
+      ? 'rgba(239,68,68,0.15)'
+      : darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+    border: darkMode ? '1px solid rgba(255,255,255,0.09)' : '1px solid rgba(0,0,0,0.09)',
+    borderRadius: 12,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0 as const,
+    transition: 'all 0.2s ease',
+  });
 
   /* ════════════════════════════ RENDER ════════════════════════════ */
   return (
@@ -489,23 +489,33 @@ const Navigation = () => {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
         style={{
-          /* borderless — blends with page bg, no visible edge */
+          /* primary-tinted glass — the "shaded colour" */
           background: darkMode
-            ? 'rgba(6,9,20,0.96)'
-            : 'rgba(250,251,255,0.97)',
-          backdropFilter:       'blur(32px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(32px) saturate(180%)',
-          borderRight: 'none',
-          boxShadow: darkMode
-            ? '4px 0 32px rgba(0,0,0,0.4)'
-            : '4px 0 24px rgba(0,0,0,0.06)',
-          fontFamily: "'Outfit', sans-serif",
+            ? `linear-gradient(170deg,
+                rgba(6,9,20,0.98)    0%,
+                rgba(${pRgb},0.09)  28%,
+                rgba(10,14,30,0.97) 58%,
+                rgba(${aRgb},0.07)  82%,
+                rgba(6,9,20,0.98)   100%)`
+            : `linear-gradient(170deg,
+                rgba(250,251,255,0.98) 0%,
+                rgba(${pRgb},0.06)    40%,
+                rgba(${aRgb},0.03)    70%,
+                rgba(248,250,255,0.97) 100%)`,
+          backdropFilter:       'blur(32px) saturate(200%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(200%)',
+          borderRight: darkMode
+            ? `1px solid rgba(${pRgb},0.16)`
+            : `1px solid rgba(${pRgb},0.13)`,
+          boxShadow: `8px 0 48px -4px rgba(0,0,0,0.55), inset -1px 0 0 rgba(${pRgb},0.09)`,
+          fontFamily: "'DM Sans', sans-serif",
         }}
       >
 
         {/* ── brand ── */}
         <div className={clsx(
-          'h-16 sm:h-[68px] lg:h-[72px] px-4 flex items-center justify-between flex-shrink-0',
+          'h-16 sm:h-[68px] lg:h-[72px] px-4 flex items-center justify-between flex-shrink-0 border-b',
+          darkMode ? 'border-white/[0.06]' : 'border-black/[0.07]',
         )}>
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <Link to="/dashboard"
@@ -539,45 +549,25 @@ const Navigation = () => {
         </div>
 
         {/* ── user profile ── */}
-        <div className={clsx('px-2 pb-1 flex-shrink-0')}>
+        <div className={clsx('p-3 border-b flex-shrink-0', darkMode ? 'border-white/[0.06]' : 'border-black/[0.07]')}>
           <button
             onClick={() => setShowProfile(true)}
             onMouseEnter={() => setHovProfile(true)}
             onMouseLeave={() => setHovProfile(false)}
             className={clsx('w-full flex items-center rounded-2xl transition-all duration-200',
-              sidebarOpen ? 'gap-3 px-2.5 py-2' : 'justify-center p-2.5')}
-            style={{
-              background: hovProfile
-                ? darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'
-                : 'transparent',
-              border: '1px solid transparent',
-              transition: 'all 0.2s cubic-bezier(0.34,1.2,0.64,1)',
-              transform: hovProfile ? 'scale(1.01)' : 'scale(1)',
-            }}
+              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5')}
+            style={bottomBtnStyle(hovProfile)}
           >
-            <div
-              className="flex items-center justify-center text-white font-bold text-sm flex-shrink-0 rounded-xl"
-              style={{
-                width: 36, height: 36,
-                background: gradient,
-                boxShadow: hovProfile
-                  ? `0 0 0 3px rgba(${pRgb},0.2), 0 4px 14px rgba(${pRgb},0.5)`
-                  : `0 0 0 0 rgba(${pRgb},0), 0 2px 8px rgba(${pRgb},0.3)`,
-                transform: hovProfile ? 'scale(1.1)' : 'scale(1)',
-                transition: 'all 0.22s cubic-bezier(0.34,1.3,0.64,1)',
-              }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+              style={{ background: gradient, boxShadow: `0 3px 12px rgba(${pRgb},0.4)` }}>
               {user && getInitials(user.name)}
             </div>
             {sidebarOpen && (
               <div className="flex-1 min-w-0 text-left">
-                <p style={{
-                  fontSize: '0.8125rem', fontWeight: 650, lineHeight: 1.3,
-                  color: darkMode ? 'rgba(255,255,255,0.9)' : 'rgba(17,24,39,0.9)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
+                <p className={clsx('text-[13px] font-bold truncate leading-tight', darkMode ? 'text-white' : 'text-gray-900')}>
                   {user?.name}
                 </p>
-                <p style={{ fontSize: '0.6875rem', fontWeight: 500, color: primaryColor, textTransform: 'capitalize' }}>
+                <p className="text-[11px] font-semibold capitalize" style={{ color: primaryColor }}>
                   {user?.role}
                 </p>
               </div>
@@ -585,9 +575,30 @@ const Navigation = () => {
           </button>
         </div>
 
-        {/* ── nav list ── */}
+        {/* ══════════════════════════════════════════════
+            NAV LIST
+            — gradient-tinted bar fills the whole area
+            — each NavItem is self-contained in normal flow
+            — scrolling NEVER misaligns the active style
+        ══════════════════════════════════════════════ */}
         <div className="flex-1 relative overflow-hidden">
-          <div className="absolute inset-0 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+
+          {/* gradient bar backdrop (the coloured bar from the video) */}
+          {sidebarOpen && (
+            <div className="absolute inset-x-2 inset-y-2 rounded-3xl pointer-events-none"
+              style={{
+                background: darkMode
+                  ? `linear-gradient(180deg, rgba(${pRgb},0.11) 0%, rgba(${pRgb},0.06) 50%, rgba(${aRgb},0.09) 100%)`
+                  : `linear-gradient(180deg, rgba(${pRgb},0.07) 0%, rgba(${pRgb},0.03) 50%, rgba(${aRgb},0.06) 100%)`,
+                border: darkMode
+                  ? `1px solid rgba(${pRgb},0.13)`
+                  : `1px solid rgba(${pRgb},0.10)`,
+              }}
+            />
+          )}
+
+          {/* scroll container — clipped inside the glass backdrop boundary */}
+          <div className="absolute inset-x-2 inset-y-2 rounded-3xl overflow-hidden">
           <NavList
             navItems={navItems}
             location={location}
@@ -604,130 +615,72 @@ const Navigation = () => {
         </div>
 
         {/* ── bottom actions ── */}
-        <div className="flex-shrink-0 px-2 py-2 pb-16 sm:pb-20 lg:pb-3 space-y-0.5">
+        <div className={clsx('flex-shrink-0 px-2 py-2 border-t pb-16 sm:pb-20 lg:pb-2',
+          darkMode ? 'border-white/[0.06]' : 'border-black/[0.07]')}>
 
           {/* dark-mode toggle */}
           <button
             onClick={() => setDarkMode(v => !v)}
             onMouseEnter={() => setHovTheme(true)}
             onMouseLeave={() => setHovTheme(false)}
-            className={clsx('w-full flex items-center rounded-2xl transition-all duration-200',
-              sidebarOpen ? 'gap-3 px-2.5 py-2' : 'justify-center p-2.5')}
-            style={{
-              background: hovTheme ? (darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)') : 'transparent',
-              border: '1px solid transparent',
-              transform: hovTheme ? 'scale(1.01)' : 'scale(1)',
-              transition: 'all 0.2s cubic-bezier(0.34,1.2,0.64,1)',
-              color: darkMode ? 'rgba(148,163,184,0.8)' : 'rgba(100,116,139,0.85)',
-            }}
+            className={clsx('w-full flex items-center rounded-2xl transition-all duration-200 mb-0.5',
+              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5')}
+            style={bottomBtnStyle(hovTheme)}
           >
-            <span
-              className="flex items-center justify-center rounded-xl flex-shrink-0"
-              style={{
-                width: 36, height: 36,
-                background: hovTheme
-                  ? darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(245,158,11,0.15)'
-                  : darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                border: hovTheme
-                  ? darkMode ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(245,158,11,0.25)'
-                  : darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)',
-                boxShadow: hovTheme
-                  ? darkMode ? '0 0 0 3px rgba(99,102,241,0.1)' : '0 0 0 3px rgba(245,158,11,0.1)'
-                  : 'none',
-                transform: hovTheme ? 'scale(1.1)' : 'scale(1)',
-                transition: 'all 0.22s cubic-bezier(0.34,1.3,0.64,1)',
-              }}
-            >
+            <span style={iconWrap(hovTheme)}>
               {darkMode
-                ? <Moon size={15} style={{ color: hovTheme ? '#818cf8' : 'rgba(148,163,184,0.7)' }} strokeWidth={2}/>
-                : <Sun size={15} style={{ color: hovTheme ? '#f59e0b' : 'rgba(100,116,139,0.8)' }} strokeWidth={2}/>}
+                ? <Moon size={15} className="text-indigo-300" strokeWidth={2}/>
+                : <Sun size={15} className="text-amber-500" strokeWidth={2}/>}
             </span>
             {sidebarOpen && (
               <div className="flex items-center justify-between flex-1">
-                <span style={{ fontSize: '0.8125rem', fontWeight: 550, color: darkMode ? 'rgba(203,213,225,0.85)' : 'rgba(71,85,105,0.9)' }}>
-                  {darkMode ? 'Dark Mode' : 'Light Mode'}
+                <span className="text-[13px] font-semibold">
+                  {darkMode ? 'Dark' : 'Light'} Mode
                 </span>
                 <div className="relative rounded-full flex-shrink-0"
-                  style={{ width: 34, height: 18, background: darkMode ? gradient : 'rgba(0,0,0,0.12)', transition: 'background 0.3s' }}>
-                  <div className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow"
-                    style={{ left: darkMode ? 18 : 2, transition: 'left 0.3s' }}/>
+                  style={{ width:38, height:20, background: darkMode ? gradient : 'rgba(0,0,0,0.15)', transition:'background 0.3s' }}>
+                  <div className="absolute top-[3px] w-[14px] h-[14px] rounded-full bg-white shadow"
+                    style={{ left: darkMode ? 21 : 3, transition:'left 0.3s' }}/>
                 </div>
               </div>
             )}
           </button>
 
           {/* settings */}
-          {(() => {
-            const isSettingsActive = location.pathname === '/settings';
-            return (
-              <Link
-                to="/settings"
-                onClick={() => setShowProfile(false)}
-                onMouseEnter={() => setHovSettings(true)}
-                onMouseLeave={() => setHovSettings(false)}
-                className={clsx('flex items-center rounded-2xl transition-all duration-200',
-                  sidebarOpen ? 'gap-3 px-2.5 py-2' : 'justify-center p-2.5')}
-                style={{
-                  background: isSettingsActive
-                    ? darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)'
-                    : hovSettings
-                      ? darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'
-                      : 'transparent',
-                  border: '1px solid transparent',
-                  transform: hovSettings ? 'scale(1.01)' : 'scale(1)',
-                  transition: 'all 0.2s cubic-bezier(0.34,1.2,0.64,1)',
-                  color: darkMode ? 'rgba(148,163,184,0.8)' : 'rgba(100,116,139,0.85)',
-                }}
-              >
-                <span
-                  className="flex items-center justify-center rounded-xl flex-shrink-0"
-                  style={{
-                    width: 36, height: 36,
-                    background: isSettingsActive
-                      ? gradient
-                      : hovSettings
-                        ? darkMode ? `rgba(${pRgb},0.2)` : `rgba(${pRgb},0.14)`
-                        : darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                    border: isSettingsActive
-                      ? 'none'
-                      : hovSettings
-                        ? darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.18)`
-                        : darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)',
-                    boxShadow: isSettingsActive
-                      ? `0 0 0 4px rgba(${pRgb},0.15), 0 4px 16px rgba(${pRgb},0.5)`
-                      : hovSettings
-                        ? `0 0 0 3px rgba(${pRgb},0.1), 0 2px 10px rgba(${pRgb},0.3)`
-                        : 'none',
-                    transform: isSettingsActive || hovSettings ? 'scale(1.1)' : 'scale(1)',
-                    transition: 'all 0.22s cubic-bezier(0.34,1.3,0.64,1)',
-                  }}
-                >
-                  <Settings size={15} strokeWidth={2} style={{ color: isSettingsActive ? 'white' : hovSettings ? (darkMode ? `rgb(${pRgb})` : primaryColor) : 'currentColor' }} />
-                </span>
-                {sidebarOpen && (
-                  <span style={{ fontSize: '0.8125rem', fontWeight: isSettingsActive ? 650 : 550, color: isSettingsActive ? (darkMode ? 'rgba(255,255,255,0.95)' : 'rgba(17,24,39,0.95)') : 'inherit' }}>
-                    Settings
-                  </span>
-                )}
-                {!sidebarOpen && (
-                  <span className="pointer-events-none absolute px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap"
-                    style={{
-                      left: 58, zIndex: 99999,
-                      opacity: hovSettings ? 1 : 0,
-                      transform: hovSettings ? 'translateX(0) scale(1)' : 'translateX(-6px) scale(0.95)',
-                      transition: 'opacity 0.15s ease, transform 0.15s ease',
-                      background: darkMode ? 'rgba(8,12,24,0.96)' : 'rgba(17,24,39,0.94)',
-                      color: 'white', fontFamily: "'Outfit',sans-serif",
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
-                      backdropFilter: 'blur(12px)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                    }}>
-                    Settings
-                  </span>
-                )}
-              </Link>
-            );
-          })()}
+          <Link
+            to="/settings"
+            onClick={() => setShowProfile(false)}
+            onMouseEnter={() => setHovSettings(true)}
+            onMouseLeave={() => setHovSettings(false)}
+            className={clsx('flex items-center rounded-2xl transition-all duration-200 mb-0.5',
+              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5')}
+            style={{
+              ...bottomBtnStyle(hovSettings || location.pathname === '/settings'),
+              ...(location.pathname === '/settings' ? {
+                background: gradient,
+                border: `1px solid rgba(${pRgb},0.3)`,
+                color: 'white',
+                boxShadow: `0 4px 14px rgba(${pRgb},0.3)`,
+              } : {}),
+            }}
+          >
+            <span style={{
+              ...iconWrap(hovSettings),
+              ...(location.pathname === '/settings' ? {
+                background: 'rgba(255,255,255,0.2)',
+                border: '1px solid rgba(255,255,255,0.28)',
+              } : {}),
+            }}>
+              <Settings size={16} strokeWidth={2} style={{ color: location.pathname === '/settings' ? 'white' : 'inherit' }} />
+            </span>
+            {sidebarOpen && <span className="text-[13px] font-semibold">Settings</span>}
+            {!sidebarOpen && (
+              <span className="pointer-events-none fixed opacity-0 group-hover:opacity-100 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap"
+                style={{ left:88, zIndex:99999, background:'rgba(8,12,24,0.97)', color:'white', border:'1px solid rgba(255,255,255,0.1)', fontFamily:"'DM Sans',sans-serif" }}>
+                Settings
+              </span>
+            )}
+          </Link>
 
           {/* sign out */}
           <button
@@ -736,52 +689,19 @@ const Navigation = () => {
             onMouseEnter={() => setHovLogout(true)}
             onMouseLeave={() => setHovLogout(false)}
             className={clsx('w-full flex items-center rounded-2xl transition-all duration-200',
-              sidebarOpen ? 'gap-3 px-2.5 py-2' : 'justify-center p-2.5',
+              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5',
               isSigningOut && 'opacity-60 cursor-not-allowed')}
-            style={{
-              background: hovLogout ? 'rgba(239,68,68,0.06)' : 'transparent',
-              border: '1px solid transparent',
-              transform: hovLogout ? 'scale(1.01)' : 'scale(1)',
-              transition: 'all 0.2s cubic-bezier(0.34,1.2,0.64,1)',
-            }}
+            style={bottomBtnStyle(hovLogout, true)}
           >
-            <span
-              className="flex items-center justify-center rounded-xl flex-shrink-0"
-              style={{
-                width: 36, height: 36,
-                background: hovLogout
-                  ? 'rgba(239,68,68,0.15)'
-                  : darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-                border: hovLogout
-                  ? '1px solid rgba(239,68,68,0.3)'
-                  : darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)',
-                boxShadow: hovLogout ? '0 0 0 3px rgba(239,68,68,0.1)' : 'none',
-                transform: hovLogout ? 'scale(1.1)' : 'scale(1)',
-                transition: 'all 0.22s cubic-bezier(0.34,1.3,0.64,1)',
-              }}
-            >
+            <span style={iconWrap(hovLogout, true)}>
               {isSigningOut
-                ? <Loader2 size={15} strokeWidth={2} className="animate-spin" style={{ color: hovLogout ? '#f87171' : 'rgba(148,163,184,0.7)' }}/>
-                : <LogOut size={15} strokeWidth={2} style={{ color: hovLogout ? '#f87171' : (darkMode ? 'rgba(148,163,184,0.7)' : 'rgba(100,116,139,0.8)') }}/>}
+                ? <Loader2 size={16} strokeWidth={2} className="animate-spin"/>
+                : <LogOut size={16} strokeWidth={2}/>}
             </span>
-            {sidebarOpen && (
-              <span style={{ fontSize: '0.8125rem', fontWeight: 550, color: hovLogout ? '#f87171' : (darkMode ? 'rgba(148,163,184,0.8)' : 'rgba(100,116,139,0.85)') }}>
-                {isSigningOut ? 'Signing Out…' : 'Sign Out'}
-              </span>
-            )}
-            {!sidebarOpen && (
-              <span className="pointer-events-none absolute px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap"
-                style={{
-                  left: 58, zIndex: 99999,
-                  opacity: hovLogout ? 1 : 0,
-                  transform: hovLogout ? 'translateX(0) scale(1)' : 'translateX(-6px) scale(0.95)',
-                  transition: 'opacity 0.15s ease, transform 0.15s ease',
-                  background: darkMode ? 'rgba(8,12,24,0.96)' : 'rgba(17,24,39,0.94)',
-                  color: 'white', fontFamily: "'Outfit',sans-serif",
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
-                  backdropFilter: 'blur(12px)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}>
+            {sidebarOpen && <span className="text-[13px] font-semibold">{isSigningOut ? 'Signing Out…' : 'Sign Out'}</span>}
+            {!sidebarOpen && !isSigningOut && (
+              <span className="pointer-events-none fixed opacity-0 group-hover:opacity-100 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap"
+                style={{ left:88, zIndex:99999, background:'rgba(8,12,24,0.97)', color:'white', border:'1px solid rgba(255,255,255,0.1)', fontFamily:"'DM Sans',sans-serif" }}>
                 Sign Out
               </span>
             )}
@@ -796,7 +716,12 @@ const Navigation = () => {
       )}
 
       {/* ══════════════════════════════════════════════════════════════
-          HEADER
+          HEADER — exact same glass-bar language as the sidebar
+          • Header bg: same tinted gradient as aside, horizontal sweep
+          • Inner gradient strip: mirrors the sidebar nav bar strip
+          • Buttons: glass popup cards matching NavItem active style
+          • Search: glass pill with tinted border + icon bubble
+          • Profile chip: active-nav-card style (raised glass + shadow)
       ══════════════════════════════════════════════════════════════ */}
       <header
         className={clsx(
@@ -809,25 +734,42 @@ const Navigation = () => {
           'flex items-center',
         )}
         style={{
-          /* ── Blended header: no hard border, fades into page background ── */
+          /* Same tinted deep-glass as sidebar — horizontal direction */
           background: darkMode
-            ? `linear-gradient(180deg,
-                rgba(6,9,20,0.92)   0%,
-                rgba(6,9,20,0.72)  55%,
-                rgba(6,9,20,0.0)  100%)`
-            : `linear-gradient(180deg,
-                rgba(248,250,252,0.96)  0%,
-                rgba(248,250,252,0.72) 55%,
-                rgba(248,250,252,0.0) 100%)`,
-          backdropFilter:       'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-          borderBottom: 'none',
-          boxShadow: 'none',
-          fontFamily: "'Outfit', sans-serif",
+            ? `linear-gradient(90deg,
+                rgba(6,9,20,0.97)    0%,
+                rgba(${pRgb},0.09)  25%,
+                rgba(10,14,30,0.97) 55%,
+                rgba(${aRgb},0.07)  80%,
+                rgba(6,9,20,0.97)   100%)`
+            : `linear-gradient(90deg,
+                rgba(250,251,255,0.97) 0%,
+                rgba(${pRgb},0.06)    40%,
+                rgba(${aRgb},0.04)    70%,
+                rgba(248,250,255,0.97) 100%)`,
+          backdropFilter:       'blur(32px) saturate(200%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(200%)',
+          borderBottom: darkMode
+            ? `1px solid rgba(${pRgb},0.16)`
+            : `1px solid rgba(${pRgb},0.13)`,
+          boxShadow: darkMode
+            ? `0 1px 0 rgba(255,255,255,0.03), 0 8px 40px -8px rgba(0,0,0,0.5), inset 0 -1px 0 rgba(${pRgb},0.08)`
+            : `0 1px 0 rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.07), inset 0 -1px 0 rgba(${pRgb},0.06)`,
+          fontFamily: "'DM Sans', sans-serif",
           position: 'fixed',
         }}
       >
-        {/* ── No inner strip — clean blended look ── */}
+        {/* ── Inner gradient strip — mirrors sidebar nav bar, horizontal ── */}
+        <div className="absolute inset-x-3 inset-y-2 rounded-2xl pointer-events-none hidden lg:block"
+          style={{
+            background: darkMode
+              ? `linear-gradient(90deg, rgba(${pRgb},0.11) 0%, rgba(${pRgb},0.06) 50%, rgba(${aRgb},0.09) 100%)`
+              : `linear-gradient(90deg, rgba(${pRgb},0.07) 0%, rgba(${pRgb},0.03) 50%, rgba(${aRgb},0.06) 100%)`,
+            border: darkMode
+              ? `1px solid rgba(${pRgb},0.13)`
+              : `1px solid rgba(${pRgb},0.10)`,
+          }}
+        />
 
         {/* ── MOBILE layout ── */}
         <div className="lg:hidden relative w-full flex items-center justify-between px-3">
@@ -861,20 +803,12 @@ const Navigation = () => {
             )}
           </div>
 
-          {/* Center logo — Dynamic Island on mobile */}
+          {/* Center logo */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <MobileIslandLogo
-              expanded={diExpanded}
-              closing={diClosing}
-              notif={diNotif}
-              mode={diMode}
-              progress={diProgress}
-              recTime={diRecTime}
-              primary={primaryColor}
-              gradient={gradient}
-              pRgb={pRgb}
-              onDismiss={() => window.dispatchEvent(new CustomEvent('dynamic-island-dismiss'))}
-            />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+              style={{ background: gradient, boxShadow: `0 4px 14px rgba(${pRgb},0.45)` }}>
+              <GraduationCap className="w-[18px] h-[18px] text-white" strokeWidth={2.5}/>
+            </div>
           </div>
 
           {isAuthenticated && (
@@ -926,42 +860,42 @@ const Navigation = () => {
                   value={searchQuery}
                   onChange={handleSearchChange}
                   placeholder="Search courses, content…"
-                  className="search-input w-full h-10 rounded-2xl focus:outline-none text-[13px] font-medium"
+                  className="search-input w-full h-10 rounded-xl focus:outline-none text-[13px] font-medium"
                   style={{
-                    /* Floating pill — blends with page, lifts on focus */
+                    /* Tinted glass matching sidebar inactive icon bubbles */
                     background: darkMode
-                      ? `rgba(255,255,255,0.06)`
-                      : `rgba(255,255,255,0.82)`,
+                      ? `rgba(${pRgb},0.1)`
+                      : `rgba(255,255,255,0.7)`,
                     border: darkMode
-                      ? `1px solid rgba(255,255,255,0.09)`
-                      : `1px solid rgba(${pRgb},0.1)`,
+                      ? `1px solid rgba(${pRgb},0.22)`
+                      : `1px solid rgba(${pRgb},0.18)`,
                     paddingLeft: 42, paddingRight: 16,
                     color: darkMode ? '#f1f5f9' : '#111827',
-                    backdropFilter: 'blur(12px)',
-                    fontFamily: "'Outfit', sans-serif",
+                    backdropFilter: 'blur(16px)',
+                    fontFamily: "'DM Sans', sans-serif",
                     boxShadow: darkMode
-                      ? `0 2px 12px rgba(0,0,0,0.25)`
-                      : `0 2px 12px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.9)`,
+                      ? `inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 0 rgba(0,0,0,0.2)`
+                      : `inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 0 rgba(0,0,0,0.06)`,
                     transition: 'all 0.25s cubic-bezier(0.34,1.25,0.64,1)',
                   }}
                   onFocus={e => {
-                    e.currentTarget.style.background = darkMode ? `rgba(255,255,255,0.1)` : 'rgba(255,255,255,0.98)';
-                    e.currentTarget.style.border = `1px solid rgba(${pRgb},0.4)`;
-                    e.currentTarget.style.boxShadow = `0 0 0 3px rgba(${pRgb},0.12), 0 4px 20px rgba(0,0,0,0.12)`;
+                    e.currentTarget.style.background = darkMode ? `rgba(${pRgb},0.18)` : 'rgba(255,255,255,0.95)';
+                    e.currentTarget.style.border = `1px solid rgba(${pRgb},0.5)`;
+                    e.currentTarget.style.boxShadow = `0 0 0 3px rgba(${pRgb},0.15), inset 0 1px 0 rgba(255,255,255,0.08)`;
                   }}
                   onBlur={e => {
-                    e.currentTarget.style.background = darkMode ? `rgba(255,255,255,0.06)` : 'rgba(255,255,255,0.82)';
-                    e.currentTarget.style.border = darkMode ? `1px solid rgba(255,255,255,0.09)` : `1px solid rgba(${pRgb},0.1)`;
+                    e.currentTarget.style.background = darkMode ? `rgba(${pRgb},0.1)` : 'rgba(255,255,255,0.7)';
+                    e.currentTarget.style.border = darkMode ? `1px solid rgba(${pRgb},0.22)` : `1px solid rgba(${pRgb},0.18)`;
                     e.currentTarget.style.boxShadow = darkMode
-                      ? `0 2px 12px rgba(0,0,0,0.25)`
-                      : `0 2px 12px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.9)`;
+                      ? `inset 0 1px 0 rgba(255,255,255,0.07), 0 1px 0 rgba(0,0,0,0.2)`
+                      : `inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 0 rgba(0,0,0,0.06)`;
                   }}
                 />
                 {/* Search icon bubble — same style as sidebar icon bubbles */}
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center pointer-events-none"
                   style={{
-                    background: darkMode ? `rgba(${pRgb},0.15)` : `rgba(${pRgb},0.1)`,
-                    border: darkMode ? `1px solid rgba(${pRgb},0.2)` : `1px solid rgba(${pRgb},0.15)`,
+                    background: darkMode ? `rgba(${pRgb},0.2)` : `rgba(${pRgb},0.12)`,
+                    border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
                   }}>
                   <Search size={12} style={{ color: primaryColor }} strokeWidth={2.5}/>
                 </span>
@@ -989,7 +923,7 @@ const Navigation = () => {
                     ).map(r => (
                       <button key={r}
                         className="w-full text-left px-4 py-2.5 text-[13px] font-medium border-b last:border-0 transition-all duration-150"
-                        style={{ color: darkMode ? '#e2e8f0' : '#111827', borderColor: `rgba(${pRgb},0.07)`, fontFamily:"'Outfit',sans-serif" }}
+                        style={{ color: darkMode ? '#e2e8f0' : '#111827', borderColor: `rgba(${pRgb},0.07)`, fontFamily:"'DM Sans',sans-serif" }}
                         onMouseEnter={e => {
                           e.currentTarget.style.background = darkMode ? `rgba(${pRgb},0.1)` : `rgba(${pRgb},0.06)`;
                           e.currentTarget.style.color = darkMode ? 'white' : primaryColor;
@@ -1039,39 +973,52 @@ const Navigation = () => {
                 )}
               </div>
 
-              {/* Profile chip — clean minimal pill */}
+              {/* Profile chip — raised glass card, same style as active NavItem */}
               <button onClick={() => setShowProfile(true)}
                 className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-xl transition-all duration-200"
                 style={{
+                  /* Active nav item card style */
                   background: darkMode
-                    ? 'rgba(255,255,255,0.06)'
-                    : 'rgba(255,255,255,0.85)',
+                    ? `linear-gradient(135deg, rgba(${pRgb},0.22) 0%, rgba(${aRgb},0.14) 55%, rgba(255,255,255,0.06) 100%)`
+                    : `linear-gradient(135deg, rgba(255,255,255,0.97) 0%, rgba(255,255,255,0.88) 100%)`,
                   border: darkMode
-                    ? '1px solid rgba(255,255,255,0.1)'
-                    : '1px solid rgba(0,0,0,0.08)',
-                  boxShadow: 'none',
-                  backdropFilter: 'blur(12px)',
+                    ? `1px solid rgba(${pRgb},0.38)`
+                    : `1px solid rgba(${pRgb},0.22)`,
+                  boxShadow: darkMode
+                    ? `0 4px 20px -4px rgba(${pRgb},0.45), 0 1px 0 rgba(255,255,255,0.12) inset`
+                    : `0 4px 14px -4px rgba(${pRgb},0.25), 0 1px 0 rgba(255,255,255,1) inset`,
+                  backdropFilter: 'blur(20px) saturate(180%)',
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.98)';
-                  e.currentTarget.style.border = darkMode ? `1px solid rgba(${pRgb},0.25)` : `1px solid rgba(${pRgb},0.2)`;
+                  e.currentTarget.style.boxShadow = darkMode
+                    ? `0 6px 24px -4px rgba(${pRgb},0.6), 0 1px 0 rgba(255,255,255,0.15) inset`
+                    : `0 6px 18px -4px rgba(${pRgb},0.35), 0 1px 0 rgba(255,255,255,1) inset`;
+                  e.currentTarget.style.transform = 'scale(1.02)';
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)';
-                  e.currentTarget.style.border = darkMode ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)';
+                  e.currentTarget.style.boxShadow = darkMode
+                    ? `0 4px 20px -4px rgba(${pRgb},0.45), 0 1px 0 rgba(255,255,255,0.12) inset`
+                    : `0 4px 14px -4px rgba(${pRgb},0.25), 0 1px 0 rgba(255,255,255,1) inset`;
+                  e.currentTarget.style.transform = 'scale(1)';
                 }}>
-                {/* Avatar bubble */}
+                {/* Avatar bubble — same gradient as active nav icon */}
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-                  style={{ background: gradient }}>
+                  style={{ background: gradient, boxShadow: `0 3px 10px rgba(${pRgb},0.5)` }}>
                   {user && getInitials(user.name)}
                 </div>
                 <div className="text-left hidden xl:block">
-                  <p className="text-[13px] font-semibold leading-tight"
-                    style={{ color: darkMode ? 'rgba(255,255,255,0.9)' : 'rgba(17,24,39,0.9)' }}>
+                  {/* Gradient text — same as active NavItem label */}
+                  <p className="text-[13px] font-bold leading-tight" style={{
+                    background: darkMode
+                      ? 'linear-gradient(90deg,#fff 0%,rgba(255,255,255,0.82) 100%)'
+                      : `linear-gradient(90deg,${primaryColor},${accentColor})`,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}>
                     {user?.name}
                   </p>
-                  <p className="text-[11px] font-medium capitalize"
-                    style={{ color: darkMode ? 'rgba(148,163,184,0.7)' : 'rgba(75,85,99,0.7)' }}>
+                  <p className="text-[11px] font-semibold capitalize" style={{ color: darkMode ? primaryColor : primaryColor }}>
                     {user?.role}
                   </p>
                 </div>
@@ -1112,7 +1059,7 @@ const Navigation = () => {
               backdropFilter: 'blur(32px) saturate(200%)',
               borderColor: `rgba(${pRgb},0.16)`,
               paddingTop: 'max(env(safe-area-inset-top,0px) + 12px, 12px)',
-              fontFamily: "'Outfit',sans-serif",
+              fontFamily: "'DM Sans',sans-serif",
             }}>
             <div className="flex items-center gap-2">
               <form onSubmit={handleSearchSubmit} className="flex-1">
@@ -1122,17 +1069,17 @@ const Navigation = () => {
                     className="w-full h-11 rounded-xl focus:outline-none text-[14px] font-medium"
                     style={{
                       background: darkMode ? `rgba(${pRgb},0.12)` : 'rgba(255,255,255,0.8)',
-                      border: darkMode ? `1px solid rgba(${pRgb},0.2)` : `1px solid rgba(${pRgb},0.15)`,
+                      border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
                       paddingLeft: 42, paddingRight: 16,
                       color: darkMode ? '#f1f5f9' : '#111827',
                       backdropFilter: 'blur(16px)',
-                      fontFamily: "'Outfit',sans-serif",
+                      fontFamily: "'DM Sans',sans-serif",
                       boxShadow: `0 0 0 3px rgba(${pRgb},0.12)`,
                     }}/>
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center pointer-events-none"
                     style={{
-                      background: darkMode ? `rgba(${pRgb},0.15)` : `rgba(${pRgb},0.1)`,
-                      border: darkMode ? `1px solid rgba(${pRgb},0.2)` : `1px solid rgba(${pRgb},0.15)`,
+                      background: darkMode ? `rgba(${pRgb},0.2)` : `rgba(${pRgb},0.12)`,
+                      border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
                     }}>
                     <Search size={12} style={{ color: primaryColor }} strokeWidth={2.5}/>
                   </span>
