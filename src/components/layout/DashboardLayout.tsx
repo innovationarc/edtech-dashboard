@@ -1,10 +1,8 @@
 // src/components/layout/DashboardLayout.tsx
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
 import { useDashboard } from '../../contexts/DashboardContext';
-import DynamicIsland from '../ui/DynamicIsland';
-import { useStudyPlanReminders } from '../../hooks/useStudyPlanReminders';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
@@ -15,16 +13,11 @@ import { onAuthStateChanged } from 'firebase/auth';
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated, theme, primaryColor } = useDashboard();
-  const darkMode = theme !== 'light';
-  const hexRgb = (hex: string) => {
-    if (!hex || hex.length < 7) return '99,102,241';
-    return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
-  };
-  const pRgb = hexRgb(primaryColor);
-  const gradient = `linear-gradient(135deg,${primaryColor},${primaryColor}cc)`;
-  useStudyPlanReminders(isAuthenticated);
+  const { sidebarOpen, isAuthenticated } = useDashboard();
+  const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
+  const [loadbarKey, setLoadbarKey] = useState(0);
+  const [outletKey, setOutletKey] = useState(0);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -42,7 +35,11 @@ const DashboardLayout = () => {
   const isFlying = useRef(false);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    setLoadbarKey(k => k + 1);
+    setOutletKey(k => k + 1);
+  }, [location.pathname]);
+
+  useEffect(() => { = () => setIsMobile(window.innerWidth < 1024);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -277,20 +274,16 @@ const DashboardLayout = () => {
 
   return (
     <div className="flex h-screen bg-background-950 overflow-hidden">
+      {/* iDraft Loading Bar — fires on every route change */}
+      <div
+        key={`loadbar-${loadbarKey}`}
+        className="idraft-loadbar"
+        style={{ width: 0 }}
+      />
       <style>{`
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
       `}</style>
-
-      {/* Dynamic Island — always mounted, centered top */}
-      {isAuthenticated && (
-        <DynamicIsland
-          darkMode={darkMode}
-          primaryColor={primaryColor}
-          gradient={gradient}
-          pRgb={pRgb}
-        />
-      )}
 
       <Navigation />
 
@@ -298,7 +291,7 @@ const DashboardLayout = () => {
         !isMobile && sidebarOpen ? 'ml-64' : !isMobile ? 'ml-20' : 'ml-0'
       }`}>
         <main className="dl-main flex-1 overflow-auto pt-16 sm:pt-[68px] lg:pt-[72px]">
-          <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
+          <div key={`outlet-${outletKey}`} className="idraft-outlet p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
             <Outlet />
           </div>
         </main>
