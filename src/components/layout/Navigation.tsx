@@ -473,18 +473,20 @@ const Navigation = () => {
 
   /* Shared glass style — tinted with primary colour, matching sidebar */
   const glassBtn: React.CSSProperties = {
-    background:           darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.72)',
-    border:               darkMode ? `1px solid rgba(255,255,255,0.09)` : `1px solid rgba(${pRgb},0.1)`,
-    backdropFilter:       'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    boxShadow:            darkMode ? 'none' : '0 2px 10px rgba(0,0,0,0.06)',
-    transition:           'all 0.2s cubic-bezier(0.34,1.25,0.64,1)',
-    borderRadius:         12,
+    background:           'transparent',
+    border:               '1px solid transparent',
+    backdropFilter:       'none',
+    WebkitBackdropFilter: 'none',
+    boxShadow:            'none',
+    transition:           'all 0.18s cubic-bezier(0.34,1.25,0.64,1)',
+    borderRadius:         10,
+    color:                darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(55,65,81,0.85)',
   };
   const glassBtnHov: React.CSSProperties = {
-    background:  darkMode ? `rgba(${pRgb},0.14)` : `rgba(255,255,255,0.95)`,
-    border:      darkMode ? `1px solid rgba(${pRgb},0.3)` : `1px solid rgba(${pRgb},0.18)`,
-    boxShadow:   darkMode ? `0 4px 16px -4px rgba(${pRgb},0.3)` : `0 4px 14px -2px rgba(${pRgb},0.15)`,
+    background:  darkMode ? `rgba(255,255,255,0.08)` : `rgba(0,0,0,0.06)`,
+    border:      darkMode ? `1px solid rgba(255,255,255,0.1)` : `1px solid rgba(0,0,0,0.08)`,
+    boxShadow:   'none',
+    color:       darkMode ? 'rgba(255,255,255,0.92)' : 'rgba(17,24,39,0.9)',
   };
 
   /* bottom-row button shared style */
@@ -778,15 +780,15 @@ const Navigation = () => {
           /* ── Blended header: no hard border, fades into page background ── */
           background: darkMode
             ? `linear-gradient(180deg,
-                rgba(6,9,20,0.82)   0%,
-                rgba(6,9,20,0.55)  60%,
+                rgba(6,9,20,0.92)   0%,
+                rgba(6,9,20,0.72)  55%,
                 rgba(6,9,20,0.0)  100%)`
             : `linear-gradient(180deg,
-                rgba(248,250,252,0.88)  0%,
-                rgba(248,250,252,0.55) 60%,
+                rgba(248,250,252,0.96)  0%,
+                rgba(248,250,252,0.72) 55%,
                 rgba(248,250,252,0.0) 100%)`,
-          backdropFilter:       'blur(18px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+          backdropFilter:       'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           borderBottom: 'none',
           boxShadow: 'none',
           fontFamily: "'Outfit', sans-serif",
@@ -926,8 +928,8 @@ const Navigation = () => {
                 {/* Search icon bubble — same style as sidebar icon bubbles */}
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center pointer-events-none"
                   style={{
-                    background: darkMode ? `rgba(${pRgb},0.2)` : `rgba(${pRgb},0.12)`,
-                    border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
+                    background: darkMode ? `rgba(${pRgb},0.15)` : `rgba(${pRgb},0.1)`,
+                    border: darkMode ? `1px solid rgba(${pRgb},0.2)` : `1px solid rgba(${pRgb},0.15)`,
                   }}>
                   <Search size={12} style={{ color: primaryColor }} strokeWidth={2.5}/>
                 </span>
@@ -1005,52 +1007,39 @@ const Navigation = () => {
                 )}
               </div>
 
-              {/* Profile chip — raised glass card, same style as active NavItem */}
+              {/* Profile chip — clean minimal pill */}
               <button onClick={() => setShowProfile(true)}
                 className="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-xl transition-all duration-200"
                 style={{
-                  /* Active nav item card style */
                   background: darkMode
-                    ? `linear-gradient(135deg, rgba(${pRgb},0.22) 0%, rgba(${aRgb},0.14) 55%, rgba(255,255,255,0.06) 100%)`
-                    : `linear-gradient(135deg, rgba(255,255,255,0.97) 0%, rgba(255,255,255,0.88) 100%)`,
+                    ? 'rgba(255,255,255,0.06)'
+                    : 'rgba(255,255,255,0.85)',
                   border: darkMode
-                    ? `1px solid rgba(${pRgb},0.38)`
-                    : `1px solid rgba(${pRgb},0.22)`,
-                  boxShadow: darkMode
-                    ? `0 4px 20px -4px rgba(${pRgb},0.45), 0 1px 0 rgba(255,255,255,0.12) inset`
-                    : `0 4px 14px -4px rgba(${pRgb},0.25), 0 1px 0 rgba(255,255,255,1) inset`,
-                  backdropFilter: 'blur(20px) saturate(180%)',
+                    ? '1px solid rgba(255,255,255,0.1)'
+                    : '1px solid rgba(0,0,0,0.08)',
+                  boxShadow: 'none',
+                  backdropFilter: 'blur(12px)',
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.boxShadow = darkMode
-                    ? `0 6px 24px -4px rgba(${pRgb},0.6), 0 1px 0 rgba(255,255,255,0.15) inset`
-                    : `0 6px 18px -4px rgba(${pRgb},0.35), 0 1px 0 rgba(255,255,255,1) inset`;
-                  e.currentTarget.style.transform = 'scale(1.02)';
+                  e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.98)';
+                  e.currentTarget.style.border = darkMode ? `1px solid rgba(${pRgb},0.25)` : `1px solid rgba(${pRgb},0.2)`;
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.boxShadow = darkMode
-                    ? `0 4px 20px -4px rgba(${pRgb},0.45), 0 1px 0 rgba(255,255,255,0.12) inset`
-                    : `0 4px 14px -4px rgba(${pRgb},0.25), 0 1px 0 rgba(255,255,255,1) inset`;
-                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)';
+                  e.currentTarget.style.border = darkMode ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.08)';
                 }}>
-                {/* Avatar bubble — same gradient as active nav icon */}
+                {/* Avatar bubble */}
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-                  style={{ background: gradient, boxShadow: `0 3px 10px rgba(${pRgb},0.5)` }}>
+                  style={{ background: gradient }}>
                   {user && getInitials(user.name)}
                 </div>
                 <div className="text-left hidden xl:block">
-                  {/* Gradient text — same as active NavItem label */}
-                  <p className="text-[13px] font-bold leading-tight" style={{
-                    background: darkMode
-                      ? 'linear-gradient(90deg,#fff 0%,rgba(255,255,255,0.82) 100%)'
-                      : `linear-gradient(90deg,${primaryColor},${accentColor})`,
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}>
+                  <p className="text-[13px] font-semibold leading-tight"
+                    style={{ color: darkMode ? 'rgba(255,255,255,0.9)' : 'rgba(17,24,39,0.9)' }}>
                     {user?.name}
                   </p>
-                  <p className="text-[11px] font-semibold capitalize" style={{ color: darkMode ? primaryColor : primaryColor }}>
+                  <p className="text-[11px] font-medium capitalize"
+                    style={{ color: darkMode ? 'rgba(148,163,184,0.7)' : 'rgba(75,85,99,0.7)' }}>
                     {user?.role}
                   </p>
                 </div>
@@ -1101,7 +1090,7 @@ const Navigation = () => {
                     className="w-full h-11 rounded-xl focus:outline-none text-[14px] font-medium"
                     style={{
                       background: darkMode ? `rgba(${pRgb},0.12)` : 'rgba(255,255,255,0.8)',
-                      border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
+                      border: darkMode ? `1px solid rgba(${pRgb},0.2)` : `1px solid rgba(${pRgb},0.15)`,
                       paddingLeft: 42, paddingRight: 16,
                       color: darkMode ? '#f1f5f9' : '#111827',
                       backdropFilter: 'blur(16px)',
@@ -1110,8 +1099,8 @@ const Navigation = () => {
                     }}/>
                   <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center pointer-events-none"
                     style={{
-                      background: darkMode ? `rgba(${pRgb},0.2)` : `rgba(${pRgb},0.12)`,
-                      border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
+                      background: darkMode ? `rgba(${pRgb},0.15)` : `rgba(${pRgb},0.1)`,
+                      border: darkMode ? `1px solid rgba(${pRgb},0.2)` : `1px solid rgba(${pRgb},0.15)`,
                     }}>
                     <Search size={12} style={{ color: primaryColor }} strokeWidth={2.5}/>
                   </span>
