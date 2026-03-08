@@ -368,18 +368,32 @@ function idealSessionMins(
   hoursLeft:       number,
   daysLeft:        number,
   freeHoursPerDay: number,
+  urgency:         number = 0,
 ): number {
   if (hoursLeft <= 0) return MIN_SESSION_MINS;
 
-  const minsLeft      = hoursLeft * 60;
-  const availableMins = Math.max(1, daysLeft) * freeHoursPerDay * 60;
+  // Dynamic ceiling — extend sessions gracefully when deadline pressure is high.
+  // Caps at the actual free window so we never plan impossible days.
+  // "Graceful" means: only extend as far as truly needed, never more.
+  const dynamicMax =
+    daysLeft <= 1 ? Math.min(180, freeHoursPerDay * 60)  // last day: up to 3h, capped at free window
+    : daysLeft <= 2 || urgency >= 0.85 ? 150              // 2 days or very urgent: 2.5h
+    : MAX_SESSION_MINS;                                    // normal: 2h
 
-  // How many minimum-length sessions fit?
-  const maxSessions = Math.floor(availableMins / MIN_SESSION_MINS);
-  if (maxSessions <= 0) return MAX_SESSION_MINS; // desperate: use longest sessions
+  const minsLeft = hoursLeft * 60;
+
+  // If remaining work fits in a single extended session, schedule it exactly —
+  // avoids a 60-min session leaving 20 min unscheduled and wasting the next slot.
+  if (minsLeft <= dynamicMax) {
+    return Math.max(MIN_SESSION_MINS, snapToGrid(minsLeft, SNAP_MINS));
+  }
+
+  const availableMins = Math.max(1, daysLeft) * freeHoursPerDay * 60;
+  const maxSessions   = Math.floor(availableMins / MIN_SESSION_MINS);
+  if (maxSessions <= 0) return dynamicMax;
 
   const ideal   = minsLeft / maxSessions;
-  const clamped = Math.min(MAX_SESSION_MINS, Math.max(MIN_SESSION_MINS, ideal));
+  const clamped = Math.min(dynamicMax, Math.max(MIN_SESSION_MINS, ideal));
   return snapToGrid(clamped, SNAP_MINS);
 }
 
@@ -451,9 +465,27 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
   );
 
   // Step 5: assign sessions day by day
-  // THE KEY LOOP: for each day, keep placing sessions until the day is full
-  // or all goals have no time left. Without the while loop, only ONE session
-  // per goal per day is placed — which severely under-schedules single-goal plans.
+  //
+  // SCHEDULING STRATEGY — three layered rules:
+  //
+  //  Rule 1 — Round-robin fairness: within each day, track how many sessions
+  //    each goal has already received. Goals with fewer sessions go first.
+  //    This prevents a high-urgency goal from monopolising all available slots.
+  //
+  //  Rule 2 — Tighter deadline wins ties: when two goals have equal session
+  //    counts today, the one expiring soonest gets priority. A goal due tomorrow
+  //    cannot "make up" missed sessions the way a goal due next week can.
+  //
+  //  Rule 3 — Urgency breaks remaining ties: when deadline distance is equal,
+  //    the goal needing a higher fraction of remaining free time goes first.
+  //
+  // WHY THIS FIXES THE PHYSICS / CHEMISTRY BUG:
+  //   Chemistry urgency (0.50) > Physics urgency (0.42), so Chemistry won every
+  //   round and stole the third daily slot. Physics only had 3 days before
+  //   expiry, so it finished with 3h instead of 5h.
+  //   With Rule 2: after round 1 (both have 1 session), Physics (fewer days)
+  //   gets priority for the third slot. Chemistry catches up after Physics
+  //   expires, filling the remaining days exclusively.
   const sessions: ScheduledSession[] = [];
 
   for (const slot of daySlots) {
@@ -461,9 +493,9 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 
     const ds = slot.dateStr;
 
-    // Keep looping until the day is full or no eligible goals remain.
-    // Each iteration places one session per eligible goal, then loops back
-    // to place another round of sessions if time still remains.
+    // Per-day session counter — reset each day, used for round-robin fairness
+    const sessionsPlacedToday = new Map<string, number>();
+
     let anyPlacedThisRound = true;
     while (anyPlacedThisRound && slot.freeBlocks.length > 0) {
       anyPlacedThisRound = false;
@@ -476,8 +508,20 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
       );
       if (eligible.length === 0) break;
 
-      // Most urgent first — re-sort each round as minsLeft changes
-      eligible.sort((a, b) => b.urgency - a.urgency);
+      eligible.sort((a, b) => {
+        // Rule 1: fewer sessions placed today → higher priority
+        const countA = sessionsPlacedToday.get(a.goal.id) ?? 0;
+        const countB = sessionsPlacedToday.get(b.goal.id) ?? 0;
+        if (countA !== countB) return countA - countB;
+
+        // Rule 2: tighter deadline → higher priority (can't catch up later)
+        const daysA = calendarDayDiff(a.goal.targetDate, new Date(ds + 'T12:00:00'));
+        const daysB = calendarDayDiff(b.goal.targetDate, new Date(ds + 'T12:00:00'));
+        if (daysA !== daysB) return daysA - daysB;
+
+        // Rule 3: higher urgency as final tiebreaker
+        return b.urgency - a.urgency;
+      });
 
       for (const gw of eligible) {
         if (gw.minsLeft < MIN_SESSION_MINS) continue;
@@ -490,7 +534,8 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
         const sessionMins = idealSessionMins(
           gw.minsLeft / 60,
           daysToDeadline,
-          freeHoursPerDay
+          freeHoursPerDay,
+          gw.urgency,
         );
 
         // Find first block large enough for this session
@@ -534,7 +579,8 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
         gw.newSessions++;
         if (gw.minsLeft < MIN_SESSION_MINS) gw.minsLeft = 0;
 
-        anyPlacedThisRound = true; // at least one session placed → loop again
+        sessionsPlacedToday.set(gw.goal.id, (sessionsPlacedToday.get(gw.goal.id) ?? 0) + 1);
+        anyPlacedThisRound = true;
       }
     }
   }
