@@ -36,6 +36,7 @@ export interface StudyPlanEvent {
   sessionType?: 'focus' | 'review' | 'practice' | 'break';
   completed?: boolean;
   completedAt?: Date;
+  expired?: boolean;   // true when the linked goal has passed its deadline
   color?: string;
   reminderMinutes?: number;
   recurrence?: 'none' | 'daily' | 'weekly' | 'biweekly';
@@ -557,6 +558,60 @@ export const studyPlanService = {
     });
     await Promise.all(toDelete.map(doc => studyPlanService.deleteEvent(doc.id))).catch(() => {});
     return toDelete.length;
+  },
+
+  /**
+   * Delete ALL AI-generated sessions for given goal subjects — including completed ones.
+   * Used when a goal is manually deleted so no orphan sessions remain.
+   */
+  async deleteAllAISessionsForGoalFromFirestore(
+    studentId: string,
+    goalSubjects: string[]
+  ): Promise<number> {
+    const snap = await getDocs(
+      query(
+        collection(db, 'studyPlanEvents'),
+        where('studentId', '==', studentId),
+        where('isAIGenerated', '==', true),
+        where('isPersonal', '==', true)
+      )
+    );
+    const toDelete = snap.docs.filter(d => {
+      const course: string = d.data().course || '';
+      return goalSubjects.some(subj => {
+        const base = subj.split(' (')[0];
+        return course === subj || course === base || course.startsWith(base);
+      });
+    });
+    await Promise.all(toDelete.map(d => studyPlanService.deleteEvent(d.id))).catch(() => {});
+    return toDelete.length;
+  },
+
+  /**
+   * Mark all AI sessions for given goal subjects as expired (expired: true).
+   * Called when a goal's deadline passes but it hasn't yet hit the 12-hour auto-delete window.
+   */
+  async markGoalSessionsExpired(
+    studentId: string,
+    goalSubjects: string[]
+  ): Promise<void> {
+    const snap = await getDocs(
+      query(
+        collection(db, 'studyPlanEvents'),
+        where('studentId', '==', studentId),
+        where('isAIGenerated', '==', true),
+        where('isPersonal', '==', true)
+      )
+    );
+    const toMark = snap.docs.filter(d => {
+      if (d.data().expired) return false; // already marked
+      const course: string = d.data().course || '';
+      return goalSubjects.some(subj => {
+        const base = subj.split(' (')[0];
+        return course === subj || course === base || course.startsWith(base);
+      });
+    });
+    await Promise.all(toMark.map(d => updateDoc(d.ref, { expired: true }))).catch(() => {});
   },
 
   // ── NEW: Enrolled Courses For Planning ────────────────────────────────────
