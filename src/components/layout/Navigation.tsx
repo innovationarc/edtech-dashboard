@@ -11,6 +11,8 @@ import { useDashboard } from '../../contexts/DashboardContext';
 import Profile from '../profile/Profile';
 import HamburgerMenuIcon from '../ui/HamburgerMenuIcon';
 import clsx from 'clsx';
+import { MobileIslandLogo } from '../ui/DynamicIsland';
+import type { DynamicIslandNotification, IslandMode } from '../ui/DynamicIsland';
 
 /* ─── colour helper ─── */
 const hexRgb = (hex: string) => {
@@ -326,6 +328,14 @@ const Navigation = () => {
   const [notifications, setNotifications] = useState<Array<{
     id: string; message: string; type: 'success'|'info'|'warning'|'error'; timestamp: Date;
   }>>([]);
+
+  // ── Mobile Dynamic Island state ──
+  const [diExpanded, setDiExpanded]   = useState(false);
+  const [diClosing,  setDiClosing]    = useState(false);
+  const [diNotif,    setDiNotif]      = useState<DynamicIslandNotification|null>(null);
+  const [diMode,     setDiMode]       = useState<IslandMode>('idle');
+  const [diProgress, setDiProgress]   = useState(0);
+  const [diRecTime,  setDiRecTime]    = useState(0);
   const [darkMode, setDarkMode]     = useState(() => (localStorage.getItem('theme') || 'dark') !== 'light');
   const [isSigningOut, setIsSigningOut] = useState(false);
   /* per-button hover for bottom row */
@@ -404,6 +414,31 @@ const Navigation = () => {
     (window as any).addNotification = addNotification;
     return () => { delete (window as any).addNotification; };
   }, [addNotification]);
+
+  // ── Listen for di-mobile-expand / di-mobile-idle events ──
+  useEffect(() => {
+    const onExpand = (e: CustomEvent) => {
+      setDiClosing(false);
+      setDiNotif(e.detail.notif);
+      setDiMode(e.detail.mode);
+      setDiProgress(e.detail.notif?.progress ?? 0);
+      setDiRecTime(0);
+      setDiExpanded(true);
+    };
+    const onIdle = () => {
+      setDiClosing(true);
+      setTimeout(() => { setDiExpanded(false); setDiClosing(false); setDiNotif(null); setDiMode('idle'); }, 450);
+    };
+    const onProgress = (e: CustomEvent) => setDiProgress(e.detail.progress);
+    window.addEventListener('di-mobile-expand',     onExpand as EventListener);
+    window.addEventListener('di-mobile-idle',       onIdle);
+    window.addEventListener('dynamic-island-progress', onProgress as EventListener);
+    return () => {
+      window.removeEventListener('di-mobile-expand',     onExpand as EventListener);
+      window.removeEventListener('di-mobile-idle',       onIdle);
+      window.removeEventListener('dynamic-island-progress', onProgress as EventListener);
+    };
+  }, []);
   const removeNotification = (id: string) => setNotifications(prev => prev.filter(n => n.id !== id));
   const notifIcon  = (t: string): string => ({ success:'✅', warning:'⚠️', error:'❌' }[t] ?? 'ℹ️');
   const notifColor = (t: string) => ({
@@ -792,12 +827,20 @@ const Navigation = () => {
             )}
           </div>
 
-          {/* Center logo */}
+          {/* Center logo — Dynamic Island on mobile */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: gradient, boxShadow: `0 4px 14px rgba(${pRgb},0.45)` }}>
-              <GraduationCap className="w-[18px] h-[18px] text-white" strokeWidth={2.5}/>
-            </div>
+            <MobileIslandLogo
+              expanded={diExpanded}
+              closing={diClosing}
+              notif={diNotif}
+              mode={diMode}
+              progress={diProgress}
+              recTime={diRecTime}
+              primary={primaryColor}
+              gradient={gradient}
+              pRgb={pRgb}
+              onDismiss={() => window.dispatchEvent(new CustomEvent('dynamic-island-dismiss'))}
+            />
           </div>
 
           {isAuthenticated && (
