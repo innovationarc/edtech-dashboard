@@ -1,6 +1,6 @@
-// src/components/dashboard/WelcomeCard.tsx
+// src/components/dashboard/WelcomeCard.tsx — iDraft-style dark info card
 import { useState, useEffect } from 'react';
-import { ArrowUpRight, Sparkles, TrendingUp, Star } from 'lucide-react';
+import { ArrowUpRight, TrendingUp, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface WelcomeCardProps {
@@ -8,9 +8,9 @@ interface WelcomeCardProps {
 }
 
 const GREETINGS = [
-  { text: 'Good morning', emoji: '☀️', sub: "Let's make today count!" },
-  { text: 'Good afternoon', emoji: '⚡', sub: "You're crushing it!" },
-  { text: 'Good evening', emoji: '🌙', sub: "Great work today!" },
+  { text: 'Good morning', sub: "Let's make today count!" },
+  { text: 'Good afternoon', sub: "You're crushing it!" },
+  { text: 'Good evening', sub: "Great work today!" },
 ];
 
 const TIPS = [
@@ -46,45 +46,72 @@ const WelcomeCard = ({ userName }: WelcomeCardProps) => {
   const firstName = userName.split(' ')[0];
 
   return (
-    <div className="relative h-full rounded-2xl overflow-hidden" style={{
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)',
-      minHeight: '200px',
-    }}>
-      <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-20 blur-2xl"
-        style={{ background: 'radial-gradient(circle, #a78bfa, #6366f1)', animation: 'pulse 3s infinite' }} />
-      <div className="absolute -bottom-6 -left-6 w-32 h-32 rounded-full opacity-15 blur-2xl"
-        style={{ background: 'radial-gradient(circle, #10b981, #06b6d4)' }} />
-      <div className="absolute inset-0 opacity-[0.04]" style={{
-        backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
-        backgroundSize: '20px 20px'
-      }} />
-      <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-3 py-1">
-        <Star size={11} className="text-yellow-300 fill-yellow-300" />
-        <span className="text-xs font-semibold text-white/90">Admin</span>
-      </div>
-      <div className="relative p-5 h-full flex flex-col justify-between" style={{ minHeight: '200px' }}>
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg">{greeting.emoji}</span>
-            <span className="text-xs font-medium text-white/60 uppercase tracking-widest">{greeting.text}</span>
-          </div>
-          <h2 className="text-2xl font-bold text-white leading-tight mb-1">Hey, {firstName}!</h2>
-          <p className="text-sm text-white/60">{greeting.sub}</p>
+    <div
+      className="relative h-full rounded-2xl overflow-hidden dashboard-card"
+      style={{
+        /* Dark card — matches iDraft's "Overall Information" dark card */
+        background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
+        minHeight: '200px',
+        padding: '24px',
+      }}
+    >
+      {/* Subtle top-right accent — not glow, just a soft gradient bleed */}
+      <div className="absolute top-0 right-0 w-32 h-32 rounded-full pointer-events-none"
+        style={{
+          background: 'radial-gradient(circle at 70% 20%, rgba(99,102,241,0.12) 0%, transparent 70%)',
+        }}
+      />
+
+      <div className="relative flex flex-col h-full" style={{ minHeight: '200px' }}>
+        {/* Greeting line */}
+        <div className="mb-1">
+          <p style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(148,163,184,0.7)', marginBottom: 4 }}>
+            {greeting.text}
+          </p>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: 'white', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 4 }}>
+            Hi, {firstName}!
+          </h2>
+          <p style={{ fontSize: '14px', color: 'rgba(148,163,184,0.75)', lineHeight: 1.5 }}>
+            {greeting.sub}
+          </p>
         </div>
-        <div className="my-4 h-7 overflow-hidden">
-          <div className="flex items-center gap-2" style={{ opacity: tipVisible ? 1 : 0, transform: tipVisible ? 'translateY(0)' : 'translateY(8px)', transition: 'opacity 0.3s, transform 0.3s' }}>
-            <Sparkles size={13} className="text-violet-300 flex-shrink-0" />
-            <p className="text-xs text-white/70 truncate">{TIPS[tipIndex]}</p>
+
+        {/* Rotating tip */}
+        <div className="my-4 h-7 overflow-hidden flex-shrink-0">
+          <div className="flex items-center gap-2"
+            style={{
+              opacity: tipVisible ? 1 : 0,
+              transform: tipVisible ? 'translateY(0)' : 'translateY(8px)',
+              transition: 'opacity 0.3s, transform 0.3s',
+            }}>
+            <Zap size={12} className="flex-shrink-0" style={{ color: 'rgba(167,139,250,0.85)' }} />
+            <p style={{ fontSize: '12px', color: 'rgba(148,163,184,0.7)' }}>{TIPS[tipIndex]}</p>
           </div>
         </div>
-        <Link
-          to="/analytics"
-          className="group inline-flex items-center gap-2 bg-white text-gray-900 text-xs font-bold px-4 py-2.5 rounded-xl w-max hover:bg-white/90 transition-all duration-200 shadow-lg"
-        >
-          <TrendingUp size={14} />
-          View Analytics
-          <ArrowUpRight size={13} />
-        </Link>
+
+        <div className="mt-auto">
+          <Link
+            to="/analytics"
+            className="group inline-flex items-center gap-2 text-white text-[13px] font-semibold px-4 py-2.5 rounded-xl transition-all duration-200"
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.16)';
+              e.currentTarget.style.transform = 'scale(1.03)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            <TrendingUp size={14} />
+            View Analytics
+            <ArrowUpRight size={13} />
+          </Link>
+        </div>
       </div>
     </div>
   );
