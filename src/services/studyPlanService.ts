@@ -1,5 +1,5 @@
 // src/services/studyPlanService.ts
-// Extended — Chat History · Custom Activities · Enrolled Course Planning
+// Extended — Chat History · Custom Activities · Enrolled Course Planning · Topic-based Goals
 // All original methods preserved and unchanged.
 
 import {
@@ -37,10 +37,23 @@ export interface StudyPlanEvent {
   completed?: boolean;
   completedAt?: Date;
   completionPercent?: number;  // 0–100 partial completion; 100 = fully done
-  expired?: boolean;   // true when the linked goal has passed its deadline
+  expired?: boolean;           // true when the linked goal has passed its deadline
   color?: string;
   reminderMinutes?: number;
   recurrence?: 'none' | 'daily' | 'weekly' | 'biweekly';
+  // ── NEW: topic-based sessions ──────────────────────────────────────────────
+  topicName?: string;          // the specific topic being studied in this session
+  topicsIncluded?: string[];   // all topic names covered (for multi-topic sessions)
+}
+
+// ─── NEW: GoalTopic ───────────────────────────────────────────────────────────
+
+export interface GoalTopic {
+  id: string;
+  name: string;
+  minHours: number;
+  maxHours: number;
+  difficulty: 'easy' | 'medium' | 'hard';
 }
 
 export interface StudyGoal {
@@ -56,6 +69,9 @@ export interface StudyGoal {
   createdAt: Date;
   // Optional: link to an enrolled course
   courseId?: string;
+  // ── NEW: topic-based goals ────────────────────────────────────────────────
+  topics?: GoalTopic[];
+  studyMode?: 'first_reading' | 'revision';
 }
 
 export interface PomodoroSession {
@@ -87,7 +103,6 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  // AI-generated calendar events embedded in this message (if any)
   calendarEvents?: Array<{
     title: string;
     date: string;
@@ -105,13 +120,12 @@ export interface CustomActivity {
   studentId: string;
   name: string;
   category: 'sport' | 'job' | 'hobby' | 'family' | 'religious' | 'social' | 'transport' | 'other';
-  /** 'recurring' = repeat on selected days of week; 'specific_dates' = one-off on chosen dates */
   scheduleType: 'recurring' | 'specific_dates';
-  daysOfWeek: number[]; // 0=Sun … 6=Sat (used when scheduleType === 'recurring')
-  specificDates?: string[]; // YYYY-MM-DD list (used when scheduleType === 'specific_dates')
-  startTime: string;    // HH:MM
-  endTime: string;      // HH:MM
-  isFlexible: boolean;  // true = AI can schedule over it if urgent
+  daysOfWeek: number[];
+  specificDates?: string[];
+  startTime: string;
+  endTime: string;
+  isFlexible: boolean;
   notes?: string;
   createdAt: Date;
 }
@@ -122,7 +136,7 @@ export interface EnrolledCourseForPlanning {
   subjects: string[];
   totalLessons: number;
   completedLessons: number;
-  progress: number;     // 0-100
+  progress: number;
   level: string;
   instructor: string;
 }
@@ -142,7 +156,6 @@ export const studyPlanService = {
   // ── Original methods (100% unchanged) ────────────────────────────────────
 
   async createEvent(event: Omit<StudyPlanEvent, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
-    // Firestore rejects undefined — strip before writing
     const payload: Record<string, any> = { createdAt: Timestamp.now() };
     for (const [k, v] of Object.entries(event)) {
       if (v !== undefined) {
@@ -221,7 +234,6 @@ export const studyPlanService = {
 
   async updateEvent(id: string, updates: Partial<StudyPlanEvent>): Promise<void> {
     const data: any = { updatedAt: Timestamp.now() };
-    // Firestore rejects undefined values — strip them before writing
     for (const [k, v] of Object.entries(updates)) {
       if (v === undefined) continue;
       data[k] = k === 'date' && v instanceof Date ? Timestamp.fromDate(v)
@@ -242,13 +254,8 @@ export const studyPlanService = {
     } as any);
   },
 
-  /**
-   * Set partial or full completion % on an event.
-   * 100% automatically flips completed=true; anything below resets it to false.
-   */
   async updateEventCompletionPercent(id: string, percent: number): Promise<void> {
     const clamped = Math.max(0, Math.min(100, percent));
-    // Never pass completedAt: undefined — omit the field entirely when not 100%
     const updates: any = {
       completionPercent: clamped,
       completed: clamped === 100,
@@ -271,11 +278,13 @@ export const studyPlanService = {
   // ── Study Goals ───────────────────────────────────────────────────────────
 
   async createGoal(goal: Omit<StudyGoal, 'id' | 'createdAt'>): Promise<string> {
-    const ref = await addDoc(collection(db, 'studyGoals'), {
-      ...goal,
-      targetDate: Timestamp.fromDate(goal.targetDate),
-      createdAt: Timestamp.now(),
-    });
+    // Strip undefined values before writing (topics can be undefined for manual goals)
+    const payload: Record<string, any> = { createdAt: Timestamp.now() };
+    for (const [k, v] of Object.entries(goal)) {
+      if (v === undefined) continue;
+      payload[k] = k === 'targetDate' && v instanceof Date ? Timestamp.fromDate(v) : v;
+    }
+    const ref = await addDoc(collection(db, 'studyGoals'), payload);
     return ref.id;
   },
 
@@ -289,12 +298,17 @@ export const studyPlanService = {
       id: d.id, ...d.data(),
       targetDate: toDate(d.data().targetDate),
       createdAt: toDate(d.data().createdAt),
+      // topic-based fields (may be absent in older goals)
+      topics: d.data().topics || undefined,
+      studyMode: d.data().studyMode || undefined,
     })) as StudyGoal[];
   },
 
   async updateGoal(id: string, updates: Partial<StudyGoal>): Promise<void> {
     const data: any = { ...updates };
     if (data.targetDate instanceof Date) data.targetDate = Timestamp.fromDate(data.targetDate);
+    // Strip undefined
+    Object.keys(data).forEach(k => { if (data[k] === undefined) delete data[k]; });
     await updateDoc(doc(db, 'studyGoals', id), data);
   },
 
@@ -362,7 +376,7 @@ export const studyPlanService = {
     return { ...d, lastStudyDate: toDate(d.lastStudyDate) } as StudyStreak;
   },
 
-  // ── NEW: Chat History ─────────────────────────────────────────────────────
+  // ── Chat History ─────────────────────────────────────────────────────────
 
   async saveChatMessage(
     studentId: string,
@@ -377,7 +391,6 @@ export const studyPlanService = {
         timestamp: Timestamp.now(),
       });
     } catch (e) {
-      // Non-critical — chat still works without persistence
       console.warn('Failed to save chat message:', e);
     }
   },
@@ -410,20 +423,17 @@ export const studyPlanService = {
         collection(db, 'studyChatHistory'),
         where('studentId', '==', studentId)
       ));
-      // Delete in batches of 10 to avoid hitting Firestore limits
-      const deletions = snap.docs.map(d => deleteDoc(d.ref));
-      await Promise.all(deletions);
+      await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
     } catch (e) {
       console.warn('Failed to clear chat history:', e);
     }
   },
 
-  // ── NEW: Custom Activities ────────────────────────────────────────────────
+  // ── Custom Activities ────────────────────────────────────────────────────
 
   async createCustomActivity(
     activity: Omit<CustomActivity, 'id' | 'createdAt'>
   ): Promise<string> {
-    // Firestore rejects undefined values — strip them before writing
     const payload: Record<string, any> = { createdAt: Timestamp.now() };
     for (const [k, v] of Object.entries(activity)) {
       if (v !== undefined) payload[k] = v;
@@ -444,7 +454,6 @@ export const studyPlanService = {
         createdAt: toDate(d.data().createdAt),
       })) as CustomActivity[];
     } catch (e) {
-      // Index not yet created — fallback without ordering
       try {
         const snap = await getDocs(query(
           collection(db, 'studentActivities'),
@@ -466,25 +475,16 @@ export const studyPlanService = {
     await deleteDoc(doc(db, 'studentActivities', id));
   },
 
-  /**
-   * Auto-cleanup expired personal events.
-   * Rules:
-   *   - AI-generated events: only delete 24h AFTER their linked goal's deadline (not event date)
-   *   - Regular personal events: delete 24h after the event's own date
-   * Returns IDs that were deleted so the caller can filter them out.
-   */
   async deleteExpiredPersonalEvents(
     studentId: string,
     events: StudyPlanEvent[],
-    goals?: import('./studyPlanService').StudyGoal[]
+    goals?: StudyGoal[]
   ): Promise<string[]> {
     const now = Date.now();
     const cutoff24h = new Date(now - 24 * 60 * 60 * 1000);
 
     const toDelete = events.filter(e => {
       if (!e.isPersonal || e.studentId !== studentId || e.completed) return false;
-
-      // AI-generated events: survive until 24h after the linked goal's deadline
       if (e.isAIGenerated && goals && goals.length > 0) {
         const linkedGoal = goals.find(
           g => g.subject === e.course || e.course?.startsWith(g.subject.split(' (')[0])
@@ -493,11 +493,8 @@ export const studyPlanService = {
           const goalDeadlineCutoff = new Date(linkedGoal.targetDate.getTime() + 24 * 60 * 60 * 1000);
           return new Date() > goalDeadlineCutoff;
         }
-        // AI event but no linked goal found → use event date + 24h grace
         return e.date < cutoff24h;
       }
-
-      // Regular personal events: 24h after event date
       return e.date < cutoff24h;
     });
 
@@ -505,10 +502,6 @@ export const studyPlanService = {
     return toDelete.map(e => e.id);
   },
 
-  /**
-   * Reschedule: delete all future uncompleted AI-generated events for a goal,
-   * returning the count of deleted sessions so the caller knows what was cleared.
-   */
   async clearFutureAIEventsForGoal(
     goalSubject: string,
     events: StudyPlanEvent[],
@@ -528,11 +521,6 @@ export const studyPlanService = {
     return toDelete.length;
   },
 
-  /**
-   * Full reset: delete ALL uncompleted AI events for a goal (past + future).
-   * Used when accepting a brand-new schedule or reschedule to prevent duplicates
-   * and reset the "behind" tracker to zero.
-   */
   async clearAllAIEventsForGoal(
     goalSubject: string,
     events: StudyPlanEvent[],
@@ -551,26 +539,13 @@ export const studyPlanService = {
     return toDelete.length;
   },
 
-  /**
-   * Nuclear option: query Firestore DIRECTLY to delete all uncompleted AI events
-   * for a student (optionally filtered to specific goal subjects).
-   * Bypasses stale React state — always works on fresh data.
-   */
-  /**
-   * Returns the highest "Session N" number among COMPLETED sessions for the given
-   * student + subject.
-   *
-   * WHY completed-only: on reschedule we delete all uncompleted sessions first,
-   * so only completed sessions survive. Counting uncompleted sessions (e.g. 1–8
-   * when only 1 is done) would make the next session start at 9 instead of 2.
-   */
   async getMaxSessionNumberForSubject(studentId: string, subject: string): Promise<number> {
     const base = subject.split(' (')[0].toLowerCase().trim();
     const snap = await getDocs(
       query(
         collection(db, 'studyPlanEvents'),
         where('studentId', '==', studentId),
-        where('completed', '==', true)   // ← only sessions that survive the clear
+        where('completed', '==', true)
       )
     );
     let max = 0;
@@ -612,10 +587,6 @@ export const studyPlanService = {
     return toDelete.length;
   },
 
-  /**
-   * Delete ALL AI-generated sessions for given goal subjects — including completed ones.
-   * Used when a goal is manually deleted so no orphan sessions remain.
-   */
   async deleteAllAISessionsForGoalFromFirestore(
     studentId: string,
     goalSubjects: string[]
@@ -639,10 +610,6 @@ export const studyPlanService = {
     return toDelete.length;
   },
 
-  /**
-   * Mark all AI sessions for given goal subjects as expired (expired: true).
-   * Called when a goal's deadline passes but it hasn't yet hit the 12-hour auto-delete window.
-   */
   async markGoalSessionsExpired(
     studentId: string,
     goalSubjects: string[]
@@ -656,7 +623,7 @@ export const studyPlanService = {
       )
     );
     const toMark = snap.docs.filter(d => {
-      if (d.data().expired) return false; // already marked
+      if (d.data().expired) return false;
       const course: string = d.data().course || '';
       return goalSubjects.some(subj => {
         const base = subj.split(' (')[0];
@@ -666,7 +633,7 @@ export const studyPlanService = {
     await Promise.all(toMark.map(d => updateDoc(d.ref, { expired: true }))).catch(() => {});
   },
 
-  // ── NEW: Enrolled Courses For Planning ────────────────────────────────────
+  // ── Enrolled Courses For Planning ────────────────────────────────────────
 
   async getEnrolledCoursesForPlanning(studentId: string): Promise<EnrolledCourseForPlanning[]> {
     try {
