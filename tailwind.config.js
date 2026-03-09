@@ -103,23 +103,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['DM Sans', 'var(--font-sans)', 'system-ui', 'sans-serif'],
-        mono: ['DM Mono', 'monospace'],
+        sans: ['var(--font-sans)', 'Inter', 'Roboto', 'Open Sans', 'Poppins', 'sans-serif'],
       },
       boxShadow: {
-        card: 'var(--shadow-dark-card)',
-        'card-hover': '0 12px 40px -8px rgba(0,0,0,0.5)',
-        'float': 'var(--shadow-float)',
-        'float-hover': 'var(--shadow-float-hover)',
-      },
-      borderRadius: {
-        'card': '20px',
-        'btn':  '12px',
-      },
-      transitionTimingFunction: {
-        'spring': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-        'smooth': 'cubic-bezier(0.25, 1, 0.5, 1)',
-        'snappy': 'cubic-bezier(0.4, 0, 0.2, 1)',
+        card: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
