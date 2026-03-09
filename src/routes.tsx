@@ -48,6 +48,9 @@ import ComingSoonManagement from './pages/ComingSoonManagement';
 // AI Model Settings (Admin only)
 import AIModelSettings from './pages/AIModelSettings';
 
+// Topic Groups (Teacher/Admin)
+import TeacherTopicGroups from './pages/TeacherTopicGroups';
+
 // NEW: Course Assignment Management
 import CourseAssignment from './pages/CourseAssignment';
 
@@ -274,6 +277,13 @@ const AppRoutes = () => {
           <TeacherRoute>
             <TeacherTaskManagement />
           </TeacherRoute>
+        } />
+
+        {/* Topic Groups — teacher defines subject/chapter/topic hierarchies for courses */}
+        <Route path="teacher-topic-groups" element={
+          <TeacherAdminRoute>
+            <TeacherTopicGroups />
+          </TeacherAdminRoute>
         } />
         
         {/* Admin-only routes */}
