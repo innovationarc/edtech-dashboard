@@ -1,4 +1,3 @@
-// src/components/ui/Card.tsx — iDraft Design System
 import { ReactNode } from 'react';
 import clsx from 'clsx';
 
@@ -11,132 +10,42 @@ interface CardProps {
   footer?: ReactNode;
   onClick?: () => void;
   hover?: boolean;
-  variant?: 'dark' | 'white' | 'default';
 }
 
-const Card = ({
-  children,
-  className,
-  title,
-  subtitle,
-  icon,
-  footer,
+const Card = ({ 
+  children, 
+  className, 
+  title, 
+  subtitle, 
+  icon, 
+  footer, 
   onClick,
-  hover = false,
-  variant = 'default',
+  hover = false 
 }: CardProps) => {
-  const isWhite = variant === 'white';
-  const isDark  = variant === 'dark';
-
-  const base: React.CSSProperties = {
-    fontFamily: "'DM Sans', sans-serif",
-    borderRadius: 'var(--radius-card)',
-    overflow: 'hidden',
-    transition: 'box-shadow 0.35s var(--ease-smooth), transform 0.35s var(--ease-spring)',
-    cursor: onClick ? 'pointer' : undefined,
-    ...(isWhite
-      ? {
-          background: '#FFFFFF',
-          boxShadow: 'var(--shadow-float)',
-          border: '1px solid rgba(0,0,0,0.04)',
-          color: '#111827',
-        }
-      : isDark
-      ? {
-          background: '#1A1A1E',
-          boxShadow: 'var(--shadow-dark-card)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          color: '#ffffff',
-        }
-      : {
-          background: 'var(--color-card, #1f2937)',
-          boxShadow: 'var(--shadow-dark-card)',
-          border: '1px solid rgba(255,255,255,0.05)',
-          color: '#ffffff',
-        }),
-  };
-
-  const hoverStyle =
-    hover || onClick
-      ? ({
-          ':hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: isWhite ? 'var(--shadow-float-hover)' : '0 12px 40px -8px rgba(0,0,0,0.7)',
-          },
-        } as React.CSSProperties)
-      : {};
-
-  const headerBorder = isWhite
-    ? '1px solid rgba(0,0,0,0.06)'
-    : '1px solid rgba(255,255,255,0.06)';
-
-  const titleColor  = isWhite ? '#111827' : '#ffffff';
-  const subColor    = isWhite ? '#6b7280' : 'rgba(156,163,175,1)';
-  const footerBg    = isWhite ? 'rgba(0,0,0,0.03)' : 'rgba(0,0,0,0.2)';
+  const baseClasses = "bg-card rounded-2xl overflow-hidden";
+  const interactiveClasses = onClick ? "cursor-pointer" : "";
+  const hoverClasses = hover || onClick ? "hover:shadow-card-hover transition-all duration-300" : "";
 
   return (
-    <div
-      className={clsx(
-        (hover || onClick) && (isWhite ? 'idraft-card-white' : 'idraft-card-dark'),
-        !hover && !onClick && 'responsive-card',
-        className
-      )}
-      style={base}
+    <div 
+      className={clsx(baseClasses, interactiveClasses, hoverClasses, className)}
+      style={{ fontFamily: "'Outfit', sans-serif", border: '1px solid rgba(255,255,255,0.05)' }}
       onClick={onClick}
     >
       {(title || subtitle || icon) && (
-        <div
-          style={{
-            padding: 'clamp(12px,2vw,18px) clamp(14px,2.5vw,20px)',
-            borderBottom: headerBorder,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ minWidth: 0, flex: 1 }}>
-            {title && (
-              <h3
-                style={{
-                  fontSize: 'clamp(0.875rem, 1.5vw, 1rem)',
-                  fontWeight: 700,
-                  letterSpacing: '-0.02em',
-                  color: titleColor,
-                  lineHeight: 1.3,
-                }}
-              >
-                {title}
-              </h3>
-            )}
-            {subtitle && (
-              <p
-                style={{
-                  fontSize: 'clamp(0.7rem, 1.1vw, 0.8rem)',
-                  color: subColor,
-                  marginTop: '3px',
-                  fontWeight: 400,
-                }}
-              >
-                {subtitle}
-              </p>
-            )}
+        <div className="px-4 py-3 lg:px-5 lg:py-4 border-b border-background-800 flex justify-between items-center">
+          <div className="min-w-0 flex-1">
+            {title && <h3 style={{ fontSize: 'clamp(0.875rem, 1.5vw, 1rem)', fontWeight: 600, color: 'white' }}>{title}</h3>}
+            {subtitle && <p style={{ fontSize: 'clamp(0.7rem, 1.1vw, 0.8rem)', color: 'rgba(156,163,175,1)', marginTop: '2px' }}>{subtitle}</p>}
           </div>
-          {icon && <div style={{ marginLeft: '12px', flexShrink: 0 }}>{icon}</div>}
+          {icon && <div className="ml-3 flex-shrink-0">{icon}</div>}
         </div>
       )}
-
-      <div style={{ padding: 'clamp(12px,2vw,20px) clamp(14px,2.5vw,20px)' }}>
-        {children}
-      </div>
-
+      
+      <div className="p-4 lg:p-5">{children}</div>
+      
       {footer && (
-        <div
-          style={{
-            padding: '12px clamp(14px,2.5vw,20px)',
-            borderTop: headerBorder,
-            background: footerBg,
-          }}
-        >
+        <div className="px-4 lg:px-5 py-3 border-t border-background-800 bg-card-dark">
           {footer}
         </div>
       )}
