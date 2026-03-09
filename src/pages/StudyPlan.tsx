@@ -2,10 +2,11 @@
 // Teacher/Admin Study Plan Management — Search · Filter · Sort · AI Tips
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Plus, Edit, Trash2, Users, User, BookOpen, Clock,
   Search, Filter, SortAsc, Loader, AlertCircle, X, Sparkles,
-  Brain, CheckCircle2, ChevronDown, TrendingUp,
+  Brain, CheckCircle2, ChevronDown, TrendingUp, Layers,
 } from 'lucide-react';
 import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService';
 import { aiStudyPlannerService } from '../services/aiStudyPlannerService';
@@ -29,6 +30,7 @@ type SortKey = 'date' | 'priority' | 'type' | 'title';
 
 const StudyPlan: React.FC = () => {
   const { user } = useDashboard();
+  const navigate = useNavigate();
 
   const [events, setEvents]         = useState<StudyPlanEvent[]>([]);
   const [allStudents, setAllStudents] = useState<{ uid: string; name: string; email: string }[]>([]);
@@ -155,11 +157,18 @@ const StudyPlan: React.FC = () => {
           </h1>
           <p className="text-gray-400 text-sm mt-1">Create and manage study plans for your students</p>
         </div>
-        <button
-          onClick={() => { setEditingEvent(null); setShowModal(true); }}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg">
-          <Plus size={15} /> Create Event
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/teacher-topic-groups')}
+            className="flex items-center gap-2 bg-background-700 hover:bg-background-600 text-gray-300 hover:text-white border border-background-600 px-4 py-2.5 rounded-xl text-sm font-medium transition-all">
+            <Layers size={14} /> Topic Groups
+          </button>
+          <button
+            onClick={() => { setEditingEvent(null); setShowModal(true); }}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg">
+            <Plus size={15} /> Create Event
+          </button>
+        </div>
       </div>
 
       {error && (
