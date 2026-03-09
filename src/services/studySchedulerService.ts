@@ -66,7 +66,12 @@ export interface ScheduledSession {
   priority:     'low' | 'medium' | 'high';
   reason:       string;
   durationMins: number;
-  topicNames?:  string[];     // NEW: topic names covered in this session
+  topicNames?:  string[];     // flat topic names covered in this session
+  topicContext?: Array<{      // rich subject > chapter > topic hierarchy
+    subjectName: string;
+    chapterName: string;
+    topicName:   string;
+  }>;
 }
 
 export interface GoalScheduleStats {
@@ -224,7 +229,10 @@ function subtractBlocks(base: Block[], remove: Block[], minLen = 1): Block[] {
 
 interface TopicSlot {
   name:         string;
-  cumulativeMins: number; // end-minute of this topic in the total timeline
+  chapterName?: string;   // chapter this topic belongs to
+  subjectName?: string;   // subject this topic belongs to
+  startMins:    number;   // cumulative start minute in the total study timeline
+  endMins:      number;   // cumulative end minute in the total study timeline
 }
 
 /** Hours a single topic requires given study mode */
@@ -240,25 +248,26 @@ function topicHours(t: SelectedTopicItem, mode: 'first_reading' | 'revision'): n
 function buildTopicSlots(topics: SelectedTopicItem[], mode: 'first_reading' | 'revision'): TopicSlot[] {
   let cum = 0;
   return topics.map(t => {
-    cum += topicHours(t, mode) * 60;
-    return { name: t.name, cumulativeMins: cum };
+    const dur = topicHours(t, mode) * 60;
+    const slot: TopicSlot = {
+      name:        t.name,
+      chapterName: t.chapterName,
+      subjectName: t.subjectName,
+      startMins:   cum,
+      endMins:     cum + dur,
+    };
+    cum += dur;
+    return slot;
   });
 }
 
 /**
- * Returns topic names covered in a session window [placedMins, placedMins+sessionMins).
+ * Returns all TopicSlots that overlap the session window [placedMins, placedMins+sessionMins).
+ * A topic overlaps if it starts before the session ends AND ends after the session starts.
  */
-function getTopicsForSession(slots: TopicSlot[], placedMins: number, sessionMins: number): string[] {
-  const end = placedMins + sessionMins;
-  const names: string[] = [];
-  for (const slot of slots) {
-    const topicStart = slot.cumulativeMins - (slot.cumulativeMins - (names.length > 0 ? slots[slots.indexOf(slot) - 1]?.cumulativeMins ?? 0 : 0));
-    if (slot.cumulativeMins > placedMins && (slot.cumulativeMins - sessionMins) < end) {
-      names.push(slot.name);
-    }
-    if (slot.cumulativeMins >= end) break;
-  }
-  return names;
+function getTopicsForSession(slots: TopicSlot[], placedMins: number, sessionMins: number): TopicSlot[] {
+  const sessionEnd = placedMins + sessionMins;
+  return slots.filter(s => s.startMins < sessionEnd && s.endMins > placedMins);
 }
 
 /**
@@ -613,9 +622,36 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 
         const sessionNum = gw.nextSessionNum++;
 
-        const topicNames = gw.topicSlots.length
+        // ── Topic resolution (correct overlap window) ──────────────────────
+        const coveredSlots = gw.topicSlots.length
           ? getTopicsForSession(gw.topicSlots, gw.minsPlaced, sessionMins)
+          : [];
+
+        const topicNames = coveredSlots.length ? coveredSlots.map(s => s.name) : undefined;
+
+        const topicContext = coveredSlots.length
+          ? coveredSlots.map(s => ({
+              subjectName: s.subjectName || '',
+              chapterName: s.chapterName || '',
+              topicName:   s.name,
+            }))
           : undefined;
+
+        // ── Build a user-friendly reason that names exactly what to study ──
+        let sessionReason = reason;
+        if (coveredSlots.length > 0) {
+          const uniqueSubjects = [...new Set(coveredSlots.map(s => s.subjectName).filter(Boolean))];
+          const uniqueChapters = [...new Set(coveredSlots.map(s => s.chapterName).filter(Boolean))];
+          const topicList      = coveredSlots.map(s => s.name).slice(0, 3).join(', ');
+          const extra          = coveredSlots.length > 3 ? ` +${coveredSlots.length - 3} more` : '';
+          if (uniqueSubjects.length > 0 && uniqueChapters.length > 0) {
+            sessionReason = `${uniqueSubjects.join(', ')} › ${uniqueChapters.join(', ')} › ${topicList}${extra}`;
+          } else if (uniqueSubjects.length > 0) {
+            sessionReason = `${uniqueSubjects.join(', ')} › ${topicList}${extra}`;
+          } else {
+            sessionReason = `${topicList}${extra}`;
+          }
+        }
 
         sessions.push({
           subject:      gw.goal.subject,
@@ -625,9 +661,10 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
           endTime:      fromMins(end),
           sessionType:  type,
           priority:     gw.priority,
-          reason,
+          reason:       sessionReason,
           durationMins: sessionMins,
-          ...(topicNames?.length ? { topicNames } : {}),
+          ...(topicNames?.length    ? { topicNames }    : {}),
+          ...(topicContext?.length  ? { topicContext }   : {}),
         });
 
         // Shrink the consumed block or remove it if exhausted
