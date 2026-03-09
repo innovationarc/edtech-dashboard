@@ -9,13 +9,15 @@
   }
   
   html {
-    @apply text-white bg-background-950;
+    @apply text-white;
+    background-color: #0f1117;
     scroll-behavior: smooth;
   }
   
   body {
     font-family: 'Outfit', var(--font-sans), sans-serif;
-    @apply bg-background-950 text-white;
+    background-color: #0f1117;
+    @apply text-white;
     transition: background-color 0.3s ease;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -76,7 +78,7 @@
   }
 
   .theme-light body {
-    background-color: #f9fafb !important;
+    background-color: #f0f1f5 !important;
     color: #111827 !important;
   }
 
@@ -95,12 +97,20 @@
     border-color: #e5e7eb !important;
   }
 
+  /* Light mode cards — clean white */
   .theme-light .bg-card {
     background-color: #ffffff !important;
+    border-color: rgba(0,0,0,0.06) !important;
   }
 
   .theme-light .border-background-800 {
     border-color: #e5e7eb !important;
+  }
+  
+  /* Light mode — clean card shadows */
+  .theme-light .stats-card-hover:hover,
+  .theme-light .saas-card-hover:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08) !important;
   }
 
   .theme-purple {
@@ -633,69 +643,43 @@
   }
 }
 /* ═══════════════════════════════════════════════════════
-   GRID BACKGROUND — applies to ALL pages via .dl-main
+   CLEAN NEUTRAL BACKGROUND — applies to ALL pages via .dl-main
+   No grid — clean white-gray professional SaaS background
    ═══════════════════════════════════════════════════════ */
 
-/* The grid is drawn on the main scroll container */
 .dl-main {
   position: relative;
-  background-color: var(--color-background, #0d1117);
-  background-image:
-    linear-gradient(rgba(99, 102, 241, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
-  background-size: 40px 40px;
-  background-position: center center;
+  background-color: #0f1117;
 }
 
-/* Dot variant for light theme */
+/* Light theme — clean off-white matching reference image */
 .theme-light .dl-main {
-  background-image:
-    radial-gradient(circle, rgba(99, 102, 241, 0.12) 1px, transparent 1px);
-  background-size: 28px 28px;
-  background-color: #f5f5f7;
+  background-color: #f0f1f5;
 }
 
-/* Theme-tinted grids */
-.theme-ocean .dl-main {
-  background-image:
-    linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.theme-forest .dl-main {
-  background-image:
-    linear-gradient(rgba(74, 222, 128, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(74, 222, 128, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.theme-sunset .dl-main {
-  background-image:
-    linear-gradient(rgba(251, 146, 60, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(251, 146, 60, 0.05) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.theme-pink .dl-main {
-  background-image:
-    linear-gradient(rgba(249, 168, 212, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(249, 168, 212, 0.06) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.theme-purple .dl-main {
-  background-image:
-    linear-gradient(rgba(167, 139, 250, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(167, 139, 250, 0.06) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.theme-slate .dl-main {
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
+/* Theme variants — solid clean backgrounds */
+.theme-ocean .dl-main  { background-color: #0c1a2e; }
+.theme-forest .dl-main { background-color: #0a1f14; }
+.theme-sunset .dl-main { background-color: #1c0a00; }
+.theme-pink .dl-main   { background-color: #1c0a12; }
+.theme-purple .dl-main { background-color: #120e28; }
+.theme-slate .dl-main  { background-color: #0f172a; }
 
 /* ═══════════════════════════════════════════════════════
-   FLUID TYPOGRAPHY — Outfit font, clamped scales
+   TYPOGRAPHY SCALE — Precise SaaS hierarchy
+   Based on iDraft reference: 32px greeting → 18px titles → 14px tasks → 12px metadata
    ═══════════════════════════════════════════════════════ */
+
+/* Greeting / Hero text */
+.text-greeting     { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.15; }
+/* Section headings */
+.text-section      { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.3; }
+/* Card labels / task text */
+.text-task         { font-size: 14px; font-weight: 500; line-height: 1.5; }
+/* Metadata / timestamps */
+.text-meta         { font-size: 12px; font-weight: 500; letter-spacing: 0.01em; line-height: 1.4; }
+/* Big numbers on cards */
+.text-stat         { font-size: 32px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
 
 /* Fluid heading scale */
 .text-fluid-xs   { font-size: clamp(0.65rem,  1.2vw, 0.75rem);  line-height: 1.4; }
@@ -706,21 +690,17 @@
 .text-fluid-2xl  { font-size: clamp(1.25rem,  3vw,   2rem);    line-height: 1.3; }
 .text-fluid-3xl  { font-size: clamp(1.5rem,   4vw,   2.5rem);  line-height: 1.2; }
 
-/* Card text resets — ensure Outfit everywhere */
-.bg-card, .bg-card * {
-  font-family: 'Outfit', sans-serif;
-}
+/* Card text resets */
+.bg-card, .bg-card * { font-family: 'Outfit', sans-serif; }
 
-/* Card heading */
 .card-title {
   font-family: 'Outfit', sans-serif;
-  font-size: clamp(0.875rem, 1.5vw, 1rem);
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: white;
 }
 
-/* Card value (big number) */
 .card-value {
   font-family: 'Outfit', sans-serif;
   font-size: clamp(1.5rem, 3.5vw, 2.25rem);
@@ -731,12 +711,35 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Card subtext */
 .card-sub {
-  font-size: clamp(0.65rem, 1.1vw, 0.75rem);
-  color: rgba(156, 163, 175, 1);
+  font-size: 0.75rem;
+  color: rgba(156, 163, 175, 0.85);
   font-weight: 500;
   letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════
+   GLOBAL CARD HOVER SYSTEM
+   Soft shadow lift instead of glow effects
+   ═══════════════════════════════════════════════════════ */
+
+/* Applied to all dashboard cards */
+.dashboard-card {
+  transition: transform 0.22s cubic-bezier(0.34,1.25,0.64,1), 
+              box-shadow 0.22s ease, 
+              border-color 0.22s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.12);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.dashboard-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.2);
+  border-color: rgba(255,255,255,0.10);
+}
+
+.dashboard-card:active {
+  transform: translateY(-1px);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -769,6 +772,50 @@
 .widget-drop-animation {
   animation: widget-drop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
+
+/* ═══════════════════════════════════════════════════════
+   GLOBAL HOVER SYSTEM — lift + shadow, no glow
+   ═══════════════════════════════════════════════════════ */
+
+.stats-card-hover {
+  transition: transform 0.22s cubic-bezier(0.34,1.25,0.64,1), 
+              box-shadow 0.22s ease, 
+              border-color 0.22s ease;
+}
+
+.stats-card-hover:hover {
+  transform: translateY(-3px) scale(1.005);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.2) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+.stats-card-hover:active {
+  transform: translateY(-1px) scale(1.002);
+}
+
+.saas-card-hover {
+  transition: transform 0.2s cubic-bezier(0.34,1.25,0.64,1), 
+              box-shadow 0.2s ease, 
+              border-color 0.2s ease;
+}
+
+.saas-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+.saas-card-hover:active {
+  transform: translateY(-1px);
+}
+
+/* Consistent spacing system — 8/16/24/32px scale */
+.spacing-card   { padding: 24px; }
+.spacing-inner  { padding: 16px; }
+.spacing-tight  { padding: 8px; }
+.gap-section    { gap: 32px; }
+.gap-card       { gap: 24px; }
+.gap-inner      { gap: 16px; }
 
 /* ═══════════════════════════════════════════════════════
    FONT OVERRIDE — kill ALL system font fallbacks
