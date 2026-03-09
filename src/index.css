@@ -77,41 +77,81 @@
     --color-text-secondary: #6b7280;
   }
 
-  .theme-light body {
-    background-color: #f0f1f5 !important;
+  /* ── Light mode: FULL white treatment ── */
+  .theme-light,
+  .theme-light body,
+  .theme-light #root {
+    background-color: #f2f4f8 !important;
     color: #111827 !important;
   }
 
-  .theme-light .text-white {
-    color: #111827 !important;
+  /* All dark backgrounds become white */
+  .theme-light .bg-background-950,
+  .theme-light .bg-background-900,
+  .theme-light .bg-background-800,
+  .theme-light .bg-background-700,
+  .theme-light .bg-card,
+  .theme-light .bg-card-light,
+  .theme-light .bg-card-dark {
+    background-color: #ffffff !important;
+    border-color: #e5e7eb !important;
   }
 
+  /* Text overrides */
+  .theme-light .text-white,
+  .theme-light h1, .theme-light h2, .theme-light h3 {
+    color: #111827 !important;
+  }
   .theme-light .text-gray-300,
-  .theme-light .text-gray-400 {
+  .theme-light .text-gray-400,
+  .theme-light .text-slate-400 {
     color: #6b7280 !important;
   }
+  .theme-light p { color: #374151; }
 
-  .theme-light .bg-background-800,
-  .theme-light .bg-background-900 {
-    background-color: #ffffff !important;
+  /* Borders */
+  .theme-light .border-background-800,
+  .theme-light .border-white\/\[0\.06\],
+  .theme-light [class*="border-white"] {
     border-color: #e5e7eb !important;
   }
 
-  /* Light mode cards — clean white */
-  .theme-light .bg-card {
-    background-color: #ffffff !important;
-    border-color: rgba(0,0,0,0.06) !important;
+  /* Main content area */
+  .theme-light .dl-main {
+    background-color: #f2f4f8 !important;
   }
 
-  .theme-light .border-background-800 {
-    border-color: #e5e7eb !important;
+  /* Cards get clean white + soft shadow */
+  .theme-light .dashboard-card,
+  .theme-light .stats-card-hover,
+  .theme-light .saas-card-hover,
+  .theme-light [style*="background: 'var(--color-card"],
+  .theme-light [style*="background: var(--color-card"] {
+    background-color: #ffffff !important;
+    border-color: rgba(0,0,0,0.07) !important;
+    color: #111827 !important;
   }
-  
-  /* Light mode — clean card shadows */
   .theme-light .stats-card-hover:hover,
   .theme-light .saas-card-hover:hover {
-    box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06) !important;
   }
+
+  /* Inline dark backgrounds on cards → white */
+  .theme-light [style*="#1f2937"],
+  .theme-light [style*="#111827"],
+  .theme-light [style*="#0d1117"],
+  .theme-light [style*="#374151"],
+  .theme-light [style*="rgba(13,16,26"],
+  .theme-light [style*="rgba(6,9,20"],
+  .theme-light [style*="rgba(17,24,39"] {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  /* Scrollbars in light mode */
+  .theme-light ::-webkit-scrollbar-track { background: #f2f4f8; }
+  .theme-light ::-webkit-scrollbar-thumb { background: #d1d5db; }
+  .theme-light ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
   .theme-purple {
     --color-text: #ffffff;
@@ -652,9 +692,9 @@
   background-color: #0f1117;
 }
 
-/* Light theme — clean off-white matching reference image */
+/* Light theme — clean white-gray */
 .theme-light .dl-main {
-  background-color: #f0f1f5;
+  background-color: #f2f4f8 !important;
 }
 
 /* Theme variants — solid clean backgrounds */
