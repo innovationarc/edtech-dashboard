@@ -1,71 +1,54 @@
+
 // src/services/studySchedulerService.ts
 // Deterministic Study Planner — zero AI, zero network calls, instant results.
+// NEW: Topic-aware sessions — sessions show topic names and respect min/max hours per topic.
 //
 // ALGORITHM OVERVIEW
 // ------------------
 // 1. For each goal: compute exact hours remaining by measuring real completed
 //    session durations + partial credit + manual progress floor.
+//    If goal has topics[], total hours = sum of allocated topic hours (based on studyMode).
 // 2. Build a timeline of "free blocks" per day:
 //      base free windows -> subtract custom activities -> subtract existing events
 //      -> clamp today's blocks to (now + 30 min)
-// 3. Assign sessions via urgency-ordered day-filling:
-//    - Goals sorted by urgency = hoursLeft / (daysLeft x freeHoursPerDay)
-//    - Each day: fill most-urgent goal first, then next, interleaving goals
-//    - Session length adapts to deadline pressure (60-120 min, 15-min grid)
-//    - Daily cap enforced via actual freeBlocks — naturally limits overload
-// 4. Session numbering: read highest COMPLETED session number only
-//    (uncompleted sessions are deleted on reschedule so only completed count)
-// 5. Session type cycles: focus -> practice -> review per goal independently
-//
-// STUDENT PROBLEMS THIS SOLVES
-// -----------------------------
-// "I forgot to study, now it's too late"
-//   -> urgency re-packs remaining hours into longer/denser sessions automatically
-// "I have a job/sport/class that blocks time"
-//   -> custom activities subtracted from free blocks before any session is placed
-// "Sessions are scheduled during my sleep"
-//   -> hard clamp to freeTimeRanges; hours mode uses 09:00-(09:00+N)
-// "Duplicate session numbers after reschedule"
-//   -> nextSessionNum reads only completed events; uncompleted wiped first
-// "Progress bar wrong — I actually studied!"
-//   -> hoursCompleted measured from real startTime/endTime deltas, not a % field
-// "Partial sessions waste my progress"
-//   -> completionPercent contributes fractional hours, reducing future sessions
-// "All sessions pile up on one day"
-//   -> daily cap enforced by freeBlocks arithmetic — excess spills to next day
+// 3. Assign sessions via urgency-ordered day-filling (round-robin + deadline priority)
+// 4. Topic-aware naming: sessions are titled with the specific topic being studied.
+//    Topics are consumed in order; a session may span topic boundaries.
 
-import { StudyGoal, StudyPlanEvent, CustomActivity } from './studyPlanService';
+import { StudyGoal, StudyPlanEvent, CustomActivity, GoalTopic } from './studyPlanService';
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
 export interface TimeRange {
-  start: string; // "HH:MM"
-  end:   string; // "HH:MM"
+  start: string;
+  end:   string;
 }
 
 export interface SchedulerInput {
   goals:            StudyGoal[];
-  existingEvents:   StudyPlanEvent[];  // ALL events: completed, uncompleted, non-AI
+  existingEvents:   StudyPlanEvent[];
   customActivities: CustomActivity[];
   freeTimeMode:     'hours' | 'range';
-  freeHoursPerDay:  number;            // used when mode === 'hours'
-  freeTimeRanges:   TimeRange[];       // used when mode === 'range'
+  freeHoursPerDay:  number;
+  freeTimeRanges:   TimeRange[];
   now:              Date;
   studentId:        string;
 }
 
 export interface ScheduledSession {
-  subject:      string;
-  title:        string;       // "<Subject> — Session N"
-  date:         Date;
-  startTime:    string;       // "HH:MM"
-  endTime:      string;       // "HH:MM"
-  sessionType:  'focus' | 'review' | 'practice';
-  priority:     'low' | 'medium' | 'high';
-  reason:       string;
-  durationMins: number;
+  subject:         string;
+  title:           string;
+  date:            Date;
+  startTime:       string;
+  endTime:         string;
+  sessionType:     'focus' | 'review' | 'practice';
+  priority:        'low' | 'medium' | 'high';
+  reason:          string;
+  durationMins:    number;
+  topicName?:      string;     // ── NEW: specific topic being studied
+  topicsIncluded?: string[];   // ── NEW: all topics covered if session spans multiple
 }
 
 export interface GoalScheduleStats {
@@ -75,11 +58,11 @@ export interface GoalScheduleStats {
   hoursCompleted:  number;
   hoursLeft:       number;
   hoursScheduled:  number;
-  progressPct:     number;   // 0-100 visual
+  progressPct:     number;
   completedCount:  number;
   newSessionCount: number;
   nextSessionNum:  number;
-  canFullyCover:   boolean;  // false if deadline too tight
+  canFullyCover:   boolean;
 }
 
 export interface ScheduleResult {
@@ -90,6 +73,11 @@ export interface ScheduleResult {
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
+
+interface TopicQueueItem {
+  name:     string;
+  minsLeft: number;
+}
 
 interface GoalWork {
   goal:           StudyGoal;
@@ -104,6 +92,7 @@ interface GoalWork {
   typeIdx:        number;
   newSessions:    number;
   minsScheduled:  number;
+  topicQueue:     TopicQueueItem[];  // ── NEW: ordered topic queue (empty if no topics)
 }
 
 interface Block {
@@ -164,10 +153,6 @@ function fromMins(mins: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-// CRITICAL: use local date components — NOT toISOString() which returns UTC.
-// toISOString() on local midnight in UTC+X gives the previous day in UTC,
-// so "2026-03-08T00:00:00" local → "2026-03-07T..." UTC → "2026-03-07" slice.
-// This breaks isToday detection, deadline comparisons, and day-slot boundaries.
 function toDateStr(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -216,6 +201,43 @@ function subtractBlocks(base: Block[], remove: Block[], minLen = 1): Block[] {
 }
 
 // ---------------------------------------------------------------------------
+// Topic queue builder — NEW
+// Converts goal.topics[] into an ordered queue of { name, minsLeft }
+// based on the goal's studyMode (first_reading uses maxHours, revision uses closer to minHours)
+// ---------------------------------------------------------------------------
+
+function buildTopicQueue(goal: StudyGoal): TopicQueueItem[] {
+  if (!goal.topics || goal.topics.length === 0) return [];
+  return goal.topics.map((t: GoalTopic) => {
+    let allocHours: number;
+    if (goal.studyMode === 'first_reading') {
+      allocHours = t.maxHours;
+    } else if (goal.studyMode === 'revision') {
+      // Revision: closer to minHours — use min + 25% of the min→max spread
+      allocHours = t.minHours + (t.maxHours - t.minHours) * 0.25;
+    } else {
+      allocHours = (t.minHours + t.maxHours) / 2;
+    }
+    return { name: t.name, minsLeft: Math.max(30, Math.round(allocHours * 60)) };
+  });
+}
+
+/**
+ * Compute total allocated hours from topics (based on studyMode).
+ * Used to override goal.hoursNeeded when topics are present.
+ */
+function computeTopicTotalHours(goal: StudyGoal): number {
+  if (!goal.topics || goal.topics.length === 0) return goal.hoursNeeded;
+  return goal.topics.reduce((sum, t) => {
+    let h: number;
+    if (goal.studyMode === 'first_reading') h = t.maxHours;
+    else if (goal.studyMode === 'revision') h = t.minHours + (t.maxHours - t.minHours) * 0.25;
+    else h = (t.minHours + t.maxHours) / 2;
+    return sum + h;
+  }, 0);
+}
+
+// ---------------------------------------------------------------------------
 // Per-goal work computation
 // ---------------------------------------------------------------------------
 
@@ -249,7 +271,6 @@ function computeGoalWork(goal: StudyGoal, allEvents: StudyPlanEvent[]): GoalWork
     if (e.completed) {
       completedHours += dur;
       completedCount++;
-      // Only completed sessions determine next number — uncompleted get cleared
       const m = (e.title || '').match(/Session\s+(\d+)/i);
       if (m) maxSessionNum = Math.max(maxSessionNum, parseInt(m[1], 10));
     } else if ((e.completionPercent || 0) > 0) {
@@ -257,10 +278,12 @@ function computeGoalWork(goal: StudyGoal, allEvents: StudyPlanEvent[]): GoalWork
     }
   }
 
-  // Take max of real measured progress vs manually-set currentProgress %
-  const progressHours = goal.hoursNeeded * (goal.currentProgress / 100);
+  // Effective hoursNeeded: use topic-based total if topics are defined
+  const effectiveHoursNeeded = computeTopicTotalHours(goal);
+
+  const progressHours = effectiveHoursNeeded * (goal.currentProgress / 100);
   const totalDone     = Math.max(completedHours + partialCredit, progressHours);
-  const hoursLeft     = Math.max(0, parseFloat((goal.hoursNeeded - totalDone).toFixed(2)));
+  const hoursLeft     = Math.max(0, parseFloat((effectiveHoursNeeded - totalDone).toFixed(2)));
 
   return {
     hoursCompleted: parseFloat(totalDone.toFixed(2)),
@@ -287,7 +310,6 @@ function buildDaySlots(
   const cap = addDays(from, MAX_DAYS_AHEAD);
   const end = upTo < cap ? upTo : cap;
 
-  // Pre-index existing event blocks by date
   const existingByDate: Record<string, Block[]> = {};
   for (const e of existingEvents) {
     if (!e.startTime || !e.endTime) continue;
@@ -310,7 +332,6 @@ function buildDaySlots(
     const dayOfWeek = d.getDay();
     const isToday   = ds === toDateStr(from);
 
-    // Base free blocks
     let freeBlocks: Block[];
     if (freeTimeMode === 'range' && freeTimeRanges.length > 0) {
       freeBlocks = freeTimeRanges
@@ -321,7 +342,6 @@ function buildDaySlots(
       freeBlocks = [{ startMins: s, endMins: s + freeHoursPerDay * 60 }];
     }
 
-    // Clamp today to now+30min
     if (isToday) {
       const earliest = nowMins + 30;
       freeBlocks = freeBlocks
@@ -329,7 +349,6 @@ function buildDaySlots(
         .filter(b => b.endMins - b.startMins > 0);
     }
 
-    // Subtract non-flexible custom activities
     const actBlocks: Block[] = [];
     for (const act of customActivities) {
       if (act.isFlexible) continue;
@@ -345,7 +364,6 @@ function buildDaySlots(
       }
     }
 
-    // Subtract existing events
     const evBlocks = existingByDate[ds] || [];
 
     freeBlocks = subtractBlocks(
@@ -372,18 +390,13 @@ function idealSessionMins(
 ): number {
   if (hoursLeft <= 0) return MIN_SESSION_MINS;
 
-  // Dynamic ceiling — extend sessions gracefully when deadline pressure is high.
-  // Caps at the actual free window so we never plan impossible days.
-  // "Graceful" means: only extend as far as truly needed, never more.
   const dynamicMax =
-    daysLeft <= 1 ? Math.min(180, freeHoursPerDay * 60)  // last day: up to 3h, capped at free window
-    : daysLeft <= 2 || urgency >= 0.85 ? 150              // 2 days or very urgent: 2.5h
-    : MAX_SESSION_MINS;                                    // normal: 2h
+    daysLeft <= 1 ? Math.min(180, freeHoursPerDay * 60)
+    : daysLeft <= 2 || urgency >= 0.85 ? 150
+    : MAX_SESSION_MINS;
 
   const minsLeft = hoursLeft * 60;
 
-  // If remaining work fits in a single extended session, schedule it exactly —
-  // avoids a 60-min session leaving 20 min unscheduled and wasting the next slot.
   if (minsLeft <= dynamicMax) {
     return Math.max(MIN_SESSION_MINS, snapToGrid(minsLeft, SNAP_MINS));
   }
@@ -395,6 +408,38 @@ function idealSessionMins(
   const ideal   = minsLeft / maxSessions;
   const clamped = Math.min(dynamicMax, Math.max(MIN_SESSION_MINS, ideal));
   return snapToGrid(clamped, SNAP_MINS);
+}
+
+// ---------------------------------------------------------------------------
+// Topic resolution for a session — NEW
+// Determines which topic(s) a session covers and consumes from the queue.
+// Returns { topicName, topicsIncluded } for the session.
+// ---------------------------------------------------------------------------
+
+function resolveTopicForSession(
+  topicQueue: TopicQueueItem[],
+  sessionMins: number,
+): { topicName: string | undefined; topicsIncluded: string[] } {
+  if (topicQueue.length === 0) return { topicName: undefined, topicsIncluded: [] };
+
+  const topicsIncluded: string[] = [];
+  let minsToConsume = sessionMins;
+
+  while (minsToConsume > 0 && topicQueue.length > 0) {
+    const current = topicQueue[0];
+    topicsIncluded.push(current.name);
+    if (current.minsLeft <= minsToConsume) {
+      minsToConsume -= current.minsLeft;
+      topicQueue.shift();
+    } else {
+      current.minsLeft -= minsToConsume;
+      minsToConsume = 0;
+    }
+  }
+
+  // Primary topic is the first one consumed
+  const topicName = topicsIncluded[0];
+  return { topicName, topicsIncluded };
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +465,7 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
     const raw = computeGoalWork(goal, existingEvents);
     if (raw.hoursLeft <= 0) continue;
 
+    const effectiveHoursNeeded = computeTopicTotalHours(goal);
     const availableHours = Math.max(0.5, daysLeft * freeHoursPerDay);
     const urgency        = Math.min(1, raw.hoursLeft / availableHours);
 
@@ -438,9 +484,10 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
       urgency,
       priority,
       daysLeft,
-      typeIdx:       0,
-      newSessions:   0,
-      minsScheduled: 0,
+      typeIdx:        0,
+      newSessions:    0,
+      minsScheduled:  0,
+      topicQueue:     buildTopicQueue(goal),  // ── NEW
     });
   }
 
@@ -464,43 +511,19 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
     customActivities, existingEvents, nowMins
   );
 
-  // Step 5: assign sessions day by day
-  //
-  // SCHEDULING STRATEGY — three layered rules:
-  //
-  //  Rule 1 — Round-robin fairness: within each day, track how many sessions
-  //    each goal has already received. Goals with fewer sessions go first.
-  //    This prevents a high-urgency goal from monopolising all available slots.
-  //
-  //  Rule 2 — Tighter deadline wins ties: when two goals have equal session
-  //    counts today, the one expiring soonest gets priority. A goal due tomorrow
-  //    cannot "make up" missed sessions the way a goal due next week can.
-  //
-  //  Rule 3 — Urgency breaks remaining ties: when deadline distance is equal,
-  //    the goal needing a higher fraction of remaining free time goes first.
-  //
-  // WHY THIS FIXES THE PHYSICS / CHEMISTRY BUG:
-  //   Chemistry urgency (0.50) > Physics urgency (0.42), so Chemistry won every
-  //   round and stole the third daily slot. Physics only had 3 days before
-  //   expiry, so it finished with 3h instead of 5h.
-  //   With Rule 2: after round 1 (both have 1 session), Physics (fewer days)
-  //   gets priority for the third slot. Chemistry catches up after Physics
-  //   expires, filling the remaining days exclusively.
+  // Step 5: assign sessions day by day (round-robin + deadline priority)
   const sessions: ScheduledSession[] = [];
 
   for (const slot of daySlots) {
     if (slot.freeBlocks.length === 0) continue;
 
     const ds = slot.dateStr;
-
-    // Per-day session counter — reset each day, used for round-robin fairness
     const sessionsPlacedToday = new Map<string, number>();
 
     let anyPlacedThisRound = true;
     while (anyPlacedThisRound && slot.freeBlocks.length > 0) {
       anyPlacedThisRound = false;
 
-      // Re-filter each round so goals that just ran out are excluded
       const eligible = workList.filter(
         gw =>
           gw.minsLeft >= MIN_SESSION_MINS &&
@@ -509,17 +532,14 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
       if (eligible.length === 0) break;
 
       eligible.sort((a, b) => {
-        // Rule 1: fewer sessions placed today → higher priority
         const countA = sessionsPlacedToday.get(a.goal.id) ?? 0;
         const countB = sessionsPlacedToday.get(b.goal.id) ?? 0;
         if (countA !== countB) return countA - countB;
 
-        // Rule 2: tighter deadline → higher priority (can't catch up later)
         const daysA = calendarDayDiff(a.goal.targetDate, new Date(ds + 'T12:00:00'));
         const daysB = calendarDayDiff(b.goal.targetDate, new Date(ds + 'T12:00:00'));
         if (daysA !== daysB) return daysA - daysB;
 
-        // Rule 3: higher urgency as final tiebreaker
         return b.urgency - a.urgency;
       });
 
@@ -538,11 +558,10 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
           gw.urgency,
         );
 
-        // Find first block large enough for this session
         const bi = slot.freeBlocks.findIndex(
           b => b.endMins - b.startMins >= sessionMins
         );
-        if (bi === -1) continue; // no room for this goal today — try next goal
+        if (bi === -1) continue;
 
         const block = slot.freeBlocks[bi];
         const start = block.startMins;
@@ -552,21 +571,40 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
         const reason = REASONS[type][gw.newSessions % REASONS[type].length];
         gw.typeIdx++;
 
+        // ── NEW: resolve topic for this session ──────────────────────────────
+        const { topicName, topicsIncluded } = resolveTopicForSession(
+          gw.topicQueue,
+          sessionMins
+        );
+
+        // Build session title:
+        // - Topic-based goals: use topic name as title (no session number)
+        // - Manual goals: existing "Subject — Session N" format
         const sessionNum = gw.nextSessionNum++;
+        const hasTopics  = topicName !== undefined;
+        const sessionTitle = hasTopics
+          ? topicName!
+          : `${gw.goal.subject} — Session ${sessionNum}`;
 
         sessions.push({
-          subject:      gw.goal.subject,
-          title:        `${gw.goal.subject} — Session ${sessionNum}`,
-          date:         new Date(ds + 'T12:00:00'),
-          startTime:    fromMins(start),
-          endTime:      fromMins(end),
-          sessionType:  type,
-          priority:     gw.priority,
-          reason,
-          durationMins: sessionMins,
+          subject:         gw.goal.subject,
+          title:           sessionTitle,
+          date:            new Date(ds + 'T12:00:00'),
+          startTime:       fromMins(start),
+          endTime:         fromMins(end),
+          sessionType:     type,
+          priority:        gw.priority,
+          reason:          hasTopics
+            ? `${reason} Topic: ${topicName}${topicsIncluded.length > 1 ? ` (+${topicsIncluded.length - 1} more)` : ''}`
+            : reason,
+          durationMins:    sessionMins,
+          topicName,                                             // ── NEW
+          topicsIncluded:  topicsIncluded.length > 0            // ── NEW
+            ? topicsIncluded
+            : undefined,
         });
 
-        // Shrink the consumed block or remove it if exhausted
+        // Shrink/remove consumed block
         const nextStart = end + GAP_MINS;
         if (nextStart < block.endMins) {
           slot.freeBlocks[bi] = { startMins: nextStart, endMins: block.endMins };
@@ -587,15 +625,16 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 
   // Step 6: build per-goal stats
   const goalStats: GoalScheduleStats[] = workList.map(gw => {
-    const progressPct = gw.goal.hoursNeeded > 0
+    const effectiveHoursNeeded = computeTopicTotalHours(gw.goal);
+    const progressPct = effectiveHoursNeeded > 0
       ? Math.min(100, Math.round(
-          ((gw.hoursCompleted + gw.minsScheduled / 60) / gw.goal.hoursNeeded) * 100
+          ((gw.hoursCompleted + gw.minsScheduled / 60) / effectiveHoursNeeded) * 100
         ))
       : 0;
     return {
       goalId:          gw.goal.id,
       subject:         gw.goal.subject,
-      hoursNeeded:     gw.goal.hoursNeeded,
+      hoursNeeded:     effectiveHoursNeeded,
       hoursCompleted:  gw.hoursCompleted,
       hoursLeft:       gw.hoursLeft,
       hoursScheduled:  parseFloat((gw.minsScheduled / 60).toFixed(2)),
@@ -619,10 +658,6 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 // ---------------------------------------------------------------------------
 // Reschedule alias
 // ---------------------------------------------------------------------------
-// Identical to generateStudySchedule. The scheduler handles reschedule
-// automatically: computeGoalWork reads only completed sessions for
-// hoursCompleted and nextSessionNum; uncompleted sessions are deleted
-// by clearAllStudentAIEventsFromFirestore before this runs.
 
 export function rescheduleStudyPlan(input: SchedulerInput): ScheduleResult {
   return generateStudySchedule(input);
@@ -631,16 +666,15 @@ export function rescheduleStudyPlan(input: SchedulerInput): ScheduleResult {
 // ---------------------------------------------------------------------------
 // Goal progress updater
 // ---------------------------------------------------------------------------
-// Call this after marking a session complete or setting a partial %.
-// Returns the values to write back to the Firestore StudyGoal document.
 
 export function computeGoalProgressUpdate(
   goal:      StudyGoal,
   allEvents: StudyPlanEvent[],
 ): { hoursCompleted: number; currentProgress: number } {
   const raw = computeGoalWork(goal, allEvents);
-  const pct = goal.hoursNeeded > 0
-    ? Math.min(100, Math.round((raw.hoursCompleted / goal.hoursNeeded) * 100))
+  const effectiveHoursNeeded = computeTopicTotalHours(goal);
+  const pct = effectiveHoursNeeded > 0
+    ? Math.min(100, Math.round((raw.hoursCompleted / effectiveHoursNeeded) * 100))
     : 0;
   return {
     hoursCompleted:  raw.hoursCompleted,
