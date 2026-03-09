@@ -42,6 +42,11 @@ export interface StudyPlanEvent {
   reminderMinutes?: number;
   recurrence?: 'none' | 'daily' | 'weekly' | 'biweekly';
   topicNames?: string[];  // NEW: topic names covered in this session
+  topicContext?: Array<{  // NEW: rich subject > chapter > topic hierarchy
+    subjectName: string;
+    chapterName: string;
+    topicName:   string;
+  }>;
 }
 
 // NEW: A single topic item selected for a goal
