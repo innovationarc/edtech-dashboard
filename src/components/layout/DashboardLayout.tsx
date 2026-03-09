@@ -266,7 +266,7 @@ const DashboardLayout = () => {
   }, []);
 
   return (
-    <div className="flex h-screen bg-background-950 overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: '#0f1117' }}>
       <style>{`
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
