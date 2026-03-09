@@ -66,7 +66,12 @@ export interface ScheduledSession {
   priority:     'low' | 'medium' | 'high';
   reason:       string;
   durationMins: number;
-  topicNames?:  string[];     // NEW: topic names covered in this session
+  topicNames?:  string[];     // flat topic names (for legacy/fallback)
+  topicContext?: Array<{      // rich subject > chapter > topic hierarchy
+    subjectName: string;
+    chapterName: string;
+    topicName:   string;
+  }>;
 }
 
 export interface GoalScheduleStats {
@@ -94,6 +99,7 @@ export interface ScheduleResult {
 
 interface GoalWork {
   goal:           StudyGoal;
+  workId:         string;      // unique per GoalWork entry (for round-robin tracking)
   subjectName?:   string;      // set when goal is split by subject (one GoalWork per subject)
   hoursLeft:      number;
   minsLeft:       number;
@@ -225,7 +231,10 @@ function subtractBlocks(base: Block[], remove: Block[], minLen = 1): Block[] {
 
 interface TopicSlot {
   name:         string;
-  cumulativeMins: number; // end-minute of this topic in the total timeline
+  subjectName?: string;  // from SelectedTopicItem.subjectName
+  chapterName?: string;  // from SelectedTopicItem.chapterName
+  startMins:    number;  // cumulative start minute within this GoalWork's total timeline
+  endMins:      number;  // cumulative end minute
 }
 
 /** Hours a single topic requires given study mode */
@@ -235,31 +244,32 @@ function topicHours(t: SelectedTopicItem, mode: 'first_reading' | 'revision'): n
 }
 
 /**
- * Build a cumulative minute timeline for all topics in a goal.
- * e.g. topic A=60min, B=90min → [{name:'A', cumulativeMins:60}, {name:'B', cumulativeMins:150}]
+ * Build a timeline of TopicSlots with absolute start/end minutes.
+ * Each slot knows which subject and chapter it belongs to.
  */
 function buildTopicSlots(topics: SelectedTopicItem[], mode: 'first_reading' | 'revision'): TopicSlot[] {
-  let cum = 0;
+  let cursor = 0;
   return topics.map(t => {
-    cum += topicHours(t, mode) * 60;
-    return { name: t.name, cumulativeMins: cum };
+    const dur  = topicHours(t, mode) * 60;
+    const slot: TopicSlot = {
+      name:        t.name,
+      subjectName: t.subjectName,
+      chapterName: t.chapterName,
+      startMins:   cursor,
+      endMins:     cursor + dur,
+    };
+    cursor += dur;
+    return slot;
   });
 }
 
 /**
- * Returns topic names covered in a session window [placedMins, placedMins+sessionMins).
+ * Returns all TopicSlots that overlap the session window [placedMins, placedMins+sessionMins).
+ * Standard interval overlap: topic.start < sessionEnd AND topic.end > sessionStart
  */
-function getTopicsForSession(slots: TopicSlot[], placedMins: number, sessionMins: number): string[] {
-  const end = placedMins + sessionMins;
-  const names: string[] = [];
-  for (const slot of slots) {
-    const topicStart = slot.cumulativeMins - (slot.cumulativeMins - (names.length > 0 ? slots[slots.indexOf(slot) - 1]?.cumulativeMins ?? 0 : 0));
-    if (slot.cumulativeMins > placedMins && (slot.cumulativeMins - sessionMins) < end) {
-      names.push(slot.name);
-    }
-    if (slot.cumulativeMins >= end) break;
-  }
-  return names;
+function getTopicsForSession(slots: TopicSlot[], placedMins: number, sessionMins: number): TopicSlot[] {
+  const sessionEnd = placedMins + sessionMins;
+  return slots.filter(s => s.startMins < sessionEnd && s.endMins > placedMins);
 }
 
 /**
@@ -581,6 +591,7 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 
           workList.push({
             goal,
+            workId:         `${goal.id}::${subjectName}`,
             subjectName,
             hoursLeft:      sw.hoursLeft,
             minsLeft:       Math.round(sw.hoursLeft * 60),
@@ -604,6 +615,7 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
     // ── Single subject (or no topics) — original behaviour ────────────────
     workList.push({
       goal,
+      workId:         goal.id,
       hoursLeft:      raw.hoursLeft,
       minsLeft:       Math.round(raw.hoursLeft * 60),
       hoursCompleted: raw.hoursCompleted,
@@ -685,9 +697,9 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
       if (eligible.length === 0) break;
 
       eligible.sort((a, b) => {
-        // Rule 1: fewer sessions placed today → higher priority
-        const countA = sessionsPlacedToday.get(a.goal.id) ?? 0;
-        const countB = sessionsPlacedToday.get(b.goal.id) ?? 0;
+        // Rule 1: fewer sessions placed today → higher priority (per-subject fairness)
+        const countA = sessionsPlacedToday.get(a.workId) ?? 0;
+        const countB = sessionsPlacedToday.get(b.workId) ?? 0;
         if (countA !== countB) return countA - countB;
 
         // Rule 2: tighter deadline → higher priority (can't catch up later)
@@ -709,36 +721,70 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
         );
 
         // Allow a shorter "final" session when less than MIN_SESSION_MINS remains.
-        // This prevents the last chunk of a subject (e.g. 48 min of Biology) from
-        // being silently dropped because it doesn't fill a full 60-min slot.
-        const sessionMins = gw.minsLeft < MIN_SESSION_MINS
+        let sessionMins = gw.minsLeft < MIN_SESSION_MINS
           ? Math.max(30, snapToGrid(gw.minsLeft, SNAP_MINS))
           : idealSessionMins(gw.minsLeft / 60, daysToDeadline, freeHoursPerDay, gw.urgency);
 
         // Find first block large enough for this session
-        const bi = slot.freeBlocks.findIndex(
-          b => b.endMins - b.startMins >= sessionMins
-        );
-        if (bi === -1) continue; // no room for this goal today — try next goal
+        let bi = slot.freeBlocks.findIndex(b => b.endMins - b.startMins >= sessionMins);
+
+        if (bi === -1) {
+          // Ideal size doesn't fit. Find ANY block ≥ 30 min and shrink the session
+          // to fit — critical for later subjects that get a smaller remaining block.
+          bi = slot.freeBlocks.findIndex(b => b.endMins - b.startMins >= 30);
+          if (bi === -1) continue; // truly no space today
+          const available = slot.freeBlocks[bi].endMins - slot.freeBlocks[bi].startMins;
+          // Use Math.floor (not round) so we never produce a session longer than the block
+          sessionMins = Math.floor(Math.min(available, gw.minsLeft) / SNAP_MINS) * SNAP_MINS;
+          if (sessionMins < 30) sessionMins = Math.min(available, gw.minsLeft);
+        }
+
+        // Safety: clamp to block size (guards against rounding edge cases)
+        const blockSize = slot.freeBlocks[bi].endMins - slot.freeBlocks[bi].startMins;
+        if (sessionMins > blockSize) sessionMins = blockSize;
 
         const block = slot.freeBlocks[bi];
         const start = block.startMins;
         const end   = start + sessionMins;
 
-        const type   = SESSION_TYPES[gw.typeIdx % SESSION_TYPES.length];
-        const reason = REASONS[type][gw.newSessions % REASONS[type].length];
+        const type        = SESSION_TYPES[gw.typeIdx % SESSION_TYPES.length];
+        const baseReason  = REASONS[type][gw.newSessions % REASONS[type].length];
         gw.typeIdx++;
 
-        const sessionNum = gw.nextSessionNum++;
+        const sessionNum  = gw.nextSessionNum++;
 
         // Title: "Course [Subject] — Session N" for split goals, "Course — Session N" otherwise
         const sessionTitle = gw.subjectName
           ? `${gw.goal.subject} [${gw.subjectName}] — Session ${sessionNum}`
           : `${gw.goal.subject} — Session ${sessionNum}`;
 
-        const topicNames = gw.topicSlots.length
+        // ── Topic resolution ───────────────────────────────────────────────
+        const coveredSlots  = gw.topicSlots.length
           ? getTopicsForSession(gw.topicSlots, gw.minsPlaced, sessionMins)
+          : [];
+
+        const topicNames    = coveredSlots.length
+          ? coveredSlots.map(s => s.name)
           : undefined;
+
+        const topicContext  = coveredSlots.length
+          ? coveredSlots.map(s => ({
+              subjectName: s.subjectName || '',
+              chapterName: s.chapterName || '',
+              topicName:   s.name,
+            }))
+          : undefined;
+
+        // Smart reason: "Subject › Chapter › Topic1, Topic2" when topics are known
+        let reason = baseReason;
+        if (coveredSlots.length > 0) {
+          const uniqueChapters = [...new Set(coveredSlots.map(s => s.chapterName).filter(Boolean))];
+          const topicList      = coveredSlots.map(s => s.name).slice(0, 3).join(', ');
+          const extra          = coveredSlots.length > 3 ? ` +${coveredSlots.length - 3} more` : '';
+          reason = uniqueChapters.length > 0
+            ? `${uniqueChapters.join(', ')} › ${topicList}${extra}`
+            : `${topicList}${extra}`;
+        }
 
         sessions.push({
           subject:      gw.goal.subject,
@@ -750,7 +796,8 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
           priority:     gw.priority,
           reason,
           durationMins: sessionMins,
-          ...(topicNames?.length ? { topicNames } : {}),
+          ...(topicNames?.length    ? { topicNames }    : {}),
+          ...(topicContext?.length  ? { topicContext }  : {}),
         });
 
         // Shrink the consumed block or remove it if exhausted
@@ -767,7 +814,7 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
         gw.newSessions++;
         if (gw.minsLeft < SNAP_MINS) gw.minsLeft = 0;  // drop negligible rounding remainders (< 15 min)
 
-        sessionsPlacedToday.set(gw.goal.id, (sessionsPlacedToday.get(gw.goal.id) ?? 0) + 1);
+        sessionsPlacedToday.set(gw.workId, (sessionsPlacedToday.get(gw.workId) ?? 0) + 1);
         anyPlacedThisRound = true;
       }
     }
