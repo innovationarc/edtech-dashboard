@@ -283,6 +283,17 @@ export function calcTotalHoursFromTopics(
   return Math.round(topics.reduce((sum, t) => sum + topicHours(t, mode), 0) * 10) / 10;
 }
 
+/**
+ * Returns the min and max total hour estimates across all topics.
+ * min = sum of topic.minHours, max = sum of topic.maxHours.
+ * Use this to show a range (e.g. "4.5–7.2h") in goal creation and edit forms.
+ */
+export function calcHoursRange(topics: SelectedTopicItem[]): { min: number; max: number } {
+  const min = Math.round(topics.reduce((s, t) => s + t.minHours, 0) * 10) / 10;
+  const max = Math.round(topics.reduce((s, t) => s + t.maxHours, 0) * 10) / 10;
+  return { min, max };
+}
+
 // ---------------------------------------------------------------------------
 // Per-goal work computation
 // ---------------------------------------------------------------------------
