@@ -230,25 +230,6 @@ const Navigation = () => {
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
 
-  /* Shared round button style for header */
-  const roundBtn = (hov: boolean, danger = false): React.CSSProperties => ({
-    width: 38, height: 38, borderRadius: 999,
-    background: danger && hov
-      ? 'rgba(239,68,68,0.12)'
-      : hov
-        ? darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)'
-        : 'transparent',
-    border: danger && hov
-      ? '1px solid rgba(239,68,68,0.22)'
-      : hov
-        ? darkMode ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.10)'
-        : '1px solid transparent',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', transition: 'all 0.18s ease',
-    transform: hov ? 'scale(1.08)' : 'scale(1)',
-    flexShrink: 0,
-  });
-
   /* ════════════════════════ RENDER ════════════════════════ */
   return (
     <>
@@ -463,68 +444,63 @@ const Navigation = () => {
         {isAuthenticated && (
           <>
             {/* Search — icon button only */}
-            {(() => {
-              const [hov, setHov] = useState(false);
-              return (
-                <button
-                  onMouseEnter={() => setHov(true)}
-                  onMouseLeave={() => setHov(false)}
-                  onClick={() => setShowMobileSearch(true)}
-                  style={roundBtn(hov)}
-                >
-                  <Search size={16} color={darkMode ? '#94a3b8' : '#6b7280'} />
-                </button>
-              );
-            })()}
+            <button
+              onClick={() => setShowMobileSearch(true)}
+              className="hdr-btn"
+              style={{
+                width: 38, height: 38, borderRadius: 999,
+                background: 'transparent', border: '1px solid transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', transition: 'all 0.18s ease', flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)'; e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <Search size={16} color={darkMode ? '#94a3b8' : '#6b7280'} />
+            </button>
 
             {/* + Create */}
-            {(() => {
-              const [hov, setHov] = useState(false);
-              return (
-                <button
-                  onMouseEnter={() => setHov(true)}
-                  onMouseLeave={() => setHov(false)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '0 16px', height: 38, borderRadius: 999,
-                    background: gradient, color: '#fff',
-                    fontSize: 13, fontWeight: 700,
-                    border: 'none', cursor: 'pointer',
-                    boxShadow: hov ? `0 6px 20px rgba(${pRgb},0.5)` : `0 3px 12px rgba(${pRgb},0.35)`,
-                    transform: hov ? 'scale(1.05)' : 'scale(1)',
-                    transition: 'all 0.18s cubic-bezier(0.34,1.25,0.64,1)',
-                    fontFamily: "'Outfit',sans-serif",
-                  }}
-                >
-                  <Plus size={14} strokeWidth={2.5} />
-                  Create
-                </button>
-              );
-            })()}
+            <button
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '0 16px', height: 38, borderRadius: 999,
+                background: gradient, color: '#fff',
+                fontSize: 13, fontWeight: 700,
+                border: 'none', cursor: 'pointer',
+                boxShadow: `0 3px 12px rgba(${pRgb},0.35)`,
+                transition: 'all 0.18s cubic-bezier(0.34,1.25,0.64,1)',
+                fontFamily: "'Outfit',sans-serif", flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = `0 6px 20px rgba(${pRgb},0.5)`; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 3px 12px rgba(${pRgb},0.35)`; }}
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              Create
+            </button>
 
             {/* Bell */}
-            <div className="relative">
-              {(() => {
-                const [hov, setHov] = useState(false);
-                return (
-                  <button
-                    onMouseEnter={() => setHov(true)}
-                    onMouseLeave={() => setHov(false)}
-                    onClick={() => setShowNotifications(v => !v)}
-                    className="notif-btn"
-                    style={{ ...roundBtn(hov), position: 'relative' }}
-                  >
-                    <Bell size={16} color={darkMode ? '#94a3b8' : '#6b7280'} />
-                    {notifications.length > 0 && (
-                      <span style={{
-                        position: 'absolute', top: 7, right: 7,
-                        width: 7, height: 7, borderRadius: '50%',
-                        background: gradient, boxShadow: `0 0 6px rgba(${pRgb},0.8)`,
-                      }} />
-                    )}
-                  </button>
-                );
-              })()}
+            <div className="relative" style={{ flexShrink: 0 }}>
+              <button
+                onClick={() => setShowNotifications(v => !v)}
+                className="notif-btn"
+                style={{
+                  width: 38, height: 38, borderRadius: 999,
+                  background: 'transparent', border: '1px solid transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', position: 'relative', transition: 'all 0.18s ease',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)'; e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                <Bell size={16} color={darkMode ? '#94a3b8' : '#6b7280'} />
+                {notifications.length > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 7, right: 7,
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: gradient, boxShadow: `0 0 6px rgba(${pRgb},0.8)`,
+                  }} />
+                )}
+              </button>
               {showNotifications && (
                 <NotifDropdown darkMode={darkMode} pRgb={pRgb} lightBg={lightBg}
                   notifications={notifications} onClear={() => setNotifications([])}
@@ -534,67 +510,58 @@ const Navigation = () => {
             </div>
 
             {/* Avatar + Name pill */}
-            {(() => {
-              const [hov, setHov] = useState(false);
-              return (
-                <button
-                  onMouseEnter={() => setHov(true)}
-                  onMouseLeave={() => setHov(false)}
-                  onClick={() => setShowProfile(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '4px 12px 4px 4px', borderRadius: 999,
-                    background: hov
-                      ? darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)'
-                      : darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)',
-                    border: hov
-                      ? `1px solid rgba(${pRgb},0.3)`
-                      : darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.09)',
-                    cursor: 'pointer',
-                    boxShadow: darkMode ? 'none' : '0 1px 4px rgba(0,0,0,0.06)',
-                    transform: hov ? 'scale(1.03)' : 'scale(1)',
-                    transition: 'all 0.18s ease',
-                    fontFamily: "'Outfit',sans-serif",
-                  }}
-                >
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: gradient, color: '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontWeight: 700, fontSize: 11, flexShrink: 0,
-                  }}>
-                    {user && getInitials(user.name)}
-                  </div>
-                  <span style={{
-                    fontSize: 13, fontWeight: 600,
-                    color: darkMode ? '#e2e8f0' : '#111827',
-                    whiteSpace: 'nowrap', maxWidth: 160,
-                    overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>
-                    {user?.name}
-                  </span>
-                </button>
-              );
-            })()}
+            <button
+              onClick={() => setShowProfile(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '4px 12px 4px 4px', borderRadius: 999,
+                background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.85)',
+                border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.09)',
+                cursor: 'pointer',
+                boxShadow: darkMode ? 'none' : '0 1px 4px rgba(0,0,0,0.06)',
+                transition: 'all 0.18s ease',
+                fontFamily: "'Outfit',sans-serif", flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = `rgba(${pRgb},0.3)`; e.currentTarget.style.transform = 'scale(1.03)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: gradient, color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 11, flexShrink: 0,
+              }}>
+                {user && getInitials(user.name)}
+              </div>
+              <span style={{
+                fontSize: 13, fontWeight: 600,
+                color: darkMode ? '#e2e8f0' : '#111827',
+                whiteSpace: 'nowrap', maxWidth: 160,
+                overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {user?.name}
+              </span>
+            </button>
 
             {/* Logout */}
-            {(() => {
-              const [hov, setHov] = useState(false);
-              return (
-                <button
-                  onMouseEnter={() => setHov(true)}
-                  onMouseLeave={() => setHov(false)}
-                  onClick={handleSignOutClick}
-                  disabled={isSigningOut}
-                  style={{ ...roundBtn(hov, true), opacity: isSigningOut ? 0.6 : 1 }}
-                  title="Sign Out"
-                >
-                  {isSigningOut
-                    ? <Loader2 size={15} color="#64748b" className="animate-spin"/>
-                    : <LogOut size={15} color={hov ? '#f87171' : (darkMode ? '#64748b' : '#9ca3af')} />}
-                </button>
-              );
-            })()}
+            <button
+              onClick={handleSignOutClick}
+              disabled={isSigningOut}
+              title="Sign Out"
+              style={{
+                width: 38, height: 38, borderRadius: 999,
+                background: 'transparent', border: '1px solid transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', opacity: isSigningOut ? 0.6 : 1,
+                transition: 'all 0.18s ease', flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.22)'; e.currentTarget.style.transform = 'scale(1.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              {isSigningOut
+                ? <Loader2 size={15} color="#64748b" className="animate-spin"/>
+                : <LogOut size={15} color={darkMode ? '#64748b' : '#9ca3af'} />}
+            </button>
           </>
         )}
       </header>
