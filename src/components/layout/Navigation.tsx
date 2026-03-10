@@ -1,49 +1,39 @@
-/* /src/components/layout/Navigation.tsx — FINAL: Glass Sidebar + Scroll-safe Active State */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+/* Navigation.tsx — Oval icon-only sidebar + iDraft-style top nav */
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Bell, Search, LogOut, X,
   LayoutDashboard, Users, Upload, Calendar, Medal, BarChart3, Settings, Clock,
-  CreditCard, Library, GraduationCap, BookOpen, Brain, ShoppingCart, Trophy,
-  Ticket, PlusCircle, Megaphone, FileText, MessageSquare, Sun, Moon, Loader2, ChevronRight, ClipboardCheck, UserCheck, ListOrdered
+  CreditCard, Library, GraduationCap, BookOpen, ShoppingCart, Trophy,
+  Ticket, PlusCircle, Megaphone, FileText, MessageSquare, Sun, Moon, Loader2,
+  ClipboardCheck, UserCheck, ListOrdered, Plus,
 } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import Profile from '../profile/Profile';
 import HamburgerMenuIcon from '../ui/HamburgerMenuIcon';
 import clsx from 'clsx';
 
-/* ─── colour helper ─── */
 const hexRgb = (hex: string) => {
   if (!hex || hex.length < 7) return '99,102,241';
   return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
 };
 
-/* ─────────────────────────────────────────────────────────────
-   NavItem — smooth hover animation, no flicker on cursor move.
-   onMouseEnter/onMouseLeave are NOT called here — they belong
-   only on the <aside> wrapper to prevent rapid open/close flicker
-   when moving between items.
-───────────────────────────────────────────────────────────── */
+/* ─── Oval Nav Item — icon only with tooltip ─── */
 interface NavItemProps {
   path: string;
   name: string;
   Icon: React.ElementType;
   isActive: boolean;
   isHovered: boolean;
-  sidebarOpen: boolean;
   darkMode: boolean;
-  primaryColor: string;
-  accentColor: string;
   pRgb: string;
-  aRgb: string;
   gradient: string;
-  onHover: (hov: boolean) => void;
+  onHover: (h: boolean) => void;
   onClick: () => void;
 }
+
 const NavItem: React.FC<NavItemProps> = ({
-  path, name, Icon, isActive, isHovered, sidebarOpen, darkMode,
-  primaryColor, accentColor, pRgb, aRgb, gradient,
-  onHover, onClick,
+  path, name, Icon, isActive, isHovered, darkMode, pRgb, gradient, onHover, onClick,
 }) => {
   return (
     <Link
@@ -51,222 +41,69 @@ const NavItem: React.FC<NavItemProps> = ({
       onClick={onClick}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
-      className={clsx(
-        'group relative flex items-center rounded-2xl select-none outline-none',
-        sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5',
-      )}
+      className="relative flex items-center justify-center nav-item-oval"
       style={{
-        fontFamily: "'Outfit', sans-serif",
-
-        /* ── iDraft-style active: gradient pill background ── */
+        width: 46,
+        height: 46,
+        borderRadius: 16,
+        flexShrink: 0,
         background: isActive
-          ? darkMode
-            ? `linear-gradient(135deg, rgba(${pRgb},0.18) 0%, rgba(${aRgb},0.12) 100%)`
-            : `linear-gradient(135deg, rgba(${pRgb},0.12) 0%, rgba(${aRgb},0.08) 100%)`
+          ? gradient
           : isHovered
-            ? darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
+            ? darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)'
             : 'transparent',
-
         border: isActive
-          ? darkMode
-            ? `1px solid rgba(${pRgb},0.25)`
-            : `1px solid rgba(${pRgb},0.18)`
+          ? 'none'
           : isHovered
-            ? darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.06)'
+            ? darkMode ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.10)'
             : '1px solid transparent',
-
-        boxShadow: isActive
-          ? `0 2px 10px rgba(${pRgb},0.15)`
-          : 'none',
-
-        backdropFilter: isActive ? 'blur(8px)' : 'none',
-        WebkitBackdropFilter: isActive ? 'blur(8px)' : 'none',
-
-        transform: isActive && sidebarOpen
-          ? 'translateX(2px)'
-          : isHovered && sidebarOpen
-            ? 'translateX(1px)'
-            : 'none',
-        transition: 'all 0.2s cubic-bezier(0.34,1.25,0.64,1)',
-
-        /* ── Crisp readable text in both modes ── */
-        color: isActive
-          ? darkMode ? '#ffffff' : primaryColor
-          : isHovered
-            ? darkMode ? '#e2e8f0' : '#1f2937'
-            : darkMode ? '#94a3b8' : '#4b5563',
+        boxShadow: isActive ? `0 4px 16px rgba(${pRgb},0.40)` : 'none',
+        transition: 'all 0.22s cubic-bezier(0.34,1.56,0.64,1)',
+        transform: isActive ? 'scale(1.08)' : isHovered ? 'scale(1.04)' : 'scale(1)',
       }}
     >
-      {/* ── icon bubble — colored on active ── */}
-      <span
-        className="flex items-center justify-center flex-shrink-0 rounded-xl"
+      <Icon
+        size={18}
+        strokeWidth={isActive ? 2.5 : 2}
         style={{
-          width: 34, height: 34,
-          background: isActive
-            ? gradient
-            : isHovered
-              ? darkMode ? `rgba(${pRgb},0.12)` : `rgba(${pRgb},0.08)`
-              : darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-          border: isActive
-            ? `1px solid rgba(${pRgb},0.35)`
-            : isHovered
-              ? darkMode ? `1px solid rgba(${pRgb},0.2)` : `1px solid rgba(${pRgb},0.15)`
-              : darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.08)',
-          boxShadow: isActive ? `0 2px 8px rgba(${pRgb},0.35)` : 'none',
-          transform: isActive ? 'scale(1.05)' : isHovered ? 'scale(1.02)' : 'scale(1)',
-          transition: 'all 0.2s cubic-bezier(0.34,1.25,0.64,1)',
+          color: isActive ? '#fff' : isHovered ? (darkMode ? '#e2e8f0' : '#1f2937') : (darkMode ? '#64748b' : '#6b7280'),
+          transition: 'color 0.2s ease',
+        }}
+      />
+      {/* Tooltip */}
+      <span
+        className="pointer-events-none absolute left-14 px-3 py-1.5 rounded-xl text-[12px] font-semibold whitespace-nowrap z-[99999]"
+        style={{
+          background: darkMode ? 'rgba(15,17,27,0.97)' : '#1f2937',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.10)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          opacity: isHovered && !isActive ? 1 : 0,
+          transform: isHovered && !isActive ? 'translateX(0) scale(1)' : 'translateX(-6px) scale(0.95)',
+          transition: 'all 0.18s cubic-bezier(0.34,1.25,0.64,1)',
+          pointerEvents: 'none',
         }}
       >
-        <Icon size={16} strokeWidth={isActive || isHovered ? 2.5 : 2}
-          style={{
-            color: isActive ? 'white'
-              : isHovered ? (darkMode ? `rgb(${pRgb})` : primaryColor)
-              : darkMode ? '#94a3b8' : '#6b7280',
-            transition: 'color 0.2s ease',
-          }} />
+        {name}
       </span>
-
-      {/* ── label — always readable ── */}
-      {sidebarOpen && (
-        <span style={{
-          fontSize: '0.8125rem',
-          fontWeight: isActive ? 700 : isHovered ? 600 : 500,
-          flex: 1,
-          transition: 'all 0.2s ease',
-          color: isActive
-            ? darkMode ? '#ffffff' : primaryColor
-            : isHovered
-              ? darkMode ? '#e2e8f0' : '#1f2937'
-              : darkMode ? '#94a3b8' : '#4b5563',
-        }}>
-          {name}
-        </span>
-      )}
-
-      {/* chevron hint on active */}
-      {sidebarOpen && isActive && (
-        <ChevronRight size={12} style={{ color: darkMode ? `rgba(${pRgb},0.6)` : `rgba(${pRgb},0.5)`, flexShrink: 0 }} />
-      )}
-
-      {/* collapsed: right-edge pill */}
-      {!sidebarOpen && isActive && (
-        <span className="absolute right-0 top-1/2 -translate-y-1/2 rounded-l-full"
-          style={{ width: 3, height: 20, background: gradient }} />
-      )}
-
-      {/* tooltip for collapsed mode */}
-      {!sidebarOpen && (
-        <span
-          className="pointer-events-none absolute px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap"
-          style={{
-            left: 54, zIndex: 99999,
-            opacity: isHovered ? 1 : 0,
-            transform: isHovered ? 'translateX(0) scale(1)' : 'translateX(-4px) scale(0.96)',
-            transition: 'opacity 0.18s ease, transform 0.18s cubic-bezier(0.34,1.25,0.64,1)',
-            background: darkMode ? 'rgba(8,12,24,0.97)' : '#1a1f2e',
-            color: 'white',
-            border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(12px)',
-            fontFamily: "'Outfit', sans-serif",
-          }}
-        >
-          {name}
-        </span>
-      )}
     </Link>
   );
 };
 
-/* ─────────────────────────────────────────────────────────────
-   NotifDropdown
-───────────────────────────────────────────────────────────── */
-interface NotifDropdownProps {
-  pos: 'mobile' | 'desktop';
-  darkMode: boolean;
-  pRgb: string;
-  notifications: Array<{ id: string; message: string; type: string; timestamp: Date }>;
-  onClear: () => void;
-  onRemove: (id: string) => void;
-  notifIcon: (t: string) => string;
-  notifColor: (t: string) => string;
-}
-const NotifDropdown: React.FC<NotifDropdownProps> = ({
-  pos, darkMode, pRgb, notifications, onClear, onRemove, notifIcon, notifColor,
-}) => (
-  <div
-    className={clsx(
-      'notif-dropdown rounded-2xl overflow-hidden z-[200]',
-      pos === 'desktop'
-        ? 'absolute top-full right-0 mt-2 w-[380px]'
-        : 'fixed right-2 w-[calc(100vw-16px)] max-w-[360px]',
-    )}
-    style={{
-      top: pos === 'mobile' ? 72 : undefined,
-      background: darkMode ? 'rgba(8,12,24,0.97)' : 'rgba(255,255,255,0.97)',
-      border: `1px solid rgba(${pRgb},0.18)`,
-      boxShadow: '0 16px 48px rgba(0,0,0,0.55)',
-      backdropFilter: 'blur(24px)',
-      fontFamily: "'Outfit', sans-serif",
-    }}
-  >
-    <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.07]">
-      <h3 className={clsx('text-sm font-bold', darkMode ? 'text-white' : 'text-gray-900')}>Notifications</h3>
-      {notifications.length > 0 && (
-        <button onClick={onClear} className="text-xs font-semibold text-slate-400 hover:text-white transition-colors">
-          Clear all
-        </button>
-      )}
-    </div>
-    <div className="max-h-[360px] overflow-y-auto">
-      {notifications.length === 0 ? (
-        <div className="flex flex-col items-center py-10 text-slate-500">
-          <Bell size={26} className="mb-3 opacity-40" />
-          <p className="text-sm">No notifications yet</p>
-        </div>
-      ) : notifications.map(n => (
-        <div key={n.id} className={`px-4 py-3 border-l-2 flex gap-3 items-start ${notifColor(n.type)}`}>
-          <span className="text-base flex-shrink-0">{notifIcon(n.type)}</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium">{n.message}</p>
-            <p className="text-[11px] opacity-60 mt-0.5">{new Date(n.timestamp).toLocaleTimeString()}</p>
-          </div>
-          <button onClick={() => onRemove(n.id)} className="text-slate-400 hover:text-white p-0.5 flex-shrink-0">
-            <X size={13} />
-          </button>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-/* ─────────────────────────────────────────────────────────────
-   NavList — renders all nav items with a single shared
-   hoveredIndex so the hover highlight slides smoothly between
-   items instead of flickering on/off per-item.
-───────────────────────────────────────────────────────────── */
-interface NavListProps {
+/* ─── NavList ─── */
+const NavList: React.FC<{
   navItems: Array<{ path: string; name: string; Icon: React.ElementType }>;
   location: ReturnType<typeof useLocation>;
-  sidebarOpen: boolean;
   darkMode: boolean;
-  primaryColor: string;
-  accentColor: string;
   pRgb: string;
-  aRgb: string;
   gradient: string;
   onItemClick: () => void;
-}
-const NavList: React.FC<NavListProps> = ({
-  navItems, location, sidebarOpen, darkMode, primaryColor, accentColor,
-  pRgb, aRgb, gradient, onItemClick,
-}) => {
+}> = ({ navItems, location, darkMode, pRgb, gradient, onItemClick }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
   return (
     <nav
-      className="relative h-full overflow-y-auto py-2 px-2 space-y-0.5"
-      style={{ scrollbarWidth: 'none' }}
+      className="flex flex-col items-center py-2 gap-1"
+      style={{ overflowY: 'auto', overflowX: 'visible', scrollbarWidth: 'none', flex: 1 }}
       onMouseLeave={() => setHoveredIndex(null)}
     >
       {navItems.map((item, idx) => (
@@ -277,14 +114,10 @@ const NavList: React.FC<NavListProps> = ({
           Icon={item.Icon}
           isActive={location.pathname === item.path}
           isHovered={hoveredIndex === idx}
-          sidebarOpen={sidebarOpen}
           darkMode={darkMode}
-          primaryColor={primaryColor}
-          accentColor={accentColor}
           pRgb={pRgb}
-          aRgb={aRgb}
           gradient={gradient}
-          onHover={(hov) => setHoveredIndex(hov ? idx : null)}
+          onHover={(h) => setHoveredIndex(h ? idx : null)}
           onClick={onItemClick}
         />
       ))}
@@ -292,58 +125,104 @@ const NavList: React.FC<NavListProps> = ({
   );
 };
 
-/* ══════════════════════════════════════════════════════════════
-   MAIN NAVIGATION COMPONENT
-══════════════════════════════════════════════════════════════ */
+/* ─── Notification Dropdown ─── */
+const NotifDropdown: React.FC<{
+  pos: 'mobile' | 'desktop';
+  darkMode: boolean;
+  pRgb: string;
+  notifications: Array<{ id: string; message: string; type: string; timestamp: Date }>;
+  onClear: () => void;
+  onRemove: (id: string) => void;
+}> = ({ pos, darkMode, pRgb, notifications, onClear, onRemove }) => {
+  const icon = (t: string) => ({ success:'✅', warning:'⚠️', error:'❌' }[t] ?? 'ℹ️');
+  const color = (t: string) => ({
+    success: 'bg-emerald-950/60 border-emerald-500 text-emerald-200',
+    warning: 'bg-amber-950/60 border-amber-500 text-amber-200',
+    error:   'bg-red-950/60 border-red-500 text-red-200',
+  }[t] ?? 'bg-indigo-950/60 border-indigo-500 text-indigo-200');
+
+  return (
+    <div
+      className={clsx('notif-dropdown rounded-2xl overflow-hidden z-[200]',
+        pos === 'desktop' ? 'absolute top-full right-0 mt-2 w-[360px]' : 'fixed right-2 w-[calc(100vw-16px)] max-w-[340px]'
+      )}
+      style={{
+        top: pos === 'mobile' ? 72 : undefined,
+        background: darkMode ? 'rgba(13,16,26,0.98)' : '#ffffff',
+        border: `1px solid rgba(${pRgb},0.18)`,
+        boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
+        backdropFilter: 'blur(24px)',
+      }}
+    >
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: darkMode ? '#fff' : '#111827' }}>Notifications</h3>
+        {notifications.length > 0 && (
+          <button onClick={onClear} style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Clear all</button>
+        )}
+      </div>
+      <div className="max-h-[320px] overflow-y-auto">
+        {notifications.length === 0 ? (
+          <div className="flex flex-col items-center py-8 text-slate-500">
+            <Bell size={24} className="mb-2 opacity-40" />
+            <p style={{ fontSize: 13 }}>No notifications yet</p>
+          </div>
+        ) : notifications.map(n => (
+          <div key={n.id} className={`px-4 py-2.5 border-l-2 flex gap-3 items-start ${color(n.type)}`}>
+            <span className="text-sm flex-shrink-0">{icon(n.type)}</span>
+            <div className="flex-1 min-w-0">
+              <p style={{ fontSize: 12, fontWeight: 500 }}>{n.message}</p>
+              <p style={{ fontSize: 10, opacity: 0.6, marginTop: 2 }}>{new Date(n.timestamp).toLocaleTimeString()}</p>
+            </div>
+            <button onClick={() => onRemove(n.id)} style={{ color: '#64748b', flexShrink: 0 }}><X size={12}/></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ════ MAIN NAVIGATION ════ */
 const Navigation = () => {
   const {
     sidebarOpen, toggleSidebarClick,
-    handleMouseEnterSidebarArea, handleMouseLeaveSidebarArea,
     handleSearch, handleSignOut,
     isAuthenticated, user,
     theme, primaryColor, accentColor,
   } = useDashboard();
 
   const location = useLocation();
-
-  const [searchQuery, setSearchQuery]           = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [showMobileSearch, setShowMobileSearch]   = useState(false);
-  const [showProfile, setShowProfile]             = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Array<{
     id: string; message: string; type: 'success'|'info'|'warning'|'error'; timestamp: Date;
   }>>([]);
-  const [darkMode, setDarkMode]     = useState(() => (localStorage.getItem('theme') || 'dark') !== 'light');
+  const [darkMode, setDarkMode] = useState(() => (localStorage.getItem('theme') || 'dark') !== 'light');
   const [isSigningOut, setIsSigningOut] = useState(false);
-  /* per-button hover for bottom row */
-  const [hovTheme, setHovTheme]     = useState(false);
+  const [hovTheme, setHovTheme] = useState(false);
   const [hovSettings, setHovSettings] = useState(false);
-  const [hovLogout, setHovLogout]   = useState(false);
-  const [hovProfile, setHovProfile] = useState(false);
+  const [hovLogout, setHovLogout] = useState(false);
 
-  /* derived colours */
   const pRgb     = hexRgb(primaryColor);
   const aRgb     = hexRgb(accentColor);
   const gradient = `linear-gradient(135deg,${primaryColor} 0%,${accentColor} 100%)`;
 
   useEffect(() => { setDarkMode(theme !== 'light'); }, [theme]);
-
-  /* Reset signing-out state whenever auth status changes (covers re-login without refresh) */
   useEffect(() => { setIsSigningOut(false); }, [isAuthenticated]);
 
-  /* nav items */
   const NAV = [
     { name:'Dashboard',     Icon:LayoutDashboard, path:'/dashboard',          roles:['admin'] },
     { name:'Dashboard',     Icon:GraduationCap,   path:'/student-dashboard',  roles:['student'] },
     { name:'Dashboard',     Icon:BookOpen,        path:'/teacher-dashboard',  roles:['teacher'] },
     { name:'Users',         Icon:Users,           path:'/users',              roles:['admin'] },
     { name:'Announcements', Icon:Megaphone,       path:'/announcements',      roles:['admin'] },
-    { name:'Payments',         Icon:CreditCard,      path:'/payments',           roles:['admin'] },
+    { name:'Payments',      Icon:CreditCard,      path:'/payments',           roles:['admin'] },
     { name:'Analytics',     Icon:BarChart3,       path:'/analytics',          roles:['admin'] },
     { name:'Content',       Icon:Upload,          path:'/content',            roles:['admin','teacher'] },
-    { name:'Courses',           Icon:PlusCircle,      path:'/course-creation',    roles:['admin','teacher'] },
-    { name:'Course Assignment', Icon:UserCheck,        path:'/course-assignment',  roles:['admin'] },
+    { name:'Courses',       Icon:PlusCircle,      path:'/course-creation',    roles:['admin','teacher'] },
+    { name:'Course Assign', Icon:UserCheck,       path:'/course-assignment',  roles:['admin'] },
     { name:'Coupons',       Icon:Ticket,          path:'/manage-coupon',      roles:['admin','manager'] },
     { name:'Study Plans',   Icon:Calendar,        path:'/study-plan',         roles:['admin','teacher'] },
     { name:'Progress',      Icon:Medal,           path:'/progress',           roles:['student'] },
@@ -366,14 +245,9 @@ const Navigation = () => {
     return p.length === 1 ? p[0][0].toUpperCase() : (p[0][0]+p[p.length-1][0]).toUpperCase();
   };
 
-  /* header helpers */
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault(); handleSearch(searchQuery);
     setShowSearchResults(true); setShowMobileSearch(false);
-  };
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-    if (!e.target.value) setShowSearchResults(false);
   };
   const handleSignOutClick = async () => {
     setIsSigningOut(true);
@@ -388,19 +262,8 @@ const Navigation = () => {
     (window as any).addNotification = addNotification;
     return () => { delete (window as any).addNotification; };
   }, [addNotification]);
-  const removeNotification = (id: string) => setNotifications(prev => prev.filter(n => n.id !== id));
-  const notifIcon  = (t: string): string => ({ success:'✅', warning:'⚠️', error:'❌' }[t] ?? 'ℹ️');
-  const notifColor = (t: string) => ({
-    success: 'bg-emerald-950/60 border-emerald-500 text-emerald-200',
-    warning: 'bg-amber-950/60 border-amber-500 text-amber-200',
-    error:   'bg-red-950/60 border-red-500 text-red-200',
-  }[t] ?? 'bg-indigo-950/60 border-indigo-500 text-indigo-200');
 
-  const handleProfileSuccess = () => { setShowProfile(false); window.location.reload(); };
-  const isStudent = user?.role === 'student';
-  const isTeacher = user?.role === 'teacher';
-
-  /* close popups on outside click */
+  /* close on outside click */
   useEffect(() => {
     const h = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
@@ -420,468 +283,352 @@ const Navigation = () => {
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
 
-  /* Header button style — clean, readable in both modes */
-  const glassBtn: React.CSSProperties = {
-    background:           darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-    border:               darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.09)',
-    backdropFilter:       'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    transition:           'all 0.2s ease',
-  };
-  const glassBtnHov: React.CSSProperties = {
-    background:  darkMode ? `rgba(${pRgb},0.14)` : `rgba(${pRgb},0.08)`,
-    border:      darkMode ? `1px solid rgba(${pRgb},0.3)` : `1px solid rgba(${pRgb},0.2)`,
-    boxShadow:   `0 2px 10px rgba(${pRgb},0.15)`,
-  };
+  const isStudent = user?.role === 'student';
+  const isTeacher = user?.role === 'teacher';
 
-  /* bottom-row button shared style */
-  const bottomBtnStyle = (hov: boolean, danger = false): React.CSSProperties => ({
-    fontFamily: "'Outfit', sans-serif",
-    background: hov
-      ? danger ? 'rgba(239,68,68,0.1)' : (darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)')
-      : 'transparent',
-    border: hov
-      ? danger ? '1px solid rgba(239,68,68,0.2)' : (darkMode ? '1px solid rgba(255,255,255,0.09)' : '1px solid rgba(0,0,0,0.08)')
-      : '1px solid transparent',
-    backdropFilter: hov ? 'blur(8px)' : 'none',
-    /* ── always legible text ── */
-    color: hov && danger ? '#f87171' : (darkMode ? '#cbd5e1' : '#374151'),
-    transition: 'all 0.2s ease',
-  });
-
-  const iconWrap = (hov: boolean, danger = false) => ({
-    width: 34, height: 34,
-    background: hov && danger
-      ? 'rgba(239,68,68,0.15)'
-      : darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
-    border: darkMode ? '1px solid rgba(255,255,255,0.09)' : '1px solid rgba(0,0,0,0.09)',
-    borderRadius: 12,
+  /* ── Sidebar button shared style ── */
+  const iconBtn = (hov: boolean, active = false, danger = false): React.CSSProperties => ({
+    width: 40, height: 40, borderRadius: 14,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0 as const,
-    transition: 'all 0.2s ease',
+    background: active
+      ? gradient
+      : danger && hov
+        ? 'rgba(239,68,68,0.14)'
+        : hov
+          ? darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.06)'
+          : 'transparent',
+    border: active
+      ? 'none'
+      : danger && hov
+        ? '1px solid rgba(239,68,68,0.25)'
+        : hov
+          ? darkMode ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.09)'
+          : '1px solid transparent',
+    boxShadow: active ? `0 4px 14px rgba(${pRgb},0.4)` : 'none',
+    transition: 'all 0.2s cubic-bezier(0.34,1.25,0.64,1)',
+    transform: hov ? 'scale(1.06)' : 'scale(1)',
+    cursor: 'pointer',
+    flexShrink: 0,
   });
 
-  /* ════════════════════════════ RENDER ════════════════════════════ */
+  /* ════ RENDER ════ */
   return (
     <>
-      {/* ══════════════════════════════════════════════════
-          SIDEBAR
-      ══════════════════════════════════════════════════ */}
+      {/* ══════════════════ SIDEBAR — Oval/pill icon strip ══════════════════ */}
       <aside
-        onMouseEnter={handleMouseEnterSidebarArea}
-        onMouseLeave={handleMouseLeaveSidebarArea}
         className={clsx(
-          'fixed top-0 left-0 h-screen flex flex-col z-[100]',
+          'fixed top-0 left-0 h-screen flex flex-col items-center z-[100]',
           'transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'w-64' : 'w-20',
           'lg:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
         style={{
-          /* Clean neutral sidebar — iDraft style */
-          background: darkMode
-            ? '#0d1017'
-            : '#ffffff',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderRight: darkMode
-            ? '1px solid rgba(255,255,255,0.06)'
-            : '1px solid rgba(0,0,0,0.08)',
-          boxShadow: darkMode
-            ? '4px 0 24px rgba(0,0,0,0.4)'
-            : '4px 0 16px rgba(0,0,0,0.06)',
+          width: 72,
+          background: darkMode ? '#0d1017' : '#ffffff',
+          borderRight: darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
+          boxShadow: darkMode ? '4px 0 24px rgba(0,0,0,0.4)' : '4px 0 12px rgba(0,0,0,0.06)',
           fontFamily: "'Outfit', sans-serif",
+          paddingBottom: 8,
+          overflow: 'visible',
         }}
       >
-
-        {/* ── brand ── */}
-        <div className={clsx(
-          'h-16 sm:h-[68px] lg:h-[72px] px-4 flex items-center justify-between flex-shrink-0 border-b',
-          darkMode ? 'border-white/[0.06]' : 'border-black/[0.07]',
-        )}>
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <Link to="/dashboard"
-              className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 hover:scale-105 active:scale-95 transition-transform"
-              style={{
-                background: gradient,
-                boxShadow: `0 4px 16px rgba(${pRgb},0.4)`,
-              }}>
-              <GraduationCap className="w-5 h-5 text-white" strokeWidth={2.5} />
-            </Link>
-            {sidebarOpen && (
-              <span style={{
-                fontSize: '15px', fontWeight: 700, letterSpacing: '-0.01em',
-                color: darkMode ? '#ffffff' : '#111827',
-              }}>
-                {user?.role === 'student' ? 'Student Portal' : user?.role === 'teacher' ? 'Teacher Portal' : 'Admin Panel'}
-              </span>
-            )}
-          </div>
-          <button onClick={toggleSidebarClick}
-            className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl flex-shrink-0"
-            style={{ outline:'none', border:'none', boxShadow:'none', WebkitTapHighlightColor:'rgba(0,0,0,0)' }}>
-            <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={36}
-              style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
-          </button>
-          {sidebarOpen && (
-            <button onClick={toggleSidebarClick}
-              className="hidden lg:flex items-center justify-center w-9 h-9 rounded-xl flex-shrink-0"
-              style={{ outline:'none', border:'none', boxShadow:'none' }}>
-              <HamburgerMenuIcon state="open" size={36}
-                style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
-            </button>
-          )}
-        </div>
-
-        {/* ── user profile ── */}
-        <div className="p-3 border-b flex-shrink-0" style={{ borderColor: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)' }}>
-          <button
-            onClick={() => setShowProfile(true)}
-            onMouseEnter={() => setHovProfile(true)}
-            onMouseLeave={() => setHovProfile(false)}
-            className={clsx('w-full flex items-center rounded-2xl transition-all duration-200',
-              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5')}
+        {/* Logo */}
+        <div style={{ height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Link
+            to="/dashboard"
+            className="flex items-center justify-center hover:scale-110 active:scale-95"
             style={{
-              background: hovProfile
-                ? darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'
-                : 'transparent',
-              border: hovProfile
-                ? darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.07)'
-                : '1px solid transparent',
-              transition: 'all 0.2s ease',
+              width: 44, height: 44, borderRadius: 16,
+              background: gradient,
+              boxShadow: `0 4px 16px rgba(${pRgb},0.45)`,
+              transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1)',
             }}
           >
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-              style={{ background: gradient }}>
-              {user && getInitials(user.name)}
-            </div>
-            {sidebarOpen && (
-              <div className="flex-1 min-w-0 text-left">
-                <p style={{ fontSize: '13px', fontWeight: 700, color: darkMode ? '#ffffff' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {user?.name}
-                </p>
-                <p style={{ fontSize: '11px', fontWeight: 600, textTransform: 'capitalize', color: primaryColor }}>
-                  {user?.role}
-                </p>
-              </div>
-            )}
+            <GraduationCap size={20} color="#fff" strokeWidth={2.5} />
+          </Link>
+        </div>
+
+        {/* User avatar */}
+        <div style={{ paddingBottom: 8, flexShrink: 0 }}>
+          <button
+            onClick={() => setShowProfile(true)}
+            className="relative group"
+            style={{
+              width: 44, height: 44, borderRadius: 16,
+              background: gradient,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontWeight: 700, fontSize: 14,
+              border: 'none', cursor: 'pointer',
+              boxShadow: `0 2px 10px rgba(${pRgb},0.35)`,
+              transition: 'transform 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.08)')}
+            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            {user && getInitials(user.name)}
           </button>
         </div>
 
-        {/* ══════════════════════════════════════════════
-            NAV LIST — rounded container like iDraft
-        ══════════════════════════════════════════════ */}
-        <div className="flex-1 relative overflow-hidden">
+        {/* Divider */}
+        <div style={{ width: 32, height: 1, background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', marginBottom: 8, flexShrink: 0 }} />
 
-          {/* iDraft-style: rounded container around nav items */}
-          {sidebarOpen && (
-            <div className="absolute inset-x-3 inset-y-3 rounded-2xl pointer-events-none"
-              style={{
-                background: darkMode
-                  ? 'rgba(255,255,255,0.03)'
-                  : 'rgba(0,0,0,0.02)',
-                border: darkMode
-                  ? '1px solid rgba(255,255,255,0.05)'
-                  : '1px solid rgba(0,0,0,0.05)',
-              }}
-            />
-          )}
-
-          {/* scroll container */}
-          <div className="absolute inset-x-2 inset-y-2 rounded-2xl overflow-hidden">
+        {/* Nav list inside oval container */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: '100%',
+          overflowY: 'auto',
+          overflowX: 'visible',
+          scrollbarWidth: 'none',
+          padding: '4px 0',
+        }}>
           <NavList
             navItems={navItems}
             location={location}
-            sidebarOpen={sidebarOpen}
             darkMode={darkMode}
-            primaryColor={primaryColor}
-            accentColor={accentColor}
             pRgb={pRgb}
-            aRgb={aRgb}
             gradient={gradient}
             onItemClick={() => setShowProfile(false)}
           />
-          </div>
         </div>
 
-        {/* ── bottom actions ── */}
-        <div className={clsx('flex-shrink-0 px-2 py-2 border-t pb-16 sm:pb-20 lg:pb-2',
-          darkMode ? 'border-white/[0.06]' : 'border-black/[0.07]')}>
+        {/* Divider */}
+        <div style={{ width: 32, height: 1, background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)', marginTop: 4, marginBottom: 8, flexShrink: 0 }} />
 
-          {/* dark-mode toggle */}
+        {/* Bottom actions */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingBottom: 72, flexShrink: 0 }}>
+          {/* Dark mode toggle */}
           <button
             onClick={() => setDarkMode(v => !v)}
             onMouseEnter={() => setHovTheme(true)}
             onMouseLeave={() => setHovTheme(false)}
-            className={clsx('w-full flex items-center rounded-2xl transition-all duration-200 mb-0.5',
-              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5')}
-            style={bottomBtnStyle(hovTheme)}
+            style={iconBtn(hovTheme)}
+            title={darkMode ? 'Light Mode' : 'Dark Mode'}
           >
-            <span style={iconWrap(hovTheme)}>
-              {darkMode
-                ? <Moon size={15} className="text-indigo-300" strokeWidth={2}/>
-                : <Sun size={15} className="text-amber-500" strokeWidth={2}/>}
-            </span>
-            {sidebarOpen && (
-              <div className="flex items-center justify-between flex-1">
-                <span className="text-[13px] font-semibold">
-                  {darkMode ? 'Dark' : 'Light'} Mode
-                </span>
-                <div className="relative rounded-full flex-shrink-0"
-                  style={{ width:38, height:20, background: darkMode ? gradient : 'rgba(0,0,0,0.15)', transition:'background 0.3s' }}>
-                  <div className="absolute top-[3px] w-[14px] h-[14px] rounded-full bg-white shadow"
-                    style={{ left: darkMode ? 21 : 3, transition:'left 0.3s' }}/>
-                </div>
-              </div>
-            )}
+            {darkMode
+              ? <Moon size={16} color={hovTheme ? '#a5b4fc' : '#64748b'} strokeWidth={2}/>
+              : <Sun size={16} color={hovTheme ? '#fbbf24' : '#6b7280'} strokeWidth={2}/>}
           </button>
 
-          {/* settings */}
+          {/* Settings */}
           <Link
             to="/settings"
             onClick={() => setShowProfile(false)}
             onMouseEnter={() => setHovSettings(true)}
             onMouseLeave={() => setHovSettings(false)}
-            className={clsx('flex items-center rounded-2xl transition-all duration-200 mb-0.5',
-              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5')}
-            style={{
-              ...bottomBtnStyle(hovSettings || location.pathname === '/settings'),
-              ...(location.pathname === '/settings' ? {
-                background: gradient,
-                border: `1px solid rgba(${pRgb},0.3)`,
-                color: 'white',
-                boxShadow: `0 4px 14px rgba(${pRgb},0.3)`,
-              } : {}),
-            }}
+            style={iconBtn(hovSettings, location.pathname === '/settings')}
+            title="Settings"
           >
-            <span style={{
-              ...iconWrap(hovSettings),
-              ...(location.pathname === '/settings' ? {
-                background: 'rgba(255,255,255,0.2)',
-                border: '1px solid rgba(255,255,255,0.28)',
-              } : {}),
-            }}>
-              <Settings size={16} strokeWidth={2} style={{ color: location.pathname === '/settings' ? 'white' : 'inherit' }} />
-            </span>
-            {sidebarOpen && <span className="text-[13px] font-semibold">Settings</span>}
-            {!sidebarOpen && (
-              <span className="pointer-events-none fixed opacity-0 group-hover:opacity-100 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap"
-                style={{ left:88, zIndex:99999, background:'rgba(8,12,24,0.97)', color:'white', border:'1px solid rgba(255,255,255,0.1)', fontFamily:"'Outfit',sans-serif" }}>
-                Settings
-              </span>
-            )}
+            <Settings size={16}
+              color={location.pathname === '/settings' ? '#fff' : hovSettings ? (darkMode ? '#e2e8f0' : '#1f2937') : (darkMode ? '#64748b' : '#6b7280')}
+              strokeWidth={2}
+            />
           </Link>
 
-          {/* sign out */}
+          {/* Sign Out */}
           <button
             onClick={handleSignOutClick}
             disabled={isSigningOut}
             onMouseEnter={() => setHovLogout(true)}
             onMouseLeave={() => setHovLogout(false)}
-            className={clsx('w-full flex items-center rounded-2xl transition-all duration-200',
-              sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center p-2.5',
-              isSigningOut && 'opacity-60 cursor-not-allowed')}
-            style={bottomBtnStyle(hovLogout, true)}
+            style={{ ...iconBtn(hovLogout, false, true), opacity: isSigningOut ? 0.6 : 1 }}
+            title="Sign Out"
           >
-            <span style={iconWrap(hovLogout, true)}>
-              {isSigningOut
-                ? <Loader2 size={16} strokeWidth={2} className="animate-spin"/>
-                : <LogOut size={16} strokeWidth={2}/>}
-            </span>
-            {sidebarOpen && <span className="text-[13px] font-semibold">{isSigningOut ? 'Signing Out…' : 'Sign Out'}</span>}
-            {!sidebarOpen && !isSigningOut && (
-              <span className="pointer-events-none fixed opacity-0 group-hover:opacity-100 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap"
-                style={{ left:88, zIndex:99999, background:'rgba(8,12,24,0.97)', color:'white', border:'1px solid rgba(255,255,255,0.1)', fontFamily:"'Outfit',sans-serif" }}>
-                Sign Out
-              </span>
-            )}
+            {isSigningOut
+              ? <Loader2 size={16} color="#64748b" className="animate-spin"/>
+              : <LogOut size={16} color={hovLogout ? '#f87171' : (darkMode ? '#64748b' : '#6b7280')} strokeWidth={2}/>}
           </button>
         </div>
       </aside>
 
-      {/* mobile overlay */}
+      {/* Mobile overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99] lg:hidden"
           onClick={toggleSidebarClick} />
       )}
 
-      {/* ══════════════════════════════════════════════════════════════
-          HEADER — exact same glass-bar language as the sidebar
-          • Header bg: same tinted gradient as aside, horizontal sweep
-          • Inner gradient strip: mirrors the sidebar nav bar strip
-          • Buttons: glass popup cards matching NavItem active style
-          • Search: glass pill with tinted border + icon bubble
-          • Profile chip: active-nav-card style (raised glass + shadow)
-      ══════════════════════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════════
+          HEADER — iDraft top navigation style
+          Search | + Create | Bell | Avatar+Name | SignOut
+      ══════════════════════════════════════════════════════════ */}
       <header
         className={clsx(
-          'header-container fixed top-0 right-0 z-[60]',
-          'h-16 sm:h-[68px] lg:h-[72px]',
-          'lg:left-64 lg:w-[calc(100%-256px)]',
-          !sidebarOpen && 'lg:!left-20 lg:!w-[calc(100%-80px)]',
-          'left-0 w-full',
-          'transition-all duration-300 ease-in-out',
+          'fixed top-0 right-0 z-[60]',
+          'h-[72px]',
+          'left-[72px] w-[calc(100%-72px)]',
+          'left-0 w-full lg:left-[72px] lg:w-[calc(100%-72px)]',
           'flex items-center',
+          'transition-all duration-300',
         )}
         style={{
-          /* Clean glass header — neutral monochrome like iDraft */
-          background: darkMode
-            ? 'rgba(13,16,26,0.96)'
-            : 'rgba(248,249,252,0.96)',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-          borderBottom: darkMode
-            ? '1px solid rgba(255,255,255,0.06)'
-            : '1px solid rgba(0,0,0,0.07)',
-          boxShadow: darkMode
-            ? '0 1px 0 rgba(255,255,255,0.03), 0 4px 20px rgba(0,0,0,0.3)'
-            : '0 1px 0 rgba(0,0,0,0.04), 0 2px 12px rgba(0,0,0,0.05)',
+          background: darkMode ? 'rgba(13,16,26,0.97)' : 'rgba(248,249,252,0.97)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
+          boxShadow: darkMode ? '0 2px 16px rgba(0,0,0,0.3)' : '0 2px 12px rgba(0,0,0,0.06)',
           fontFamily: "'Outfit', sans-serif",
-          position: 'fixed',
         }}
       >
-        {/* ── MOBILE layout ── */}
-        <div className="lg:hidden relative w-full flex items-center justify-between px-3">
+        {/* Mobile header */}
+        <div className="lg:hidden relative w-full flex items-center justify-between px-4">
           <div className="flex items-center gap-2">
             {isAuthenticated && (
-              <>
-                <button onClick={toggleSidebarClick}
-                  className="relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200"
-                  style={glassBtn}
-                  onMouseEnter={e => Object.assign(e.currentTarget.style, glassBtnHov)}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = glassBtn.background as string;
-                    e.currentTarget.style.border = glassBtn.border as string;
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}>
-                  <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={40}
-                    style={{ color: darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.85)' }} />
-                </button>
-                <button onClick={() => setShowMobileSearch(true)}
-                  className="relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200"
-                  style={glassBtn}
-                  onMouseEnter={e => Object.assign(e.currentTarget.style, glassBtnHov)}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = glassBtn.background as string;
-                    e.currentTarget.style.border = glassBtn.border as string;
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}>
-                  <Search size={18} style={{ color: darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.85)' }} strokeWidth={2}/>
-                </button>
-              </>
+              <button
+                onClick={toggleSidebarClick}
+                style={{
+                  width: 40, height: 40, borderRadius: 12,
+                  background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                  border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={36}
+                  style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
+              </button>
             )}
           </div>
-
           {/* Center logo */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: gradient, boxShadow: `0 4px 14px rgba(${pRgb},0.45)` }}>
-              <GraduationCap className="w-[18px] h-[18px] text-white" strokeWidth={2.5}/>
+          <div style={{
+            position: 'absolute', left: '50%', top: '50%',
+            transform: 'translate(-50%,-50%)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 12,
+              background: gradient, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <GraduationCap size={16} color="#fff" strokeWidth={2.5}/>
             </div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: darkMode ? '#fff' : '#111827' }}>EduPlatform</span>
           </div>
-
           {isAuthenticated && (
             <div className="flex items-center gap-2">
-              {/* Bell */}
+              <button
+                onClick={() => setShowMobileSearch(true)}
+                style={{
+                  width: 40, height: 40, borderRadius: 12,
+                  background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                  border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+              >
+                <Search size={16} color={darkMode ? '#94a3b8' : '#6b7280'} />
+              </button>
               <div className="relative">
-                <button onClick={() => setShowNotifications(v => !v)}
-                  className="notif-btn relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200"
-                  style={glassBtn}
-                  onMouseEnter={e => Object.assign(e.currentTarget.style, glassBtnHov)}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = glassBtn.background as string;
-                    e.currentTarget.style.border = glassBtn.border as string;
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}>
-                  <Bell size={18} style={{ color: darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.85)' }} strokeWidth={2}/>
+                <button
+                  onClick={() => setShowNotifications(v => !v)}
+                  className="notif-btn"
+                  style={{
+                    width: 40, height: 40, borderRadius: 12,
+                    background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                    border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', position: 'relative',
+                  }}
+                >
+                  <Bell size={16} color={darkMode ? '#94a3b8' : '#6b7280'} />
                   {notifications.length > 0 && (
-                    <span className="absolute top-1 right-1 text-white text-[9px] rounded-full min-w-[15px] h-[15px] px-1 flex items-center justify-center font-bold"
-                      style={{ background: gradient, boxShadow: `0 2px 6px rgba(${pRgb},0.6)` }}>
-                      {notifications.length > 9 ? '9+' : notifications.length}
-                    </span>
+                    <span style={{
+                      position: 'absolute', top: 6, right: 6,
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: gradient,
+                    }} />
                   )}
                 </button>
                 {showNotifications && (
                   <NotifDropdown pos="mobile" darkMode={darkMode} pRgb={pRgb}
                     notifications={notifications} onClear={() => setNotifications([])}
-                    onRemove={removeNotification} notifIcon={notifIcon} notifColor={notifColor}/>
+                    onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
+                  />
                 )}
               </div>
-              {/* Avatar */}
-              <button onClick={() => setShowProfile(true)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm hover:scale-105 active:scale-95 transition-all"
-                style={{ background: gradient, boxShadow: `0 3px 12px rgba(${pRgb},0.45)` }}>
+              <button
+                onClick={() => setShowProfile(true)}
+                style={{
+                  width: 36, height: 36, borderRadius: 12,
+                  background: gradient, color: '#fff',
+                  fontWeight: 700, fontSize: 13,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: 'none', cursor: 'pointer',
+                }}
+              >
                 {user && getInitials(user.name)}
               </button>
             </div>
           )}
         </div>
 
-        {/* ── DESKTOP layout ── */}
-        <div className="hidden lg:flex items-center justify-between w-full relative px-5 gap-4">
-
-          {/* Search pill — glass card, same tinted treatment as inactive nav icon bubbles */}
+        {/* Desktop header */}
+        <div className="hidden lg:flex items-center justify-between w-full px-6 gap-4">
+          {/* Search — pill style like iDraft */}
           {isAuthenticated && (
-            <div className="relative flex-1 max-w-[480px]">
-              <form onSubmit={handleSearchSubmit} className="relative">
+            <div className="relative flex-1 max-w-[520px]">
+              <form onSubmit={handleSearchSubmit} className="relative search-input-wrap">
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={handleSearchChange}
+                  onChange={e => { setSearchQuery(e.target.value); if (!e.target.value) setShowSearchResults(false); }}
                   placeholder="Search courses, content..."
-                  className="search-input w-full h-10 rounded-2xl focus:outline-none text-[13px] font-medium"
                   style={{
+                    width: '100%', height: 42,
+                    borderRadius: 999,
                     background: darkMode ? 'rgba(255,255,255,0.06)' : '#ffffff',
                     border: darkMode ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.10)',
-                    paddingLeft: 40, paddingRight: 16,
+                    paddingLeft: 44, paddingRight: 16,
+                    fontSize: 13, fontWeight: 500,
                     color: darkMode ? '#f1f5f9' : '#111827',
-                    fontFamily: "'Outfit', sans-serif",
-                    boxShadow: darkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.08)',
+                    fontFamily: "'Outfit',sans-serif",
+                    outline: 'none',
+                    boxShadow: darkMode ? 'none' : '0 1px 4px rgba(0,0,0,0.06)',
                     transition: 'all 0.2s ease',
                   }}
                   onFocus={e => {
-                    e.currentTarget.style.border = `1px solid rgba(${pRgb},0.5)`;
+                    e.currentTarget.style.borderColor = `rgba(${pRgb},0.5)`;
                     e.currentTarget.style.boxShadow = `0 0 0 3px rgba(${pRgb},0.12)`;
                   }}
                   onBlur={e => {
-                    e.currentTarget.style.border = darkMode ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.10)';
-                    e.currentTarget.style.boxShadow = darkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.08)';
+                    e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
+                    e.currentTarget.style.boxShadow = darkMode ? 'none' : '0 1px 4px rgba(0,0,0,0.06)';
                   }}
                 />
-                {/* Search icon */}
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <Search size={14} style={{ color: darkMode ? '#64748b' : '#9ca3af' }} strokeWidth={2}/>
-                </span>
-                {/* Search results dropdown */}
+                <Search size={15} style={{
+                  position: 'absolute', left: 16, top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: darkMode ? '#475569' : '#9ca3af',
+                  pointerEvents: 'none',
+                }} />
                 {showSearchResults && searchQuery && (
                   <div className="search-results absolute top-full left-0 right-0 mt-2 rounded-2xl overflow-hidden z-50"
                     style={{
                       background: darkMode ? '#0d1017' : '#ffffff',
                       border: `1px solid rgba(${pRgb},0.2)`,
-                      boxShadow: `0 16px 40px rgba(0,0,0,0.3)`,
-                    }}>
-                    <div className="px-3 py-2.5 border-b" style={{ borderColor: darkMode ? 'rgba(255,255,255,0.06)' : '#f3f4f6' }}>
-                      <p style={{ fontSize: '11px', fontWeight: 500, color: darkMode ? '#64748b' : '#9ca3af' }}>
-                        Results for <span style={{ color: darkMode ? 'white' : primaryColor, fontWeight: 700 }}>"{searchQuery}"</span>
-                      </p>
+                      boxShadow: '0 16px 40px rgba(0,0,0,0.28)',
+                    }}
+                  >
+                    <div style={{ padding: '8px 12px', borderBottom: darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid #f3f4f6' }}>
+                      <p style={{ fontSize: 11, color: '#64748b' }}>Results for <strong style={{ color: darkMode ? '#fff' : primaryColor }}>"{searchQuery}"</strong></p>
                     </div>
-                    {(isStudent
-                      ? ['Student Dashboard','Content Library','My Progress']
-                      : isTeacher
-                        ? ['Teacher Dashboard','Content Upload','Study Plans']
-                        : ['Content Library','My Courses','Analytics']
+                    {(isStudent ? ['Student Dashboard','Content Library','My Progress'] :
+                      isTeacher ? ['Teacher Dashboard','Content Upload','Study Plans'] :
+                      ['Content Library','My Courses','Analytics']
                     ).map(r => (
                       <button key={r}
-                        className="w-full text-left px-4 py-2.5 text-[13px] font-medium border-b last:border-0 transition-all duration-150"
-                        style={{ color: darkMode ? '#e2e8f0' : '#111827', borderColor: darkMode ? 'rgba(255,255,255,0.05)' : '#f3f4f6', fontFamily:"'Outfit',sans-serif" }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = darkMode ? `rgba(${pRgb},0.1)` : `rgba(${pRgb},0.06)`;
-                          e.currentTarget.style.paddingLeft = '20px';
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '10px 16px', fontSize: 13, fontWeight: 500,
+                          color: darkMode ? '#e2e8f0' : '#111827',
+                          background: 'transparent',
+                          border: 'none',
+                          borderBottom: darkMode ? '1px solid rgba(255,255,255,0.04)' : '1px solid #f9fafb',
+                          cursor: 'pointer', fontFamily: "'Outfit',sans-serif",
+                          transition: 'all 0.15s ease',
                         }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.paddingLeft = '16px';
-                        }}>
+                        onMouseEnter={e => { e.currentTarget.style.background = darkMode ? `rgba(${pRgb},0.09)` : `rgba(${pRgb},0.05)`; e.currentTarget.style.paddingLeft = '20px'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.paddingLeft = '16px'; }}
+                      >
                         {r}
                       </button>
                     ))}
@@ -891,184 +638,178 @@ const Navigation = () => {
             </div>
           )}
 
-          {/* Right-side action buttons */}
+          {/* Right buttons */}
           {isAuthenticated && (
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2.5 flex-shrink-0">
 
-              {/* + Create button — matches iDraft reference */}
+              {/* + Create button */}
               <button
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-semibold text-white transition-all duration-200"
                 style={{
-                  background: darkMode
-                    ? `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)`
-                    : `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)`,
-                  boxShadow: `0 2px 8px rgba(${pRgb},0.35)`,
-                  border: 'none',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '0 18px', height: 40, borderRadius: 999,
+                  background: gradient,
+                  color: '#fff', fontSize: 13, fontWeight: 700,
+                  border: 'none', cursor: 'pointer',
+                  boxShadow: `0 3px 12px rgba(${pRgb},0.4)`,
+                  fontFamily: "'Outfit',sans-serif",
+                  transition: 'all 0.2s cubic-bezier(0.34,1.25,0.64,1)',
                 }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'scale(1.04)';
-                  e.currentTarget.style.boxShadow = `0 4px 16px rgba(${pRgb},0.5)`;
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                  e.currentTarget.style.boxShadow = `0 2px 8px rgba(${pRgb},0.35)`;
-                }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; e.currentTarget.style.boxShadow = `0 6px 20px rgba(${pRgb},0.55)`; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 3px 12px rgba(${pRgb},0.4)`; }}
               >
-                <span style={{ fontSize: 16, lineHeight: 1, marginTop: -1 }}>+</span>
+                <Plus size={15} strokeWidth={2.5} />
                 Create
               </button>
 
               {/* Bell */}
               <div className="relative">
-                <button onClick={() => setShowNotifications(v => !v)}
-                  className="notif-btn relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200"
-                  style={glassBtn}
-                  onMouseEnter={e => Object.assign(e.currentTarget.style, glassBtnHov)}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = glassBtn.background as string;
-                    e.currentTarget.style.border = glassBtn.border as string;
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}>
-                  <Bell size={17} style={{ color: darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.85)' }} strokeWidth={2}/>
+                <button
+                  onClick={() => setShowNotifications(v => !v)}
+                  className="notif-btn"
+                  style={{
+                    width: 40, height: 40, borderRadius: 999,
+                    background: darkMode ? 'rgba(255,255,255,0.06)' : '#ffffff',
+                    border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.10)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', position: 'relative',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = darkMode ? `rgba(${pRgb},0.12)` : `rgba(${pRgb},0.07)`; e.currentTarget.style.borderColor = `rgba(${pRgb},0.25)`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : '#ffffff'; e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.10)'; }}
+                >
+                  <Bell size={17} color={darkMode ? '#94a3b8' : '#6b7280'} strokeWidth={2} />
                   {notifications.length > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 text-white text-[9px] rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center font-bold"
-                      style={{ background: gradient, boxShadow: `0 2px 6px rgba(${pRgb},0.6)` }}>
-                      {notifications.length > 9 ? '9+' : notifications.length}
-                    </span>
+                    <span style={{
+                      position: 'absolute', top: 8, right: 8,
+                      width: 7, height: 7, borderRadius: '50%',
+                      background: gradient,
+                      boxShadow: `0 0 6px rgba(${pRgb},0.8)`,
+                    }} />
                   )}
                 </button>
                 {showNotifications && (
                   <NotifDropdown pos="desktop" darkMode={darkMode} pRgb={pRgb}
                     notifications={notifications} onClear={() => setNotifications([])}
-                    onRemove={removeNotification} notifIcon={notifIcon} notifColor={notifColor}/>
+                    onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
+                  />
                 )}
               </div>
 
-              {/* Profile avatar — iDraft style: avatar + full name, pill shape */}
-              <button onClick={() => setShowProfile(true)}
-                className="flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-2xl transition-all duration-200"
+              {/* Profile chip — avatar + full name */}
+              <button
+                onClick={() => setShowProfile(true)}
                 style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '5px 14px 5px 5px', borderRadius: 999,
                   background: darkMode ? 'rgba(255,255,255,0.07)' : '#ffffff',
                   border: darkMode ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.10)',
+                  cursor: 'pointer',
                   boxShadow: darkMode ? 'none' : '0 1px 4px rgba(0,0,0,0.08)',
+                  transition: 'all 0.2s ease',
+                  fontFamily: "'Outfit',sans-serif",
                 }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = darkMode ? `rgba(${pRgb},0.12)` : '#f9fafb';
-                  e.currentTarget.style.borderColor = `rgba(${pRgb},0.3)`;
-                  e.currentTarget.style.transform = 'scale(1.02)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.07)' : '#ffffff';
-                  e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
-                  e.currentTarget.style.transform = 'scale(1)';
+                onMouseEnter={e => { e.currentTarget.style.borderColor = `rgba(${pRgb},0.3)`; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'; e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%',
+                  background: gradient, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, fontSize: 12, flexShrink: 0,
                 }}>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-                  style={{ background: gradient }}>
                   {user && getInitials(user.name)}
                 </div>
                 <span style={{
-                  fontSize: '13px',
-                  fontWeight: 600,
+                  fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+                  maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis',
                   color: darkMode ? '#e2e8f0' : '#111827',
-                  whiteSpace: 'nowrap',
-                  maxWidth: 160,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
                 }}>
                   {user?.name}
                 </span>
               </button>
 
-              {/* Sign-out */}
-              <button onClick={handleSignOutClick} disabled={isSigningOut}
-                className="flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200"
-                style={glassBtn} title="Sign Out"
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(239,68,68,0.12)';
-                  e.currentTarget.style.border = '1px solid rgba(239,68,68,0.28)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(239,68,68,0.2)';
+              {/* Sign out */}
+              <button
+                onClick={handleSignOutClick}
+                disabled={isSigningOut}
+                title="Sign Out"
+                style={{
+                  width: 40, height: 40, borderRadius: 999,
+                  background: darkMode ? 'rgba(255,255,255,0.06)' : '#ffffff',
+                  border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.10)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', opacity: isSigningOut ? 0.6 : 1,
+                  transition: 'all 0.2s ease',
                 }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = glassBtn.background as string;
-                  e.currentTarget.style.border = glassBtn.border as string;
-                  e.currentTarget.style.boxShadow = 'none';
-                }}>
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.25)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : '#ffffff'; e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.10)'; }}
+              >
                 {isSigningOut
-                  ? <Loader2 size={16} style={{ color: darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.85)' }} className="animate-spin"/>
-                  : <LogOut size={16} style={{ color: darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.85)' }} strokeWidth={2}/>}
+                  ? <Loader2 size={16} color="#64748b" className="animate-spin"/>
+                  : <LogOut size={16} color={darkMode ? '#64748b' : '#9ca3af'} strokeWidth={2}/>
+                }
               </button>
             </div>
           )}
         </div>
       </header>
-      {/* mobile search modal — same tinted glass as header/sidebar */}
+
+      {/* Mobile search modal */}
       {showMobileSearch && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[90] lg:hidden"
           onClick={() => setShowMobileSearch(false)}>
-          <div className="absolute top-0 left-0 right-0 px-3 py-3 border-b"
-            onClick={e => e.stopPropagation()}
+          <div className="absolute top-0 left-0 right-0 px-4 py-4"
             style={{
-              background: darkMode
-                ? `linear-gradient(90deg, rgba(6,9,20,0.98) 0%, rgba(${pRgb},0.09) 50%, rgba(6,9,20,0.98) 100%)`
-                : `linear-gradient(90deg, rgba(250,251,255,0.98) 0%, rgba(${pRgb},0.06) 50%, rgba(248,250,255,0.98) 100%)`,
-              backdropFilter: 'blur(32px) saturate(200%)',
-              borderColor: `rgba(${pRgb},0.16)`,
-              paddingTop: 'max(env(safe-area-inset-top,0px) + 12px, 12px)',
-              fontFamily: "'Outfit',sans-serif",
-            }}>
+              background: darkMode ? 'rgba(13,16,26,0.98)' : 'rgba(248,249,252,0.98)',
+              borderBottom: darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
+            }}
+            onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2">
               <form onSubmit={handleSearchSubmit} className="flex-1">
                 <div className="relative">
-                  <input type="text" value={searchQuery} onChange={handleSearchChange}
-                    placeholder="Search courses, content…" autoFocus
-                    className="w-full h-11 rounded-xl focus:outline-none text-[14px] font-medium"
+                  <input type="text" value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search..." autoFocus
                     style={{
-                      background: darkMode ? `rgba(${pRgb},0.12)` : 'rgba(255,255,255,0.8)',
-                      border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
-                      paddingLeft: 42, paddingRight: 16,
-                      color: darkMode ? '#f1f5f9' : '#111827',
-                      backdropFilter: 'blur(16px)',
-                      fontFamily: "'Outfit',sans-serif",
+                      width: '100%', height: 44, borderRadius: 999,
+                      background: darkMode ? 'rgba(255,255,255,0.07)' : '#ffffff',
+                      border: `1px solid rgba(${pRgb},0.3)`,
+                      paddingLeft: 44, paddingRight: 16,
+                      color: darkMode ? '#f1f5f9' : '#111827', fontSize: 14,
+                      fontFamily: "'Outfit',sans-serif", outline: 'none',
                       boxShadow: `0 0 0 3px rgba(${pRgb},0.12)`,
-                    }}/>
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center pointer-events-none"
-                    style={{
-                      background: darkMode ? `rgba(${pRgb},0.2)` : `rgba(${pRgb},0.12)`,
-                      border: darkMode ? `1px solid rgba(${pRgb},0.28)` : `1px solid rgba(${pRgb},0.2)`,
-                    }}>
-                    <Search size={12} style={{ color: primaryColor }} strokeWidth={2.5}/>
-                  </span>
+                    }}
+                  />
+                  <Search size={15} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: '#64748b', pointerEvents: 'none' }}/>
                 </div>
               </form>
               <button onClick={() => setShowMobileSearch(false)}
-                className="flex items-center justify-center w-11 h-11 rounded-xl flex-shrink-0 transition-all duration-200"
-                style={glassBtn}
-                onMouseEnter={e => Object.assign(e.currentTarget.style, glassBtnHov)}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = glassBtn.background as string;
-                  e.currentTarget.style.border = glassBtn.border as string;
-                  e.currentTarget.style.boxShadow = 'none';
-                }}>
-                <X size={18} style={{ color: darkMode ? 'rgba(148,163,184,0.85)' : 'rgba(75,85,99,0.85)' }} strokeWidth={2}/>
+                style={{
+                  width: 44, height: 44, borderRadius: 999, flexShrink: 0,
+                  background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
+                  border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.09)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                }}
+              >
+                <X size={16} color={darkMode ? '#94a3b8' : '#6b7280'}/>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* profile modal */}
       {showProfile && isAuthenticated && (
-        <Profile onClose={() => setShowProfile(false)} onSuccess={handleProfileSuccess}/>
+        <Profile onClose={() => setShowProfile(false)} onSuccess={() => { setShowProfile(false); window.location.reload(); }}/>
       )}
 
       <style>{`
         nav::-webkit-scrollbar { display: none; }
-        .header-container, aside { -webkit-font-smoothing: antialiased; }
         @keyframes notif-in {
           from { opacity:0; transform:translateY(-6px) scale(0.97); }
           to   { opacity:1; transform:translateY(0) scale(1); }
         }
         .notif-dropdown { animation: notif-in 0.18s cubic-bezier(0.34,1.2,0.64,1) forwards; }
+        .nav-item-oval { outline: none; text-decoration: none; }
         @media (prefers-reduced-motion:reduce) {
           *, *::before, *::after { animation-duration:.01ms!important; transition-duration:.01ms!important; }
         }
