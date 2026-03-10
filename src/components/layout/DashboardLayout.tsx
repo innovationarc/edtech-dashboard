@@ -275,9 +275,9 @@ const DashboardLayout = () => {
       <Navigation />
 
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
-        !isMobile && sidebarOpen ? 'ml-64' : !isMobile ? 'ml-20' : 'ml-0'
+        !isMobile ? 'ml-[72px]' : 'ml-0'
       }`}>
-        <main className="dl-main flex-1 overflow-auto pt-16 sm:pt-[68px] lg:pt-[72px]">
+        <main className="dl-main flex-1 overflow-auto pt-[72px]">
           <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
             <Outlet />
           </div>
