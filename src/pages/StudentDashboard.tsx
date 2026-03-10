@@ -30,7 +30,7 @@ const APB = (p:string) => p==='high'?'#ef4444':p==='medium'?'#f59e0b':p==='low'?
 const EDC = (t:string) => { const s=t.toLowerCase(); return s.includes('exam')||s.includes('test')||s.includes('quiz')?'#ef4444':s.includes('assignment')||s.includes('due')?'#f59e0b':s.includes('class')||s.includes('lecture')?'#6366f1':'#10b981'; };
 
 const StudentDashboard = () => {
-  const { user } = useDashboard();
+  const { user, primaryColor = '#6366f1', accentColor = '#8b5cf6' } = useDashboard();
   const [dailyQuote, setDailyQuote]                 = useState(() => getRandomQuote());
   const [announcements, setAnnouncements]           = useState<Announcement[]>([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
@@ -158,27 +158,94 @@ const StudentDashboard = () => {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'clamp(12px,2vw,22px)',fontFamily:"'Outfit',sans-serif"}}>
 
-      {/* Welcome Banner */}
-      <div style={{background:'linear-gradient(135deg,rgba(99,102,241,0.16) 0%,rgba(139,92,246,0.1) 50%,rgba(16,185,129,0.08) 100%)',border:'1px solid rgba(99,102,241,0.18)',borderRadius:20,padding:'clamp(14px,2vw,24px)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:14,flexWrap:'wrap',position:'relative',overflow:'hidden'}}>
-        <div style={{position:'absolute',top:0,left:'5%',right:'5%',height:1,background:'linear-gradient(90deg,transparent,rgba(99,102,241,0.35),transparent)',pointerEvents:'none'}}/>
-        <div>
-          <p style={{fontSize:'clamp(0.68rem,1.1vw,0.78rem)',fontWeight:700,color:'rgba(99,102,241,0.9)',textTransform:'uppercase',letterSpacing:'0.09em',margin:'0 0 3px'}}>{greeting} ✦</p>
-          <h1 style={{fontSize:'clamp(1.1rem,2.8vw,1.65rem)',fontWeight:750,color:'rgba(255,255,255,0.95)',margin:'0 0 3px',letterSpacing:'-0.02em'}}>{user?.name || 'Student'}!</h1>
-          <p style={{fontSize:'clamp(0.72rem,1.1vw,0.82rem)',color:'rgba(255,255,255,0.48)',margin:0}}>You have {objectives.filter(o=>!o.completed).length} tasks left today.</p>
+      {/* Welcome Banner — matches Image 2 style */}
+      <div style={{
+        background: 'linear-gradient(145deg, rgba(20,22,40,0.85) 0%, rgba(30,27,64,0.80) 50%, rgba(17,24,39,0.82) 100%)',
+        backdropFilter: 'blur(20px) saturate(170%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(170%)',
+        border: '1px solid rgba(99,102,241,0.16)',
+        borderRadius: 24,
+        padding: 'clamp(20px,3vw,32px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 16, flexWrap: 'wrap',
+        position: 'relative', overflow: 'hidden',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)',
+      }}>
+        {/* Subtle ambient glow */}
+        <div style={{ position:'absolute', top:-60, left:'10%', width:280, height:280, borderRadius:'50%', background:'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)', pointerEvents:'none' }}/>
+        <div style={{ position:'absolute', bottom:-40, right:'5%', width:200, height:200, borderRadius:'50%', background:'radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)', pointerEvents:'none' }}/>
+
+        <div style={{ position:'relative', flex: 1 }}>
+          {/* Welcome back line */}
+          <p style={{
+            fontSize: 'clamp(0.68rem,1.1vw,0.78rem)',
+            fontWeight: 700,
+            color: 'rgba(99,102,241,0.85)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.10em',
+            margin: '0 0 6px',
+          }}>
+            {greeting} ✦
+          </p>
+          {/* Big name — like Image 2 */}
+          <h1 style={{
+            fontSize: 'clamp(1.5rem,3.5vw,2.2rem)',
+            fontWeight: 800,
+            color: 'rgba(255,255,255,0.96)',
+            margin: '0 0 6px',
+            letterSpacing: '-0.03em',
+            lineHeight: 1.1,
+          }}>
+            {user?.name || 'Student'}! ⭐
+          </h1>
+          {/* Subtitle */}
+          <p style={{
+            fontSize: 'clamp(0.8rem,1.3vw,0.95rem)',
+            color: 'rgba(148,163,184,0.75)',
+            margin: 0,
+          }}>
+            Ready to conquer your learning goals today?
+          </p>
+          {/* Task count badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            marginTop: 12, padding: '5px 12px', borderRadius: 999,
+            background: 'rgba(99,102,241,0.14)',
+            border: '1px solid rgba(99,102,241,0.25)',
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', flexShrink: 0 }}/>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(165,180,252,0.95)' }}>
+              {objectives.filter(o=>!o.completed).length} tasks left today
+            </span>
+          </div>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
-          <div style={{position:'relative',width:60,height:60}}>
-            <svg width="60" height="60" style={{transform:'rotate(-90deg)'}}>
-              <circle cx="30" cy="30" r="24" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="5"/>
-              <circle cx="30" cy="30" r="24" fill="none" stroke="#6366f1" strokeWidth="5" strokeDasharray={`${2*Math.PI*24*pct/100} ${2*Math.PI*24}`} strokeLinecap="round"/>
+
+        {/* Date + progress ring */}
+        <div style={{ display:'flex', alignItems:'center', gap:16, flexShrink:0, position:'relative' }}>
+          {/* Progress ring */}
+          <div style={{ position:'relative', width:64, height:64 }}>
+            <svg width="64" height="64" style={{transform:'rotate(-90deg)'}}>
+              <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="5"/>
+              <circle cx="32" cy="32" r="26" fill="none" stroke="url(#ringGrad)" strokeWidth="5"
+                strokeDasharray={`${2*Math.PI*26*pct/100} ${2*Math.PI*26}`} strokeLinecap="round"
+                style={{transition:'stroke-dasharray 1s ease'}}/>
+              <defs>
+                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor={primaryColor}/>
+                  <stop offset="100%" stopColor={accentColor}/>
+                </linearGradient>
+              </defs>
             </svg>
             <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-              <span style={{fontSize:13,fontWeight:750,color:'white',lineHeight:1}}>{pct}%</span>
+              <span style={{fontSize:14,fontWeight:800,color:'white',lineHeight:1}}>{pct}%</span>
             </div>
           </div>
-          <div>
-            <p style={{fontSize:11,color:'rgba(255,255,255,0.4)',margin:'0 0 2px'}}>Today</p>
-            <p style={{fontSize:13,fontWeight:700,color:'rgba(255,255,255,0.88)',margin:0}}>{new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</p>
+          {/* Date */}
+          <div style={{ textAlign:'right' }}>
+            <p style={{ fontSize:11, color:'rgba(148,163,184,0.6)', margin:'0 0 2px', textTransform:'uppercase', letterSpacing:'0.06em' }}>Today</p>
+            <p style={{ fontSize:15, fontWeight:700, color:'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap' }}>
+              {new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
+            </p>
           </div>
         </div>
       </div>
