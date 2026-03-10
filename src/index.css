@@ -75,17 +75,27 @@
   .theme-light {
     --color-text: #111827;
     --color-text-secondary: #6b7280;
+    --color-background: #f1eee7;
   }
 
-  /* ── Light mode: FULL white treatment ── */
+  /* ════════════════════════════════════════════
+     LIGHT MODE — complete warm white treatment
+     Background: #f1eee7 (warm parchment like iDraft)
+  ════════════════════════════════════════════ */
   .theme-light,
   .theme-light body,
   .theme-light #root {
-    background-color: #f2f4f8 !important;
+    background-color: #f1eee7 !important;
     color: #111827 !important;
   }
 
-  /* All dark backgrounds become white */
+  /* Page/main area */
+  .theme-light .dl-main,
+  .theme-light .flex.h-screen {
+    background-color: #f1eee7 !important;
+  }
+
+  /* All utility dark backgrounds → white */
   .theme-light .bg-background-950,
   .theme-light .bg-background-900,
   .theme-light .bg-background-800,
@@ -94,64 +104,57 @@
   .theme-light .bg-card-light,
   .theme-light .bg-card-dark {
     background-color: #ffffff !important;
-    border-color: #e5e7eb !important;
+    border-color: rgba(0,0,0,0.07) !important;
   }
 
-  /* Text overrides */
+  /* Text */
   .theme-light .text-white,
-  .theme-light h1, .theme-light h2, .theme-light h3 {
+  .theme-light h1, .theme-light h2, .theme-light h3, .theme-light h4 {
     color: #111827 !important;
   }
   .theme-light .text-gray-300,
   .theme-light .text-gray-400,
-  .theme-light .text-slate-400 {
+  .theme-light .text-slate-400,
+  .theme-light .text-slate-500 {
     color: #6b7280 !important;
   }
   .theme-light p { color: #374151; }
 
   /* Borders */
   .theme-light .border-background-800,
-  .theme-light .border-white\/\[0\.06\],
-  .theme-light [class*="border-white"] {
-    border-color: #e5e7eb !important;
-  }
+  .theme-light [class*="border-white"] { border-color: rgba(0,0,0,0.08) !important; }
 
-  /* Main content area */
-  .theme-light .dl-main {
-    background-color: #f2f4f8 !important;
-  }
-
-  /* Cards get clean white + soft shadow */
+  /* Cards — white with subtle warm shadow */
   .theme-light .dashboard-card,
   .theme-light .stats-card-hover,
   .theme-light .saas-card-hover,
-  .theme-light [style*="background: 'var(--color-card"],
-  .theme-light [style*="background: var(--color-card"] {
+  .theme-light .glass-card {
     background-color: #ffffff !important;
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     border-color: rgba(0,0,0,0.07) !important;
     color: #111827 !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04) !important;
   }
   .theme-light .stats-card-hover:hover,
-  .theme-light .saas-card-hover:hover {
-    box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06) !important;
+  .theme-light .saas-card-hover:hover,
+  .theme-light .glass-card:hover {
+    box-shadow: 0 6px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06) !important;
   }
 
-  /* Inline dark backgrounds on cards → white */
-  .theme-light [style*="#1f2937"],
-  .theme-light [style*="#111827"],
-  .theme-light [style*="#0d1117"],
-  .theme-light [style*="#374151"],
-  .theme-light [style*="rgba(13,16,26"],
-  .theme-light [style*="rgba(6,9,20"],
-  .theme-light [style*="rgba(17,24,39"] {
-    background: #ffffff !important;
-    color: #111827 !important;
+  /* Force white on any inline rgba dark backgrounds */
+  .theme-light [style*="rgba(255,255,255,0.03)"],
+  .theme-light [style*="rgba(255,255,255,0.04)"],
+  .theme-light [style*="rgba(255,255,255,0.05)"],
+  .theme-light [style*="rgba(255,255,255,0.06)"] {
+    background: rgba(0,0,0,0.03) !important;
   }
 
-  /* Scrollbars in light mode */
-  .theme-light ::-webkit-scrollbar-track { background: #f2f4f8; }
-  .theme-light ::-webkit-scrollbar-thumb { background: #d1d5db; }
-  .theme-light ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+  /* Scrollbars */
+  .theme-light ::-webkit-scrollbar-track { background: #f1eee7; }
+  .theme-light ::-webkit-scrollbar-thumb { background: #d6d0c8; }
+  .theme-light ::-webkit-scrollbar-thumb:hover { background: #b8b2aa; }
 
   .theme-purple {
     --color-text: #ffffff;
@@ -689,12 +692,12 @@
 
 .dl-main {
   position: relative;
-  background-color: #0f1117;
+  background-color: var(--color-background, #0f1117);
 }
 
-/* Light theme — clean white-gray */
+/* Light theme — warm parchment */
 .theme-light .dl-main {
-  background-color: #f2f4f8 !important;
+  background-color: #f1eee7 !important;
 }
 
 /* Theme variants — solid clean backgrounds */
