@@ -158,94 +158,22 @@ const StudentDashboard = () => {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'clamp(12px,2vw,22px)',fontFamily:"'Outfit',sans-serif"}}>
 
-      {/* Welcome Banner — matches Image 2 style */}
-      <div style={{
-        background: 'linear-gradient(145deg, rgba(20,22,40,0.85) 0%, rgba(30,27,64,0.80) 50%, rgba(17,24,39,0.82) 100%)',
-        backdropFilter: 'blur(20px) saturate(170%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(170%)',
-        border: '1px solid rgba(99,102,241,0.16)',
-        borderRadius: 24,
-        padding: 'clamp(20px,3vw,32px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 16, flexWrap: 'wrap',
-        position: 'relative', overflow: 'hidden',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07)',
-      }}>
-        {/* Subtle ambient glow */}
-        <div style={{ position:'absolute', top:-60, left:'10%', width:280, height:280, borderRadius:'50%', background:'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)', pointerEvents:'none' }}/>
-        <div style={{ position:'absolute', bottom:-40, right:'5%', width:200, height:200, borderRadius:'50%', background:'radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)', pointerEvents:'none' }}/>
-
-        <div style={{ position:'relative', flex: 1 }}>
-          {/* Welcome back line */}
-          <p style={{
-            fontSize: 'clamp(0.68rem,1.1vw,0.78rem)',
-            fontWeight: 700,
-            color: 'rgba(99,102,241,0.85)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.10em',
-            margin: '0 0 6px',
-          }}>
-            {greeting} ✦
-          </p>
-          {/* Big name — like Image 2 */}
-          <h1 style={{
-            fontSize: 'clamp(1.5rem,3.5vw,2.2rem)',
-            fontWeight: 800,
-            color: 'rgba(255,255,255,0.96)',
-            margin: '0 0 6px',
-            letterSpacing: '-0.03em',
-            lineHeight: 1.1,
-          }}>
-            {user?.name || 'Student'}! ⭐
+      {/* Welcome Banner — from uploaded file */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            Welcome back, {user?.name || 'Student'}! 🌟
           </h1>
-          {/* Subtitle */}
-          <p style={{
-            fontSize: 'clamp(0.8rem,1.3vw,0.95rem)',
-            color: 'rgba(148,163,184,0.75)',
-            margin: 0,
-          }}>
-            Ready to conquer your learning goals today?
-          </p>
-          {/* Task count badge */}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            marginTop: 12, padding: '5px 12px', borderRadius: 999,
-            background: 'rgba(99,102,241,0.14)',
-            border: '1px solid rgba(99,102,241,0.25)',
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', flexShrink: 0 }}/>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(165,180,252,0.95)' }}>
-              {objectives.filter(o=>!o.completed).length} tasks left today
-            </span>
-          </div>
+          <p className="text-gray-400 mt-1">Ready to conquer your learning goals today?</p>
         </div>
-
-        {/* Date + progress ring */}
-        <div style={{ display:'flex', alignItems:'center', gap:16, flexShrink:0, position:'relative' }}>
-          {/* Progress ring */}
-          <div style={{ position:'relative', width:64, height:64 }}>
-            <svg width="64" height="64" style={{transform:'rotate(-90deg)'}}>
-              <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="5"/>
-              <circle cx="32" cy="32" r="26" fill="none" stroke="url(#ringGrad)" strokeWidth="5"
-                strokeDasharray={`${2*Math.PI*26*pct/100} ${2*Math.PI*26}`} strokeLinecap="round"
-                style={{transition:'stroke-dasharray 1s ease'}}/>
-              <defs>
-                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor={primaryColor}/>
-                  <stop offset="100%" stopColor={accentColor}/>
-                </linearGradient>
-              </defs>
-            </svg>
-            <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-              <span style={{fontSize:14,fontWeight:800,color:'white',lineHeight:1}}>{pct}%</span>
-            </div>
-          </div>
-          {/* Date */}
-          <div style={{ textAlign:'right' }}>
-            <p style={{ fontSize:11, color:'rgba(148,163,184,0.6)', margin:'0 0 2px', textTransform:'uppercase', letterSpacing:'0.06em' }}>Today</p>
-            <p style={{ fontSize:15, fontWeight:700, color:'rgba(255,255,255,0.9)', margin:0, whiteSpace:'nowrap' }}>
-              {new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
-            </p>
+        <div className="text-right">
+          <div className="text-sm text-gray-400">Today</div>
+          <div className="text-lg font-semibold text-white">
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric'
+            })}
           </div>
         </div>
       </div>
