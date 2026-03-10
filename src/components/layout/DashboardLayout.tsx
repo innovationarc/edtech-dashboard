@@ -266,7 +266,7 @@ const DashboardLayout = () => {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: '#0f1117' }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--color-background, #0d1117)' }}>
       <style>{`
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
@@ -275,9 +275,9 @@ const DashboardLayout = () => {
       <Navigation />
 
       <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
-        !isMobile ? 'ml-[72px]' : 'ml-0'
+        !isMobile ? 'ml-[220px]' : 'ml-0'
       }`}>
-        <main className="dl-main flex-1 overflow-auto pt-[72px]">
+        <main className="dl-main flex-1 overflow-auto pt-0">
           <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
             <Outlet />
           </div>
