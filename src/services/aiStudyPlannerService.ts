@@ -319,7 +319,7 @@ Return ONLY a valid JSON array with no markdown:
   ): Promise<{ response: string; calendarEvents: CalendarEventFromChat[] }> {
     const name = context.studentName || 'Student';
     const totalEvents = context.totalEvents ?? context.events ?? 0;
-    const hist = history.slice(-6).map(m => `${m.role === 'user' ? name : 'Sage'}: ${m.content}`).join('\n');
+    const hist = history.slice(-6).map(m => `${m.role === 'user' ? name : 'Minerva'}: ${m.content}`).join('\n');
 
     const courseCtx = context.enrolledCourses?.length
       ? `\nEnrolled courses: ${context.enrolledCourses.map(c => `${c.title} (${c.progress ?? 0}% done)`).join(', ')}`
@@ -333,7 +333,7 @@ Return ONLY a valid JSON array with no markdown:
 
     const today = new Date().toISOString().split('T')[0];
 
-    const prompt = `You are Sage, a warm and expert AI study companion for an EdTech platform. Be encouraging, concise, and actionable.
+    const prompt = `You are Minerva, a warm and expert AI study companion for an EdTech platform. Be encouraging, concise, and actionable.
 
 Student: ${name}
 Context: ${totalEvents} events, subjects: ${context.subjects.join(', ') || 'none'}, upcoming exams: ${context.upcomingExams.join(', ') || 'none'}
@@ -346,7 +346,7 @@ ${hist}
 ${name}: ${message}
 
 Instructions:
-- Respond as Sage (max 200 words, warm and actionable)
+- Respond as Minerva (max 200 words, warm and actionable)
 - If the student asks you to create, schedule, plan, or add study sessions/events to their calendar, include them in calendarEvents
 - Only include calendarEvents when explicitly creating/scheduling something
 
