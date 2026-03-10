@@ -690,6 +690,19 @@ export const studyPlanService = {
 
   // ── NEW: Enrolled Courses For Planning ────────────────────────────────────
 
+  // ── Help Video URL (set by teacher/admin, read by students) ─────────────────
+
+  async getHelpVideoUrl(): Promise<string> {
+    try {
+      const snap = await getDoc(doc(db, 'appSettings', 'studyPlanHelp'));
+      return snap.exists() ? (snap.data().videoUrl || '') : '';
+    } catch { return ''; }
+  },
+
+  async setHelpVideoUrl(url: string): Promise<void> {
+    await setDoc(doc(db, 'appSettings', 'studyPlanHelp'), { videoUrl: url }, { merge: true });
+  },
+
   async getEnrolledCoursesForPlanning(studentId: string): Promise<EnrolledCourseForPlanning[]> {
     try {
       const enrollments = await courseService.getStudentEnrollments(studentId);
