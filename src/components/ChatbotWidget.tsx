@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, X, Loader, AlertTriangle, Info } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
 import { useDashboard } from '../contexts/DashboardContext';
+import { callWithFailover } from '../services/aiModelConfigService';
 
 interface ChatbotWidgetProps { eyeOffset?: { x: number; y: number }; }
 interface ChatMessage { sender: 'user' | 'ai'; text: string; }
@@ -18,8 +19,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  const MODEL = 'gemini-2.5-flash';
+  // API key & model now managed by Admin → AI Model Settings (Key Groups / Legacy Config)
+  // Falls back to VITE_GEMINI_API_KEY via aiModelConfigService if no group assigned
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
   const isFlying = useRef(false);
@@ -36,24 +37,17 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
   const handleSendMessage = async () => {
     if (inputMessage.trim() === '' || isLoading) return;
-    if (!API_KEY) {
-      setErrorDetails(`API Key Missing!\n\nPlease create a .env file in your project root with:\nVITE_GEMINI_API_KEY=your_api_key_here\n\nThen restart your development server.`);
-      setMessages(p => [...p, { sender: 'ai', text: '❌ API key not configured. Please check .env file.' }]);
-      return;
-    }
     const userMessageText = inputMessage.trim();
     setMessages(p => [...p, { sender: 'user', text: userMessageText }]);
     setInputMessage(''); setIsLoading(true); setErrorDetails('');
     try {
       const tutorPrompt = `You are an AI tutor designed to help students learn.\nYour primary goal is to guide students to find answers themselves, not to give direct solutions.\nWhen a student asks a question, provide hints, ask guiding questions, or suggest resources.\nDo NOT provide the direct answer to a problem or question.\nIf a student asks for a direct answer, politely redirect them to think through the problem or provide a hint.\n\nStudent's question: "${userMessageText}"\n\nRespond as a helpful tutor who guides rather than tells.`;
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: tutorPrompt }] }] }) });
-      if (!response.ok) { const e = await response.json(); throw new Error(e.error?.message || `API Error (${response.status})`); }
-      const data = await response.json();
-      if (!data.candidates?.[0]?.content) throw new Error('Invalid response structure from Gemini API');
-      setMessages(p => [...p, { sender: 'ai', text: data.candidates[0].content.parts[0].text }]);
+      // Uses Admin → AI Model Settings: Key Group assigned to "chatbot" feature, or falls back to Legacy Config / VITE_GEMINI_API_KEY
+      const text = await callWithFailover(tutorPrompt, 'chatbot', 1024, 0.7);
+      setMessages(p => [...p, { sender: 'ai', text }]);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setErrorDetails(`Error: ${errorMsg}\n\nPossible causes:\n1. CORS blocking\n2. Network issue\n3. API key problem\n4. Rate limiting`);
+      setErrorDetails(`Error: ${errorMsg}\n\nPossible causes:\n1. No AI key configured (Admin → AI Model Settings)\n2. CORS blocking\n3. Network issue\n4. Rate limit exceeded — failover exhausted`);
       setMessages(p => [...p, { sender: 'ai', text: `❌ ${errorMsg}\n\nClick the info icon for details.` }]);
     } finally { setIsLoading(false); }
   };
@@ -95,10 +89,10 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
               <button onClick={() => setShowInfo(false)} className="text-gray-400 hover:text-white"><X size={20}/></button>
             </div>
             <div className="p-4 space-y-3 text-sm text-gray-300">
-              <p>AI Tutor powered by Google Gemini 2.5 Flash!</p>
-              <div className="bg-gray-700 p-3 rounded"><p className="font-medium text-white mb-2">✨ Features:</p><ul className="list-disc list-inside space-y-1 text-xs"><li>Powered by Gemini 2.5 Flash</li><li>Guides you to find answers yourself</li><li>Perfect for homework help & studying</li><li>Secure API key from .env</li></ul></div>
+              <p>AI Tutor powered by your configured AI provider (Admin → AI Model Settings).</p>
+              <div className="bg-gray-700 p-3 rounded"><p className="font-medium text-white mb-2">✨ Features:</p><ul className="list-disc list-inside space-y-1 text-xs"><li>Provider set in Admin → AI Model Settings</li><li>Guides you to find answers yourself</li><li>Perfect for homework help & studying</li><li>Automatic failover across key groups</li></ul></div>
               <div className="bg-blue-900 bg-opacity-30 border border-blue-700 p-2 rounded text-xs"><p className="text-blue-300">💡 <strong>Tip:</strong> Ask questions like "How do I..." for best results!</p></div>
-              {!API_KEY && <div className="bg-red-900 bg-opacity-30 border border-red-700 p-2 rounded text-xs"><p className="text-red-300">⚠️ API key not found. Add VITE_GEMINI_API_KEY to .env file.</p></div>}
+              <div className="bg-blue-900 bg-opacity-30 border border-blue-700 p-2 rounded text-xs"><p className="text-blue-300">💡 Configure your AI keys in <strong>Admin → AI Model Settings</strong>.</p></div>
               <button onClick={() => setShowInfo(false)} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors">Got it!</button>
             </div>
           </div>
@@ -129,7 +123,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           <div className="p-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-2xl flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-2xl">🎓</div>
-              <div><h3 className="text-white font-semibold">AI Tutor</h3><p className="text-xs text-blue-100">Gemini 2.5 Flash</p></div>
+              <div><h3 className="text-white font-semibold">AI Tutor</h3><p className="text-xs text-blue-100">AI-Powered Tutor</p></div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setShowInfo(true)} className="text-white hover:bg-white hover:bg-opacity-20 p-1 rounded transition-colors"><Info size={18}/></button>
