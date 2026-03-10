@@ -2,8 +2,9 @@
 // Multi-provider AI — Smart Schedule · Time Slots · Auto-Draft · Chat · Digest
 // Provider configured in Firestore via Admin → AI Model Settings
 // Supports: Gemini · Groq · OpenAI · Anthropic · DeepSeek
+// v2: routes through callWithFailover for group-based failover & rate limiting
 
-import { aiModelConfigService, callProviderDirect, AIModelConfig } from './aiModelConfigService';
+import { aiModelConfigService, callProviderDirect, callWithFailover, AIModelConfig, AIFeatureId } from './aiModelConfigService';
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -102,10 +103,19 @@ async function resolveConfig(legacyKey = ''): Promise<AIModelConfig> {
   return aiModelConfigService.getConfig();
 }
 
-async function callAI(prompt: string, maxTokens = 2048, temp = 0.7, legacyKey = ''): Promise<string> {
-  const cfg = await resolveConfig(legacyKey);
-  if (!cfg.apiKey) throw new Error('No AI API key configured. Go to Admin → AI Model Settings.');
-  return callProviderDirect(prompt, cfg, maxTokens, temp);
+async function callAI(
+  prompt: string,
+  maxTokens = 2048,
+  temp = 0.7,
+  legacyKey = '',
+  featureId: AIFeatureId = 'study_schedule'
+): Promise<string> {
+  if (legacyKey) {
+    // Legacy path: caller passed an explicit key → direct Gemini call (backwards compat)
+    return callProviderDirect(prompt, { provider: 'gemini', model: 'gemini-2.0-flash', apiKey: legacyKey }, maxTokens, temp);
+  }
+  // v2: group-based failover with rate limiting; falls back to single config if no group assigned
+  return callWithFailover(prompt, featureId, maxTokens, temp);
 }
 
 // Robust JSON parser — handles markdown fences, extra text, nested structures
@@ -200,7 +210,7 @@ Rules: morning=hard topics, afternoon=review, vary focus/review/practice, space 
 Return ONLY a valid JSON array with no markdown, no explanation:
 [{"title":"string","subject":"string","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"string","priority":"low|medium|high","sessionType":"focus|review|practice|break","tips":["t1","t2"]}]`;
 
-    const raw = await callAI(prompt, 3000, 0.6, apiKey);
+    const raw = await callAI(prompt, 3000, 0.6, apiKey, 'study_schedule');
     const parsed = parseJSON<any[]>(raw, [], true);
     if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('AI returned no schedule. Try adjusting your goals or free hours.');
     return parsed.map((s: any) => ({ ...s, date: new Date(s.date) }));
@@ -231,7 +241,7 @@ Rules: exams/hard topics → peak energy (morning), reviews → afternoon, pract
 Return ONLY a valid JSON array of exactly 3 objects with no markdown, no explanation:
 [{"date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","reason":"one sentence","energyLevel":"peak|medium|low","sessionType":"focus|review|practice|break","estimatedProductivity":75,"conflictWarning":null}]`;
 
-    const raw = await callAI(prompt, 1024, 0.5, apiKey);
+    const raw = await callAI(prompt, 1024, 0.5, apiKey, 'study_slots');
     const parsed = parseJSON<AITimeSlotSuggestion[]>(raw, [], true);
     if (!Array.isArray(parsed) || parsed.length === 0) {
       throw new Error('AI returned no time slots. Check your AI model settings or try again.');
@@ -248,7 +258,7 @@ Return ONLY a valid JSON object with no markdown:
 {"title":"improved title","description":"1-2 sentence description","priority":"low|medium|high","estimatedDuration":60,"suggestedPrep":["step1","step2","step3"],"relatedTopics":["topic1","topic2"]}`;
 
     return parseJSON<AIEventDraft>(
-      await callAI(prompt, 512, 0.6, apiKey),
+      await callAI(prompt, 512, 0.6, apiKey, 'study_draft'),
       { title, description: '', priority: 'medium', estimatedDuration: 60, suggestedPrep: [], relatedTopics: [] }
     );
   },
@@ -278,7 +288,7 @@ Return ONLY a valid JSON array with no markdown:
 [{"type":"warning|success|tip|motivation","title":"3-5 word title","message":"max 100 chars","action":"CTA string or null"}]`;
 
     const result = parseJSON<AIInsight[]>(
-      await callAI(prompt, 512, 0.8, apiKey),
+      await callAI(prompt, 512, 0.8, apiKey, 'study_insights'),
       [{ type: 'tip', title: 'Stay Consistent', message: 'Short daily sessions beat long cramming.', action: 'Start Pomodoro' }],
       true
     );
@@ -346,7 +356,7 @@ Respond ONLY with this exact JSON structure (no markdown):
 If creating events, include them like:
 {"response":"your reply","calendarEvents":[{"title":"Session title","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","subject":"Subject","eventType":"study_session","description":"brief desc","priority":"medium"}]}`;
 
-    const raw = await callAI(prompt, 768, 0.8, apiKey);
+    const raw = await callAI(prompt, 768, 0.8, apiKey, 'study_chat');
 
     // Try to parse the structured response
     const parsed = parseJSON<{ response: string; calendarEvents: CalendarEventFromChat[] }>(
@@ -374,7 +384,7 @@ Return ONLY a valid JSON array with no markdown:
 [{"id":"string","newPriority":"low|medium|high","urgencyScore":0-100,"reason":"brief reason"}]`;
 
     return parseJSON<any[]>(
-      await callAI(prompt, 1024, 0.4, apiKey),
+      await callAI(prompt, 1024, 0.4, apiKey, 'study_prioritize'),
       tasks.map(t => ({ id: t.id, newPriority: t.priority, urgencyScore: 50, reason: 'Manual' })),
       true
     );
@@ -387,7 +397,7 @@ Return ONLY a valid JSON array with no markdown:
 Return ONLY a valid JSON array with no markdown:
 ["tip one here","tip two here","tip three here"]`;
     return parseJSON<string[]>(
-      await callAI(prompt, 256, 0.7, apiKey),
+      await callAI(prompt, 256, 0.7, apiKey, 'study_tips'),
       ['Review key concepts', 'Practice past questions', 'Summarize in your own words'],
       true
     );
@@ -411,7 +421,7 @@ Return ONLY a valid JSON object with no markdown:
 {"summary":"2-3 sentence personalized overview","tips":["t1","t2","t3"],"urgentItems":["item if <=3d, else empty array"],"motivationalMessage":"one warm sentence"}`;
 
     return parseJSON<WeeklyDigestAI>(
-      await callAI(prompt, 768, 0.75, apiKey),
+      await callAI(prompt, 768, 0.75, apiKey, 'study_digest'),
       { summary: `Hi ${studentName}, here's your weekly digest.`, tips: ['Review notes daily', 'Use active recall', 'Take breaks'], urgentItems: [], motivationalMessage: 'Keep it up!' }
     );
   },
@@ -431,7 +441,7 @@ Return ONLY a valid JSON object with no markdown:
 {"weeklyHours":0,"subjectDistribution":[{"subject":"name","hours":0,"color":"#6366f1"}],"productivityScore":0-100,"streakDays":0,"completionRate":0-100,"insights":["i1","i2","i3"],"recommendations":["r1","r2","r3"]}`;
 
     return parseJSON<StudyAnalytics>(
-      await callAI(prompt, 1024, 0.5, apiKey),
+      await callAI(prompt, 1024, 0.5, apiKey, 'study_patterns'),
       { weeklyHours: 0, subjectDistribution: [], productivityScore: 50, streakDays: 0, completionRate: 0, insights: ['Start tracking to get AI insights!'], recommendations: ['Add your first session'] }
     );
   },
