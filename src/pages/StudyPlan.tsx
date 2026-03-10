@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Calendar, Plus, Edit, Trash2, Users, User, BookOpen, Clock,
   Search, Filter, SortAsc, Loader, AlertCircle, X, Sparkles,
-  Brain, CheckCircle2, ChevronDown, TrendingUp, Layers,
+  Brain, CheckCircle2, ChevronDown, TrendingUp, Layers, Video, Save,
 } from 'lucide-react';
 import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService';
 import { aiStudyPlannerService } from '../services/aiStudyPlannerService';
@@ -54,10 +54,20 @@ const StudyPlan: React.FC = () => {
   const [tipsLoading, setTipsLoading] = useState<Record<string, boolean>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // ── Help Video URL ────────────────────────────────────────────────────────────
+  const [helpVideoUrl, setHelpVideoUrl]       = useState('');
+  const [helpVideoInput, setHelpVideoInput]   = useState('');
+  const [savingVideoUrl, setSavingVideoUrl]   = useState(false);
+  const [videoUrlSaved, setVideoUrlSaved]     = useState(false);
+
   // ── Load ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (user) {
       Promise.all([loadEvents(), loadStudentsAndCourses()]);
+      studyPlanService.getHelpVideoUrl().then(url => {
+        setHelpVideoUrl(url);
+        setHelpVideoInput(url);
+      });
     }
   }, [user]);
 
@@ -111,6 +121,18 @@ const StudyPlan: React.FC = () => {
     const next = expandedId === ev.id ? null : ev.id;
     setExpandedId(next);
     if (next) handleLoadTips(ev);
+  };
+
+  const handleSaveVideoUrl = async () => {
+    if (savingVideoUrl) return;
+    setSavingVideoUrl(true);
+    try {
+      await studyPlanService.setHelpVideoUrl(helpVideoInput.trim());
+      setHelpVideoUrl(helpVideoInput.trim());
+      setVideoUrlSaved(true);
+      setTimeout(() => setVideoUrlSaved(false), 2500);
+    } catch (e: any) { setError(e.message); }
+    finally { setSavingVideoUrl(false); }
   };
 
   // ── Filter + Sort ─────────────────────────────────────────────────────────────
@@ -248,6 +270,37 @@ const StudyPlan: React.FC = () => {
               </button>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Help Video URL */}
+      <div className="bg-background-800 border border-background-700 rounded-2xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Video size={15} className="text-primary-400" />
+          <h2 className="text-sm font-semibold text-white">Student Help Video</h2>
+          <span className="text-xs text-gray-500 ml-1">Shown to students as a guide button + first-visit popup</span>
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={helpVideoInput}
+            onChange={e => setHelpVideoInput(e.target.value)}
+            placeholder="Paste YouTube or Google Drive video URL…"
+            className={inputCls + ' flex-1'}
+          />
+          <button
+            onClick={handleSaveVideoUrl}
+            disabled={savingVideoUrl || helpVideoInput.trim() === helpVideoUrl}
+            className="flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
+          >
+            {savingVideoUrl ? <Loader size={13} className="animate-spin" /> : videoUrlSaved ? <CheckCircle2 size={13} /> : <Save size={13} />}
+            {videoUrlSaved ? 'Saved!' : 'Save'}
+          </button>
+        </div>
+        {helpVideoUrl && (
+          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+            <CheckCircle2 size={11} className="text-emerald-400" />
+            Current: <a href={helpVideoUrl} target="_blank" rel="noreferrer" className="text-primary-400 hover:underline truncate max-w-xs">{helpVideoUrl}</a>
+          </p>
         )}
       </div>
 
