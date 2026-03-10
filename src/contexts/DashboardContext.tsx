@@ -308,9 +308,9 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         cardLight: '#374151'
       },
       light: {
-        bg: '#f9fafb',
+        bg: '#f1eee7',
         card: '#ffffff',
-        cardLight: '#f3f4f6'
+        cardLight: '#f5f2ec'
       },
       purple: {
         bg: '#1e1b4b',
