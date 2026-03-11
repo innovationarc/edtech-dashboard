@@ -143,8 +143,8 @@ const Navigation = () => {
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  /* Desktop sidebar: expanded by default, collapses to icon strip on toggle */
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  /* Desktop sidebar: collapsed by default, expands on hover */
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const sidebarHoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSidebarMouseEnter = () => {
@@ -152,7 +152,7 @@ const Navigation = () => {
     setSidebarExpanded(true);
   };
   const handleSidebarMouseLeave = () => {
-    // Don't auto-collapse — sidebar stays open unless manually toggled
+    sidebarHoverTimeout.current = setTimeout(() => setSidebarExpanded(false), 120);
   };
 
   const darkMode = theme !== 'light';
