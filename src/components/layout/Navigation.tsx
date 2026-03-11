@@ -143,8 +143,8 @@ const Navigation = () => {
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  /* Desktop sidebar: collapsed by default, expands on hover */
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  /* Desktop sidebar: expanded by default, collapses to icon strip on toggle */
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const sidebarHoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleSidebarMouseEnter = () => {
@@ -152,7 +152,7 @@ const Navigation = () => {
     setSidebarExpanded(true);
   };
   const handleSidebarMouseLeave = () => {
-    sidebarHoverTimeout.current = setTimeout(() => setSidebarExpanded(false), 120);
+    // Don't auto-collapse — sidebar stays open unless manually toggled
   };
 
   const darkMode = theme !== 'light';
@@ -518,7 +518,7 @@ const Navigation = () => {
       <header
         className="hidden lg:flex fixed top-0 right-0 z-[100] items-center justify-end"
         style={{
-          left: 64,
+          left: SIDEBAR_W,
           height: 64,
           padding: '0 20px',
           gap: 8,
