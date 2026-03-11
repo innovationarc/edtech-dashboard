@@ -79,23 +79,23 @@
   }
 
   /* ════════════════════════════════════════════
-     LIGHT MODE — complete warm white treatment
-     Background: #f1eee7 (warm parchment like iDraft)
+     LIGHT MODE — matte crystal warm environment
+     Background: #ebe8e1 (soft warm grey)
+     Cards: rgba(255,255,255,0.82) frosted crystal
   ════════════════════════════════════════════ */
   .theme-light,
   .theme-light body,
   .theme-light #root {
-    background-color: #f1eee7 !important;
+    background-color: #ebe8e1 !important;
     color: #111827 !important;
   }
 
-  /* Page/main area */
   .theme-light .dl-main,
   .theme-light .flex.h-screen {
-    background-color: #f1eee7 !important;
+    background-color: #ebe8e1 !important;
   }
 
-  /* All utility dark backgrounds → white */
+  /* Utility dark backgrounds → crystal white */
   .theme-light .bg-background-950,
   .theme-light .bg-background-900,
   .theme-light .bg-background-800,
@@ -103,58 +103,52 @@
   .theme-light .bg-card,
   .theme-light .bg-card-light,
   .theme-light .bg-card-dark {
-    background-color: #ffffff !important;
-    border-color: rgba(0,0,0,0.07) !important;
+    background: rgba(255,255,255,0.82) !important;
+    backdrop-filter: blur(20px) !important;
+    border-color: rgba(255,255,255,0.9) !important;
   }
 
   /* Text */
   .theme-light .text-white,
-  .theme-light h1, .theme-light h2, .theme-light h3, .theme-light h4 {
+  .theme-light h1,.theme-light h2,.theme-light h3,.theme-light h4 {
     color: #111827 !important;
   }
-  .theme-light .text-gray-300,
-  .theme-light .text-gray-400,
-  .theme-light .text-slate-400,
-  .theme-light .text-slate-500 {
+  .theme-light .text-gray-300,.theme-light .text-gray-400,
+  .theme-light .text-slate-400,.theme-light .text-slate-500 {
     color: #6b7280 !important;
   }
   .theme-light p { color: #374151; }
 
-  /* Borders */
-  .theme-light .border-background-800,
-  .theme-light [class*="border-white"] { border-color: rgba(0,0,0,0.08) !important; }
+  .theme-light [class*="border-white"] { border-color: rgba(0,0,0,0.07) !important; }
 
-  /* Cards — white with subtle warm shadow */
+  /* Cards — matte crystal with warm shadow */
   .theme-light .dashboard-card,
   .theme-light .stats-card-hover,
   .theme-light .saas-card-hover,
   .theme-light .glass-card {
-    background-color: #ffffff !important;
-    background: #ffffff !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    border-color: rgba(0,0,0,0.07) !important;
-    color: #111827 !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04) !important;
+    background: rgba(255,255,255,0.82) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255,255,255,0.92) !important;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.95) !important;
   }
   .theme-light .stats-card-hover:hover,
   .theme-light .saas-card-hover:hover,
   .theme-light .glass-card:hover {
-    box-shadow: 0 6px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06) !important;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.11), inset 0 1px 0 rgba(255,255,255,1) !important;
   }
 
-  /* Force white on any inline rgba dark backgrounds */
-  .theme-light [style*="rgba(255,255,255,0.03)"],
-  .theme-light [style*="rgba(255,255,255,0.04)"],
-  .theme-light [style*="rgba(255,255,255,0.05)"],
-  .theme-light [style*="rgba(255,255,255,0.06)"] {
-    background: rgba(0,0,0,0.03) !important;
+  /* Inputs in light mode */
+  .theme-light input, .theme-light select, .theme-light textarea {
+    background: rgba(255,255,255,0.75) !important;
+    color: #111827 !important;
+    border-color: rgba(0,0,0,0.10) !important;
   }
 
   /* Scrollbars */
-  .theme-light ::-webkit-scrollbar-track { background: #f1eee7; }
-  .theme-light ::-webkit-scrollbar-thumb { background: #d6d0c8; }
-  .theme-light ::-webkit-scrollbar-thumb:hover { background: #b8b2aa; }
+  .theme-light ::-webkit-scrollbar-track { background: #ebe8e1; }
+  .theme-light ::-webkit-scrollbar-thumb { background: #d0ccc5; }
+  .theme-light ::-webkit-scrollbar-thumb:hover { background: #b8b4ae; }
 
   .theme-purple {
     --color-text: #ffffff;
@@ -694,11 +688,7 @@
   position: relative;
   background-color: var(--color-background, #0f1117);
 }
-
-/* Light theme — warm parchment */
-.theme-light .dl-main {
-  background-color: #f1eee7 !important;
-}
+.theme-light .dl-main { background-color: #ebe8e1 !important; }
 
 /* Theme variants — solid clean backgrounds */
 .theme-ocean .dl-main  { background-color: #0c1a2e; }
