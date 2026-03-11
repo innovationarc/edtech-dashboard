@@ -730,43 +730,76 @@ export const studyPlanService = {
   },
 
   // ── Streak Freeze (Firestore) ─────────────────────────────────────────────
-  // Document: streakFreezes/{uid} → { count, lastMonthlyAdd, createdAt }
-  // - New users start with 3 freezes
-  // - +1 freeze added automatically each month (cap: 10)
+  // Document: streakFreezes/{uid}
+  // Fields: count, lastMonthlyAdd, lastWeeklyBonusCheck, lastFreezeUsed, activatedAt, createdAt
+  // Rules:
+  //   - New users start with 3 freezes
+  //   - +2 freezes every month (cap: 10)
+  //   - +1 freeze for every 7-day streak period with no freeze used (cap: 10)
+  //   - Each freeze covers 48 hours from activation
 
-  async getStreakFreeze(uid: string): Promise<{ count: number }> {
+  async getStreakFreeze(uid: string, currentStreak = 0): Promise<{ count: number; activeUntil: Date | null }> {
     try {
       const ref = doc(db, 'streakFreezes', uid);
       const snap = await getDoc(ref);
+      const now = Date.now();
+
       if (!snap.exists()) {
-        const initial = { count: 3, lastMonthlyAdd: new Date().toISOString(), createdAt: new Date().toISOString() };
+        const initial = { count: 3, lastMonthlyAdd: new Date().toISOString(), lastWeeklyBonusCheck: new Date().toISOString(), createdAt: new Date().toISOString() };
         await setDoc(ref, initial);
-        return { count: 3 };
+        return { count: 3, activeUntil: null };
       }
+
       const data = snap.data();
-      const lastAdd = new Date(data.lastMonthlyAdd || data.createdAt || 0);
-      const monthsSince = (Date.now() - lastAdd.getTime()) / (1000 * 60 * 60 * 24 * 30);
-      if (monthsSince >= 1 && (data.count ?? 0) < 10) {
-        const newCount = Math.min(10, (data.count ?? 0) + 1);
-        await setDoc(ref, { count: newCount, lastMonthlyAdd: new Date().toISOString() }, { merge: true });
-        return { count: newCount };
+      let count = data.count ?? 3;
+      const updates: Record<string, any> = {};
+
+      // Monthly bonus: +2 per month
+      const lastMonthly = new Date(data.lastMonthlyAdd || data.createdAt || 0);
+      const monthsSince = (now - lastMonthly.getTime()) / (1000 * 60 * 60 * 24 * 30);
+      if (monthsSince >= 1 && count < 10) {
+        count = Math.min(10, count + 2);
+        updates.lastMonthlyAdd = new Date().toISOString();
       }
-      return { count: data.count ?? 3 };
+
+      // Weekly streak bonus: +1 per 7-day streak if no freeze used that week
+      const lastWeeklyCheck = new Date(data.lastWeeklyBonusCheck || data.createdAt || 0);
+      const daysSinceWeeklyCheck = (now - lastWeeklyCheck.getTime()) / (1000 * 60 * 60 * 24);
+      const lastUsed = data.lastFreezeUsed ? new Date(data.lastFreezeUsed) : null;
+      const noFreezeUsedThisWeek = !lastUsed || (now - lastUsed.getTime()) > 7 * 24 * 60 * 60 * 1000;
+      if (daysSinceWeeklyCheck >= 7 && currentStreak >= 7 && noFreezeUsedThisWeek && count < 10) {
+        count = Math.min(10, count + 1);
+        updates.lastWeeklyBonusCheck = new Date().toISOString();
+      }
+
+      if (Object.keys(updates).length > 0 || count !== data.count) {
+        await setDoc(ref, { ...updates, count }, { merge: true });
+      }
+
+      // Check if a freeze is currently active (within 48h of activation)
+      const activatedAt = data.activatedAt ? new Date(data.activatedAt) : null;
+      const activeUntil = activatedAt && (now - activatedAt.getTime()) < 48 * 60 * 60 * 1000
+        ? new Date(activatedAt.getTime() + 48 * 60 * 60 * 1000)
+        : null;
+
+      return { count, activeUntil };
     } catch (e) {
       console.warn('[streakFreeze] getStreakFreeze failed:', e);
-      throw e; // rethrow so caller can retry
+      throw e;
     }
   },
 
-  async useStreakFreeze(uid: string): Promise<number> {
+  async useStreakFreeze(uid: string): Promise<{ count: number; activeUntil: Date }> {
     try {
       const ref = doc(db, 'streakFreezes', uid);
       const snap = await getDoc(ref);
       const current = snap.exists() ? (snap.data().count ?? 0) : 0;
       const newCount = Math.max(0, current - 1);
-      await setDoc(ref, { count: newCount }, { merge: true });
-      return newCount;
-    } catch { return 0; }
+      const activatedAt = new Date().toISOString();
+      await setDoc(ref, { count: newCount, activatedAt, lastFreezeUsed: activatedAt }, { merge: true });
+      const activeUntil = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      return { count: newCount, activeUntil };
+    } catch { return { count: 0, activeUntil: new Date() }; }
   },
 
   async getEnrolledCoursesForPlanning(studentId: string): Promise<EnrolledCourseForPlanning[]> {
