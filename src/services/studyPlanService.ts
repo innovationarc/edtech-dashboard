@@ -5,6 +5,7 @@
 import {
   collection, doc, getDocs, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, Timestamp, setDoc, getDoc, limit,
+  runTransaction, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { courseService } from './courseService';
@@ -198,16 +199,38 @@ export const studyPlanService = {
   },
 
   async getEventsForStudent(studentId: string): Promise<StudyPlanEvent[]> {
-    const snap = await getDocs(query(collection(db, 'studyPlanEvents'), orderBy('date', 'asc')));
-    const all = snap.docs.map(d => ({
+    // FIX: Two targeted queries instead of a full-collection scan.
+    // Query 1: personal events owned by this student only.
+    // Query 2: teacher-created (non-personal) events — typically far fewer,
+    //          audience filtering still done client-side below.
+    const [personalSnap, teacherSnap] = await Promise.all([
+      getDocs(query(
+        collection(db, 'studyPlanEvents'),
+        where('studentId', '==', studentId),
+        where('isPersonal', '==', true),
+        orderBy('date', 'asc'),
+      )),
+      getDocs(query(
+        collection(db, 'studyPlanEvents'),
+        where('isPersonal', '==', false),
+        orderBy('date', 'asc'),
+      )),
+    ]);
+
+    const mapDoc = (d: any) => ({
       id: d.id, ...d.data(),
-      date: toDate(d.data().date),
-      startTime: d.data().startTime || '',
-      endTime: d.data().endTime || '',
-      createdAt: toDate(d.data().createdAt),
-      updatedAt: d.data().updatedAt ? toDate(d.data().updatedAt) : undefined,
+      date:        toDate(d.data().date),
+      startTime:   d.data().startTime || '',
+      endTime:     d.data().endTime   || '',
+      createdAt:   toDate(d.data().createdAt),
+      updatedAt:   d.data().updatedAt   ? toDate(d.data().updatedAt)   : undefined,
       completedAt: d.data().completedAt ? toDate(d.data().completedAt) : undefined,
-    })) as StudyPlanEvent[];
+    });
+
+    const all = [
+      ...personalSnap.docs.map(mapDoc),
+      ...teacherSnap.docs.map(mapDoc),
+    ] as StudyPlanEvent[];
 
     let enrolledCourseIds: string[] = [];
     try {
@@ -282,11 +305,10 @@ export const studyPlanService = {
     events: Omit<StudyPlanEvent, 'id' | 'createdAt' | 'updatedAt'>[],
     studentId: string
   ): Promise<string[]> {
-    const ids: string[] = [];
-    for (const e of events) {
-      ids.push(await studyPlanService.createEvent({ ...e, studentId, isPersonal: true }));
-    }
-    return ids;
+    // FIX: parallel writes — all sessions in a single Promise.all instead of sequential awaits.
+    return Promise.all(
+      events.map(e => studyPlanService.createEvent({ ...e, studentId, isPersonal: true }))
+    );
   },
 
   // ── Study Goals ───────────────────────────────────────────────────────────
@@ -337,12 +359,14 @@ export const studyPlanService = {
   },
 
   async getPomodoroSessions(studentId: string, limitCount = 30): Promise<PomodoroSession[]> {
+    // FIX: limit applied inside Firestore query — avoids fetching all sessions client-side.
     const snap = await getDocs(query(
       collection(db, 'pomodoroSessions'),
       where('studentId', '==', studentId),
-      orderBy('startTime', 'desc')
+      orderBy('startTime', 'desc'),
+      limit(limitCount),
     ));
-    return snap.docs.slice(0, limitCount).map(d => ({
+    return snap.docs.map(d => ({
       id: d.id, ...d.data(),
       startTime: toDate(d.data().startTime),
       createdAt: toDate(d.data().createdAt),
@@ -353,28 +377,32 @@ export const studyPlanService = {
 
   async updateStreak(studentId: string, minutesAdded: number): Promise<void> {
     const ref = doc(db, 'studyStreaks', studentId);
-    const snap = await getDoc(ref);
     const today = new Date(); today.setHours(0, 0, 0, 0);
 
-    if (snap.exists()) {
-      const d = snap.data() as any;
-      const last = toDate(d.lastStudyDate); last.setHours(0, 0, 0, 0);
-      const diff = Math.round((today.getTime() - last.getTime()) / 86400000);
-      const streak = diff === 1 ? d.currentStreak + 1 : diff === 0 ? d.currentStreak : 1;
-      await updateDoc(ref, {
-        currentStreak: streak,
-        longestStreak: Math.max(d.longestStreak, streak),
-        lastStudyDate: Timestamp.fromDate(today),
-        totalSessions: (d.totalSessions || 0) + 1,
-        totalMinutes:  (d.totalMinutes  || 0) + minutesAdded,
-      });
-    } else {
-      await setDoc(ref, {
-        studentId, currentStreak: 1, longestStreak: 1,
-        lastStudyDate: Timestamp.fromDate(today),
-        totalSessions: 1, totalMinutes: minutesAdded,
-      });
-    }
+    // FIX: runTransaction prevents two concurrent Pomodoro completions from
+    // corrupting the streak counter (classic read-then-write race condition).
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(ref);
+      if (snap.exists()) {
+        const d = snap.data() as any;
+        const last = toDate(d.lastStudyDate); last.setHours(0, 0, 0, 0);
+        const diff = Math.round((today.getTime() - last.getTime()) / 86400000);
+        const streak = diff === 1 ? d.currentStreak + 1 : diff === 0 ? d.currentStreak : 1;
+        txn.update(ref, {
+          currentStreak: streak,
+          longestStreak: Math.max(d.longestStreak, streak),
+          lastStudyDate: Timestamp.fromDate(today),
+          totalSessions: (d.totalSessions || 0) + 1,
+          totalMinutes:  (d.totalMinutes  || 0) + minutesAdded,
+        });
+      } else {
+        txn.set(ref, {
+          studentId, currentStreak: 1, longestStreak: 1,
+          lastStudyDate: Timestamp.fromDate(today),
+          totalSessions: 1, totalMinutes: minutesAdded,
+        });
+      }
+    });
   },
 
   async getStreak(studentId: string): Promise<StudyStreak | null> {
@@ -432,9 +460,14 @@ export const studyPlanService = {
         collection(db, 'studyChatHistory'),
         where('studentId', '==', studentId)
       ));
-      // Delete in batches of 10 to avoid hitting Firestore limits
-      const deletions = snap.docs.map(d => deleteDoc(d.ref));
-      await Promise.all(deletions);
+      // FIX: delete in writeBatch chunks of 500 to respect Firestore's 500-op batch limit.
+      // Previously used Promise.all(deleteDoc×N) which fails silently for large histories.
+      const CHUNK = 500;
+      for (let i = 0; i < snap.docs.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        snap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
     } catch (e) {
       console.warn('Failed to clear chat history:', e);
     }
@@ -588,11 +621,18 @@ export const studyPlanService = {
    */
   async getMaxSessionNumberForSubject(studentId: string, subject: string): Promise<number> {
     const base = subject.split(' (')[0].toLowerCase().trim();
+    // FIX: add isAIGenerated filter to the Firestore query.
+    // Previously fetched ALL completed events, meaning a manually-created event
+    // titled "Physics Session 5 — exam notes" could bump the AI session counter
+    // to 5, making the next generated session jump to "Session 6" even if only
+    // 1 AI session had ever been completed. Mirrors the isAIGenerated guard
+    // already applied to computeGoalWork and computeSubjectWork.
     const snap = await getDocs(
       query(
         collection(db, 'studyPlanEvents'),
         where('studentId', '==', studentId),
-        where('completed', '==', true)   // ← only sessions that survive the clear
+        where('completed', '==', true),
+        where('isAIGenerated', '==', true),   // ← FIX
       )
     );
     let max = 0;
@@ -792,12 +832,17 @@ export const studyPlanService = {
   async useStreakFreeze(uid: string): Promise<{ count: number; activeUntil: Date }> {
     try {
       const ref = doc(db, 'streakFreezes', uid);
-      const snap = await getDoc(ref);
-      const current = snap.exists() ? (snap.data().count ?? 0) : 0;
-      const newCount = Math.max(0, current - 1);
       const activatedAt = new Date().toISOString();
-      await setDoc(ref, { count: newCount, activatedAt, lastFreezeUsed: activatedAt }, { merge: true });
       const activeUntil = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      // FIX: runTransaction prevents two simultaneous freeze-uses from decrementing
+      // the count twice (double-spend race condition).
+      let newCount = 0;
+      await runTransaction(db, async (txn) => {
+        const snap = await txn.get(ref);
+        const current = snap.exists() ? (snap.data().count ?? 0) : 0;
+        newCount = Math.max(0, current - 1);
+        txn.set(ref, { count: newCount, activatedAt, lastFreezeUsed: activatedAt }, { merge: true });
+      });
       return { count: newCount, activeUntil };
     } catch { return { count: 0, activeUntil: new Date() }; }
   },
