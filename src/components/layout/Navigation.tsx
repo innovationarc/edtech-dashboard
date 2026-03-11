@@ -12,6 +12,7 @@ import {
   CreditCard, Library, GraduationCap, BookOpen, ShoppingCart, Trophy,
   Ticket, PlusCircle, Megaphone, FileText, MessageSquare, Sun, Moon, Loader2,
   ClipboardCheck, UserCheck, ListOrdered, Plus, ChevronRight,
+  BrainCircuit, LayoutGrid,
 } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import Profile from '../profile/Profile';
@@ -168,8 +169,9 @@ const Navigation = () => {
     { name:'Announcements', Icon:Megaphone,       path:'/announcements',      roles:['admin'] },
     { name:'Payments',      Icon:CreditCard,      path:'/payments',           roles:['admin'] },
     { name:'Analytics',     Icon:BarChart3,       path:'/analytics',          roles:['admin'] },
+    { name:'AI Settings',   Icon:BrainCircuit,    path:'/ai-settings',        roles:['admin'] },
     { name:'Content',       Icon:Upload,          path:'/content',            roles:['admin','teacher'] },
-    { name:'Courses',       Icon:PlusCircle,      path:'/course-creation',    roles:['admin','teacher'] },
+    { name:'Course Mgmt',   Icon:PlusCircle,      path:'/course-creation',    roles:['admin','teacher'] },
     { name:'Course Assign', Icon:UserCheck,       path:'/course-assignment',  roles:['admin'] },
     { name:'Coupons',       Icon:Ticket,          path:'/manage-coupon',      roles:['admin','manager'] },
     { name:'Study Plans',   Icon:Calendar,        path:'/study-plan',         roles:['admin','teacher'] },
@@ -184,6 +186,7 @@ const Navigation = () => {
     { name:'Achievements',  Icon:Trophy,          path:'/achievements',       roles:['admin','teacher','student'] },
     { name:'My Tasks',      Icon:FileText,        path:'/student-tasks',      roles:['student'] },
     { name:'My Study Plan', Icon:Calendar,        path:'/student-study-plan', roles:['student'] },
+    { name:'Coming Soon Mgmt', Icon:LayoutGrid,   path:'/coming-soon-management', roles:['admin'] },
     { name:'Coming Soon',   Icon:Clock,           path:'/coming-soon',        roles:['admin','teacher','student'] },
   ];
   const navItems = NAV_ALL.filter(i => user && i.roles.includes(user.role));
