@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Save, Upload, Globe, Mail, BellRing, Lock, Users, Palette, Shield, MessageSquare } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -185,337 +185,258 @@ const AppearanceSettings = () => {
     setFontFamily
   } = useDashboard();
 
-  // Android 16 / Material You inspired themes
+  const [colorMode, setColorMode] = useState<'gradient' | 'solid'>('gradient');
+
+  // ── Base themes (light/dark/etc) ──
   const themes = [
-    { 
-      id: 'dark', 
-      name: 'Midnight', 
-      description: 'Deep dark base',
-      colors: ['#0d1117', '#1f2937', '#374151'],
-      accent: '#6366f1'
-    },
-    { 
-      id: 'light', 
-      name: 'Daylight', 
-      description: 'Clean bright mode',
-      colors: ['#f9fafb', '#f3f4f6', '#e5e7eb'],
-      accent: '#6366f1'
-    },
-    { 
-      id: 'purple', 
-      name: 'Aurora', 
-      description: 'Indigo galaxy',
-      colors: ['#1e1b4b', '#312e81', '#4c1d95'],
-      accent: '#a78bfa'
-    },
-    { 
-      id: 'pink', 
-      name: 'Blossom', 
-      description: 'Rose energy',
-      colors: ['#831843', '#9d174d', '#be185d'],
-      accent: '#f9a8d4'
-    },
-    { 
-      id: 'ocean', 
-      name: 'Ocean', 
-      description: 'Deep sea calm',
-      colors: ['#0c1a2e', '#0f2744', '#1e3a5f'],
-      accent: '#38bdf8'
-    },
-    { 
-      id: 'forest', 
-      name: 'Forest', 
-      description: 'Nature grounded',
-      colors: ['#0a1f14', '#0f2d1e', '#14532d'],
-      accent: '#4ade80'
-    },
-    { 
-      id: 'sunset', 
-      name: 'Sunset', 
-      description: 'Warm horizon',
-      colors: ['#1c0a00', '#431407', '#7c2d12'],
-      accent: '#fb923c'
-    },
-    { 
-      id: 'slate', 
-      name: 'Graphite', 
-      description: 'Minimal pro',
-      colors: ['#0f172a', '#1e293b', '#334155'],
-      accent: '#94a3b8'
-    },
+    { id: 'light',  name: 'Warm White',  desc: 'Clean parchment',  bg: '#f1eee7', card: '#ffffff', text: '#111827' },
+    { id: 'dark',   name: 'Midnight',    desc: 'Deep dark',        bg: '#0d1117', card: '#1a1f2e', text: '#f1f5f9' },
+    { id: 'slate',  name: 'Graphite',    desc: 'Minimal pro',      bg: '#0f172a', card: '#1e293b', text: '#e2e8f0' },
+    { id: 'ocean',  name: 'Deep Sea',    desc: 'Cool calm',        bg: '#0c1a2e', card: '#0f2744', text: '#bae6fd' },
+    { id: 'forest', name: 'Forest',      desc: 'Nature grounded',  bg: '#0a1f14', card: '#0f2d1e', text: '#bbf7d0' },
+    { id: 'purple', name: 'Aurora',      desc: 'Indigo galaxy',    bg: '#1e1b4b', card: '#312e81', text: '#c4b5fd' },
+    { id: 'pink',   name: 'Blossom',     desc: 'Rose energy',      bg: '#831843', card: '#9d174d', text: '#fce7f3' },
+    { id: 'sunset', name: 'Sunset',      desc: 'Warm horizon',     bg: '#1c0a00', card: '#431407', text: '#fed7aa' },
   ];
 
-  // Synced color palettes - Android 16 Material You style
-  const colorPalettes = [
-    { 
-      name: 'Violet Storm', 
-      primary: '#7c3aed', 
-      accent: '#06b6d4',
-      preview: ['#7c3aed', '#5b21b6', '#06b6d4']
-    },
-    { 
-      name: 'Ocean Breeze', 
-      primary: '#0ea5e9', 
-      accent: '#10b981',
-      preview: ['#0ea5e9', '#0284c7', '#10b981']
-    },
-    { 
-      name: 'Flame', 
-      primary: '#ef4444', 
-      accent: '#f97316',
-      preview: ['#ef4444', '#dc2626', '#f97316']
-    },
-    { 
-      name: 'Neon Mint', 
-      primary: '#10b981', 
-      accent: '#a78bfa',
-      preview: ['#10b981', '#059669', '#a78bfa']
-    },
-    { 
-      name: 'Golden Hour', 
-      primary: '#f59e0b', 
-      accent: '#ec4899',
-      preview: ['#f59e0b', '#d97706', '#ec4899']
-    },
-    { 
-      name: 'Rose Quartz', 
-      primary: '#ec4899', 
-      accent: '#8b5cf6',
-      preview: ['#ec4899', '#db2777', '#8b5cf6']
-    },
-    { 
-      name: 'Arctic', 
-      primary: '#6366f1', 
-      accent: '#22d3ee',
-      preview: ['#6366f1', '#4f46e5', '#22d3ee']
-    },
-    { 
-      name: 'Emerald City', 
-      primary: '#059669', 
-      accent: '#0ea5e9',
-      preview: ['#059669', '#047857', '#0ea5e9']
-    },
+  // ── Matte gradient palettes ──
+  const gradientPalettes = [
+    { name: 'Violet Storm',   p: '#7c3aed', a: '#06b6d4', preview: 'linear-gradient(135deg,#7c3aed,#06b6d4)' },
+    { name: 'Sunset Glow',    p: '#f97316', a: '#ec4899', preview: 'linear-gradient(135deg,#f97316,#ec4899)' },
+    { name: 'Ocean Breeze',   p: '#0ea5e9', a: '#10b981', preview: 'linear-gradient(135deg,#0ea5e9,#10b981)' },
+    { name: 'Rose Quartz',    p: '#ec4899', a: '#8b5cf6', preview: 'linear-gradient(135deg,#ec4899,#8b5cf6)' },
+    { name: 'Neon Mint',      p: '#10b981', a: '#a78bfa', preview: 'linear-gradient(135deg,#10b981,#a78bfa)' },
+    { name: 'Golden Hour',    p: '#f59e0b', a: '#ef4444', preview: 'linear-gradient(135deg,#f59e0b,#ef4444)' },
+    { name: 'Arctic',         p: '#6366f1', a: '#22d3ee', preview: 'linear-gradient(135deg,#6366f1,#22d3ee)' },
+    { name: 'Matcha',         p: '#059669', a: '#0ea5e9', preview: 'linear-gradient(135deg,#059669,#0ea5e9)' },
   ];
 
-  // Rich font options with Google Fonts
+  // ── Solid color palettes (matte flat) ──
+  const solidPalettes = [
+    { name: 'Indigo',    p: '#6366f1', a: '#6366f1', preview: '#6366f1' },
+    { name: 'Violet',    p: '#7c3aed', a: '#7c3aed', preview: '#7c3aed' },
+    { name: 'Sky',       p: '#0ea5e9', a: '#0ea5e9', preview: '#0ea5e9' },
+    { name: 'Emerald',   p: '#10b981', a: '#10b981', preview: '#10b981' },
+    { name: 'Rose',      p: '#f43f5e', a: '#f43f5e', preview: '#f43f5e' },
+    { name: 'Amber',     p: '#f59e0b', a: '#f59e0b', preview: '#f59e0b' },
+    { name: 'Coral',     p: '#f97316', a: '#f97316', preview: '#f97316' },
+    { name: 'Slate',     p: '#64748b', a: '#64748b', preview: '#64748b' },
+    { name: 'Teal',      p: '#14b8a6', a: '#14b8a6', preview: '#14b8a6' },
+    { name: 'Fuchsia',   p: '#a21caf', a: '#a21caf', preview: '#a21caf' },
+    { name: 'Lime',      p: '#65a30d', a: '#65a30d', preview: '#65a30d' },
+    { name: 'Crimson',   p: '#dc2626', a: '#dc2626', preview: '#dc2626' },
+  ];
+
+  // ── Font options ──
   const fontOptions = [
-    { value: 'Sora', label: 'Sora', description: 'Modern & geometric', category: 'Sans-serif' },
-    { value: 'DM Sans', label: 'DM Sans', description: 'Clean & neutral', category: 'Sans-serif' },
-    { value: 'Outfit', label: 'Outfit', description: 'Friendly & versatile', category: 'Sans-serif' },
-    { value: 'Plus Jakarta Sans', label: 'Plus Jakarta Sans', description: 'Contemporary', category: 'Sans-serif' },
-    { value: 'Nunito', label: 'Nunito', description: 'Rounded & warm', category: 'Sans-serif' },
-    { value: 'Raleway', label: 'Raleway', description: 'Elegant & refined', category: 'Display' },
-    { value: 'Josefin Sans', label: 'Josefin Sans', description: 'Art deco flair', category: 'Display' },
-    { value: 'Exo 2', label: 'Exo 2', description: 'Tech forward', category: 'Display' },
-    { value: 'Fira Code', label: 'Fira Code', description: 'Monospace code', category: 'Monospace' },
-    { value: 'JetBrains Mono', label: 'JetBrains Mono', description: 'Dev favorite', category: 'Monospace' },
+    { value: 'Outfit',           label: 'Outfit',           desc: 'Friendly & versatile',  cat: 'Sans' },
+    { value: 'Sora',             label: 'Sora',             desc: 'Modern & geometric',    cat: 'Sans' },
+    { value: 'DM Sans',          label: 'DM Sans',          desc: 'Clean & neutral',       cat: 'Sans' },
+    { value: 'Plus Jakarta Sans',label: 'Plus Jakarta Sans',desc: 'Contemporary',          cat: 'Sans' },
+    { value: 'Nunito',           label: 'Nunito',           desc: 'Rounded & warm',        cat: 'Sans' },
+    { value: 'Raleway',          label: 'Raleway',          desc: 'Elegant & refined',     cat: 'Display' },
+    { value: 'Josefin Sans',     label: 'Josefin Sans',     desc: 'Art deco flair',        cat: 'Display' },
+    { value: 'Fira Code',        label: 'Fira Code',        desc: 'Monospace code',        cat: 'Mono' },
   ];
 
-  const isActivePalette = (palette: typeof colorPalettes[0]) => 
-    palette.primary === primaryColor && palette.accent === accentColor;
-
-  // Load Google Font dynamically when selected
   const handleFontChange = (font: string) => {
     setFontFamily(font);
-    // Dynamically inject font link
     const fontName = font.replace(/ /g, '+');
-    const linkId = `google-font-${fontName}`;
+    const linkId = `gf-${fontName}`;
     if (!document.getElementById(linkId)) {
-      const link = document.createElement('link');
-      link.id = linkId;
-      link.rel = 'stylesheet';
-      link.href = `https://fonts.googleapis.com/css2?family=${fontName}:wght@300;400;500;600;700&display=swap`;
-      document.head.appendChild(link);
+      const l = document.createElement('link');
+      l.id = linkId; l.rel = 'stylesheet';
+      l.href = `https://fonts.googleapis.com/css2?family=${fontName}:wght@300;400;500;600;700&display=swap`;
+      document.head.appendChild(l);
     }
     document.documentElement.style.setProperty('--font-sans', font);
     document.body.style.fontFamily = `'${font}', sans-serif`;
   };
 
-  const handleSaveSettings = () => {
-    alert('Appearance settings saved!');
-  };
-  
+  const isLight = theme === 'light';
+  const bg = isLight ? '#f1eee7' : '#0f1117';
+  const cardBg = isLight ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.04)';
+  const border = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+  const labelC = isLight ? '#374151' : '#94a3b8';
+  const headC  = isLight ? '#111827' : '#f1f5f9';
+  const descC  = isLight ? '#6b7280' : '#64748b';
+
+  // Shared section heading style
+  const SectionLabel = ({ children }: { children: string }) => (
+    <p style={{ fontSize: 11, fontWeight: 700, color: labelC, textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 12 }}>{children}</p>
+  );
+
   return (
-    <Card title="Appearance" subtitle="Android 16-inspired theming & personalization">
-      <div className="space-y-8">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, fontFamily: "'Outfit',sans-serif" }}>
 
-        {/* Theme Selection */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-4 uppercase tracking-wider">Visual Theme</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {themes.map((themeOption) => (
-              <button
-                key={themeOption.id}
-                onClick={() => setTheme(themeOption.id)}
-                className={`relative rounded-2xl overflow-hidden transition-all duration-200 focus:outline-none group ${
-                  theme === themeOption.id 
-                    ? 'ring-2 ring-offset-2 ring-offset-background-900 ring-primary-500 scale-105 shadow-xl' 
-                    : 'ring-1 ring-background-600 hover:scale-102 hover:ring-primary-400/50'
-                }`}
-              >
-                {/* Color preview */}
-                <div className="h-14 w-full flex">
-                  {themeOption.colors.map((color, idx) => (
-                    <div key={idx} className="flex-1 h-full" style={{ backgroundColor: color }}></div>
-                  ))}
-                  {/* Accent dot */}
-                  <div 
-                    className="absolute bottom-2 right-2 w-3 h-3 rounded-full ring-1 ring-white/30"
-                    style={{ backgroundColor: themeOption.accent }}
-                  />
+      {/* ── 1. Base Theme ── */}
+      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 20, padding: '20px 22px', backdropFilter: 'blur(20px)', boxShadow: isLight ? '0 2px 16px rgba(0,0,0,0.07)' : '0 2px 16px rgba(0,0,0,0.3)' }}>
+        <SectionLabel>Environment Theme</SectionLabel>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+          {themes.map(t => (
+            <button key={t.id} onClick={() => setTheme(t.id)} style={{
+              position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+              border: theme === t.id ? `2px solid ${primaryColor}` : `1px solid ${border}`,
+              outline: 'none', transition: 'all 0.18s ease',
+              transform: theme === t.id ? 'scale(1.04)' : 'scale(1)',
+              boxShadow: theme === t.id ? `0 0 0 3px ${primaryColor}28` : 'none',
+            }}>
+              {/* Preview swatch */}
+              <div style={{ height: 44, background: t.bg, display: 'flex', alignItems: 'flex-end', padding: '0 6px 6px' }}>
+                <div style={{ height: 18, flex: 1, borderRadius: 6, background: t.card, opacity: 0.9 }}/>
+              </div>
+              <div style={{ padding: '6px 8px', background: isLight ? '#fff' : '#1a1f2e' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: headC, margin: 0 }}>{t.name}</p>
+                <p style={{ fontSize: 9, color: descC, margin: 0 }}>{t.desc}</p>
+              </div>
+              {theme === t.id && (
+                <div style={{ position: 'absolute', top: 5, right: 5, width: 16, height: 16, borderRadius: '50%', background: primaryColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="8" height="8" viewBox="0 0 10 8"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" fill="none"/></svg>
                 </div>
-                {/* Label */}
-                <div className="px-2 py-1.5 bg-background-800/90">
-                  <p className={`text-xs font-semibold ${theme === themeOption.id ? 'text-primary-300' : 'text-gray-200'}`}>
-                    {themeOption.name}
-                  </p>
-                  <p className="text-[10px] text-gray-500">{themeOption.description}</p>
-                </div>
-                {theme === themeOption.id && (
-                  <div className="absolute top-1.5 left-1.5 w-4 h-4 bg-primary-500 rounded-full flex items-center justify-center">
-                    <svg width="8" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Synced Color Palettes */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-1 uppercase tracking-wider">Synced Color Palettes</label>
-          <p className="text-xs text-gray-500 mb-4">One click syncs both primary & accent colors</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {colorPalettes.map((palette) => (
-              <button
-                key={palette.name}
-                onClick={() => { setPrimaryColor(palette.primary); setAccentColor(palette.accent); }}
-                className={`relative p-3 rounded-2xl transition-all duration-200 focus:outline-none text-left ${
-                  isActivePalette(palette)
-                    ? 'ring-2 ring-primary-500 ring-offset-1 ring-offset-background-900 bg-background-700 scale-105'
-                    : 'bg-background-800 hover:bg-background-700 ring-1 ring-background-600'
-                }`}
-              >
-                {/* Color swatches */}
-                <div className="flex gap-1 mb-2">
-                  {palette.preview.map((c, i) => (
-                    <div key={i} className={`h-5 rounded-full ${i === 0 ? 'flex-1' : 'w-5'}`} style={{ backgroundColor: c }}/>
-                  ))}
-                </div>
-                <p className="text-xs font-medium text-gray-200">{palette.name}</p>
-                {isActivePalette(palette) && (
-                  <div className="absolute top-2 right-2 w-4 h-4 bg-primary-500 rounded-full flex items-center justify-center">
-                    <svg width="8" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Custom Color Pickers */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wider">Primary Color</label>
-            <div className="flex items-center gap-3 bg-background-800 rounded-xl p-2 ring-1 ring-background-600">
-              <input
-                type="color"
-                value={primaryColor}
-                onChange={(e) => setPrimaryColor(e.target.value)}
-                className="h-9 w-9 rounded-lg overflow-hidden bg-transparent border-0 cursor-pointer flex-shrink-0"
-              />
-              <input
-                type="text"
-                value={primaryColor}
-                onChange={(e) => setPrimaryColor(e.target.value)}
-                className="flex-1 bg-transparent text-white text-sm focus:outline-none font-mono"
-              />
-              <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: primaryColor }} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-300 mb-2 uppercase tracking-wider">Accent Color</label>
-            <div className="flex items-center gap-3 bg-background-800 rounded-xl p-2 ring-1 ring-background-600">
-              <input
-                type="color"
-                value={accentColor}
-                onChange={(e) => setAccentColor(e.target.value)}
-                className="h-9 w-9 rounded-lg overflow-hidden bg-transparent border-0 cursor-pointer flex-shrink-0"
-              />
-              <input
-                type="text"
-                value={accentColor}
-                onChange={(e) => setAccentColor(e.target.value)}
-                className="flex-1 bg-transparent text-white text-sm focus:outline-none font-mono"
-              />
-              <div className="w-6 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: accentColor }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Font Family */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-300 mb-1 uppercase tracking-wider">Typography</label>
-          <p className="text-xs text-gray-500 mb-4">Choose a font that matches your style</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {fontOptions.map((font) => (
-              <button
-                key={font.value}
-                onClick={() => handleFontChange(font.value)}
-                className={`flex items-center justify-between p-3 rounded-xl transition-all text-left ${
-                  fontFamily === font.value
-                    ? 'bg-primary-900/40 ring-2 ring-primary-500 text-primary-200'
-                    : 'bg-background-800 ring-1 ring-background-600 hover:bg-background-700 text-gray-300'
-                }`}
-              >
-                <div>
-                  <p className="text-sm font-medium" style={{ fontFamily: `'${font.value}', sans-serif` }}>{font.label}</p>
-                  <p className="text-[11px] text-gray-500">{font.description}</p>
-                </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                  font.category === 'Monospace' ? 'bg-yellow-900/40 text-yellow-400' 
-                  : font.category === 'Display' ? 'bg-purple-900/40 text-purple-400'
-                  : 'bg-blue-900/40 text-blue-400'
-                }`}>
-                  {font.category}
-                </span>
-              </button>
-            ))}
-          </div>
-          {/* Live preview */}
-          <div className="mt-3 p-4 bg-background-800 rounded-xl ring-1 ring-background-600">
-            <p className="text-xs text-gray-500 mb-2">Live Preview</p>
-            <p className="text-lg font-bold text-white" style={{ fontFamily: `'${fontFamily}', sans-serif` }}>The quick brown fox</p>
-            <p className="text-sm text-gray-400" style={{ fontFamily: `'${fontFamily}', sans-serif` }}>jumps over the lazy dog — 1234567890</p>
-          </div>
-        </div>
-
-        {/* Animations Toggle */}
-        <div className="flex items-center justify-between p-4 bg-background-800 rounded-xl ring-1 ring-background-600">
-          <div>
-            <p className="text-sm font-semibold text-white">Enable Animations</p>
-            <p className="text-xs text-gray-500 mt-0.5">Smooth transitions & micro-interactions</p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" defaultChecked className="sr-only peer" />
-            <div className="w-11 h-6 bg-background-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
-        </div>
-        
-        <div className="flex justify-end">
-          <button 
-            onClick={handleSaveSettings}
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2.5 px-6 rounded-xl transition-colors font-medium"
-          >
-            <Save size={18} />
-            <span>Save Appearance</span>
-          </button>
+              )}
+            </button>
+          ))}
         </div>
       </div>
-    </Card>
+
+      {/* ── 2. Accent Color System ── */}
+      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 20, padding: '20px 22px', backdropFilter: 'blur(20px)', boxShadow: isLight ? '0 2px 16px rgba(0,0,0,0.07)' : '0 2px 16px rgba(0,0,0,0.3)' }}>
+        <SectionLabel>Accent Color System</SectionLabel>
+
+        {/* Mode toggle: Gradient / Solid */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4, width: 'fit-content' }}>
+          {(['gradient','solid'] as const).map(m => (
+            <button key={m} onClick={() => setColorMode(m)} style={{
+              padding: '5px 16px', borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: colorMode === m ? (isLight ? '#fff' : 'rgba(255,255,255,0.14)') : 'transparent',
+              color: colorMode === m ? primaryColor : (isLight ? '#6b7280' : '#64748b'),
+              border: 'none', transition: 'all 0.18s ease',
+              boxShadow: colorMode === m ? '0 1px 6px rgba(0,0,0,0.12)' : 'none',
+              textTransform: 'capitalize',
+            }}>{m}</button>
+          ))}
+        </div>
+
+        {/* Gradient palettes */}
+        {colorMode === 'gradient' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            {gradientPalettes.map(pal => {
+              const active = pal.p === primaryColor && pal.a === accentColor;
+              return (
+                <button key={pal.name} onClick={() => { setPrimaryColor(pal.p); setAccentColor(pal.a); }} style={{
+                  borderRadius: 14, overflow: 'hidden', cursor: 'pointer', border: active ? `2px solid ${pal.p}` : `1px solid ${border}`,
+                  outline: 'none', transition: 'all 0.18s ease', transform: active ? 'scale(1.05)' : 'scale(1)',
+                  boxShadow: active ? `0 4px 14px ${pal.p}44` : 'none', background: 'transparent',
+                }}>
+                  <div style={{ height: 38, background: pal.preview }}/>
+                  <div style={{ padding: '5px 8px', background: isLight ? '#fff' : '#1a1f2e' }}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: headC, margin: 0 }}>{pal.name}</p>
+                  </div>
+                  {active && (
+                    <div style={{ position: 'absolute', top: 4, right: 4, width: 14, height: 14, borderRadius: '50%', background: pal.p, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px #fff' }}>
+                      <svg width="7" height="7" viewBox="0 0 10 8"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="2" strokeLinecap="round" fill="none"/></svg>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Solid palettes */}
+        {colorMode === 'solid' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 10 }}>
+            {solidPalettes.map(pal => {
+              const active = pal.p === primaryColor;
+              return (
+                <button key={pal.name} onClick={() => { setPrimaryColor(pal.p); setAccentColor(pal.a); }} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                  padding: '10px 6px', borderRadius: 14, cursor: 'pointer',
+                  border: active ? `2px solid ${pal.p}` : `1px solid ${border}`,
+                  outline: 'none', transition: 'all 0.18s ease',
+                  transform: active ? 'scale(1.08)' : 'scale(1)',
+                  boxShadow: active ? `0 4px 14px ${pal.p}55` : 'none',
+                  background: active ? `${pal.p}14` : (isLight ? '#fff' : 'rgba(255,255,255,0.04)'),
+                }}>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: pal.preview, boxShadow: `0 2px 8px ${pal.p}55` }}/>
+                  <p style={{ fontSize: 9, fontWeight: 600, color: headC, margin: 0, textAlign: 'center' }}>{pal.name}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Custom pickers */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+          {[{ label: 'Primary', val: primaryColor, set: setPrimaryColor }, { label: 'Accent', val: accentColor, set: setAccentColor }].map(({ label, val, set }) => (
+            <div key={label}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: labelC, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>{label}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)', borderRadius: 12, padding: '8px 10px', border: `1px solid ${border}` }}>
+                <input type="color" value={val} onChange={e => set(e.target.value)} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', cursor: 'pointer', background: 'transparent', flexShrink: 0 }}/>
+                <input type="text" value={val} onChange={e => set(e.target.value)} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 12, fontFamily: 'monospace', color: headC }}/>
+                <div style={{ width: 20, height: 20, borderRadius: '50%', background: val, flexShrink: 0, boxShadow: `0 2px 6px ${val}66` }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 3. Typography ── */}
+      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 20, padding: '20px 22px', backdropFilter: 'blur(20px)', boxShadow: isLight ? '0 2px 16px rgba(0,0,0,0.07)' : '0 2px 16px rgba(0,0,0,0.3)' }}>
+        <SectionLabel>Typography</SectionLabel>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
+          {fontOptions.map(f => {
+            const active = fontFamily === f.value;
+            return (
+              <button key={f.value} onClick={() => handleFontChange(f.value)} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 14px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+                background: active ? `${primaryColor}14` : (isLight ? '#fff' : 'rgba(255,255,255,0.04)'),
+                border: active ? `1.5px solid ${primaryColor}66` : `1px solid ${border}`,
+                outline: 'none', transition: 'all 0.18s ease',
+                boxShadow: active ? `0 4px 12px ${primaryColor}22` : 'none',
+              }}>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: headC, fontFamily: `'${f.value}', sans-serif`, margin: 0 }}>{f.label}</p>
+                  <p style={{ fontSize: 10, color: descC, margin: 0 }}>{f.desc}</p>
+                </div>
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 6, background: f.cat === 'Mono' ? '#854d0e22' : f.cat === 'Display' ? '#6d28d922' : '#1d4ed822', color: f.cat === 'Mono' ? '#b45309' : f.cat === 'Display' ? '#7c3aed' : '#1d4ed8', flexShrink: 0, textTransform: 'uppercase' }}>{f.cat}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Live preview */}
+        <div style={{ marginTop: 12, padding: '14px 16px', background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)', borderRadius: 14, border: `1px solid ${border}` }}>
+          <p style={{ fontSize: 10, color: descC, marginBottom: 6 }}>LIVE PREVIEW</p>
+          <p style={{ fontSize: 18, fontWeight: 700, color: headC, fontFamily: `'${fontFamily}', sans-serif`, margin: 0 }}>The quick brown fox</p>
+          <p style={{ fontSize: 13, color: labelC, fontFamily: `'${fontFamily}', sans-serif`, margin: 0 }}>jumps over the lazy dog — 1234567890</p>
+        </div>
+      </div>
+
+      {/* ── Save Button ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          onClick={() => { localStorage.setItem('theme', theme); alert('Appearance saved!'); }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 24px', borderRadius: 12, cursor: 'pointer',
+            background: `linear-gradient(135deg,${primaryColor},${accentColor})`,
+            color: '#fff', fontSize: 14, fontWeight: 700, border: 'none',
+            boxShadow: `0 4px 16px ${primaryColor}44`,
+            fontFamily: "'Outfit',sans-serif",
+            transition: 'all 0.18s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+        >
+          <Save size={16}/>
+          Save Appearance
+        </button>
+      </div>
+
+    </div>
   );
 };
-
 const NotificationSettings = () => {
   return (
     <Card title="Notification Settings">
