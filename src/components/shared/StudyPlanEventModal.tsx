@@ -24,6 +24,8 @@ interface StudyPlanEventModalProps {
   onSave: (eventData: any) => void;
   isPersonalEvent: boolean;
   event?: any; // For editing existing events
+  /** All student events — modal filters by formData.date to get same-day context */
+  existingEvents?: { title: string; date: Date; startTime: string; endTime: string; eventType?: string }[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -55,6 +57,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
   selectedDate, currentUser,
   allStudents = [], allCourses = [],
   onClose, onSave, isPersonalEvent, event,
+  existingEvents = [],
 }) => {
   const isEditing = !!event;
 
@@ -95,6 +98,7 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
   const [appliedSlot, setAppliedSlot]     = useState<AITimeSlotSuggestion | null>(null);
   const [tipsLoading, setTipsLoading]     = useState(false);
   const [tips, setTips]                   = useState<string[]>([]);
+  const [tipsSource, setTipsSource]       = useState<'draft' | 'ai' | null>(null);
   const [draftLoading, setDraftLoading]   = useState(false);
   const [draft, setDraft]                 = useState<AIEventDraft | null>(null);
   const [draftApplied, setDraftApplied]   = useState(false);
@@ -109,7 +113,13 @@ const StudyPlanEventModal: React.FC<StudyPlanEventModalProps> = ({
     debounceRef.current = setTimeout(async () => {
       setDraftLoading(true);
       try {
+        const isRevision = /\b(revision|revise|review|recap|revisit|quick|brief|summary|summarize|overview)\b/i.test(formData.title);
         const prompt = `Suggest details for a study event titled "${formData.title}" (type: ${formData.eventType}, subject: ${formData.course || 'General'}).
+Estimate session duration based on topic complexity and intent:
+- Revision/review/recap sessions (re-reading known material): 20-45min
+- Standard first-time study session: 60min  
+- Complex/advanced/multi-part/mastering/deep-dive topics: 90-120min
+${isRevision ? 'NOTE: This title contains revision/review keywords — prefer a shorter duration (20-45min) unless the scope is clearly large.' : ''}
 Return ONLY valid JSON — no markdown, no explanation:
 {"title":"improved title","description":"2-3 sentence description of what to cover in this session","priority":"low|medium|high","estimatedDuration":60,"suggestedPrep":["prep step 1","prep step 2"]}`;
         const raw = await callProviderDirect(prompt, aiConfig!, 400, 0.5);
@@ -131,6 +141,7 @@ Return ONLY valid JSON — no markdown, no explanation:
       endTime:     calcEnd(p.startTime, draft.estimatedDuration),
     }));
     setTips(draft.suggestedPrep.length ? draft.suggestedPrep : tips);
+    if (draft.suggestedPrep.length) setTipsSource('draft');
     setDraftApplied(true);
     setDraft(null);
   };
@@ -142,28 +153,75 @@ Return ONLY valid JSON — no markdown, no explanation:
     setSlots([]);
     setAiPanel('slots');
     try {
-      const prompt = `Today is ${new Date().toLocaleDateString('en-CA')}.
-Generate 4 optimal study time slots for: "${formData.title || 'Study Session'}" (${formData.eventType}) — subject: "${formData.course || 'General'}".
-Preferred date: ${formData.date}. Session duration: 60 minutes.
-Consider: peak focus morning (7–10 AM), solid afternoon (2–5 PM), calm evening (7–9 PM).
+      // Always read duration from current form fields — reflects both draft-applied and manual edits
+      const computedDuration = (() => {
+        try {
+          const [sh, sm] = formData.startTime.split(':').map(Number);
+          const [eh, em] = formData.endTime.split(':').map(Number);
+          const mins = (eh * 60 + em) - (sh * 60 + sm);
+          return mins > 0 ? mins : 60;
+        } catch { return 60; }
+      })();
 
-Return ONLY a valid JSON array — no markdown, no explanation:
-[
-  {
-    "startTime": "HH:MM",
-    "endTime": "HH:MM",
-    "date": "YYYY-MM-DD",
-    "reason": "2-sentence explanation of why this slot maximises learning for this subject and type",
-    "energyLevel": "peak",
-    "sessionType": "focus",
-    "estimatedProductivity": 85,
-    "conflictWarning": null
-  }
-]
-energyLevel must be one of: peak, medium, low.
-sessionType must be one of: focus, review, practice.`;
+      // Filter existing events to the selected date (always correct even after manual date change)
+      const sameDayEvents = existingEvents.filter(e => {
+        try { return e.date.toISOString().slice(0, 10) === formData.date; } catch { return false; }
+      }).sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-      const raw = await callProviderDirect(prompt, aiConfig!, 800, 0.5);
+      const busyBlocks = sameDayEvents.length > 0
+        ? sameDayEvents.map(e => `  ${e.startTime}–${e.endTime}: "${e.title}"${e.eventType ? ` (${e.eventType})` : ''}`).join('\n')
+        : '  None — day is fully free';
+
+      // Pre-compute free windows so the LLM can reason about actual gaps
+      const toMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+      const toTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      const freeWindows: string[] = [];
+      if (sameDayEvents.length > 0) {
+        let cursor = toMins('06:00');
+        for (const ev of sameDayEvents) {
+          const evStart = toMins(ev.startTime);
+          if (evStart - cursor >= computedDuration + 15) freeWindows.push(`${toTime(cursor)}–${toTime(evStart)}`);
+          cursor = Math.max(cursor, toMins(ev.endTime));
+        }
+        if (toMins('23:00') - cursor >= computedDuration) freeWindows.push(`${toTime(cursor)}–23:00`);
+      }
+      const freeContext = sameDayEvents.length === 0
+        ? 'Entire day is free — pick slots based purely on energy level and topic type.'
+        : freeWindows.length > 0
+          ? `Free windows (≥${computedDuration}min gap + 15min buffer):\n${freeWindows.map(w => `  ${w}`).join('\n')}`
+          : 'Day is heavily booked — suggest the best available gaps; set conflictWarning if tight.';
+
+      const isRevision = /\b(revision|revise|review|recap|revisit|quick|brief|summary|summarize|overview)\b/i.test(formData.title);
+
+      const prompt = `You are an expert study scheduler with full visibility of the student's day.
+
+SESSION TO SCHEDULE
+  Title: "${formData.title || 'Study Session'}"
+  Subject: "${formData.course || 'General'}"
+  Type: ${formData.eventType}
+  Duration: ${computedDuration} minutes — every slot MUST span exactly ${computedDuration} minutes (startTime + ${computedDuration}min = endTime)
+  Date: ${formData.date}
+  Nature: ${isRevision ? 'REVISION/REVIEW — lower cognitive load, flexible timing, fits smaller gaps' : 'New/deep study — needs focused uninterrupted time, prefer peak windows'}
+
+STUDENT'S SCHEDULE ON ${formData.date}
+Already booked:
+${busyBlocks}
+
+${freeContext}
+
+RULES
+1. No slot may overlap any booked session; maintain ≥15min buffer before and after each existing session
+2. Slots must be within 06:00–23:00
+3. ${isRevision ? 'Revision: afternoon or evening slots are fine; peak morning not required' : 'Deep study: prioritise morning peak (07:00–10:00) first, then afternoon'}
+4. Vary energy levels across the 4 suggestions so student has real choices
+5. estimatedProductivity = time-of-day energy × topic fit (revision in evening can still score 75+)
+6. In "reason", explicitly reference the day's schedule — mention why this gap works, what comes before/after
+7. If a slot is tight (buffer < 20min from another session), set conflictWarning with a brief note
+
+Return ONLY a valid JSON array of exactly 4 objects — no markdown, no explanation:
+[{"date":"${formData.date}","startTime":"HH:MM","endTime":"HH:MM","reason":"2 sentences referencing the day schedule","energyLevel":"peak|medium|low","sessionType":"focus|review|practice","estimatedProductivity":85,"conflictWarning":null}]`;
+
+      const raw = await callProviderDirect(prompt, aiConfig!, 1200, 0.5);
       const cleaned = raw.replace(/```json|```/g, '').trim();
       const parsed: AITimeSlotSuggestion[] = JSON.parse(cleaned);
       if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Model returned no time slots. Check your AI model settings or try again.');
@@ -198,6 +256,7 @@ Return ONLY a valid JSON array of 5 strings — no markdown, no explanation:
       const cleaned = raw.replace(/```json|```/g, '').trim();
       const parsed: string[] = JSON.parse(cleaned);
       setTips(Array.isArray(parsed) ? parsed : []);
+      if (Array.isArray(parsed) && parsed.length) setTipsSource('ai');
     } catch { /* silent */ } finally { setTipsLoading(false); }
   };
 
@@ -523,12 +582,23 @@ Return ONLY a valid JSON array of 5 strings — no markdown, no explanation:
                 </div>
               )}
 
+              {tips.length === 0 && !tipsLoading && (
+                <div className="flex items-center gap-2 text-xs text-gray-500 bg-background-800 border border-background-700 rounded-lg px-4 py-3">
+                  <Lightbulb size={11} /> Click <span className="text-amber-300 font-medium mx-0.5">AI Tips</span> to get study suggestions for this topic
+                </div>
+              )}
+
               {tips.length > 0 && !tipsLoading && (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
-                  <p className="text-xs font-semibold text-amber-300 flex items-center gap-1.5 mb-3">
-                    <Lightbulb size={12} /> AI Study Tips
-                    <span className="text-gray-500 font-normal">· {formData.course || 'General'}</span>
-                  </p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                      <Lightbulb size={12} /> AI Study Tips
+                      <span className="text-gray-500 font-normal">· {formData.course || 'General'}</span>
+                    </p>
+                    {tipsSource === 'draft' && (
+                      <span className="text-xs text-gray-500 italic">Click AI Tips for detailed tips</span>
+                    )}
+                  </div>
                   {tips.map((tip, i) => (
                     <div key={i} className="flex items-start gap-2.5 text-sm text-gray-200">
                       <span className="text-amber-400 font-bold flex-shrink-0 mt-0.5">{i + 1}.</span>
@@ -624,11 +694,11 @@ Return ONLY a valid JSON array of 5 strings — no markdown, no explanation:
                 {aiReady && aiPanel === null && (
                   <>
                     <button type="button" onClick={handleGetSlots}
-                      className="flex items-center gap-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 px-3 py-2 rounded-lg transition-all">
+                      className="flex items-center gap-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 px-4 py-2.5 rounded-lg transition-all font-medium">
                       <Brain size={12} /> AI Times
                     </button>
                     <button type="button" onClick={handleGetTips}
-                      className="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 px-3 py-2 rounded-lg transition-all">
+                      className="flex items-center gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 px-4 py-2.5 rounded-lg transition-all font-medium">
                       <Lightbulb size={12} /> Tips
                     </button>
                   </>
