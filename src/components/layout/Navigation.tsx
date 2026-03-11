@@ -1,4 +1,4 @@
-/* Navigation.tsx 
+/* Navigation.tsx
    — Solid frosted header (never transparent) — no overlap
    — Auto-hide sidebar: collapsed (64px icons) on desktop, expands on hover
    — Mobile: slide-in drawer + fixed top bar
@@ -250,10 +250,8 @@ const Navigation = () => {
 
   return (
     <>
-      {/* ══════════════════════════════════════════
-          DESKTOP SIDEBAR
-          Auto-collapses to 64px icons, expands on hover to 220px
-      ══════════════════════════════════════════ */}
+      {/* DESKTOP SIDEBAR
+          Auto-collapses to 64px icons, expands on hover to 220px */}
       <aside
         onMouseEnter={handleSidebarMouseEnter}
         onMouseLeave={handleSidebarMouseLeave}
@@ -445,9 +443,7 @@ const Navigation = () => {
         </div>{/* end content wrapper */}
       </aside>
 
-      {/* ══════════════════════════════════════════
-          MOBILE SIDEBAR DRAWER (slide in from left)
-      ══════════════════════════════════════════ */}
+      {/* MOBILE SIDEBAR DRAWER (slide in from left) */}
       {/* Overlay */}
       {sidebarOpen && (
         <div
@@ -554,9 +550,10 @@ const Navigation = () => {
         </div>
         </div>{/* end mobile content wrapper */}
       </aside>
+
+      {/* DESKTOP HEADER
           Solid frosted background — NEVER transparent
-          Positioned right of the sidebar (64px gap)
-      ══════════════════════════════════════════ */}
+          Positioned right of the sidebar (64px gap) */}
       <header
         className="hidden lg:flex fixed top-0 right-0 z-[100] items-center justify-end"
         style={{
@@ -675,9 +672,7 @@ const Navigation = () => {
         )}
       </header>
 
-      {/* ══════════════════════════════════════════
-          MOBILE HEADER — solid, always visible
-      ══════════════════════════════════════════ */}
+      {/* MOBILE HEADER — solid, always visible */}
       <header
         className="lg:hidden fixed top-0 left-0 right-0 z-[100] flex items-center justify-between"
         style={{
