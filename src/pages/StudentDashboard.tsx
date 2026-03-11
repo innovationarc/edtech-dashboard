@@ -30,7 +30,23 @@ const APB = (p:string) => p==='high'?'#ef4444':p==='medium'?'#f59e0b':p==='low'?
 const EDC = (t:string) => { const s=t.toLowerCase(); return s.includes('exam')||s.includes('test')||s.includes('quiz')?'#ef4444':s.includes('assignment')||s.includes('due')?'#f59e0b':s.includes('class')||s.includes('lecture')?'#6366f1':'#10b981'; };
 
 const StudentDashboard = () => {
-  const { user, primaryColor = '#6366f1', accentColor = '#8b5cf6' } = useDashboard();
+  const { user, primaryColor = '#6366f1', accentColor = '#8b5cf6', theme } = useDashboard();
+  const isLight = theme === 'light';
+
+  // Theme-aware text & surface colors
+  const T = {
+    text:    isLight ? '#111827'              : 'rgba(255,255,255,0.88)',
+    text2:   isLight ? '#6b7280'              : 'rgba(255,255,255,0.52)',
+    text3:   isLight ? '#9ca3af'              : 'rgba(255,255,255,0.32)',
+    muted:   isLight ? 'rgba(0,0,0,0.45)'    : 'rgba(255,255,255,0.38)',
+    surface: isLight ? 'rgba(0,0,0,0.04)'    : 'rgba(255,255,255,0.04)',
+    border:  isLight ? 'rgba(0,0,0,0.07)'    : 'rgba(255,255,255,0.07)',
+    dimIcon: isLight ? 'rgba(0,0,0,0.25)'    : 'rgba(255,255,255,0.22)',
+    ring:    isLight ? 'rgba(0,0,0,0.08)'    : 'rgba(255,255,255,0.06)',
+    trackBg: isLight ? 'rgba(0,0,0,0.08)'    : 'rgba(255,255,255,0.08)',
+    starBg:  isLight ? 'rgba(0,0,0,0.06)'    : 'rgba(0,0,0,0.18)',
+    tagBg:   isLight ? 'rgba(0,0,0,0.06)'    : 'rgba(255,255,255,0.05)',
+  };
   const [dailyQuote, setDailyQuote]                 = useState(() => getRandomQuote());
   const [announcements, setAnnouncements]           = useState<Announcement[]>([]);
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
@@ -158,22 +174,18 @@ const StudentDashboard = () => {
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'clamp(12px,2vw,22px)',fontFamily:"'Outfit',sans-serif"}}>
 
-      {/* Welcome Banner — from uploaded file */}
+      {/* Welcome Banner */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 style={{fontSize:'clamp(1.2rem,2.5vw,1.6rem)',fontWeight:800,color:T.text,margin:0}}>
             Welcome back, {user?.name || 'Student'}! 🌟
           </h1>
-          <p className="text-gray-400 mt-1">Ready to conquer your learning goals today?</p>
+          <p style={{color:T.text2,marginTop:4,fontSize:14}}>Ready to conquer your learning goals today?</p>
         </div>
         <div className="text-right">
-          <div className="text-sm text-gray-400">Today</div>
-          <div className="text-lg font-semibold text-white">
-            {new Date().toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'short',
-              day: 'numeric'
-            })}
+          <div style={{fontSize:11,color:T.text3,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.08em'}}>Today</div>
+          <div style={{fontSize:16,fontWeight:700,color:T.text}}>
+            {new Date().toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' })}
           </div>
         </div>
       </div>
@@ -185,12 +197,12 @@ const StudentDashboard = () => {
         <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>}>
           <div style={{display:'flex',flexDirection:'column',gap:5}}>
             {objectives.map(o=>(
-              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:9,padding:'7px 9px',borderRadius:9,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.05)',cursor:'pointer',transition:'background 0.12s'}}
-                onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,255,255,0.06)')}
-                onMouseLeave={e=>(e.currentTarget.style.background='rgba(255,255,255,0.03)')}
+              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:9,padding:'7px 9px',borderRadius:9,background:T.surface,border:`1px solid ${T.border}`,cursor:'pointer',transition:'background 0.12s'}}
+                onMouseEnter={e=>(e.currentTarget.style.background=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.07)')}
+                onMouseLeave={e=>(e.currentTarget.style.background=T.surface)}
               >
-                {o.completed?<CheckCircle size={17} color="#10b981" style={{flexShrink:0}}/>:<Circle size={17} color="rgba(255,255,255,0.22)" style={{flexShrink:0}}/>}
-                <p style={{flex:1,fontSize:'clamp(0.7rem,1.05vw,0.79rem)',color:o.completed?'rgba(255,255,255,0.32)':'rgba(255,255,255,0.82)',margin:0,textDecoration:o.completed?'line-through':'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.title}</p>
+                {o.completed?<CheckCircle size={17} color="#10b981" style={{flexShrink:0}}/>:<Circle size={17} color={T.dimIcon} style={{flexShrink:0}}/>}
+                <p style={{flex:1,fontSize:'clamp(0.7rem,1.05vw,0.79rem)',color:o.completed?T.text3:T.text,margin:0,textDecoration:o.completed?'line-through':'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.title}</p>
                 <div style={{width:5,height:5,borderRadius:'50%',background:PC(o.priority),flexShrink:0}}/>
               </div>
             ))}
@@ -205,30 +217,30 @@ const StudentDashboard = () => {
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
             <div style={{display:'flex',gap:5,width:'100%'}}>
               {(['focus','break'] as const).map(m=>(
-                <button key={m} onClick={()=>{setTimerMode(m);setTimerMin(m==='focus'?25:5);setTimerSec(0);setTimerRunning(false);}} style={{flex:1,padding:'5px 0',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:"'Outfit',sans-serif",background:timerMode===m?(m==='focus'?'rgba(16,185,129,0.18)':'rgba(245,158,11,0.18)'):'rgba(255,255,255,0.04)',border:timerMode===m?`1px solid ${m==='focus'?'rgba(16,185,129,0.35)':'rgba(245,158,11,0.35)'}`:'1px solid rgba(255,255,255,0.07)',color:timerMode===m?(m==='focus'?'#10b981':'#f59e0b'):'rgba(255,255,255,0.38)'}}>
+                <button key={m} onClick={()=>{setTimerMode(m);setTimerMin(m==='focus'?25:5);setTimerSec(0);setTimerRunning(false);}} style={{flex:1,padding:'5px 0',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:"'Outfit',sans-serif",background:timerMode===m?(m==='focus'?'rgba(16,185,129,0.18)':'rgba(245,158,11,0.18)'):T.surface,border:timerMode===m?`1px solid ${m==='focus'?'rgba(16,185,129,0.35)':'rgba(245,158,11,0.35)'}`:`1px solid ${T.border}`,color:timerMode===m?(m==='focus'?'#10b981':'#f59e0b'):T.muted}}>
                   {m==='focus'?'Focus':'Break'}
                 </button>
               ))}
             </div>
             <div style={{position:'relative',width:100,height:100}}>
               <svg width="100" height="100" style={{transform:'rotate(-90deg)'}}>
-                <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7"/>
+                <circle cx="50" cy="50" r="42" fill="none" stroke={T.trackBg} strokeWidth="7"/>
                 <circle cx="50" cy="50" r="42" fill="none" stroke={timerMode==='focus'?'#10b981':'#f59e0b'} strokeWidth="7" strokeDasharray={`${circ*timerPct} ${circ}`} strokeLinecap="round" style={{transition:'stroke-dasharray 0.9s ease'}}/>
               </svg>
               <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}>
-                <span style={{fontSize:'clamp(1.1rem,2.5vw,1.4rem)',fontWeight:750,color:'rgba(255,255,255,0.95)',lineHeight:1}}>{String(timerMin).padStart(2,'0')}:{String(timerSec).padStart(2,'0')}</span>
-                <span style={{fontSize:9,color:'rgba(255,255,255,0.38)',textTransform:'capitalize',marginTop:2}}>{timerMode}</span>
+                <span style={{fontSize:'clamp(1.1rem,2.5vw,1.4rem)',fontWeight:750,color:T.text,lineHeight:1}}>{String(timerMin).padStart(2,'0')}:{String(timerSec).padStart(2,'0')}</span>
+                <span style={{fontSize:9,color:T.text3,textTransform:'capitalize',marginTop:2}}>{timerMode}</span>
               </div>
             </div>
             <div style={{display:'flex',gap:8}}>
               <button onClick={timerRunning?()=>setTimerRunning(false):()=>setTimerRunning(true)} style={{width:36,height:36,borderRadius:10,border:'none',cursor:'pointer',background:timerRunning?'rgba(245,158,11,0.18)':'rgba(16,185,129,0.18)',color:timerRunning?'#f59e0b':'#10b981',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 {timerRunning?<Pause size={15}/>:<Play size={15}/>}
               </button>
-              <button onClick={()=>{setTimerRunning(false);setTimerMin(timerMode==='focus'?25:5);setTimerSec(0);}} style={{width:36,height:36,borderRadius:10,border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.04)',color:'rgba(255,255,255,0.45)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <button onClick={()=>{setTimerRunning(false);setTimerMin(timerMode==='focus'?25:5);setTimerSec(0);}} style={{width:36,height:36,borderRadius:10,border:`1px solid ${T.ring}`,background:T.surface,color:T.muted,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 <RotateCcw size={13}/>
               </button>
             </div>
-            <p style={{fontSize:10,color:'rgba(255,255,255,0.32)',textAlign:'center',margin:0}}>{timerMode==='focus'?'Stay focused 🎯':'Take a breath 🌿'}</p>
+            <p style={{fontSize:10,color:T.text3,textAlign:'center',margin:0}}>{timerMode==='focus'?'Stay focused 🎯':'Take a breath 🌿'}</p>
           </div>
         </Card>
 
@@ -237,7 +249,7 @@ const StudentDashboard = () => {
           {announcementsLoading?(
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:7,padding:'22px 0'}}>
               <Loader size={16} color="#6366f1" className="animate-spin"/>
-              <span style={{fontSize:12,color:'rgba(255,255,255,0.4)'}}>Loading…</span>
+              <span style={{fontSize:12,color:T.text2}}>Loading…</span>
             </div>
           ):announcementsError?(
             <div style={{textAlign:'center',padding:'18px 0'}}>
@@ -247,19 +259,19 @@ const StudentDashboard = () => {
             </div>
           ):announcements.length===0?(
             <div style={{textAlign:'center',padding:'18px 0'}}>
-              <Megaphone size={26} color="rgba(255,255,255,0.12)" style={{margin:'0 auto 7px'}}/>
-              <p style={{fontSize:12,color:'rgba(255,255,255,0.32)',margin:0}}>No announcements yet</p>
+              <Megaphone size={26} color={T.dimIcon} style={{margin:'0 auto 7px'}}/>
+              <p style={{fontSize:12,color:T.text3,margin:0}}>No announcements yet</p>
             </div>
           ):(
             <div style={{display:'flex',flexDirection:'column',gap:7}}>
               {announcements.slice(0,3).map(a=>(
-                <div key={a.id} style={{padding:'8px 10px',borderRadius:9,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',borderLeft:`3px solid ${APB(a.priority)}`}}>
+                <div key={a.id} style={{padding:'8px 10px',borderRadius:9,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${APB(a.priority)}`}}>
                   <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
-                    <p style={{fontSize:'clamp(0.7rem,1.05vw,0.78rem)',fontWeight:650,color:'rgba(255,255,255,0.85)',margin:0,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.title}</p>
+                    <p style={{fontSize:'clamp(0.7rem,1.05vw,0.78rem)',fontWeight:650,color:T.text,margin:0,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.title}</p>
                     {a.priority==='high'&&<span style={{fontSize:9,fontWeight:700,background:'rgba(239,68,68,0.18)',color:'#ef4444',borderRadius:4,padding:'1px 5px',flexShrink:0}}>URGENT</span>}
                   </div>
-                  <p style={{fontSize:10,color:'rgba(255,255,255,0.38)',margin:'0 0 3px'}}>{a.teacherName} · {a.subject}</p>
-                  <p style={{fontSize:11,color:'rgba(255,255,255,0.52)',margin:0,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any}}>{a.message}</p>
+                  <p style={{fontSize:10,color:T.text2,margin:'0 0 3px'}}>{a.teacherName} · {a.subject}</p>
+                  <p style={{fontSize:11,color:T.text2,margin:0,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any}}>{a.message}</p>
                 </div>
               ))}
               {announcements.length>3&&<button style={{fontSize:11,color:'#6366f1',background:'none',border:'none',cursor:'pointer',padding:'3px 0'}}>View all {announcements.length} →</button>}
@@ -271,10 +283,10 @@ const StudentDashboard = () => {
         <Card title="Daily Inspiration" icon={<Star size={15} color="#f59e0b"/>}>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:12}}>
             <div style={{fontSize:32}}>💡</div>
-            <blockquote style={{fontSize:'clamp(0.72rem,1.1vw,0.82rem)',color:'rgba(255,255,255,0.68)',fontStyle:'italic',lineHeight:1.6,margin:0}}>"{dailyQuote.text}"</blockquote>
+            <blockquote style={{fontSize:'clamp(0.72rem,1.1vw,0.82rem)',color:T.text2,fontStyle:'italic',lineHeight:1.6,margin:0}}>"{dailyQuote.text}"</blockquote>
             <cite style={{fontSize:11,fontWeight:650,color:'#a78bfa',fontStyle:'normal'}}>— {dailyQuote.author}</cite>
-            <div style={{width:'100%',borderTop:'1px solid rgba(255,255,255,0.06)',paddingTop:9}}>
-              <button onClick={()=>setDailyQuote(getRandomQuote())} style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,color:'rgba(255,255,255,0.42)',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:20,padding:'5px 11px',cursor:'pointer',fontFamily:"'Outfit',sans-serif"}}>
+            <div style={{width:'100%',borderTop:`1px solid ${T.border}`,paddingTop:9}}>
+              <button onClick={()=>setDailyQuote(getRandomQuote())} style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,color:T.muted,background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:'5px 11px',cursor:'pointer',fontFamily:"'Outfit',sans-serif"}}>
                 <RotateCcw size={10}/> New Quote
               </button>
             </div>
@@ -289,29 +301,29 @@ const StudentDashboard = () => {
         <Card title="Weekly Schedule" subtitle="Events this week" icon={<Calendar size={15} color="#6366f1"/>}>
           <div style={{display:'flex',flexDirection:'column',gap:11}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
-              {['S','M','T','W','T','F','S'].map((d,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:'rgba(255,255,255,0.3)',padding:'2px 0'}}>{d}</div>)}
+              {['S','M','T','W','T','F','S'].map((d,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:T.text3,padding:'2px 0'}}>{d}</div>)}
               {Array.from({length:7},(_,i)=>{
                 const d=new Date(); d.setDate(d.getDate()-d.getDay()+i);
                 const today=d.toDateString()===new Date().toDateString();
                 const has=calendarEvents.some(e=>e.date.toDateString()===d.toDateString());
-                return <div key={i} style={{position:'relative',textAlign:'center',padding:'5px 2px',borderRadius:7,fontSize:11,fontWeight:600,background:today?'rgba(99,102,241,0.32)':has?'rgba(255,255,255,0.06)':'transparent',color:today?'white':has?'rgba(255,255,255,0.82)':'rgba(255,255,255,0.32)',border:today?'1px solid rgba(99,102,241,0.45)':'1px solid transparent'}}>
+                return <div key={i} style={{position:'relative',textAlign:'center',padding:'5px 2px',borderRadius:7,fontSize:11,fontWeight:600,background:today?'rgba(99,102,241,0.32)':has?T.surface:'transparent',color:today?'white':has?T.text:T.text3,border:today?'1px solid rgba(99,102,241,0.45)':'1px solid transparent'}}>
                   {d.getDate()}
                   {has&&!today&&<div style={{position:'absolute',bottom:2,left:'50%',transform:'translateX(-50%)',width:3,height:3,borderRadius:'50%',background:'#10b981'}}/>}
                 </div>;
               })}
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:5}}>
-              <p style={{fontSize:10,fontWeight:700,color:'rgba(255,255,255,0.35)',textTransform:'uppercase',letterSpacing:'0.07em',margin:0}}>Upcoming</p>
-              {calendarLoading?<div style={{display:'flex',alignItems:'center',gap:5,padding:'6px 0'}}><Loader size={13} color="#6366f1" className="animate-spin"/><span style={{fontSize:11,color:'rgba(255,255,255,0.38)'}}>Loading…</span></div>
-              :calendarEvents.length===0?<div style={{textAlign:'center',padding:'10px 0'}}><Calendar size={20} color="rgba(255,255,255,0.12)" style={{margin:'0 auto 5px'}}/><p style={{fontSize:11,color:'rgba(255,255,255,0.32)',margin:0}}>No upcoming events</p></div>
+              <p style={{fontSize:10,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'0.07em',margin:0}}>Upcoming</p>
+              {calendarLoading?<div style={{display:'flex',alignItems:'center',gap:5,padding:'6px 0'}}><Loader size={13} color="#6366f1" className="animate-spin"/><span style={{fontSize:11,color:T.text2}}>Loading…</span></div>
+              :calendarEvents.length===0?<div style={{textAlign:'center',padding:'10px 0'}}><Calendar size={20} color={T.dimIcon} style={{margin:'0 auto 5px'}}/><p style={{fontSize:11,color:T.text3,margin:0}}>No upcoming events</p></div>
               :calendarEvents.slice(0,4).map(ev=>(
-                <div key={ev.id} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 9px',borderRadius:9,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.05)'}}>
+                <div key={ev.id} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 9px',borderRadius:9,background:T.surface,border:`1px solid ${T.border}`}}>
                   <div style={{width:7,height:7,borderRadius:'50%',background:EDC(ev.title),flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:'clamp(0.68rem,1.05vw,0.76rem)',fontWeight:650,color:'rgba(255,255,255,0.82)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</p>
-                    <p style={{fontSize:10,color:'rgba(255,255,255,0.35)',margin:'1px 0 0'}}>{ev.date.toLocaleDateString('en-US',{month:'short',day:'numeric'})} · {ev.startTime}</p>
+                    <p style={{fontSize:'clamp(0.68rem,1.05vw,0.76rem)',fontWeight:650,color:T.text,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</p>
+                    <p style={{fontSize:10,color:T.text3,margin:'1px 0 0'}}>{ev.date.toLocaleDateString('en-US',{month:'short',day:'numeric'})} · {ev.startTime}</p>
                   </div>
-                  <span style={{fontSize:9,fontWeight:600,color:'rgba(255,255,255,0.38)',background:'rgba(255,255,255,0.05)',borderRadius:5,padding:'2px 6px',flexShrink:0,maxWidth:65,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.course}</span>
+                  <span style={{fontSize:9,fontWeight:600,color:T.muted,background:T.tagBg,borderRadius:5,padding:'2px 6px',flexShrink:0,maxWidth:65,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.course}</span>
                 </div>
               ))}
               <button onClick={()=>setShowEventModal(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,padding:'7px',borderRadius:9,border:'1px dashed rgba(99,102,241,0.27)',background:'transparent',color:'rgba(99,102,241,0.62)',fontSize:11,fontWeight:600,cursor:'pointer',marginTop:2,fontFamily:"'Outfit',sans-serif"}}>
@@ -325,21 +337,21 @@ const StudentDashboard = () => {
         <Card title="My Goals" subtitle="Track your progress" icon={<Award size={15} color="#f59e0b"/>}>
           <div style={{display:'flex',flexDirection:'column',gap:9}}>
             {goals.map(g=>(
-              <div key={g.id} style={{padding:'10px 12px',borderRadius:11,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}>
+              <div key={g.id} style={{padding:'10px 12px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:7,marginBottom:7}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:'clamp(0.72rem,1.1vw,0.8rem)',fontWeight:650,color:'rgba(255,255,255,0.85)',margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.title}</p>
-                    <p style={{fontSize:10,color:'rgba(255,255,255,0.38)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.description}</p>
+                    <p style={{fontSize:'clamp(0.72rem,1.1vw,0.8rem)',fontWeight:650,color:T.text,margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.title}</p>
+                    <p style={{fontSize:10,color:T.text2,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.description}</p>
                   </div>
                   <span style={{fontSize:9,fontWeight:700,background:'rgba(99,102,241,0.14)',color:'#818cf8',border:'1px solid rgba(99,102,241,0.22)',borderRadius:5,padding:'2px 6px',flexShrink:0}}>{g.category}</span>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{flex:1,height:4,borderRadius:2,background:'rgba(255,255,255,0.08)',overflow:'hidden'}}>
+                  <div style={{flex:1,height:4,borderRadius:2,background:T.trackBg,overflow:'hidden'}}>
                     <div style={{height:'100%',width:`${g.progress}%`,borderRadius:2,background:'linear-gradient(90deg,#6366f1,#10b981)',boxShadow:'0 0 5px rgba(99,102,241,0.4)'}}/>
                   </div>
-                  <span style={{fontSize:11,fontWeight:700,color:g.progress>70?'#10b981':g.progress>40?'#f59e0b':'rgba(255,255,255,0.45)',flexShrink:0}}>{g.progress}%</span>
+                  <span style={{fontSize:11,fontWeight:700,color:g.progress>70?'#10b981':g.progress>40?'#f59e0b':T.muted,flexShrink:0}}>{g.progress}%</span>
                 </div>
-                <p style={{fontSize:10,color:'rgba(255,255,255,0.28)',margin:'4px 0 0'}}>Due {g.deadline.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</p>
+                <p style={{fontSize:10,color:T.text3,margin:'4px 0 0'}}>Due {g.deadline.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</p>
               </div>
             ))}
             <button onClick={()=>setShowGoalModal(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,padding:'7px',borderRadius:9,border:'1px dashed rgba(245,158,11,0.28)',background:'transparent',color:'rgba(245,158,11,0.62)',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:"'Outfit',sans-serif"}}>
@@ -357,21 +369,21 @@ const StudentDashboard = () => {
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div style={{display:'flex',alignItems:'center',gap:7}}>
                   <div style={{width:9,height:9,borderRadius:'50%',background:c.color,boxShadow:`0 0 7px ${c.color}`}}/>
-                  <span style={{fontSize:'clamp(0.74rem,1.2vw,0.85rem)',fontWeight:700,color:'rgba(255,255,255,0.85)'}}>{c.name}</span>
+                  <span style={{fontSize:'clamp(0.74rem,1.2vw,0.85rem)',fontWeight:700,color:T.text}}>{c.name}</span>
                 </div>
                 <span style={{fontSize:11,fontWeight:700,color:c.color}}>{c.overallProgress}%</span>
               </div>
-              <div style={{height:3,borderRadius:2,background:'rgba(255,255,255,0.07)',overflow:'hidden'}}>
+              <div style={{height:3,borderRadius:2,background:T.trackBg,overflow:'hidden'}}>
                 <div style={{height:'100%',width:`${c.overallProgress}%`,background:c.color,borderRadius:2}}/>
               </div>
-              <div style={{position:'relative',height:130,borderRadius:10,background:'rgba(0,0,0,0.18)',border:'1px solid rgba(255,255,255,0.05)',overflow:'hidden'}}>
-                {Array.from({length:12}).map((_,i)=><div key={i} style={{position:'absolute',width:2,height:2,borderRadius:'50%',background:'rgba(255,255,255,0.18)',left:`${(i*41)%97}%`,top:`${(i*67)%95}%`}}/>)}
+              <div style={{position:'relative',height:130,borderRadius:10,background:T.starBg,border:`1px solid ${T.border}`,overflow:'hidden'}}>
+                {Array.from({length:12}).map((_,i)=><div key={i} style={{position:'absolute',width:2,height:2,borderRadius:'50%',background:T.dimIcon,left:`${(i*41)%97}%`,top:`${(i*67)%95}%`}}/>)}
                 <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none'}}>
                   {c.stars.map((s,i)=>i>0&&<line key={s.id} x1={`${c.stars[i-1].position.x}%`} y1={`${c.stars[i-1].position.y}%`} x2={`${s.position.x}%`} y2={`${s.position.y}%`} stroke={c.color} strokeWidth="1" opacity={s.mastered&&c.stars[i-1].mastered?0.45:0.12}/>)}
                 </svg>
                 {c.stars.map(s=>(
                   <div key={s.id} style={{position:'absolute',left:`${s.position.x}%`,top:`${s.position.y}%`,transform:'translate(-50%,-50%)'}} title={`${s.name} – ${s.progress}%`}>
-                    <Star size={s.mastered?16:12} color={s.mastered?'#fbbf24':s.progress>50?`${c.color}88`:'rgba(255,255,255,0.18)'} fill={s.mastered?'#fbbf24':'none'} style={{filter:s.mastered?'drop-shadow(0 0 4px rgba(251,191,36,0.6))':'none'}}/>
+                    <Star size={s.mastered?16:12} color={s.mastered?'#fbbf24':s.progress>50?`${c.color}88`:T.dimIcon} fill={s.mastered?'#fbbf24':'none'} style={{filter:s.mastered?'drop-shadow(0 0 4px rgba(251,191,36,0.6))':'none'}}/>
                   </div>
                 ))}
               </div>
@@ -379,10 +391,10 @@ const StudentDashboard = () => {
                 {c.stars.map(s=>(
                   <div key={s.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                     <div style={{display:'flex',alignItems:'center',gap:4}}>
-                      <Star size={9} color={s.mastered?'#fbbf24':'rgba(255,255,255,0.18)'} fill={s.mastered?'#fbbf24':'none'}/>
-                      <span style={{fontSize:10,color:s.mastered?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.35)'}}>{s.name}</span>
+                      <Star size={9} color={s.mastered?'#fbbf24':T.dimIcon} fill={s.mastered?'#fbbf24':'none'}/>
+                      <span style={{fontSize:10,color:s.mastered?T.text2:T.text3}}>{s.name}</span>
                     </div>
-                    <span style={{fontSize:10,fontWeight:600,color:s.mastered?'#10b981':s.progress>50?'#f59e0b':'rgba(255,255,255,0.28)'}}>{s.progress}%</span>
+                    <span style={{fontSize:10,fontWeight:600,color:s.mastered?'#10b981':s.progress>50?'#f59e0b':T.text3}}>{s.progress}%</span>
                   </div>
                 ))}
               </div>
