@@ -45,8 +45,8 @@ const Settings = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-        <p className="text-sm text-gray-400 mt-1">
+        <h1 className="text-2xl font-bold" style={{color:'var(--color-text,#111827)'}}>Settings</h1>
+        <p className="text-sm mt-1" style={{color:'var(--color-text2,#6b7280)'}}>
           {isAdmin ? 'Administrator settings' : 'User preferences'}
         </p>
       </div>
