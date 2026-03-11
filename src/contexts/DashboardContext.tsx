@@ -103,7 +103,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   // This allows instant rendering while Firebase validates in background
   const [loading, setLoading] = useState(() => !hasAuthTokens());
   
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('primaryColor') || '#6366f1');
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#10b981');
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
@@ -308,8 +308,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         cardLight: '#374151'
       },
       light: {
-        bg: '#f1eee7',
-        card: '#ffffff',
+        bg: '#ebe8e1',
+        card: 'rgba(255,255,255,0.82)',
         cardLight: '#f5f2ec'
       },
       purple: {
