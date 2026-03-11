@@ -274,11 +274,15 @@ const DashboardLayout = () => {
 
       <Navigation />
 
-      <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
-        !isMobile ? 'ml-[220px]' : 'ml-0'
-      }`}>
-        <main className="dl-main flex-1 overflow-auto pt-0">
-          <div className="p-2 xs:p-3 sm:p-4 lg:p-6 pb-20 lg:pb-6">
+      {/* 
+        Desktop: ml-[64px] matches the collapsed sidebar (64px icon strip).
+        The sidebar expands to 220px on hover but uses position:fixed + overflow:hidden
+        so it overlays content — no layout shift needed.
+        Mobile: ml-0, pt-[60px] for the fixed mobile header.
+      */}
+      <div className={`flex-1 flex flex-col ${!isMobile ? 'ml-[64px]' : 'ml-0'}`}>
+        <main className="dl-main flex-1 overflow-auto" style={{ paddingTop: isMobile ? 60 : 64 }}>
+          <div className="p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8">
             <Outlet />
           </div>
         </main>
