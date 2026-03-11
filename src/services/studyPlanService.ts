@@ -751,8 +751,11 @@ export const studyPlanService = {
         await setDoc(ref, { count: newCount, lastMonthlyAdd: new Date().toISOString() }, { merge: true });
         return { count: newCount };
       }
-      return { count: data.count ?? 0 };
-    } catch { return { count: 0 }; }
+      return { count: data.count ?? 3 };
+    } catch (e) {
+      console.warn('[streakFreeze] getStreakFreeze failed:', e);
+      throw e; // rethrow so caller can retry
+    }
   },
 
   async useStreakFreeze(uid: string): Promise<number> {
