@@ -1,6 +1,6 @@
 // src/services/studyPlanService.ts
 // Extended — Chat History · Custom Activities · Enrolled Course Planning
-// All original methods preserved and unchanged.
+// All original methods preserved and unchanged. 
 
 import {
   collection, doc, getDocs, addDoc, updateDoc, deleteDoc,
