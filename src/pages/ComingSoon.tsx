@@ -312,11 +312,19 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
         <div className="mt-6">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm text-gray-400">Development Progress</span>
-            <span className="text-sm text-white">{feature.progress}%</span>
+            <div className="flex items-center gap-2">
+              {feature.status === 'beta' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Beta</span>
+              )}
+              {feature.status === 'released' && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">Released</span>
+              )}
+              <span className="text-sm text-white">{feature.progress}%</span>
+            </div>
           </div>
           <div className="w-full bg-background-800 rounded-full h-2">
             <div
-              className="h-2 rounded-full bg-primary-500 transition-all duration-700"
+              className={`h-2 rounded-full transition-all duration-700 ${feature.progress >= 100 ? 'bg-green-500' : 'bg-primary-500'}`}
               style={{ width: `${feature.progress}%` }}
             />
           </div>
@@ -329,7 +337,22 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
       </div>
 
       <div className="p-4 border-t border-background-800 bg-card-dark">
-        {isApproved ? (
+        {/* If tryLink exists (beta/released or early access approved), always show Try It */}
+        {feature.tryLink ? (
+          <a
+            href={feature.tryLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+          >
+            <ExternalLink size={14} /> Try It
+          </a>
+        ) : feature.progress >= 100 ? (
+          /* 100% done but no link yet — show Completed */
+          <div className="flex items-center justify-center gap-2 bg-green-500/10 border border-green-500/20 text-green-400 py-2 rounded text-sm">
+            <CheckCircle size={14} /> Completed
+          </div>
+        ) : isApproved ? (
           <button
             onClick={() => onTryAccess(earlyAccess!)}
             className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded transition-colors flex items-center justify-center gap-2 text-sm font-medium"
