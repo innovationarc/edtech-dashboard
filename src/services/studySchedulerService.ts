@@ -562,20 +562,8 @@ function computeSubjectWork(
     }
   }
 
-  // FIX: apply the same manual-progress floor that computeGoalWork uses, but
+  // Apply the same manual-progress floor that computeGoalWork uses,
   // proportional to this subject's fraction of the whole goal.
-  // Without this, a student who manually sets 80% on a multi-subject goal would
-  // have their split-subject path ignore the override entirely, causing the
-  // scheduler to overschedule by (manualProgressHours - measuredHours).
-  //
-  // Proportional formula:
-  //   subjectProgressHours = subjectTotalHours × (goal.currentProgress / 100)
-  // e.g. goal 80% done, this subject = 10h total → treat 8h as already done.
-  // Capped at subjectTotalHours so it can never exceed the subject's own ceiling.
-  const subjectProgressHours = goal.hoursNeeded > 0
-    ? (subjectTotalHours / goal.hoursNeeded) * (goal.hoursNeeded * (goal.currentProgress / 100))
-    : 0;
-  // Simplified: subjectTotalHours * (currentProgress / 100)
   const progressFloor = subjectTotalHours * (goal.currentProgress / 100);
 
   const rawDone    = completedHours + partialCredit;
@@ -669,7 +657,9 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
             newSessions:   0,
             minsScheduled: 0,
             topicSlots:    buildTopicSlots(subjectTopics, mode),
-            minsPlaced:    0,
+            // FIX: start topic cursor at already-completed minutes so rescheduled
+            // sessions cover remaining topics, not topics from the beginning.
+            minsPlaced:    Math.round(sw.hoursCompleted * 60),
           });
         }
         continue; // do not fall through to the single-subject push
@@ -692,7 +682,9 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
       newSessions:   0,
       minsScheduled: 0,
       topicSlots:    goal.topics?.length ? buildTopicSlots(goal.topics, mode) : [],
-      minsPlaced:    0,
+      // FIX: start topic cursor at already-completed minutes so rescheduled
+      // sessions cover remaining topics, not topics from the beginning.
+      minsPlaced:    Math.round(raw.hoursCompleted * 60),
     });
   }
 
@@ -945,19 +937,46 @@ export function rescheduleStudyPlan(input: SchedulerInput): ScheduleResult {
 // Recovery planner — today only
 // ---------------------------------------------------------------------------
 // Runs a full reschedule then filters to today's sessions only.
-// Returns sessions for today and a flag indicating if any were found.
+// Also returns which subjects got sessions scheduled anywhere in the full
+// plan BUT got zero sessions today — so the UI can warn without deleting them.
 
-export function recoverTodayPlan(input: SchedulerInput): { sessions: ScheduledSession[]; hasSlots: boolean } {
-  const result = generateStudySchedule(input);
-  // FIX: use toDateStr() (local date components) NOT toISOString() which returns UTC.
-  // In UTC+N timezones, toISOString() at local midnight produces yesterday's date,
-  // causing "today" to match no sessions and the recovery to silently return empty.
+export function recoverTodayPlan(input: SchedulerInput): {
+  sessions:            ScheduledSession[];
+  hasSlots:            boolean;
+  unscheduledSubjects: string[];  // have future sessions but nothing fits today
+} {
+  const result   = generateStudySchedule(input);
   const todayStr = toDateStr(input.now);
-  const sessions = result.sessions.filter(s => {
+
+  const todaySessions = result.sessions.filter(s => {
     const d = s.date instanceof Date ? s.date : new Date(s.date);
     return toDateStr(d) === todayStr;
   });
-  return { sessions, hasSlots: sessions.length > 0 };
+
+  // Subjects that appear anywhere in the full schedule (have work to do)
+  const allScheduledSubjects = new Set(
+    result.sessions.map(s => s.subject.toLowerCase().split(' (')[0].trim())
+  );
+
+  // Subjects that got at least one session placed TODAY
+  const scheduledTodaySubjects = new Set(
+    todaySessions.map(s => s.subject.toLowerCase().split(' (')[0].trim())
+  );
+
+  // Subjects with scheduled work but none of it fit today → student should be warned
+  // their existing missed sessions will be preserved (not deleted)
+  const unscheduledSubjects = result.goalStats
+    .filter(gs => {
+      const base = gs.subject.toLowerCase().split(' (')[0].trim();
+      return allScheduledSubjects.has(base) && !scheduledTodaySubjects.has(base);
+    })
+    .map(gs => gs.subject);
+
+  return {
+    sessions:            todaySessions,
+    hasSlots:            todaySessions.length > 0,
+    unscheduledSubjects,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -975,7 +994,12 @@ export function computeGoalProgressUpdate(
     ? Math.min(100, Math.round((raw.hoursCompleted / goal.hoursNeeded) * 100))
     : 0;
   return {
-    hoursCompleted:  raw.hoursCompleted,
-    currentProgress: Math.max(goal.currentProgress, pct),
+    hoursCompleted: raw.hoursCompleted,
+    // FIX: use measured pct directly — Math.max(goal.currentProgress, pct) was
+    // harmful: marking a session incomplete left progress permanently frozen at
+    // the old value, causing hoursCompleted and currentProgress to diverge and
+    // the next reschedule to underschedule. The manual-progress floor is already
+    // applied inside computeGoalWork so the ratchet here was also redundant.
+    currentProgress: pct,
   };
 }
