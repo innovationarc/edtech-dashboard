@@ -2,7 +2,7 @@
 // Multi-provider AI — Smart Schedule · Time Slots · Auto-Draft · Chat · Digest
 // Provider configured in Firestore via Admin → AI Model Settings
 // Supports: Gemini · Groq · OpenAI · Anthropic · DeepSeek
-// v2: routes through callWithFailover for group-based failover & rate limiting
+// v3: Minerva — full planner context, goal creation, OCR image support, human-like conversation
 
 import { aiModelConfigService, callProviderDirect, callWithFailover, AIModelConfig, AIFeatureId } from './aiModelConfigService';
 
@@ -93,11 +93,17 @@ export interface CalendarEventFromChat {
   priority?: 'low' | 'medium' | 'high';
 }
 
+// GoalFromChat — study goals the AI creates during chat
+export interface GoalFromChat {
+  subject: string;
+  targetDate: string;     // YYYY-MM-DD
+  hoursNeeded: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  description?: string;
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
-// Resolves config:
-// - non-empty legacyKey → Gemini fallback (backwards compat with any old call sites)
-// - empty string → load from Firestore (uses whatever admin saved: Groq, OpenAI, etc.)
 async function resolveConfig(legacyKey = ''): Promise<AIModelConfig> {
   if (legacyKey) return { provider: 'gemini', model: 'gemini-2.0-flash', apiKey: legacyKey };
   return aiModelConfigService.getConfig();
@@ -111,10 +117,8 @@ async function callAI(
   featureId: AIFeatureId = 'study_schedule'
 ): Promise<string> {
   if (legacyKey) {
-    // Legacy path: caller passed an explicit key → direct Gemini call (backwards compat)
     return callProviderDirect(prompt, { provider: 'gemini', model: 'gemini-2.0-flash', apiKey: legacyKey }, maxTokens, temp);
   }
-  // v2: group-based failover with rate limiting; falls back to single config if no group assigned
   return callWithFailover(prompt, featureId, maxTokens, temp);
 }
 
@@ -122,21 +126,13 @@ async function callAI(
 function parseJSON<T>(raw: string, fallback: T, isArray = false): T {
   if (!raw) return fallback;
   try {
-    // 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
     let cleaned = raw.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1').trim();
-
-    // 2. Try direct parse first
     try { return JSON.parse(cleaned) as T; } catch { /* continue */ }
-
-    // 3. Extract array or object with regex
     const pattern = isArray ? /\[[\s\S]*\]/ : /\{[\s\S]*\}/;
     const m = cleaned.match(pattern);
     if (m) return JSON.parse(m[0]) as T;
-
-    // 4. Last resort: search raw string
     const m2 = raw.match(pattern);
     if (m2) return JSON.parse(m2[0]) as T;
-
     return fallback;
   } catch {
     return fallback;
@@ -161,15 +157,13 @@ export const aiStudyPlannerService = {
     options?: {
       enrolledCourses?: { title: string; subjects: string[] }[];
       customActivities?: { name: string; daysOfWeek: number[]; startTime: string; endTime: string; isFlexible: boolean }[];
-      /** Pass new Date() at call time so the AI never schedules in the past */
       nowDateTime?: Date;
-      /** If provided, sessions are constrained to these windows each day */
       timeRanges?: { start: string; end: string }[];
     }
   ): Promise<AIScheduleSuggestion[]> {
     const now         = options?.nowDateTime ?? new Date();
     const todayStr    = now.toISOString().slice(0, 10);
-    const currentTime = now.toTimeString().slice(0, 5); // HH:MM
+    const currentTime = now.toTimeString().slice(0, 5);
 
     const rangesDesc = options?.timeRanges?.length
       ? options.timeRanges.map(r => `${r.start}–${r.end}`).join(', ')
@@ -270,9 +264,8 @@ Return ONLY a valid JSON object with no markdown:
     upcoming: { title: string; date: Date; priority: string; eventType: string }[],
     completionRate: number,
     apiKey = '',
-    cacheKey?: string  // e.g. user.uid — used to cache per student per session
+    cacheKey?: string
   ): Promise<AIInsight[]> {
-    // Check session cache
     if (cacheKey) {
       const cached = _insightsCache[cacheKey];
       if (cached && Date.now() - cached.ts < INSIGHTS_TTL) return cached.data;
@@ -297,14 +290,15 @@ Return ONLY a valid JSON array with no markdown:
     return result;
   },
 
-  // ── AI Chat (returns response + optional calendar events to add) ────────────
+  // ── AI Chat (Minerva) ───────────────────────────────────────────────────────
+  // Returns response + optional calendar events + optional goals to add
 
   async chatWithAI(
     message: string,
     context: {
       studentName?: string;
       totalEvents?: number;
-      events?: number;  // legacy compat
+      events?: number;
       subjects: string[];
       upcomingExams: string[];
       enrolledCourses?: { title: string; subjects: string[]; totalLessons?: number; progress?: number }[];
@@ -313,62 +307,119 @@ Return ONLY a valid JSON array with no markdown:
       completionRate?: number;
       streak?: number;
       pomodoroSessions?: number;
+      // NEW: rich schedule context
+      freeTimeInfo?: string;               // e.g. "14:00–22:00 (8h free)" or "4h/day flexible"
+      dailySchedule?: {                    // upcoming sessions next 7 days
+        date: string;
+        dayLabel: string;
+        sessions: { title: string; startTime: string; endTime: string; subject: string }[];
+        activitiesBlocked: { name: string; startTime: string; endTime: string }[];
+        freeSlotsCount: number;
+      }[];
+      imageContext?: string;               // OCR-extracted text from uploaded image/routine
     },
     history: { role: 'user' | 'assistant'; content: string }[],
     apiKey = ''
-  ): Promise<{ response: string; calendarEvents: CalendarEventFromChat[] }> {
+  ): Promise<{ response: string; calendarEvents: CalendarEventFromChat[]; goals: GoalFromChat[] }> {
     const name = context.studentName || 'Student';
     const totalEvents = context.totalEvents ?? context.events ?? 0;
-    const hist = history.slice(-6).map(m => `${m.role === 'user' ? name : 'Minerva'}: ${m.content}`).join('\n');
-
-    const courseCtx = context.enrolledCourses?.length
-      ? `\nEnrolled courses: ${context.enrolledCourses.map(c => `${c.title} (${c.progress ?? 0}% done)`).join(', ')}`
-      : '';
-    const activityCtx = context.customActivities?.length
-      ? `\nScheduled activities: ${context.customActivities.map(a => `${a.name} ${a.days?.join('/') ?? ''} ${a.time ?? ''}`).join(', ')}`
-      : '';
-    const goalCtx = context.activeGoals?.length
-      ? `\nActive goals: ${context.activeGoals.map(g => `${g.subject} (${g.progress}%, due ${g.targetDate})`).join(', ')}`
-      : '';
-
     const today = new Date().toISOString().split('T')[0];
 
-    const prompt = `You are Minerva, a warm and expert AI study companion for an EdTech platform. Be encouraging, concise, and actionable.
+    // Smart history: keep last 10 messages, always include the most recent assistant message for continuity
+    const hist = history.slice(-10).map(m =>
+      `${m.role === 'user' ? name : 'Minerva'}: ${m.content}`
+    ).join('\n');
 
-Student: ${name}
-Context: ${totalEvents} events, subjects: ${context.subjects.join(', ') || 'none'}, upcoming exams: ${context.upcomingExams.join(', ') || 'none'}
-Completion: ${context.completionRate ?? 0}%, Streak: ${context.streak ?? 0} days, Pomodoros: ${context.pomodoroSessions ?? 0}
-Today: ${today}${courseCtx}${activityCtx}${goalCtx}
+    // Build context blocks
+    const courseCtx = context.enrolledCourses?.length
+      ? `\nCourses enrolled: ${context.enrolledCourses.map(c => `${c.title} (${c.progress ?? 0}% done, ${c.totalLessons ?? '?'} lessons)`).join('; ')}`
+      : '';
 
-Conversation so far:
-${hist}
+    const activityCtx = context.customActivities?.length
+      ? `\nRegular activities (unavailable times): ${context.customActivities.map(a => `${a.name} on ${a.days?.join('/')} ${a.time} (${a.priority})`).join('; ')}`
+      : '';
+
+    const goalCtx = context.activeGoals?.length
+      ? `\nStudy goals: ${context.activeGoals.map(g => `"${g.subject}" — ${g.progress}% done, due ${g.targetDate}, ${g.hoursNeeded}h needed`).join('; ')}`
+      : '\nNo active study goals yet.';
+
+    const freeTimeCtx = context.freeTimeInfo
+      ? `\nFree study time: ${context.freeTimeInfo}`
+      : '';
+
+    const scheduleCtx = context.dailySchedule?.length
+      ? `\nUpcoming 7-day schedule:\n${context.dailySchedule.map(d => {
+          const sessions = d.sessions.length
+            ? d.sessions.map(s => `  • ${s.startTime}–${s.endTime}: ${s.title}`).join('\n')
+            : '  (no sessions)';
+          const blocked = d.activitiesBlocked.length
+            ? ` | Blocked: ${d.activitiesBlocked.map(a => `${a.name} ${a.startTime}–${a.endTime}`).join(', ')}`
+            : '';
+          return `${d.dayLabel} (${d.date})${blocked}:\n${sessions}`;
+        }).join('\n')}`
+      : '';
+
+    const imageCtx = context.imageContext
+      ? `\n\n📸 STUDENT UPLOADED A ROUTINE/SCHEDULE IMAGE. OCR Extracted text:\n---\n${context.imageContext}\n---\nUse this to understand their exam schedule, class timetable, or routine. Plan around it.`
+      : '';
+
+    const prompt = `You are Minerva, a warm and intelligent AI study companion. You speak like a knowledgeable friend — natural, encouraging, never robotic. You know this student deeply and care about their success.
+
+STUDENT PROFILE:
+Name: ${name}
+Today: ${today}
+Events on platform: ${totalEvents}
+Completion rate: ${context.completionRate ?? 0}%
+Study streak: ${context.streak ?? 0} days
+Pomodoro sessions: ${context.pomodoroSessions ?? 0}
+Subjects: ${context.subjects.join(', ') || 'none yet'}
+Upcoming exams: ${context.upcomingExams.join(', ') || 'none'}${courseCtx}${activityCtx}${goalCtx}${freeTimeCtx}${scheduleCtx}${imageCtx}
+
+CONVERSATION HISTORY:
+${hist || '(no prior conversation)'}
 
 ${name}: ${message}
 
-Instructions:
-- Respond as Minerva (max 200 words, warm and actionable)
-- If the student asks you to create, schedule, plan, or add study sessions/events to their calendar, include them in calendarEvents
-- Only include calendarEvents when explicitly creating/scheduling something
+YOUR CAPABILITIES:
+1. Create study sessions/events → populate calendarEvents array
+2. Create study goals → populate goals array
+3. Give personalized advice, motivation, study tips
+4. Plan around the student's free time windows and blocked activities
+5. Read and use uploaded routine/schedule images
 
-Respond ONLY with this exact JSON structure (no markdown):
-{"response":"your reply text here","calendarEvents":[]}
+RULES FOR CREATING CONTENT:
+- For a GOAL, you need: subject name, target date (YYYY-MM-DD), estimated hours needed, difficulty (easy/medium/hard)
+- For an EVENT/SESSION, you need: title, date (YYYY-MM-DD), start/end time (HH:MM), subject
+- If the student's request is missing required info, ask for ONLY the missing piece naturally (like a friend would). Don't list requirements robotically.
+- If student uploaded a schedule image, extract relevant dates/subjects and use them to suggest a smart plan
+- Never schedule anything before today (${today})
+- Keep responses under 180 words unless explaining something complex
+- Sound warm and personal — use the student's name occasionally, reference their specific courses/goals
+- If you already have enough info to create something, do it immediately and tell them naturally
 
-If creating events, include them like:
-{"response":"your reply","calendarEvents":[{"title":"Session title","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","subject":"Subject","eventType":"study_session","description":"brief desc","priority":"medium"}]}`;
+TONE: Warm, smart, personal. Like a senior student friend who also happens to be an expert planner. Not a robot, not a formal tutor.
 
-    const raw = await callAI(prompt, 768, 0.8, apiKey, 'study_chat');
+Respond ONLY with this exact JSON (no markdown, no extra text):
+{"response":"your message to the student","calendarEvents":[],"goals":[]}
 
-    // Try to parse the structured response
-    const parsed = parseJSON<{ response: string; calendarEvents: CalendarEventFromChat[] }>(
+If creating events:
+"calendarEvents":[{"title":"Session Title","date":"YYYY-MM-DD","startTime":"HH:MM","endTime":"HH:MM","subject":"Subject Name","eventType":"study_session","description":"brief note","priority":"medium"}]
+
+If creating goals:
+"goals":[{"subject":"Subject Name","targetDate":"YYYY-MM-DD","hoursNeeded":20,"difficulty":"medium","description":"optional note"}]`;
+
+    const raw = await callAI(prompt, 900, 0.75, apiKey, 'study_chat');
+
+    const parsed = parseJSON<{ response: string; calendarEvents: CalendarEventFromChat[]; goals: GoalFromChat[] }>(
       raw,
-      { response: '', calendarEvents: [] }
+      { response: '', calendarEvents: [], goals: [] }
     );
 
-    // If parsing failed or response is empty, treat the whole raw output as the text response
     const responseText = parsed.response || raw.replace(/```json[\s\S]*?```/g, '').replace(/\{[\s\S]*\}/g, '').trim() || raw;
     const calendarEvents = Array.isArray(parsed.calendarEvents) ? parsed.calendarEvents : [];
+    const goals = Array.isArray(parsed.goals) ? parsed.goals : [];
 
-    return { response: responseText, calendarEvents };
+    return { response: responseText, calendarEvents, goals };
   },
 
   // ── Prioritize tasks ────────────────────────────────────────────────────────
