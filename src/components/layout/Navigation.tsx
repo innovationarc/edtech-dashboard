@@ -1,4 +1,4 @@
-/* Navigation.tsx
+/* Navigation.tsx 
    — Solid frosted header (never transparent) — no overlap
    — Auto-hide sidebar: collapsed (64px icons) on desktop, expands on hover
    — Mobile: slide-in drawer + fixed top bar
