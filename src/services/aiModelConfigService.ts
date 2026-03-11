@@ -72,10 +72,12 @@ export interface ProviderInfo {
 
 export const AI_PROVIDERS: ProviderInfo[] = [
   // ─────────────────────────────────────────────────────────────────────────
-  // GOOGLE GEMINI — pricing verified Mar 10 2026
-  // https://ai.google.dev/gemini-api/docs/pricing
-  // Free tier: strict RPD (10-1500/day depending on model)
-  // Paid tier: 150-1500 RPM, NO daily caps
+  // GOOGLE GEMINI
+  // Pricing source: https://ai.google.dev/gemini-api/docs/pricing (Mar 2026)
+  // Rate limits (free tier): 2.5 Pro: 5 RPM/100 RPD · 2.5 Flash: 10 RPM/250 RPD
+  //                          2.5 Flash-Lite: 15 RPM/1000 RPD
+  // Paid Tier 1: 150–300 RPM, 1,500 RPD
+  // NOTE: gemini-2.0-flash and gemini-2.0-flash-lite are DEPRECATED (EOL Jun 1 2026)
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: 'gemini',
@@ -85,28 +87,64 @@ export const AI_PROVIDERS: ProviderInfo[] = [
     borderColor: 'border-blue-500/30',
     docsUrl: 'https://aistudio.google.com/apikey',
     models: [
-      // ── Gemini 2.5 (current stable) ──────────────────────────────────────
-      { id: 'gemini-2.5-flash-lite',          label: 'Gemini 2.5 Flash-Lite',          notes: 'Cheapest stable — $0.10/$0.40 per 1M',         tier: 'nano', outputPricePerMTok: 0.40,  costWeight: 1 },
-      { id: 'gemini-2.5-flash',               label: 'Gemini 2.5 Flash',               notes: 'Best value mid — $0.30/$2.50 per 1M, 1M ctx',  tier: 'mid',  outputPricePerMTok: 2.50,  costWeight: 3, recommended: true },
-      { id: 'gemini-2.5-pro',                 label: 'Gemini 2.5 Pro',                 notes: 'Powerful — $1.25/$10 per 1M, 1M ctx',          tier: 'high', outputPricePerMTok: 10.00, costWeight: 5 },
-      // ── Gemini 3 Preview ─────────────────────────────────────────────────
-      { id: 'gemini-3-flash-preview',         label: 'Gemini 3 Flash Preview',         notes: 'Next-gen — $0.50/$3.00 per 1M (preview)',      tier: 'mid',  outputPricePerMTok: 3.00,  costWeight: 3 },
-      { id: 'gemini-3.1-flash-lite-preview',  label: 'Gemini 3.1 Flash-Lite Preview',  notes: 'Cheapest next-gen — $0.25/$1.50 per 1M',       tier: 'nano', outputPricePerMTok: 1.50,  costWeight: 2 },
-      { id: 'gemini-3.1-pro-preview',         label: 'Gemini 3.1 Pro Preview',         notes: 'Most capable Gemini — $2.00/$12.00 per 1M',    tier: 'high', outputPricePerMTok: 12.00, costWeight: 6 },
-      // ── Gemini 2.0 (deprecated — EOL Jun 1 2026) ─────────────────────────
-      { id: 'gemini-2.0-flash',               label: 'Gemini 2.0 Flash ⚠ deprecated',  notes: '⚠ EOL Jun 1 2026 — migrate to 2.5 Flash',      tier: 'mid',  outputPricePerMTok: 0.40,  costWeight: 1, deprecated: true },
-      { id: 'gemini-2.0-flash-lite',          label: 'Gemini 2.0 Flash-Lite ⚠ deprecated', notes: '⚠ EOL Jun 1 2026 — migrate to 2.5 Flash-Lite', tier: 'nano', outputPricePerMTok: 0.30,  costWeight: 1, deprecated: true },
-      // ── Gemini 1.5 (legacy) ───────────────────────────────────────────────
-      { id: 'gemini-1.5-flash',               label: 'Gemini 1.5 Flash (legacy)',       notes: 'Legacy — migrate to 2.5 Flash',                tier: 'nano', outputPricePerMTok: 0.38,  costWeight: 1, deprecated: true },
-      { id: 'gemini-1.5-pro',                 label: 'Gemini 1.5 Pro (legacy)',         notes: 'Legacy — migrate to 2.5 Pro',                  tier: 'high', outputPricePerMTok: 10.50, costWeight: 5, deprecated: true },
+      // nano tier — cheapest, high throughput
+      {
+        id: 'gemini-2.5-flash-lite',
+        label: 'Gemini 2.5 Flash-Lite',
+        notes: 'Cheapest Gemini — $0.10 in / $0.40 out per 1M',
+        tier: 'nano', outputPricePerMTok: 0.40, costWeight: 1,
+        recommended: false,
+      },
+      {
+        id: 'gemini-2.0-flash-lite',
+        label: 'Gemini 2.0 Flash-Lite (deprecated)',
+        notes: '⚠ DEPRECATED — EOL Jun 1 2026. Migrate to 2.5 Flash-Lite',
+        tier: 'nano', outputPricePerMTok: 0.30, costWeight: 1,
+        deprecated: true,
+      },
+      // mid tier — balanced quality/cost
+      {
+        id: 'gemini-2.5-flash',
+        label: 'Gemini 2.5 Flash',
+        notes: 'Best current Gemini mid — $0.30 in / $2.50 out per 1M, 1M ctx',
+        tier: 'mid', outputPricePerMTok: 2.50, costWeight: 3,
+        recommended: true,
+      },
+      {
+        id: 'gemini-3-flash-preview',
+        label: 'Gemini 3 Flash Preview',
+        notes: 'Next-gen Flash — $0.50 in / $3.00 out per 1M, superior search',
+        tier: 'mid', outputPricePerMTok: 3.00, costWeight: 3,
+      },
+      {
+        id: 'gemini-2.0-flash',
+        label: 'Gemini 2.0 Flash (deprecated)',
+        notes: '⚠ DEPRECATED — EOL Jun 1 2026. Migrate to 2.5 Flash',
+        tier: 'mid', outputPricePerMTok: 0.40, costWeight: 2,
+        deprecated: true,
+      },
+      // high tier — powerful reasoning
+      {
+        id: 'gemini-2.5-pro',
+        label: 'Gemini 2.5 Pro',
+        notes: 'Best reasoning Gemini — $1.25 in / $10.00 out per 1M, 1M ctx',
+        tier: 'high', outputPricePerMTok: 10.00, costWeight: 5,
+      },
+      {
+        id: 'gemini-3.1-pro-preview',
+        label: 'Gemini 3.1 Pro Preview',
+        notes: 'Latest gen Gemini Pro — $2.00 in / $12.00 out per 1M',
+        tier: 'high', outputPricePerMTok: 12.00, costWeight: 6,
+      },
     ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // GROQ — pricing/models verified Mar 10 2026
-  // https://console.groq.com/docs/models
-  // NO daily limits (RPD) — only RPM/TPM enforced.
-  // All models noDailyLimit: true
+  // GROQ
+  // Pricing source: https://groq.com/pricing (Mar 2026)
+  // Rate limits: Groq enforces RPM/TPM but NO RPD limits.
+  //              All Groq models are noDailyLimit: true.
+  //              Free tier: ~30 RPM for most models. Paid: 100–1000 RPM.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: 'groq',
@@ -116,67 +154,175 @@ export const AI_PROVIDERS: ProviderInfo[] = [
     borderColor: 'border-orange-500/30',
     docsUrl: 'https://console.groq.com/keys',
     models: [
-      // ── Production models ─────────────────────────────────────────────────
-      { id: 'llama-3.1-8b-instant',                        label: 'Llama 3.1 8B Instant',        notes: 'Fastest — $0.05/$0.08 per 1M, 560 TPS, 131K ctx',   tier: 'nano', outputPricePerMTok: 0.08, costWeight: 1, noDailyLimit: true },
-      { id: 'openai/gpt-oss-20b',                          label: 'GPT-OSS 20B',                 notes: '1000 TPS — $0.075/$0.30 per 1M, 131K ctx',           tier: 'nano', outputPricePerMTok: 0.30, costWeight: 1, noDailyLimit: true },
-      { id: 'openai/gpt-oss-120b',                         label: 'GPT-OSS 120B',                notes: '500 TPS — $0.15/$0.60 per 1M, 131K ctx',             tier: 'high', outputPricePerMTok: 0.60, costWeight: 2, noDailyLimit: true },
-      { id: 'llama-3.3-70b-versatile',                     label: 'Llama 3.3 70B Versatile',     notes: 'Best quality — $0.59/$0.79 per 1M, 131K ctx',        tier: 'high', outputPricePerMTok: 0.79, costWeight: 2, noDailyLimit: true, recommended: true },
-      // ── Production systems (compound — built-in web search + code exec) ──
-      { id: 'groq/compound',                               label: 'Groq Compound',               notes: 'Web search + code exec, no daily limit',             tier: 'mid',  outputPricePerMTok: 0.60, costWeight: 2, noDailyLimit: true },
-      { id: 'groq/compound-mini',                          label: 'Groq Compound Mini',          notes: 'Lightweight agentic, no daily limit',                 tier: 'nano', outputPricePerMTok: 0.30, costWeight: 1, noDailyLimit: true },
-      // ── Preview models ────────────────────────────────────────────────────
-      { id: 'meta-llama/llama-4-scout-17b-16e-instruct',   label: 'Llama 4 Scout (17B×16E)',     notes: 'Preview — $0.11/$0.34 per 1M, 750 TPS, vision',      tier: 'nano', outputPricePerMTok: 0.34, costWeight: 1, noDailyLimit: true, recommended: true },
-      { id: 'qwen/qwen3-32b',                              label: 'Qwen3 32B',                   notes: 'Preview — $0.29/$0.59 per 1M, 400 TPS',              tier: 'mid',  outputPricePerMTok: 0.59, costWeight: 2, noDailyLimit: true },
-      { id: 'moonshotai/kimi-k2-instruct-0905',            label: 'Kimi K2 (1T MoE, 256K ctx)',  notes: 'Preview — $1.00/$3.00 per 1M, 200 TPS, 256K ctx',   tier: 'high', outputPricePerMTok: 3.00, costWeight: 4, noDailyLimit: true },
-      // ── Legacy (deprecated/removed from Groq) ────────────────────────────
-      { id: 'compound-beta',       label: 'Compound Beta (legacy)',      notes: '⚠ Renamed to groq/compound',     tier: 'mid',  outputPricePerMTok: 0.60, costWeight: 2, noDailyLimit: true, deprecated: true },
-      { id: 'compound-beta-mini',  label: 'Compound Beta Mini (legacy)', notes: '⚠ Renamed to groq/compound-mini', tier: 'nano', outputPricePerMTok: 0.30, costWeight: 1, noDailyLimit: true, deprecated: true },
-      { id: 'gemma2-9b-it',        label: 'Gemma 2 9B (deprecated)',     notes: '⚠ Deprecated by Groq',           tier: 'nano', outputPricePerMTok: 0.20, costWeight: 1, noDailyLimit: true, deprecated: true },
-      { id: 'mixtral-8x7b-32768',  label: 'Mixtral 8x7B (deprecated)',   notes: '⚠ Deprecated by Groq',           tier: 'mid',  outputPricePerMTok: 0.27, costWeight: 1, noDailyLimit: true, deprecated: true },
+      // nano tier
+      {
+        id: 'llama-3.1-8b-instant',
+        label: 'Llama 3.1 8B Instant',
+        notes: 'Fastest Groq — $0.05 in / $0.08 out per 1M, 840 TPS',
+        tier: 'nano', outputPricePerMTok: 0.08, costWeight: 1,
+        noDailyLimit: true,
+      },
+      {
+        id: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        label: 'Llama 4 Scout (17B×16E)',
+        notes: 'New Llama 4 — $0.11 in / $0.34 out per 1M, 594 TPS',
+        tier: 'nano', outputPricePerMTok: 0.34, costWeight: 1,
+        noDailyLimit: true, recommended: true,
+      },
+      {
+        id: 'openai/gpt-oss-20b',
+        label: 'GPT-OSS 20B (on Groq)',
+        notes: 'OpenAI OSS on Groq HW — $0.075 in / $0.30 out per 1M, 1000 TPS',
+        tier: 'nano', outputPricePerMTok: 0.30, costWeight: 1,
+        noDailyLimit: true,
+      },
+      // mid tier
+      {
+        id: 'compound-beta-mini',
+        label: 'Compound Beta Mini',
+        notes: 'Built-in web search · no daily limit · ideal for chatbot',
+        tier: 'mid', outputPricePerMTok: 0.34, costWeight: 1,
+        noDailyLimit: true,
+      },
+      {
+        id: 'qwen/qwen3-32b',
+        label: 'Qwen 3 32B',
+        notes: 'Strong reasoning — $0.29 in / $0.59 out per 1M, 662 TPS',
+        tier: 'mid', outputPricePerMTok: 0.59, costWeight: 2,
+        noDailyLimit: true,
+      },
+      {
+        id: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+        label: 'Llama 4 Maverick (17B×128E)',
+        notes: 'New flagship mid — $0.20 in / $0.60 out per 1M, 562 TPS',
+        tier: 'mid', outputPricePerMTok: 0.60, costWeight: 2,
+        noDailyLimit: true, recommended: true,
+      },
+      {
+        id: 'compound-beta',
+        label: 'Compound Beta',
+        notes: 'Built-in web search, full power · no daily limit',
+        tier: 'mid', outputPricePerMTok: 0.60, costWeight: 2,
+        noDailyLimit: true,
+      },
+      {
+        id: 'openai/gpt-oss-120b',
+        label: 'GPT-OSS 120B (on Groq)',
+        notes: 'Large OSS on Groq HW — $0.15 in / $0.60 out per 1M, 500 TPS',
+        tier: 'high', outputPricePerMTok: 0.60, costWeight: 2,
+        noDailyLimit: true,
+      },
+      // high tier
+      {
+        id: 'llama-3.3-70b-versatile',
+        label: 'Llama 3.3 70B Versatile',
+        notes: 'Best OSS quality on Groq — $0.59 in / $0.79 out per 1M',
+        tier: 'high', outputPricePerMTok: 0.79, costWeight: 2,
+        noDailyLimit: true, recommended: true,
+      },
+      {
+        id: 'moonshotai/kimi-k2-instruct-0905',
+        label: 'Kimi K2 1T (256k ctx)',
+        notes: 'Moonshot 1T MoE — $1.00 in / $3.00 out per 1M, 256k ctx',
+        tier: 'high', outputPricePerMTok: 3.00, costWeight: 4,
+        noDailyLimit: true,
+      },
+      // Legacy Groq models (kept for backwards compat — may be removed)
+      {
+        id: 'gemma2-9b-it',
+        label: 'Gemma 2 9B (legacy)',
+        notes: 'Legacy Groq model — check availability',
+        tier: 'nano', outputPricePerMTok: 0.20, costWeight: 1,
+        noDailyLimit: true, deprecated: true,
+      },
+      {
+        id: 'mixtral-8x7b-32768',
+        label: 'Mixtral 8x7B (legacy)',
+        notes: 'Legacy Groq model — check availability',
+        tier: 'mid', outputPricePerMTok: 0.27, costWeight: 1,
+        noDailyLimit: true, deprecated: true,
+      },
     ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // OPENAI — pricing verified Mar 10 2026
-  // Has per-minute AND per-day token limits (tier-based).
-  // noDailyLimit: false for all OpenAI models.
+  // OPENAI / GPT
+  // Pricing source: https://openai.com/api/pricing (Mar 2026 — via IntuitionLabs)
+  // Rate limits: Tier-based (Free → Tier 5). Free = ~3 RPM. Tier 1+ = 500–5000 RPM.
+  //              Has both RPM and TPM limits. No noDailyLimit — has monthly caps.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: 'openai',
-    name: 'OpenAI',
+    name: 'OpenAI / GPT',
     color: 'text-green-400',
     bgColor: 'bg-green-500/10',
     borderColor: 'border-green-500/30',
     docsUrl: 'https://platform.openai.com/api-keys',
     models: [
-      // ── GPT-4.1 family (Apr 2025, 1M context) ────────────────────────────
-      { id: 'gpt-4.1-nano',  label: 'GPT-4.1 Nano',  notes: 'Fastest & cheapest — $0.10/$0.40 per 1M, 1M ctx',  tier: 'nano', outputPricePerMTok: 0.40,  costWeight: 1 },
-      { id: 'gpt-4.1-mini',  label: 'GPT-4.1 Mini',  notes: 'Great value — $0.40/$1.60 per 1M, 1M ctx',         tier: 'mid',  outputPricePerMTok: 1.60,  costWeight: 2, recommended: true },
-      { id: 'gpt-4.1',       label: 'GPT-4.1',        notes: 'Strong coding/instructions — $2/$8 per 1M, 1M ctx', tier: 'high', outputPricePerMTok: 8.00,  costWeight: 5 },
-      // ── GPT-4o family ─────────────────────────────────────────────────────
-      { id: 'gpt-4o-mini',   label: 'GPT-4o Mini',    notes: 'Proven value — $0.15/$0.60 per 1M',                tier: 'mid',  outputPricePerMTok: 0.60,  costWeight: 2 },
-      { id: 'gpt-4o',        label: 'GPT-4o',          notes: 'Flagship multimodal — $2.50/$10 per 1M',          tier: 'high', outputPricePerMTok: 10.00, costWeight: 5 },
-      // ── GPT-5 family (2025–2026) ──────────────────────────────────────────
-      { id: 'gpt-5-mini',    label: 'GPT-5 Mini',     notes: 'Efficient gen-5 — $0.25/$2 per 1M',               tier: 'mid',  outputPricePerMTok: 2.00,  costWeight: 3 },
-      { id: 'gpt-5',         label: 'GPT-5',           notes: 'Gen-5 flagship — $1.25/$10 per 1M',               tier: 'high', outputPricePerMTok: 10.00, costWeight: 5 },
-      { id: 'gpt-5.2',       label: 'GPT-5.2',         notes: 'Enhanced gen-5 — $1.75/$14 per 1M',               tier: 'high', outputPricePerMTok: 14.00, costWeight: 6 },
-      { id: 'gpt-5.4',       label: 'GPT-5.4',         notes: 'Current flagship (Mar 2026) — premium',           tier: 'high', outputPricePerMTok: 16.00, costWeight: 7 },
-      // ── o-series reasoning models ─────────────────────────────────────────
-      { id: 'o4-mini',       label: 'o4-mini (reasoning)', notes: 'Fast reasoning — high-volume complex tasks',  tier: 'high', outputPricePerMTok: 4.40,  costWeight: 4 },
-      { id: 'o3',            label: 'o3 (reasoning)',      notes: 'Most powerful reasoning — complex STEM',      tier: 'high', outputPricePerMTok: 40.00, costWeight: 9 },
-      { id: 'o1',            label: 'o1 (reasoning)',      notes: 'Original reasoning model',                    tier: 'high', outputPricePerMTok: 60.00, costWeight: 9 },
-      { id: 'o3-mini',       label: 'o3-mini (reasoning)', notes: 'Efficient reasoning',                         tier: 'high', outputPricePerMTok: 4.40,  costWeight: 4 },
-      // ── Legacy models ─────────────────────────────────────────────────────
-      { id: 'gpt-4-turbo',   label: 'GPT-4 Turbo (legacy)',   notes: '⚠ Legacy — use gpt-4.1 instead',      tier: 'high', outputPricePerMTok: 30.00, costWeight: 8, deprecated: true },
-      { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (legacy)', notes: '⚠ Legacy — use gpt-4.1-nano instead', tier: 'nano', outputPricePerMTok: 1.50,  costWeight: 2, deprecated: true },
+      // nano tier
+      {
+        id: 'gpt-5-nano',
+        label: 'GPT-5 Nano',
+        notes: 'Fastest OpenAI model — $0.05 in / $0.40 out per 1M',
+        tier: 'nano', outputPricePerMTok: 0.40, costWeight: 1,
+      },
+      // mid tier
+      {
+        id: 'gpt-4o-mini',
+        label: 'GPT-4o Mini',
+        notes: 'Proven value pick — $0.15 in / $0.60 out per 1M',
+        tier: 'mid', outputPricePerMTok: 0.60, costWeight: 2,
+        recommended: true,
+      },
+      {
+        id: 'gpt-5-mini',
+        label: 'GPT-5 Mini',
+        notes: 'New gen mid-tier — $0.25 in / $2.00 out per 1M',
+        tier: 'mid', outputPricePerMTok: 2.00, costWeight: 3,
+      },
+      // high tier
+      {
+        id: 'gpt-4o',
+        label: 'GPT-4o',
+        notes: 'Proven high-tier — $2.50 in / $10.00 out per 1M',
+        tier: 'high', outputPricePerMTok: 10.00, costWeight: 5,
+      },
+      {
+        id: 'gpt-5',
+        label: 'GPT-5',
+        notes: 'New flagship — $1.25 in / $10.00 out per 1M',
+        tier: 'high', outputPricePerMTok: 10.00, costWeight: 5,
+        recommended: true,
+      },
+      {
+        id: 'gpt-5.2',
+        label: 'GPT-5.2',
+        notes: 'Premium reasoning — $1.75 in / $14.00 out per 1M',
+        tier: 'high', outputPricePerMTok: 14.00, costWeight: 6,
+      },
+      // Legacy models (still work, but old generation)
+      {
+        id: 'gpt-3.5-turbo',
+        label: 'GPT-3.5 Turbo (legacy)',
+        notes: 'Legacy — consider gpt-5-nano instead',
+        tier: 'nano', outputPricePerMTok: 1.50, costWeight: 2,
+        deprecated: true,
+      },
+      {
+        id: 'gpt-4-turbo',
+        label: 'GPT-4 Turbo (legacy)',
+        notes: 'Legacy — consider gpt-4o or gpt-5 instead',
+        tier: 'high', outputPricePerMTok: 30.00, costWeight: 8,
+        deprecated: true,
+      },
     ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ANTHROPIC (CLAUDE) — pricing/IDs verified Mar 10 2026
-  // https://platform.claude.com/docs/en/about-claude/models/overview
-  // Has strict per-minute AND per-day limits (4-tier system).
-  // noDailyLimit: false for all Anthropic models.
+  // ANTHROPIC (CLAUDE)
+  // Pricing source: https://platform.claude.com/docs/en/about-claude/pricing (Mar 2026)
+  // Rate limits: Tier 1–4 system. Has both RPM and TPM limits per tier.
+  //              No noDailyLimit — strict per-tier enforcement.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: 'anthropic',
@@ -186,26 +332,74 @@ export const AI_PROVIDERS: ProviderInfo[] = [
     borderColor: 'border-purple-500/30',
     docsUrl: 'https://console.anthropic.com/settings/keys',
     models: [
-      // ── Claude 4.6 (latest generation) ───────────────────────────────────
-      { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',  notes: 'Fastest Claude — $1/$5 per 1M, 200K ctx',   tier: 'mid',  outputPricePerMTok: 5.00,  costWeight: 3, recommended: true },
-      { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6', notes: 'Best overall — $3/$15 per 1M, 200K ctx',    tier: 'high', outputPricePerMTok: 15.00, costWeight: 6, recommended: true },
-      { id: 'claude-opus-4-6',           label: 'Claude Opus 4.6',   notes: 'Most intelligent — $5/$25 per 1M, 200K ctx', tier: 'high', outputPricePerMTok: 25.00, costWeight: 7 },
-      // ── Claude 4.5 generation ─────────────────────────────────────────────
-      { id: 'claude-sonnet-4-5',         label: 'Claude Sonnet 4.5', notes: '$3/$15 per 1M',                             tier: 'high', outputPricePerMTok: 15.00, costWeight: 6 },
-      { id: 'claude-opus-4-5',           label: 'Claude Opus 4.5',   notes: '$5/$25 per 1M',                             tier: 'high', outputPricePerMTok: 25.00, costWeight: 7 },
-      // ── Claude 3.5 / 3 (legacy — deprecated) ─────────────────────────────
-      { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (legacy)', notes: '⚠ Legacy — $3/$15 per 1M',  tier: 'high', outputPricePerMTok: 15.00, costWeight: 6, deprecated: true },
-      { id: 'claude-3-5-haiku-20241022',  label: 'Claude 3.5 Haiku (legacy)',  notes: '⚠ Legacy — $0.80/$4 per 1M', tier: 'mid',  outputPricePerMTok: 4.00,  costWeight: 3, deprecated: true },
-      { id: 'claude-3-haiku-20240307',    label: 'Claude 3 Haiku (legacy)',    notes: '⚠ Legacy — $0.25/$1.25 per 1M', tier: 'nano', outputPricePerMTok: 1.25, costWeight: 2, deprecated: true },
-      { id: 'claude-3-opus-20240229',     label: 'Claude 3 Opus (legacy)',     notes: '⚠ Legacy — $15/$75 per 1M',  tier: 'high', outputPricePerMTok: 75.00, costWeight: 9, deprecated: true },
+      // nano tier
+      {
+        id: 'claude-haiku-3',
+        label: 'Claude Haiku 3',
+        notes: 'Cheapest Claude — $0.25 in / $1.25 out per 1M',
+        tier: 'nano', outputPricePerMTok: 1.25, costWeight: 2,
+      },
+      // mid tier
+      {
+        id: 'claude-haiku-4-5-20251001',
+        label: 'Claude Haiku 4.5',
+        notes: 'Current recommended Haiku — $1.00 in / $5.00 out per 1M',
+        tier: 'mid', outputPricePerMTok: 5.00, costWeight: 4,
+        recommended: true,
+      },
+      // high tier
+      {
+        id: 'claude-sonnet-4-6',
+        label: 'Claude Sonnet 4.6',
+        notes: 'Current flagship mid — $3.00 in / $15.00 out per 1M',
+        tier: 'high', outputPricePerMTok: 15.00, costWeight: 6,
+        recommended: true,
+      },
+      {
+        id: 'claude-opus-4-6',
+        label: 'Claude Opus 4.6',
+        notes: 'Most powerful Claude — $5.00 in / $25.00 out per 1M',
+        tier: 'high', outputPricePerMTok: 25.00, costWeight: 7,
+      },
+      // Legacy 3.x / 3.5 models (kept for backwards compat)
+      {
+        id: 'claude-3-haiku-20240307',
+        label: 'Claude 3 Haiku (legacy)',
+        notes: 'Legacy — use Haiku 4.5 instead',
+        tier: 'nano', outputPricePerMTok: 1.25, costWeight: 2,
+        deprecated: true,
+      },
+      {
+        id: 'claude-3-5-haiku-20241022',
+        label: 'Claude 3.5 Haiku (legacy)',
+        notes: 'Legacy — $0.80 in / $4.00 out per 1M',
+        tier: 'mid', outputPricePerMTok: 4.00, costWeight: 3,
+        deprecated: true,
+      },
+      {
+        id: 'claude-3-5-sonnet-20241022',
+        label: 'Claude 3.5 Sonnet (legacy)',
+        notes: 'Legacy — use Sonnet 4.6 instead',
+        tier: 'high', outputPricePerMTok: 15.00, costWeight: 6,
+        deprecated: true,
+      },
+      {
+        id: 'claude-3-opus-20240229',
+        label: 'Claude 3 Opus (legacy)',
+        notes: 'Legacy — $15 in / $75 out per 1M. Use Opus 4.6 instead',
+        tier: 'high', outputPricePerMTok: 75.00, costWeight: 9,
+        deprecated: true,
+      },
     ],
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // DEEPSEEK — pricing verified Mar 10 2026
-  // https://api-docs.deepseek.com/quick_start/pricing
-  // ZERO rate limits of any kind. noDailyLimit: true for all.
-  // deepseek-chat + deepseek-reasoner: $0.28 in / $0.42 out per 1M
+  // DEEPSEEK
+  // Pricing source: https://api-docs.deepseek.com/quick_start/pricing (Mar 2026)
+  // Rate limits: NONE — DeepSeek explicitly states no rate limit enforcement.
+  //              All models are noDailyLimit: true.
+  // Pricing: $0.28/1M input (cache miss), $0.028 (cache hit), $0.42/1M output
+  //          Both deepseek-chat and deepseek-reasoner share the same price.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: 'deepseek',
@@ -215,8 +409,20 @@ export const AI_PROVIDERS: ProviderInfo[] = [
     borderColor: 'border-cyan-500/30',
     docsUrl: 'https://platform.deepseek.com/api_keys',
     models: [
-      { id: 'deepseek-chat',     label: 'DeepSeek Chat (V3.2)',     notes: 'No rate limits — $0.28/$0.42 per 1M, 128K ctx',     tier: 'mid',  outputPricePerMTok: 0.42, costWeight: 1, noDailyLimit: true, recommended: true },
-      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner (V3.2)', notes: 'No rate limits — chain-of-thought, $0.42 out per 1M', tier: 'high', outputPricePerMTok: 0.42, costWeight: 1, noDailyLimit: true },
+      {
+        id: 'deepseek-chat',
+        label: 'DeepSeek Chat (V3.2)',
+        notes: 'No rate limits · $0.28 in / $0.42 out per 1M · 128k ctx',
+        tier: 'mid', outputPricePerMTok: 0.42, costWeight: 1,
+        noDailyLimit: true, recommended: true,
+      },
+      {
+        id: 'deepseek-reasoner',
+        label: 'DeepSeek Reasoner (V3.2)',
+        notes: 'No rate limits · Chain-of-thought · $0.28 in / $0.42 out per 1M',
+        tier: 'high', outputPricePerMTok: 0.42, costWeight: 1,
+        noDailyLimit: true,
+      },
     ],
   },
 ];
@@ -287,7 +493,9 @@ export type AIFeatureId =
   | 'study_digest'
   | 'study_patterns'
   | 'study_tips'
-  | 'study_prioritize';
+  | 'study_prioritize'
+  | 'qa_solve'       // Q&A: initial AI answer (may include image)
+  | 'qa_followup';   // Q&A: follow-up clarification (text only)
 
 export interface AIFeatureMeta {
   label: string;
@@ -407,6 +615,7 @@ export const AI_FEATURE_LABELS: Record<AIFeatureId, AIFeatureMeta> = {
     preferNoDailyLimit: false,
     tokenCost: 'high',
   },
+
   // ── Q&A features ───────────────────────────────────────────────────────────
   qa_solve: {
     label: 'Q&A AI Solve-mate',
@@ -602,7 +811,7 @@ async function callProviderWithUsage(
   entry: APIKeyEntry,
   maxTokens: number,
   temp: number,
-  imageBase64?: string,   // optional base64-encoded image (no data: prefix)
+  imageBase64?: string,   // optional raw base64 image (no data: prefix)
   imageMimeType?: string  // e.g. 'image/jpeg', 'image/png', 'image/heic'
 ): Promise<{ text: string; tokens: number }> {
   const { provider, model, apiKey } = entry;
@@ -629,8 +838,7 @@ async function callProviderWithUsage(
   }
 
   if (provider === 'anthropic') {
-    // Anthropic vision: image must be in content array alongside text
-    const userContent: any[] = imageBase64 && imageMimeType
+    const userContent: any = imageBase64 && imageMimeType
       ? [
           { type: 'image', source: { type: 'base64', media_type: imageMimeType, data: imageBase64 } },
           { type: 'text', text: prompt },
@@ -653,7 +861,6 @@ async function callProviderWithUsage(
     return { text, tokens };
   }
 
-  // OpenAI-compatible (Groq, OpenAI, DeepSeek)
   const COMPAT_URLS: Record<string, string> = {
     groq:     'https://api.groq.com/openai/v1/chat/completions',
     openai:   'https://api.openai.com/v1/chat/completions',
@@ -662,7 +869,7 @@ async function callProviderWithUsage(
   const url = COMPAT_URLS[provider];
   if (!url) throw new Error(`Unknown provider: ${provider}`);
 
-  // OpenAI vision: content is array with image_url + text
+  // OpenAI-compatible vision: content array with image_url + text
   const msgContent: any = imageBase64 && imageMimeType
     ? [
         { type: 'image_url', image_url: { url: `data:${imageMimeType};base64,${imageBase64}` } },
@@ -797,7 +1004,7 @@ export async function callWithFailover(
   featureId: AIFeatureId,
   maxTokens = 2048,
   temp = 0.7,
-  imageBase64?: string,   // optional base64 image for vision (qa_solve etc.)
+  imageBase64?: string,   // optional base64 image for vision features (e.g. qa_solve)
   imageMimeType?: string  // e.g. 'image/jpeg', 'image/png', 'image/heic'
 ): Promise<string> {
   const groupsConfig = await aiKeyGroupService.getConfig();
