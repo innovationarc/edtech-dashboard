@@ -889,6 +889,22 @@ export function rescheduleStudyPlan(input: SchedulerInput): ScheduleResult {
 }
 
 // ---------------------------------------------------------------------------
+// Recovery planner — today only
+// ---------------------------------------------------------------------------
+// Runs a full reschedule then filters to today's sessions only.
+// Returns sessions for today and a flag indicating if any were found.
+
+export function recoverTodayPlan(input: SchedulerInput): { sessions: ScheduledSession[]; hasSlots: boolean } {
+  const result = generateStudySchedule(input);
+  const todayStr = input.now.toISOString().slice(0, 10);
+  const sessions = result.sessions.filter(s => {
+    const d = s.date instanceof Date ? s.date : new Date(s.date);
+    return d.toISOString().slice(0, 10) === todayStr;
+  });
+  return { sessions, hasSlots: sessions.length > 0 };
+}
+
+// ---------------------------------------------------------------------------
 // Goal progress updater
 // ---------------------------------------------------------------------------
 // Call this after marking a session complete or setting a partial %.
