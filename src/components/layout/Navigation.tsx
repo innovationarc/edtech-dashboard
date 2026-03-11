@@ -602,12 +602,12 @@ const Navigation = () => {
             </div>
           )}
           {/* Date */}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {isAuthenticated && <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: darkMode ? '#475569' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Today</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: darkMode ? '#e2e8f0' : '#111827', lineHeight: 1.2 }}>
               {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
             </span>
-          </div>
+          </div>}
         </div>
 
         {/* Right actions */}
@@ -694,27 +694,27 @@ const Navigation = () => {
         }}
       >
         {/* Hamburger + Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={isAuthenticated ? toggleSidebarClick : undefined} style={{
-            width: 38, height: 38, borderRadius: 10,
-            background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-            border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: isAuthenticated ? 'pointer' : 'default',
-            opacity: isAuthenticated ? 1 : 0.3,
-          }}>
-            <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={32}
-              style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
-          </button>
-          <button onClick={() => setShowMobileSearch(true)} style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-            border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          }}>
-            <Search size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
-          </button>
-        </div>
+        {isAuthenticated ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={toggleSidebarClick} style={{
+              width: 38, height: 38, borderRadius: 10,
+              background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+              border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}>
+              <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={32}
+                style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
+            </button>
+            <button onClick={() => setShowMobileSearch(true)} style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+              border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}>
+              <Search size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
+            </button>
+          </div>
+        ) : <div style={{ width: 38 }} />}
 
         {/* Logo center */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -725,35 +725,37 @@ const Navigation = () => {
         </div>
 
         {/* Right actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setShowNotifications(v => !v)} className="notif-btn" style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-              border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative',
+        {isAuthenticated ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setShowNotifications(v => !v)} className="notif-btn" style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+                border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative',
+              }}>
+                <Bell size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
+                {notifications.length > 0 && <span style={{ position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: '50%', background: gradient }} />}
+              </button>
+              {showNotifications && (
+                <div style={{ position: 'fixed', top: 68, right: 12, zIndex: 200 }}>
+                  <NotifDropdown darkMode={darkMode} pRgb={pRgb}
+                    notifications={notifications} onClear={() => setNotifications([])}
+                    onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
+                  />
+                </div>
+              )}
+            </div>
+            <button onClick={() => setShowProfile(true)} style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: gradient, color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 700, fontSize: 11, border: 'none', cursor: 'pointer',
             }}>
-              <Bell size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
-              {notifications.length > 0 && <span style={{ position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: '50%', background: gradient }} />}
+              {user && getInitials(user.name)}
             </button>
-            {showNotifications && (
-              <div style={{ position: 'fixed', top: 68, right: 12, zIndex: 200 }}>
-                <NotifDropdown darkMode={darkMode} pRgb={pRgb}
-                  notifications={notifications} onClear={() => setNotifications([])}
-                  onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
-                />
-              </div>
-            )}
           </div>
-          <button onClick={() => setShowProfile(true)} style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: gradient, color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: 11, border: 'none', cursor: 'pointer',
-          }}>
-            {user && getInitials(user.name)}
-          </button>
-        </div>
+        ) : <div style={{ width: 38 }} />}
       </header>
 
       {/* Search Modal */}
