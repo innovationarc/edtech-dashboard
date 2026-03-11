@@ -1,6 +1,6 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities; 
+@tailwind utilities;
 
 @layer base {
   :root {
@@ -69,13 +69,15 @@
   /* Theme-specific styles */
   .theme-dark {
     --color-text: #ffffff;
+    --color-text2: #9ca3af;
     --color-text-secondary: #9ca3af;
   }
 
   .theme-light {
     --color-text: #111827;
+    --color-text2: #6b7280;
     --color-text-secondary: #6b7280;
-    --color-background: #f1eee7;
+    --color-background: #ebe8e1;
   }
 
   /* ════════════════════════════════════════════
