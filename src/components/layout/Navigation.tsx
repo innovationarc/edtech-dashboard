@@ -693,18 +693,28 @@ const Navigation = () => {
           fontFamily: "'Outfit', sans-serif",
         }}
       >
-        {/* Hamburger */}
-        <button onClick={isAuthenticated ? toggleSidebarClick : undefined} style={{
-          width: 38, height: 38, borderRadius: 10,
-          background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-          border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: isAuthenticated ? 'pointer' : 'default',
-          opacity: isAuthenticated ? 1 : 0.3,
-        }}>
-          <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={32}
-            style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
-        </button>
+        {/* Hamburger + Search */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={isAuthenticated ? toggleSidebarClick : undefined} style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+            border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: isAuthenticated ? 'pointer' : 'default',
+            opacity: isAuthenticated ? 1 : 0.3,
+          }}>
+            <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={32}
+              style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
+          </button>
+          <button onClick={() => setShowMobileSearch(true)} style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+            border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          }}>
+            <Search size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
+          </button>
+        </div>
 
         {/* Logo center */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -716,14 +726,6 @@ const Navigation = () => {
 
         {/* Right actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={() => setShowMobileSearch(true)} style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-            border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          }}>
-            <Search size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
-          </button>
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShowNotifications(v => !v)} className="notif-btn" style={{
               width: 36, height: 36, borderRadius: 10,
