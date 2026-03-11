@@ -4,6 +4,7 @@
 // New: enrolled course planning, custom activities, chat persistence, add-to-calendar from chat
 // AI provider loaded from Firestore (Admin → AI Model Settings) — supports Groq, Gemini, OpenAI, Anthropic, DeepSeek
 
+
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Loader, AlertCircle,
