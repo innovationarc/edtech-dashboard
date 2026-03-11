@@ -1,5 +1,6 @@
 // src/pages/ComingSoon.tsx
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Clock, Star, BookOpen, GitMerge, Zap, Upload, Smartphone, XCircle,
   BarChart2, Cpu, Users, Layers, CheckCircle, X, ExternalLink,
@@ -13,6 +14,12 @@ import {
 import Card from '../components/ui/Card';
 import { comingSoonService, ComingSoonFeature, EarlyAccessRequest, FeatureRequest } from '../services/comingSoonService';
 import { useDashboard } from '../contexts/DashboardContext';
+
+// ─── Link helper ─────────────────────────────────────────────────────────────
+const isInternalLink = (url?: string) => {
+  if (!url) return false;
+  return url.startsWith('/') || url.startsWith(window.location.origin);
+};
 
 // ─── Icon map (matches management picker) ────────────────────────────────────
 const ICON_COLORS = [
@@ -95,9 +102,10 @@ const REQUEST_STATUS_LABELS: Record<string, string> = {
 interface EarlyAccessModalProps {
   request: EarlyAccessRequest;
   onClose: () => void;
+  onNavigate: (url: string) => void;
 }
 
-const EarlyAccessModal = ({ request, onClose }: EarlyAccessModalProps) => (
+const EarlyAccessModal = ({ request, onClose, onNavigate }: EarlyAccessModalProps) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
     <div className="bg-background-800 border border-background-700 rounded-xl w-full max-w-md shadow-2xl animate-fade-in">
       <div className="p-6">
@@ -120,7 +128,7 @@ const EarlyAccessModal = ({ request, onClose }: EarlyAccessModalProps) => (
         )}
 
         <button
-          onClick={() => window.open(request.accessLink, '_blank', 'noopener,noreferrer')}
+          onClick={() => request.accessLink && onNavigate(request.accessLink)}
           className="flex items-center justify-center gap-2 w-full bg-primary-600 hover:bg-primary-500 text-white py-2.5 rounded-lg transition-colors font-medium"
         >
           Try Early Access <ExternalLink size={16} />
@@ -285,9 +293,10 @@ interface FeatureCardProps {
   onCancelAccess: (featureId: string, requestId: string) => void;
   onReRequestAccess: (feature: ComingSoonFeature, oldRequestId: string) => void;
   requestingId: string | null;
+  onNavigate: (url: string) => void;
 }
 
-const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCancelAccess, onReRequestAccess, requestingId }: FeatureCardProps) => {
+const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCancelAccess, onReRequestAccess, requestingId, onNavigate }: FeatureCardProps) => {
   const isRequested = !!earlyAccess && earlyAccess.status !== 'cancelled';
   const isApproved = earlyAccess?.status === 'approved';
   const isRejected = earlyAccess?.status === 'rejected';
@@ -340,7 +349,7 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
         {/* If tryLink exists (beta/released or early access approved), always show Try It */}
         {feature.tryLink ? (
           <button
-            onClick={() => window.open(feature.tryLink, '_blank', 'noopener,noreferrer')}
+            onClick={() => onNavigate(feature.tryLink!)}
             className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded transition-colors flex items-center justify-center gap-2 text-sm font-medium"
           >
             <ExternalLink size={14} /> Try It
@@ -353,7 +362,7 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
         ) : isApproved ? (
           <button
             onClick={() => earlyAccess?.accessLink
-              ? window.open(earlyAccess.accessLink, '_blank', 'noopener,noreferrer')
+              ? onNavigate(earlyAccess.accessLink)
               : onTryAccess(earlyAccess!)}
             className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded transition-colors flex items-center justify-center gap-2 text-sm font-medium"
           >
@@ -426,6 +435,14 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const ComingSoon = () => {
   const { user } = useDashboard();
+  const navigate = useNavigate();
+  const handleLink = (url: string) => {
+    if (isInternalLink(url)) {
+      navigate(url.replace(window.location.origin, ''));
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   const [features, setFeatures] = useState<ComingSoonFeature[]>([]);
   const [earlyAccessMap, setEarlyAccessMap] = useState<Record<string, EarlyAccessRequest>>({});
@@ -610,6 +627,7 @@ const ComingSoon = () => {
               earlyAccess={earlyAccessMap[feature.id]}
               onRequestAccess={handleRequestAccess}
               onTryAccess={req => setActiveEarlyAccess(req)}
+              onNavigate={handleLink}
               onCancelAccess={handleCancelEarlyAccess}
               onReRequestAccess={handleReRequestAccess}
               requestingId={requestingId}
@@ -661,6 +679,7 @@ const ComingSoon = () => {
       {activeEarlyAccess && (
         <EarlyAccessModal
           request={activeEarlyAccess}
+          onNavigate={handleLink}
           onClose={() => setActiveEarlyAccess(null)}
         />
       )}
