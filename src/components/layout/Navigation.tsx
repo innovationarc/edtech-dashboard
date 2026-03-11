@@ -228,9 +228,16 @@ const Navigation = () => {
     return () => { document.body.style.overflow = ''; };
   }, [sidebarOpen]);
 
-  /* ─── Sidebar bg & border ─── */
-  const sbBg = darkMode ? '#0d1017' : '#ffffff';
-  const sbBorder = darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)';
+  /* ─── Sidebar bg — matte crystal frosted ─── */
+  const sbBg = darkMode
+    ? 'rgba(13,16,23,0.96)'
+    : 'rgba(255,255,255,0.78)';
+  const sbBorder = darkMode
+    ? '1px solid rgba(255,255,255,0.07)'
+    : '1px solid rgba(255,255,255,0.9)';
+  const sbShadow = darkMode
+    ? '4px 0 32px rgba(0,0,0,0.5)'
+    : '4px 0 24px rgba(0,0,0,0.09), inset -1px 0 0 rgba(255,255,255,0.8)';
 
   /* ─── Header bg — solid frosted, never transparent ─── */
   const hdrBg = darkMode
@@ -250,10 +257,10 @@ const Navigation = () => {
         style={{
           width: SIDEBAR_W,
           background: sbBg,
+          backdropFilter: 'blur(28px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(180%)',
           borderRight: sbBorder,
-          boxShadow: sidebarExpanded
-            ? darkMode ? '4px 0 32px rgba(0,0,0,0.5)' : '4px 0 20px rgba(0,0,0,0.10)'
-            : 'none',
+          boxShadow: sidebarExpanded ? sbShadow : 'none',
           fontFamily: "'Outfit', sans-serif",
           padding: '0 8px 12px',
           overflow: 'hidden',
@@ -423,8 +430,10 @@ const Navigation = () => {
         style={{
           width: 240,
           background: sbBg,
+          backdropFilter: 'blur(28px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(180%)',
           borderRight: sbBorder,
-          boxShadow: sidebarOpen ? (darkMode ? '8px 0 40px rgba(0,0,0,0.6)' : '8px 0 24px rgba(0,0,0,0.15)') : 'none',
+          boxShadow: sidebarOpen ? sbShadow : 'none',
           fontFamily: "'Outfit', sans-serif",
           padding: '0 10px 12px',
           transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
