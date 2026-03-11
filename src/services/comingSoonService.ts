@@ -32,6 +32,7 @@ export interface ComingSoonFeature {
   createdBy?: string;
   createdByUserId?: string; // human-readable e.g. AD-2601-00001
   createdByName?: string;
+  tryLink?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -121,6 +122,7 @@ const mapFeature = (id: string, d: any): ComingSoonFeature => ({
   createdBy: d.createdBy,
   createdByUserId: d.createdByUserId,
   createdByName: d.createdByName,
+  tryLink: d.tryLink,
   createdAt: toDate(d.createdAt),
   updatedAt: toDate(d.updatedAt),
 });
