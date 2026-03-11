@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Upload, Calendar, Medal, BarChart3, Settings, Clock,
   CreditCard, Library, GraduationCap, BookOpen, ShoppingCart, Trophy,
   Ticket, PlusCircle, Megaphone, FileText, MessageSquare, Sun, Moon, Loader2,
-  ClipboardCheck, UserCheck, ListOrdered, Plus, ChevronRight,
+  ClipboardCheck, UserCheck, ListOrdered, Plus, ChevronRight, Bot, Construction,
 } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import Profile from '../profile/Profile';
@@ -171,6 +171,8 @@ const Navigation = () => {
     { name:'Announcements', Icon:Megaphone,       path:'/announcements',      roles:['admin'] },
     { name:'Payments',      Icon:CreditCard,      path:'/payments',           roles:['admin'] },
     { name:'Analytics',     Icon:BarChart3,       path:'/analytics',          roles:['admin'] },
+    { name:'AI Settings',   Icon:Bot,             path:'/ai-settings',        roles:['admin'] },
+    { name:'Coming Soon Mgmt', Icon:Construction, path:'/coming-soon-management', roles:['admin'] },
     { name:'Content',       Icon:Upload,          path:'/content',            roles:['admin','teacher'] },
     { name:'Courses',       Icon:PlusCircle,      path:'/course-creation',    roles:['admin','teacher'] },
     { name:'Course Assign', Icon:UserCheck,       path:'/course-assignment',  roles:['admin'] },
