@@ -280,7 +280,7 @@ const DashboardLayout = () => {
         so it overlays content — no layout shift needed.
         Mobile: ml-0, pt-[60px] for the fixed mobile header.
       */}
-      <div className={`flex-1 flex flex-col ${!isMobile ? 'ml-[64px]' : 'ml-0'}`}>
+      <div className={`flex-1 flex flex-col ${!isMobile ? 'ml-[220px]' : 'ml-0'}`}>
         <main className="dl-main flex-1 overflow-auto" style={{ paddingTop: isMobile ? 60 : 64 }}>
           <div className="p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8">
             <Outlet />
