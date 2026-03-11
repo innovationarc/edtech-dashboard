@@ -703,6 +703,43 @@ export const studyPlanService = {
     await setDoc(doc(db, 'appSettings', 'studyPlanHelp'), { videoUrl: url }, { merge: true });
   },
 
+  // ── Streak Freeze (Firestore) ─────────────────────────────────────────────
+  // Document: streakFreezes/{uid} → { count, lastMonthlyAdd, createdAt }
+  // - New users start with 3 freezes
+  // - +1 freeze added automatically each month (cap: 10)
+
+  async getStreakFreeze(uid: string): Promise<{ count: number }> {
+    try {
+      const ref = doc(db, 'streakFreezes', uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        const initial = { count: 3, lastMonthlyAdd: new Date().toISOString(), createdAt: new Date().toISOString() };
+        await setDoc(ref, initial);
+        return { count: 3 };
+      }
+      const data = snap.data();
+      const lastAdd = new Date(data.lastMonthlyAdd || data.createdAt || 0);
+      const monthsSince = (Date.now() - lastAdd.getTime()) / (1000 * 60 * 60 * 24 * 30);
+      if (monthsSince >= 1 && (data.count ?? 0) < 10) {
+        const newCount = Math.min(10, (data.count ?? 0) + 1);
+        await setDoc(ref, { count: newCount, lastMonthlyAdd: new Date().toISOString() }, { merge: true });
+        return { count: newCount };
+      }
+      return { count: data.count ?? 0 };
+    } catch { return { count: 0 }; }
+  },
+
+  async useStreakFreeze(uid: string): Promise<number> {
+    try {
+      const ref = doc(db, 'streakFreezes', uid);
+      const snap = await getDoc(ref);
+      const current = snap.exists() ? (snap.data().count ?? 0) : 0;
+      const newCount = Math.max(0, current - 1);
+      await setDoc(ref, { count: newCount }, { merge: true });
+      return newCount;
+    } catch { return 0; }
+  },
+
   async getEnrolledCoursesForPlanning(studentId: string): Promise<EnrolledCourseForPlanning[]> {
     try {
       const enrollments = await courseService.getStudentEnrollments(studentId);
