@@ -120,14 +120,14 @@ interface FeatureFormModalProps {
 
 const EMPTY_FORM = {
   title: '', description: '', iconName: 'Zap',
-  progress: 0, expectedDate: '', status: 'in_development' as const, order: 0,
+  progress: 0, expectedDate: '', status: 'in_development' as const, order: 0, tryLink: '',
 };
 
 const FeatureFormModal = ({ feature, existingCount, actor, onSave, onClose }: FeatureFormModalProps) => {
   const [form, setForm] = useState(
     feature
       ? { title: feature.title, description: feature.description, iconName: feature.iconName,
-          progress: feature.progress, expectedDate: feature.expectedDate, status: feature.status, order: feature.order }
+          progress: feature.progress, expectedDate: feature.expectedDate, status: feature.status, order: feature.order, tryLink: feature.tryLink ?? '' }
       : { ...EMPTY_FORM, order: existingCount },
   );
   const [saving, setSaving] = useState(false);
@@ -215,6 +215,21 @@ const FeatureFormModal = ({ feature, existingCount, actor, onSave, onClose }: Fe
               <div className="h-2 rounded-full bg-primary-500 transition-all" style={{ width: `${form.progress}%` }} />
             </div>
           </div>
+
+          {form.progress === 100 && form.status === 'in_development' && (
+            <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm rounded-lg px-4 py-2">
+              <AlertCircle size={14} /> 100% complete — consider moving status to Beta or Released.
+            </div>
+          )}
+
+          {(form.status === 'beta' || form.status === 'released') && (
+            <div>
+              <label className="text-sm text-gray-400 block mb-1.5">Try Link <span className="text-gray-500">(optional)</span></label>
+              <input value={form.tryLink} onChange={e => set('tryLink', e.target.value)}
+                placeholder="https://..."
+                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-primary-500 transition-colors" />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
