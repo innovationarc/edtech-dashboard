@@ -703,6 +703,32 @@ export const studyPlanService = {
     await setDoc(doc(db, 'appSettings', 'studyPlanHelp'), { videoUrl: url }, { merge: true });
   },
 
+  // ── Free Time Preferences (Firestore) ────────────────────────────────────
+  // Document: userPrefs/{uid} → { freeTimeMode, freeHoursPerDay, freeTimeRanges, configured }
+
+  async getFreeTimePrefs(uid: string): Promise<{ mode: 'hours' | 'range'; hours: number; ranges: { start: string; end: string }[]; configured: boolean } | null> {
+    try {
+      const snap = await getDoc(doc(db, 'userPrefs', uid));
+      if (!snap.exists() || !snap.data().freeTimeConfigured) return null;
+      const d = snap.data();
+      return {
+        mode:       d.freeTimeMode       ?? 'hours',
+        hours:      d.freeHoursPerDay    ?? 4,
+        ranges:     d.freeTimeRanges     ?? [{ start: '14:00', end: '22:00' }],
+        configured: true,
+      };
+    } catch { return null; }
+  },
+
+  async saveFreeTimePrefs(uid: string, prefs: { mode: 'hours' | 'range'; hours: number; ranges: { start: string; end: string }[] }): Promise<void> {
+    await setDoc(doc(db, 'userPrefs', uid), {
+      freeTimeMode: prefs.mode,
+      freeHoursPerDay: prefs.hours,
+      freeTimeRanges: prefs.ranges,
+      freeTimeConfigured: true,
+    }, { merge: true });
+  },
+
   // ── Streak Freeze (Firestore) ─────────────────────────────────────────────
   // Document: streakFreezes/{uid} → { count, lastMonthlyAdd, createdAt }
   // - New users start with 3 freezes
