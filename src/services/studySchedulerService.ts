@@ -323,14 +323,21 @@ function computeGoalWork(goal: StudyGoal, allEvents: StudyPlanEvent[]): GoalWork
     const rawDur = (e.startTime && e.endTime)
       ? (toMins(e.endTime) - toMins(e.startTime)) / 60
       : 0;
-    const dur = rawDur > 0 && rawDur <= 3 ? rawDur : 1.5;
+    // FIX: cap raised from 3h to 8h — a valid exam-prep block can exceed 3 hours.
+    // Values outside [0, 8] are clearly bad data (e.g. overnight timestamps); fall back to 1.5h.
+    const dur = rawDur > 0 && rawDur <= 8 ? rawDur : 1.5;
 
     if (e.completed) {
       completedHours += dur;
       completedCount++;
-      // Only completed sessions determine next number — uncompleted get cleared
-      const m = (e.title || '').match(/Session\s+(\d+)/i);
-      if (m) maxSessionNum = Math.max(maxSessionNum, parseInt(m[1], 10));
+      // FIX: scope session-number extraction to AI-generated events only.
+      // A manually-created event titled "Physics Session 5 — exam notes" previously
+      // bumped the AI session counter to 5, causing the next generated session to
+      // skip to "Session 6" even if only 1 AI session had ever been completed.
+      if (e.isAIGenerated) {
+        const m = (e.title || '').match(/Session\s+(\d+)/i);
+        if (m) maxSessionNum = Math.max(maxSessionNum, parseInt(m[1], 10));
+      }
     } else if ((e.completionPercent || 0) > 0) {
       partialCredit += (e.completionPercent! / 100) * dur;
     }
@@ -444,20 +451,30 @@ function buildDaySlots(
 // ---------------------------------------------------------------------------
 
 function idealSessionMins(
-  hoursLeft:       number,
-  daysLeft:        number,
-  freeHoursPerDay: number,
-  urgency:         number = 0,
+  hoursLeft:              number,
+  daysLeft:               number,
+  freeHoursPerDay:        number,   // nominal (from hours-mode pref, used for maxSessions estimate)
+  urgency:                number = 0,
+  effectiveFreeHoursPerDay?: number, // FIX: actual daily free hours derived from ranges
+                                      // In range mode this differs from freeHoursPerDay.
+                                      // e.g. student with 08:00–22:00 range has 14h effective
+                                      // but freeHoursPerDay may still be the old hours-mode value (4).
+                                      // Using the wrong value causes idealSessionMins to compute
+                                      // maxSessions=4 (240min÷60) instead of maxSessions=14 (840min÷60),
+                                      // inflating session length and piling work into fewer, longer blocks.
 ): number {
+  // Use effective hours for the session-length arithmetic; fall back to nominal if not supplied.
+  const dailyMins = (effectiveFreeHoursPerDay ?? freeHoursPerDay) * 60;
+
   if (hoursLeft <= 0) return MIN_SESSION_MINS;
 
   // Dynamic ceiling — extend sessions gracefully when deadline pressure is high.
   // Caps at the actual free window so we never plan impossible days.
   // "Graceful" means: only extend as far as truly needed, never more.
   const dynamicMax =
-    daysLeft <= 1 ? Math.min(180, freeHoursPerDay * 60)  // last day: up to 3h, capped at free window
-    : daysLeft <= 2 || urgency >= 0.85 ? 150              // 2 days or very urgent: 2.5h
-    : MAX_SESSION_MINS;                                    // normal: 2h
+    daysLeft <= 1 ? Math.min(180, dailyMins)         // last day: up to 3h, capped at free window
+    : daysLeft <= 2 || urgency >= 0.85 ? 150          // 2 days or very urgent: 2.5h
+    : MAX_SESSION_MINS;                               // normal: 2h
 
   const minsLeft = hoursLeft * 60;
 
@@ -467,7 +484,7 @@ function idealSessionMins(
     return Math.max(MIN_SESSION_MINS, snapToGrid(minsLeft, SNAP_MINS));
   }
 
-  const availableMins = Math.max(1, daysLeft) * freeHoursPerDay * 60;
+  const availableMins = Math.max(1, daysLeft) * dailyMins;
   const maxSessions   = Math.floor(availableMins / MIN_SESSION_MINS);
   if (maxSessions <= 0) return dynamicMax;
 
@@ -530,18 +547,39 @@ function computeSubjectWork(
   for (const e of allEvents) {
     if (!isCourse(e) || !isThisSubject(e)) continue;
     const rawDur = (e.startTime && e.endTime) ? (toMins(e.endTime) - toMins(e.startTime)) / 60 : 0;
-    const dur    = rawDur > 0 && rawDur <= 3 ? rawDur : 1.5;
+    // FIX: cap raised from 3h to 8h (mirrors computeGoalWork fix).
+    const dur    = rawDur > 0 && rawDur <= 8 ? rawDur : 1.5;
     if (e.completed) {
       completedHours += dur;
       completedCount++;
-      const m = (e.title || '').match(/Session\s+(\d+)/i);
-      if (m) maxSessionNum = Math.max(maxSessionNum, parseInt(m[1], 10));
+      // FIX: scope session-number extraction to AI-generated events only (mirrors computeGoalWork fix).
+      if (e.isAIGenerated) {
+        const m = (e.title || '').match(/Session\s+(\d+)/i);
+        if (m) maxSessionNum = Math.max(maxSessionNum, parseInt(m[1], 10));
+      }
     } else if ((e.completionPercent || 0) > 0) {
       partialCredit += (e.completionPercent! / 100) * dur;
     }
   }
 
-  const totalDone  = Math.min(subjectTotalHours, completedHours + partialCredit);
+  // FIX: apply the same manual-progress floor that computeGoalWork uses, but
+  // proportional to this subject's fraction of the whole goal.
+  // Without this, a student who manually sets 80% on a multi-subject goal would
+  // have their split-subject path ignore the override entirely, causing the
+  // scheduler to overschedule by (manualProgressHours - measuredHours).
+  //
+  // Proportional formula:
+  //   subjectProgressHours = subjectTotalHours × (goal.currentProgress / 100)
+  // e.g. goal 80% done, this subject = 10h total → treat 8h as already done.
+  // Capped at subjectTotalHours so it can never exceed the subject's own ceiling.
+  const subjectProgressHours = goal.hoursNeeded > 0
+    ? (subjectTotalHours / goal.hoursNeeded) * (goal.hoursNeeded * (goal.currentProgress / 100))
+    : 0;
+  // Simplified: subjectTotalHours * (currentProgress / 100)
+  const progressFloor = subjectTotalHours * (goal.currentProgress / 100);
+
+  const rawDone    = completedHours + partialCredit;
+  const totalDone  = Math.min(subjectTotalHours, Math.max(rawDone, progressFloor));
   const hoursLeft  = Math.max(0, parseFloat((subjectTotalHours - totalDone).toFixed(2)));
 
   return {
@@ -564,6 +602,21 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 
   const nowMins = now.getHours() * 60 + now.getMinutes();
 
+  // FIX: compute the true daily free minutes from the actual time ranges so that
+  // idealSessionMins uses real capacity, not the stale hours-mode default.
+  // In range mode a student with 08:00–22:00 has 840 free minutes, not 240.
+  // Passing the wrong value inflates session length and under-distributes work.
+  const effectiveFreeHoursPerDay: number = (() => {
+    if (freeTimeMode === 'range' && freeTimeRanges.length > 0) {
+      const totalMins = freeTimeRanges.reduce((sum, r) => {
+        const diff = toMins(r.end) - toMins(r.start);
+        return sum + (diff > 0 ? diff : 0);
+      }, 0);
+      return Math.max(1, totalMins / 60);
+    }
+    return freeHoursPerDay;
+  })();
+
   // Step 1: build GoalWork list
   const workList: GoalWork[] = [];
 
@@ -576,7 +629,7 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
     const raw            = computeGoalWork(goal, existingEvents);
     if (raw.hoursLeft <= 0) continue;
 
-    const availableHours = Math.max(0.5, daysLeft * freeHoursPerDay);
+    const availableHours = Math.max(0.5, daysLeft * effectiveFreeHoursPerDay);
     const urgency        = Math.min(1, raw.hoursLeft / availableHours);
 
     const priority: 'low' | 'medium' | 'high' =
@@ -597,7 +650,7 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
 
           // Urgency for this sub-goal: fraction of this subject's remaining
           // hours vs available time split across all subjects
-          const subAvail    = Math.max(0.5, daysLeft * (freeHoursPerDay / bySubject.size));
+          const subAvail    = Math.max(0.5, daysLeft * (effectiveFreeHoursPerDay / bySubject.size));
           const subUrgency  = Math.min(1, sw.hoursLeft / subAvail);
 
           workList.push({
@@ -734,7 +787,7 @@ export function generateStudySchedule(input: SchedulerInput): ScheduleResult {
         // Allow a shorter "final" session when less than MIN_SESSION_MINS remains.
         let sessionMins = gw.minsLeft < MIN_SESSION_MINS
           ? Math.max(30, snapToGrid(gw.minsLeft, SNAP_MINS))
-          : idealSessionMins(gw.minsLeft / 60, daysToDeadline, freeHoursPerDay, gw.urgency);
+          : idealSessionMins(gw.minsLeft / 60, daysToDeadline, freeHoursPerDay, gw.urgency, effectiveFreeHoursPerDay);
 
         // Find first block large enough for this session
         let bi = slot.freeBlocks.findIndex(b => b.endMins - b.startMins >= sessionMins);
@@ -896,10 +949,13 @@ export function rescheduleStudyPlan(input: SchedulerInput): ScheduleResult {
 
 export function recoverTodayPlan(input: SchedulerInput): { sessions: ScheduledSession[]; hasSlots: boolean } {
   const result = generateStudySchedule(input);
-  const todayStr = input.now.toISOString().slice(0, 10);
+  // FIX: use toDateStr() (local date components) NOT toISOString() which returns UTC.
+  // In UTC+N timezones, toISOString() at local midnight produces yesterday's date,
+  // causing "today" to match no sessions and the recovery to silently return empty.
+  const todayStr = toDateStr(input.now);
   const sessions = result.sessions.filter(s => {
     const d = s.date instanceof Date ? s.date : new Date(s.date);
-    return d.toISOString().slice(0, 10) === todayStr;
+    return toDateStr(d) === todayStr;
   });
   return { sessions, hasSlots: sessions.length > 0 };
 }
