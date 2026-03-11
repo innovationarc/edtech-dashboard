@@ -119,14 +119,12 @@ const EarlyAccessModal = ({ request, onClose }: EarlyAccessModalProps) => (
           </div>
         )}
 
-        <a
-          href={request.accessLink}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={() => window.open(request.accessLink, '_blank', 'noopener,noreferrer')}
           className="flex items-center justify-center gap-2 w-full bg-primary-600 hover:bg-primary-500 text-white py-2.5 rounded-lg transition-colors font-medium"
         >
           Try Early Access <ExternalLink size={16} />
-        </a>
+        </button>
       </div>
     </div>
   </div>
@@ -330,23 +328,23 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
-          <Clock size={16} className="text-primary-400" />
-          <span className="text-sm text-primary-400">Expected: {feature.expectedDate}</span>
-        </div>
+        {(feature.status !== 'released' && !(feature.status === 'beta' && feature.tryLink)) && (
+          <div className="mt-4 flex items-center gap-2">
+            <Clock size={16} className="text-primary-400" />
+            <span className="text-sm text-primary-400">Expected: {feature.expectedDate}</span>
+          </div>
+        )}
       </div>
 
       <div className="p-4 border-t border-background-800 bg-card-dark">
         {/* If tryLink exists (beta/released or early access approved), always show Try It */}
         {feature.tryLink ? (
-          <a
-            href={feature.tryLink}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => window.open(feature.tryLink, '_blank', 'noopener,noreferrer')}
             className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded transition-colors flex items-center justify-center gap-2 text-sm font-medium"
           >
             <ExternalLink size={14} /> Try It
-          </a>
+          </button>
         ) : feature.progress >= 100 ? (
           /* 100% done but no link yet — show Completed */
           <div className="flex items-center justify-center gap-2 bg-green-500/10 border border-green-500/20 text-green-400 py-2 rounded text-sm">
@@ -354,7 +352,9 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
           </div>
         ) : isApproved ? (
           <button
-            onClick={() => onTryAccess(earlyAccess!)}
+            onClick={() => earlyAccess?.accessLink
+              ? window.open(earlyAccess.accessLink, '_blank', 'noopener,noreferrer')
+              : onTryAccess(earlyAccess!)}
             className="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded transition-colors flex items-center justify-center gap-2 text-sm font-medium"
           >
             <ExternalLink size={14} /> Try Early Access
