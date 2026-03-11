@@ -195,7 +195,7 @@ const Navigation = () => {
 
   const handleSignOutClick = async () => {
     setIsSigningOut(true);
-    try { await handleSignOut(); } catch { setIsSigningOut(false); }
+    try { await handleSignOut(); } catch {} finally { setIsSigningOut(false); }
   };
 
   const addNotification = useCallback((message: string, type: 'success'|'info'|'warning'|'error' = 'info') => {
@@ -252,7 +252,7 @@ const Navigation = () => {
     <>
       {/* DESKTOP SIDEBAR
           Auto-collapses to 64px icons, expands on hover to 220px */}
-      <aside
+      {isAuthenticated && <aside
         onMouseEnter={handleSidebarMouseEnter}
         onMouseLeave={handleSidebarMouseLeave}
         className="fixed z-[110] hidden lg:flex flex-col"
@@ -441,11 +441,11 @@ const Navigation = () => {
           </button>
         </div>
         </div>{/* end content wrapper */}
-      </aside>
+      </aside>}
 
       {/* MOBILE SIDEBAR DRAWER (slide in from left) */}
       {/* Overlay */}
-      {sidebarOpen && (
+      {isAuthenticated && sidebarOpen && (
         <div
           onClick={toggleSidebarClick}
           className="lg:hidden fixed inset-0 z-[105]"
@@ -457,7 +457,7 @@ const Navigation = () => {
           }}
         />
       )}
-      <aside
+      {isAuthenticated && <aside
         className="lg:hidden fixed z-[110] flex flex-col"
         style={{
           top: 10, left: 10, bottom: 10,
@@ -490,7 +490,7 @@ const Navigation = () => {
             <span style={{ fontSize: 15, fontWeight: 800, color: darkMode ? '#fff' : '#111827', letterSpacing: '-0.02em' }}>EduPlatform</span>
           </div>
           <button onClick={toggleSidebarClick} style={{ width: 32, height: 32, borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <X size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
+            <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={28} style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
           </button>
         </div>
 
@@ -549,7 +549,7 @@ const Navigation = () => {
           </button>
         </div>
         </div>{/* end mobile content wrapper */}
-      </aside>
+      </aside>}
 
       {/* DESKTOP HEADER
           Solid frosted background — NEVER transparent
@@ -691,11 +691,13 @@ const Navigation = () => {
         }}
       >
         {/* Hamburger */}
-        <button onClick={toggleSidebarClick} style={{
+        <button onClick={isAuthenticated ? toggleSidebarClick : undefined} style={{
           width: 38, height: 38, borderRadius: 10,
           background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
           border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: isAuthenticated ? 'pointer' : 'default',
+          opacity: isAuthenticated ? 1 : 0.3,
         }}>
           <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={32}
             style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
