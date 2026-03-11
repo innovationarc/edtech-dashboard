@@ -571,12 +571,40 @@ const Navigation = () => {
           transition: 'left 0.28s cubic-bezier(0.34,1.15,0.64,1)',
         }}
       >
-        {/* Date display — left side */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 10, fontWeight: 600, color: darkMode ? '#475569' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Today</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: darkMode ? '#e2e8f0' : '#111827', lineHeight: 1.2 }}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-          </span>
+        {/* Left side: Bell + Date */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Bell — moved to left */}
+          {isAuthenticated && (
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setShowNotifications(v => !v)} className="notif-btn" style={{
+                width: 38, height: 38, borderRadius: 12,
+                background: 'transparent', border: '1px solid transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', position: 'relative', transition: 'all 0.18s ease',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'; e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.09)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}
+              >
+                <Bell size={16} color={darkMode ? '#64748b' : '#9ca3af'}/>
+                {notifications.length > 0 && (
+                  <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: gradient }} />
+                )}
+              </button>
+              {showNotifications && (
+                <NotifDropdown darkMode={darkMode} pRgb={pRgb}
+                  notifications={notifications} onClear={() => setNotifications([])}
+                  onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
+                />
+              )}
+            </div>
+          )}
+          {/* Date */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: darkMode ? '#475569' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Today</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: darkMode ? '#e2e8f0' : '#111827', lineHeight: 1.2 }}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+          </div>
         </div>
 
         {/* Right actions */}
@@ -611,30 +639,6 @@ const Navigation = () => {
             >
               <Plus size={14} strokeWidth={2.5}/> Create
             </button>
-
-            {/* Bell */}
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowNotifications(v => !v)} className="notif-btn" style={{
-                width: 38, height: 38, borderRadius: 12,
-                background: 'transparent', border: '1px solid transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', position: 'relative', transition: 'all 0.18s ease',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'; e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.09)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}
-              >
-                <Bell size={16} color={darkMode ? '#64748b' : '#9ca3af'}/>
-                {notifications.length > 0 && (
-                  <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: gradient }} />
-                )}
-              </button>
-              {showNotifications && (
-                <NotifDropdown darkMode={darkMode} pRgb={pRgb}
-                  notifications={notifications} onClear={() => setNotifications([])}
-                  onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
-                />
-              )}
-            </div>
 
             {/* Avatar + Name pill */}
             <button onClick={() => setShowProfile(true)} style={{
