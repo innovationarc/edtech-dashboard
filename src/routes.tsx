@@ -48,6 +48,9 @@ import ComingSoonManagement from './pages/ComingSoonManagement';
 // AI Model Settings (Admin only)
 import AIModelSettings from './pages/AIModelSettings';
 
+// Notifications (all authenticated users)
+import NotificationsPage from './components/shared/NotificationsPage';
+
 // Topic Groups (Teacher/Admin)
 import TeacherTopicGroups from './pages/TeacherTopicGroups';
 
@@ -414,6 +417,7 @@ const AppRoutes = () => {
         } />
         
         {/* Public routes (all authenticated users) */}
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="content-library" element={<ContentLibrary />} />
         <Route path="course-enrollment" element={<CourseEnrollment />} />
         <Route path="receipt" element={<CourseReceipt />} />
