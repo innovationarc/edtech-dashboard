@@ -21,25 +21,17 @@ const C = {
   purple700:  '#7e22ce',
   blue600:    '#2563eb',
   blue700:    '#1d4ed8',
-  // text colors
-  textWhite:   '#ffffff',
-  textGray100: '#f3f4f6',
-  textGray200: '#e5e7eb',
-  textGray300: '#d1d5db',
-  textGray400: '#9ca3af',
-  textGray500: '#6b7280',
-  red200:      '#fecaca',
-  red400:      '#f87171',
-  green500:    '#22c55e',
-  blueLite:    'rgba(219,234,254,0.9)',
-  blueXLite:   '#eff6ff',
+  // text
+  gray300: '#d1d5db',
+  gray400: '#9ca3af',
+  gray500: '#6b7280',
+  white:   '#ffffff',
+  red200:  '#fecaca',
+  red400:  '#f87171',
+  green500:'#22c55e',
 } as const;
 
-// ─── Fully scoped styles – zero bleed from/to outside ──────────────────────
 const SIGN_IN_STYLES = `
-  /* === Scope: [data-sin] === */
-  [data-sin] * { box-sizing: border-box; }
-
   @keyframes sin-shake {
     0%,100% { transform: translateX(0); }
     20%      { transform: translateX(-6px); }
@@ -63,10 +55,31 @@ const SIGN_IN_STYLES = `
     text-decoration: underline;
     text-underline-offset: 2px;
     transition: color 0.2s;
-    background: none !important;
-    -webkit-text-fill-color: unset !important;
   }
   [data-sin] .sin-link:hover { color: #a5b4fc !important; }
+
+  [data-sin] .sin-checkbox-box {
+    background: rgba(31,41,55,0.5);
+    border: 2px solid #4b5563;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  [data-sin] .sin-checkbox-input:checked + .sin-checkbox-box {
+    background: linear-gradient(to bottom right, #6366f1, #9333ea);
+    border-color: #6366f1;
+  }
+  [data-sin] .sin-checkbox-label:hover .sin-checkbox-box { border-color: rgba(99,102,241,0.5); }
+
+  [data-sin] .sin-checkbox-check {
+    width: 10px; height: 10px;
+    color: white;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  [data-sin] .sin-checkbox-input:not(:checked) ~ .sin-checkbox-check {
+    opacity: 0; transform: scale(0);
+  }
+  [data-sin] .sin-checkbox-input:checked ~ .sin-checkbox-check {
+    opacity: 1; transform: scale(1);
+  }
 
   [data-sin] .sin-btn-primary {
     background: linear-gradient(to right, #4f46e5, #9333ea, #2563eb);
@@ -102,97 +115,9 @@ const SIGN_IN_STYLES = `
   [data-sin] .sin-btn-primary:hover .sin-shimmer,
   [data-sin] .sin-btn-secondary:hover .sin-shimmer { transform: translateX(200%); }
 
-  [data-sin] .sin-info-box { transition: transform 0.3s; }
   [data-sin] .sin-info-box:hover { transform: scale(1.02); }
-
-  [data-sin] .sin-close-btn:hover { background: rgba(55,65,81,0.5); }
-
-  /* ── Input base resets ── */
-  [data-sin] .sin-input {
-    width: 100%;
-    border-width: 2px;
-    border-style: solid;
-    border-color: rgba(55,65,81,0.5);
-    border-radius: 0.75rem;
-    background: rgba(31,41,55,0.5);
-    color: #ffffff;
-    outline: none;
-    transition: border-color 0.3s, box-shadow 0.3s;
-  }
-  [data-sin] .sin-input::placeholder { color: #6b7280; }
-  [data-sin] .sin-input:disabled { opacity: 0.5; cursor: not-allowed; }
+  [data-sin] .sin-info-box { transition: transform 0.3s; }
 `;
-
-// ─── Inline style helpers ───────────────────────────────────────────────────
-const S = {
-  // Layout / container
-  overlay: {
-    position: 'fixed' as const, inset: 0,
-    background: 'rgba(0,0,0,0.6)',
-    backdropFilter: 'blur(4px)',
-    zIndex: 80,
-    overflowY: 'auto' as const,
-  },
-  centerWrap: {
-    display: 'flex', justifyContent: 'center',
-    minHeight: '100%', padding: '12px',
-    alignItems: 'flex-start',
-  },
-  card: {
-    background: 'linear-gradient(to bottom right, #111827, #111827, #1f2937)',
-    borderRadius: '1.5rem',
-    boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
-    width: '100%', maxWidth: '448px',
-    border: '1px solid rgba(55,65,81,0.5)',
-    position: 'relative' as const,
-    overflow: 'hidden',
-  },
-  bgGlow: { position: 'absolute' as const, inset: 0, pointerEvents: 'none' as const, background: 'linear-gradient(to bottom right, rgba(99,102,241,0.05), rgba(168,85,247,0.05), rgba(37,99,235,0.05))' },
-  glow1: { position: 'absolute' as const, top: -96, right: -96, width: 192, height: 192, borderRadius: '50%', filter: 'blur(48px)', pointerEvents: 'none' as const, background: 'rgba(99,102,241,0.1)' },
-  glow2: { position: 'absolute' as const, bottom: -96, left: -96, width: 192, height: 192, borderRadius: '50%', filter: 'blur(48px)', pointerEvents: 'none' as const, background: 'rgba(168,85,247,0.1)' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid rgba(55,65,81,0.5)' },
-  iconBox: { height: 40, width: 40, borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', background: `linear-gradient(to bottom right, ${C.primary500}, ${C.purple600})` },
-  headerTitle: { fontSize: '1.25rem', fontWeight: 700, color: C.textWhite, margin: 0 },
-  headerSub: { fontSize: '0.75rem', color: C.textGray400, marginTop: 2 },
-  closeBtn: { height: 36, width: 36, borderRadius: '0.75rem', background: 'rgba(31,41,55,0.5)', border: '1px solid rgba(55,65,81,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' },
-  content: { padding: '20px 24px', display: 'flex', flexDirection: 'column' as const, gap: 16 },
-  // Error
-  errorBox: { background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '0.75rem', padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 8 },
-  errorText: { fontSize: '0.75rem', color: C.red200, lineHeight: 1.4 },
-  // Form group
-  label: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', fontWeight: 600, color: C.textGray300, marginBottom: 6 },
-  inputWrap: { position: 'relative' as const },
-  inputBase: { paddingTop: 10, paddingBottom: 10, paddingLeft: 38, paddingRight: 12, fontSize: '0.875rem', letterSpacing: '0.05em' },
-  inputMeta: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  metaText: { fontSize: '0.7rem', color: C.textGray500 },
-  iconAbs: { position: 'absolute' as const, left: 10, top: '50%', transform: 'translateY(-50%)', color: C.textGray500, pointerEvents: 'none' as const },
-  eyeBtn: { position: 'absolute' as const, right: 10, top: '50%', transform: 'translateY(-50%)', color: C.textGray500, background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' },
-  // Checkbox
-  checkLabel: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' as const },
-  checkText: { fontSize: '0.8125rem', color: C.textGray400, fontWeight: 500 },
-  // Divider
-  dividerWrap: { position: 'relative' as const, margin: '4px 0' },
-  dividerLine: { position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center' },
-  dividerInner: { width: '100%', borderTop: '1px solid rgba(55,65,81,0.5)' },
-  dividerText: { position: 'relative' as const, display: 'flex', justifyContent: 'center', fontSize: '0.7rem' },
-  dividerSpan: { padding: '0 12px', background: '#111827', color: C.textGray500, fontWeight: 500 },
-  // Buttons
-  btnPrimary: { width: '100%', color: C.textWhite, padding: '12px 0', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: '0.9375rem', border: 'none', cursor: 'pointer', position: 'relative' as const, overflow: 'hidden' },
-  btnSecondary: { width: '100%', background: 'rgba(31,41,55,0.5)', border: '2px solid rgba(55,65,81,0.5)', color: C.textWhite, padding: '12px 0', borderRadius: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontWeight: 700, fontSize: '0.9375rem', cursor: 'pointer', position: 'relative' as const, overflow: 'hidden' },
-  createText: { background: `linear-gradient(to right, ${C.primary400}, ${C.purple400})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' },
-  // Info box
-  infoBox: { marginTop: 4, border: '1px solid rgba(59,130,246,0.2)', borderRadius: '0.75rem', padding: '12px 16px', background: 'linear-gradient(to bottom right, rgba(30,58,138,0.2), rgba(88,28,135,0.2))' },
-  infoInner: { display: 'flex', alignItems: 'flex-start', gap: 10 },
-  infoIconWrap: { height: 28, width: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'linear-gradient(to bottom right, #3b82f6, #9333ea)' },
-  infoTitle: { display: 'block', fontWeight: 600, color: C.blueXLite, marginBottom: 4, fontSize: '0.75rem' },
-  infoText: { fontSize: '0.75rem', lineHeight: 1.6, color: C.blueLite },
-  // Security
-  securityWrap: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  securityText: { fontSize: '0.7rem', color: C.textGray500 },
-  // Terms
-  termsWrap: { textAlign: 'center' as const, paddingBottom: 4 },
-  termsText: { fontSize: '0.7rem', color: C.textGray500, lineHeight: 1.6, padding: '0 4px' },
-};
 
 interface SignInModalProps {
   onClose: () => void;
@@ -201,6 +126,7 @@ interface SignInModalProps {
 const SignInModal = ({ onClose }: SignInModalProps) => {
   const { handleSignIn } = useDashboard();
   
+  // State management
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -216,289 +142,437 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   const [accountStatus, setAccountStatus] = useState<'inactive' | 'pending' | null>(null);
   const [accountUserId, setAccountUserId] = useState<string | undefined>(undefined);
 
+  // Load reCAPTCHA v3
   useEffect(() => {
     const loadRecaptcha = () => {
-      if (window.grecaptcha) { setCaptchaLoaded(true); return; }
+      if (window.grecaptcha) {
+        setCaptchaLoaded(true);
+        return;
+      }
+
       const script = document.createElement('script');
       script.src = `https://www.google.com/recaptcha/api.js?render=${import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}`;
-      script.async = true; script.defer = true;
+      script.async = true;
+      script.defer = true;
       script.onload = () => setCaptchaLoaded(true);
       document.head.appendChild(script);
     };
+
     loadRecaptcha();
   }, []);
 
+  // Load remember me preference on mount
   useEffect(() => {
     try {
       const savedRememberMe = localStorage.getItem('auth_remember_me');
       const savedUserId = localStorage.getItem('auth_user_id');
+      
       if (savedRememberMe === 'true' && savedUserId) {
-        setRememberMe(true); setUserId(savedUserId); setDisplayUserId(savedUserId);
+        setRememberMe(true);
+        setUserId(savedUserId);
+        setDisplayUserId(savedUserId);
       }
-    } catch { /* silent */ }
+    } catch {
+      // Fail silently if localStorage not available
+    }
   }, []);
 
+  // Get reCAPTCHA v3 token
   const getCaptchaToken = async (): Promise<string> => {
     return new Promise((resolve, reject) => {
-      if (!window.grecaptcha || !captchaLoaded) { reject(new Error('reCAPTCHA not loaded')); return; }
+      if (!window.grecaptcha || !captchaLoaded) {
+        reject(new Error('reCAPTCHA not loaded'));
+        return;
+      }
+
       window.grecaptcha.ready(() => {
         window.grecaptcha
           .execute(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'login' })
-          .then(resolve).catch(reject);
+          .then(resolve)
+          .catch(reject);
       });
     });
   };
 
+  // Format User ID input with auto-formatting: XX-YYMM-XXXXX
   const formatUserIdInput = (input: string): { display: string; value: string } => {
     const cleaned = input.replace(/[^a-zA-Z0-9]/g, '');
-    let prefix = ''; let yearMonth = ''; let sequence = '';
-    if (cleaned.length >= 1) prefix = cleaned.substring(0, 2).toUpperCase().replace(/[^A-Z]/g, '');
-    if (cleaned.length > 2) yearMonth = cleaned.substring(prefix.length).substring(0, 4).replace(/[^0-9]/g, '');
-    if (cleaned.length > 6) sequence = cleaned.substring(prefix.length + yearMonth.length).substring(0, 5).replace(/[^0-9]/g, '');
+    
+    let prefix = '';
+    let yearMonth = '';
+    let sequence = '';
+    
+    if (cleaned.length >= 1) {
+      prefix = cleaned.substring(0, 2).toUpperCase().replace(/[^A-Z]/g, '');
+    }
+    
+    if (cleaned.length > 2) {
+      const remaining = cleaned.substring(prefix.length);
+      yearMonth = remaining.substring(0, 4).replace(/[^0-9]/g, '');
+    }
+    
+    if (cleaned.length > 6) {
+      const remaining = cleaned.substring(prefix.length + yearMonth.length);
+      sequence = remaining.substring(0, 5).replace(/[^0-9]/g, '');
+    }
+    
     let display = prefix;
-    if (yearMonth) display += '-' + yearMonth;
-    if (sequence) display += '-' + sequence;
+    if (yearMonth) {
+      display += '-' + yearMonth;
+    }
+    if (sequence) {
+      display += '-' + sequence;
+    }
+    
     const value = prefix + (yearMonth ? '-' + yearMonth : '') + (sequence ? '-' + sequence : '');
+    
     return { display, value };
   };
 
+  // Handle User ID input change with formatting
   const handleUserIdChange = (input: string) => {
     const formatted = formatUserIdInput(input);
-    setDisplayUserId(formatted.display); setUserId(formatted.value);
-    if (error) setError('');
+    setDisplayUserId(formatted.display);
+    setUserId(formatted.value);
+    
+    if (error) {
+      setError('');
+    }
   };
 
+  // Handle submit
   const handleSubmit = async () => {
-    setError(''); setLoading(true);
-    if (!userId || !password) { setError('Please fill in all fields'); setLoading(false); return; }
-    try { await getCaptchaToken(); } catch {
-      setError('Please wait for security verification to load'); setLoading(false); return;
+    setError('');
+    setLoading(true);
+
+    if (!userId || !password) {
+      setError('Please fill in all fields');
+      setLoading(false);
+      return;
     }
+
     try {
-      await handleSignIn(userId, password, rememberMe); onClose();
+      await getCaptchaToken();
+    } catch (err) {
+      setError('Please wait for security verification to load');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      await handleSignIn(userId, password, rememberMe);
+      onClose();
     } catch (err: any) {
       if (err instanceof AccountStatusError) {
-        setAccountStatus(err.status); setAccountUserId(err.userId); setShowAccountStatusModal(true);
-      } else { setError(err.message || 'Invalid credentials'); }
-    } finally { setLoading(false); }
+        setAccountStatus(err.status);
+        setAccountUserId(err.userId);
+        setShowAccountStatusModal(true);
+      } else {
+        setError(err.message || 'Invalid credentials');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSubmit(); };
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSubmit();
+    }
+  };
 
-  if (showRegister) return <RegisterModal onClose={() => setShowRegister(false)} onSwitchToSignIn={() => setShowRegister(false)} />;
-  if (showForgotPassword) return (
-    <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} onSwitchToForgotUserId={() => { setShowForgotPassword(false); setShowForgotUserId(true); }} />
-  );
-  if (showForgotUserId) return <ForgotUserIdModal onClose={() => setShowForgotUserId(false)} />;
-  if (showAccountStatusModal && accountStatus) return (
-    <AccountStatusModal status={accountStatus} userId={accountUserId} onClose={() => { setShowAccountStatusModal(false); setAccountStatus(null); setAccountUserId(undefined); }} />
-  );
+  if (showRegister) {
+    return <RegisterModal onClose={() => setShowRegister(false)} onSwitchToSignIn={() => setShowRegister(false)} />;
+  }
+
+  if (showForgotPassword) {
+    return (
+      <ForgotPasswordModal 
+        onClose={() => setShowForgotPassword(false)}
+        onSwitchToForgotUserId={() => {
+          setShowForgotPassword(false);
+          setShowForgotUserId(true);
+        }}
+      />
+    );
+  }
+
+  if (showForgotUserId) {
+    return <ForgotUserIdModal onClose={() => setShowForgotUserId(false)} />;
+  }
+
+  if (showAccountStatusModal && accountStatus) {
+    return (
+      <AccountStatusModal 
+        status={accountStatus}
+        userId={accountUserId}
+        onClose={() => {
+          setShowAccountStatusModal(false);
+          setAccountStatus(null);
+          setAccountUserId(undefined);
+        }}
+      />
+    );
+  }
 
   return (
-    <div data-sin="" style={S.overlay}>
+    <div data-sin="" className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] overflow-y-auto">
       <style>{SIGN_IN_STYLES}</style>
-      <div style={S.centerWrap}>
-        <div style={S.card}>
-          {/* Animated background effects */}
-          <div style={S.bgGlow} />
-          <div style={S.glow1} />
-          <div style={S.glow2} />
+      <div className="flex justify-center min-h-full p-3 sm:p-4 md:p-6 items-start">
+      <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-[400px] sm:max-w-md md:max-w-lg border border-gray-700/50 relative overflow-hidden mt-0">
+        {/* Animated background effects */}
+        <div className="absolute inset-0 pointer-events-none" style={{background: 'linear-gradient(to bottom right, rgba(99,102,241,0.05), rgba(168,85,247,0.05), rgba(37,99,235,0.05))'}}></div>
+        <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{background: 'rgba(99,102,241,0.1)'}}></div>
+        <div className="absolute -bottom-24 -left-24 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{background: 'rgba(168,85,247,0.1)'}}></div>
 
-          <div style={{ position: 'relative' }}>
-            {/* Header */}
-            <div style={S.header}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={S.iconBox}>
-                  <Lock size={18} color={C.textWhite} />
+        <div className="relative">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 sm:p-5 md:p-6 border-b border-gray-700/50">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 rounded-xl flex items-center justify-center shadow-lg" style={{background: `linear-gradient(to bottom right, ${C.primary500}, ${C.purple600})`}}>
+                <Lock size={16} className="sm:w-[18px] sm:h-[18px] md:w-5 md:h-5" style={{color: C.white}} />
+              </div>
+              <div>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300">
+                  Welcome Back
+                </h2>
+                <p className="text-[10px] sm:text-xs mt-0.5" style={{color: C.gray400}}>Sign in to continue</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              disabled={loading}
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gray-800/50 hover:bg-gray-700/50 backdrop-blur-sm flex items-center justify-center transition-all duration-300 group border border-gray-700/30 hover:border-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Close modal"
+            >
+              <X size={16} className="sm:w-[18px] sm:h-[18px] transition-colors" style={{color: C.gray400}} />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4">
+            {/* Error Message */}
+            {error && (
+              <div className="sin-shake bg-red-500/10 border border-red-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2">
+                <AlertCircle size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5" style={{color: C.red400}} />
+                <p className="text-[11px] sm:text-xs md:text-sm leading-snug" style={{color: C.red200}}>{error}</p>
+              </div>
+            )}
+
+            {/* Sign In Form */}
+            <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-3 sm:space-y-4">
+              {/* User ID Input */}
+              <div className="group">
+                <label className="block text-xs md:text-sm font-semibold mb-1 md:mb-1.5 flex items-center gap-1 md:gap-1.5" style={{color: C.gray300}}>
+                  <CreditCard size={12} className="md:w-[14px] md:h-[14px]" style={{color: C.primary400}} />
+                  User ID
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={displayUserId}
+                    onChange={(e) => handleUserIdChange(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    className="sin-input w-full bg-gray-800/50 rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-3 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide text-xs md:text-base"
+                    style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: 'rgba(55,65,81,0.5)', outline: 'none', color: C.white }}
+                    placeholder="ST-2601-00001"
+                    disabled={loading}
+                    autoComplete="username"
+                    maxLength={13}
+                  />
+                  <CreditCard size={14} className="sin-icon-hover md:w-[18px] md:h-[18px] absolute left-2.5 md:left-4 top-2 md:top-3.5 transition-colors pointer-events-none" style={{color: C.gray500}} />
                 </div>
-                <div>
-                  <h2 style={S.headerTitle}>Welcome Back</h2>
-                  <p style={S.headerSub}>Sign in to continue</p>
+                <div className="flex items-center justify-between -mt-2 md:mt-1">
+                  <p className="text-[10px] md:text-xs" style={{color: C.gray500}}>Format: XX-YYMM-XXXXX</p>
+                  <button 
+                    type="button"
+                    onClick={() => setShowForgotUserId(true)}
+                    className="sin-link text-[10px] md:text-xs transition-colors duration-200"
+                    disabled={loading}
+                  >
+                    Forgot User ID?
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                disabled={loading}
-                className="sin-close-btn"
-                style={{ ...S.closeBtn, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
-                aria-label="Close modal"
-              >
-                <X size={16} color={C.textGray400} />
-              </button>
-            </div>
 
-            {/* Content */}
-            <div style={S.content}>
-              {/* Error */}
-              {error && (
-                <div className="sin-shake" style={S.errorBox}>
-                  <AlertCircle size={16} color={C.red400} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <p style={S.errorText}>{error}</p>
+              {/* Password Input */}
+              <div className="group">
+                <label className="block text-xs md:text-sm font-semibold mb-1 md:mb-1.5 flex items-center gap-1 md:gap-1.5" style={{color: C.gray300}}>
+                  <Lock size={12} className="md:w-[14px] md:h-[14px]" style={{color: C.primary400}} />
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    className="sin-input w-full bg-gray-800/50 rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-8 md:pr-12 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base"
+                    style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: 'rgba(55,65,81,0.5)', outline: 'none', color: C.white }}
+                    placeholder="Enter your password"
+                    disabled={loading}
+                    autoComplete="current-password"
+                  />
+                  <Lock size={14} className="sin-icon-hover md:w-[18px] md:h-[18px] absolute left-2.5 md:left-4 top-2 md:top-3.5 transition-colors pointer-events-none" style={{color: C.gray500}} />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 transition-colors duration-200"
+                    style={{color: C.gray500}}
+                    disabled={loading}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={14} className="md:w-[18px] md:h-[18px]" /> : <Eye size={14} className="md:w-[18px] md:h-[18px]" />}
+                  </button>
                 </div>
-              )}
+                <div className="flex items-center justify-between -mt-2 md:mt-1">
+                  <p className="text-[10px] md:text-xs" style={{color: C.gray500}}>Use a strong password</p>
+                  <button 
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="sin-link text-[10px] md:text-xs transition-colors duration-200"
+                    disabled={loading}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              </div>
 
-              {/* Form */}
-              <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {/* User ID */}
-                <div>
-                  <label style={S.label}>
-                    <CreditCard size={13} color={C.primary400} />
-                    <span>User ID</span>
-                  </label>
-                  <div style={S.inputWrap}>
+              {/* Remember Me Checkbox */}
+              <div className="flex items-center pt-0.5 md:pt-1">
+                <label className="flex items-center gap-2 md:gap-2.5 cursor-pointer select-none sin-checkbox-label">
+                  <div className="relative w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
                     <input
-                      type="text"
-                      value={displayUserId}
-                      onChange={(e) => handleUserIdChange(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      className="sin-input"
-                      style={{ ...S.inputBase, textTransform: 'uppercase' }}
-                      placeholder="ST-2601-00001"
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="sr-only"
                       disabled={loading}
-                      autoComplete="username"
-                      maxLength={13}
                     />
-                    <CreditCard size={14} className="sin-icon-hover" style={S.iconAbs} color={C.textGray500} />
-                  </div>
-                  <div style={S.inputMeta}>
-                    <span style={S.metaText}>Format: XX-YYMM-XXXXX</span>
-                    <button type="button" onClick={() => setShowForgotUserId(true)} className="sin-link" style={{ fontSize: '0.7rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} disabled={loading}>
-                      Forgot User ID?
-                    </button>
-                  </div>
-                </div>
-
-                {/* Password */}
-                <div>
-                  <label style={S.label}>
-                    <Lock size={13} color={C.primary400} />
-                    <span>Password</span>
-                  </label>
-                  <div style={S.inputWrap}>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      className="sin-input"
-                      style={{ ...S.inputBase, paddingRight: 38 }}
-                      placeholder="Enter your password"
-                      disabled={loading}
-                      autoComplete="current-password"
-                    />
-                    <Lock size={14} className="sin-icon-hover" style={S.iconAbs} color={C.textGray500} />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      style={{ ...S.eyeBtn, opacity: loading ? 0.5 : 1 }}
-                      disabled={loading}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff size={15} color={C.textGray500} /> : <Eye size={15} color={C.textGray500} />}
-                    </button>
-                  </div>
-                  <div style={S.inputMeta}>
-                    <span style={S.metaText}>Use a strong password</span>
-                    <button type="button" onClick={() => setShowForgotPassword(true)} className="sin-link" style={{ fontSize: '0.7rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} disabled={loading}>
-                      Forgot Password?
-                    </button>
-                  </div>
-                </div>
-
-                {/* Remember Me */}
-                <div>
-                  <label style={S.checkLabel}>
                     <div
+                      className="w-4 h-4 md:w-5 md:h-5 rounded flex items-center justify-center transition-all duration-300"
                       style={{
-                        width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '2px solid', transition: 'all 0.3s',
+                        border: '2px solid',
                         borderColor: rememberMe ? C.primary500 : '#4b5563',
-                        background: rememberMe ? `linear-gradient(to bottom right, ${C.primary500}, ${C.purple600})` : 'rgba(31,41,55,0.5)',
-                        opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer',
+                        background: rememberMe
+                          ? `linear-gradient(to bottom right, ${C.primary500}, ${C.purple600})`
+                          : 'rgba(31,41,55,0.5)',
+                        opacity: loading ? 0.5 : 1,
+                        cursor: loading ? 'not-allowed' : 'pointer',
                       }}
-                      onClick={() => !loading && setRememberMe(v => !v)}
                     >
-                      <svg style={{ width: 10, height: 10, opacity: rememberMe ? 1 : 0, transform: rememberMe ? 'scale(1)' : 'scale(0)', transition: 'all 0.2s' }} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" viewBox="0 0 24 24" stroke="white">
-                        <path d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-2.5 h-2.5 md:w-3 md:h-3 transition-all duration-300"
+                        style={{ opacity: rememberMe ? 1 : 0, transform: rememberMe ? 'scale(1)' : 'scale(0)', color: C.white }}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="3"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path d="M5 13l4 4L19 7"></path>
                       </svg>
                     </div>
-                    <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} disabled={loading} />
-                    <span style={S.checkText}>Keep me signed in</span>
-                  </label>
-                </div>
-
-                {/* Sign In Button */}
-                <button
-                  type="submit"
-                  disabled={loading || !captchaLoaded}
-                  className="sin-btn-primary"
-                  style={S.btnPrimary}
-                >
-                  <div className="sin-shimmer" />
-                  <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {loading && <Loader size={16} color={C.textWhite} style={{ animation: 'spin 1s linear infinite' }} />}
-                    <span style={{ color: C.textWhite }}>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
-                    {!loading && captchaLoaded && <ArrowRight size={16} color={C.textWhite} />}
+                  </div>
+                  <span className="text-xs md:text-sm transition-colors font-medium" style={{color: C.gray400}}>
+                    Keep me signed in
                   </span>
-                </button>
-              </form>
-
-              {/* Divider */}
-              <div style={S.dividerWrap}>
-                <div style={S.dividerLine}><div style={S.dividerInner} /></div>
-                <div style={S.dividerText}><span style={S.dividerSpan}>New to our platform?</span></div>
+                </label>
               </div>
 
-              {/* Create Account */}
+              {/* Sign In Button */}
               <button
-                type="button"
-                onClick={() => setShowRegister(true)}
-                className="sin-btn-secondary sin-account-btn"
-                style={{ ...S.btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
-                disabled={loading}
+                type="submit"
+                disabled={loading || !captchaLoaded}
+                className="sin-btn-primary w-full py-2.5 md:py-3.5 rounded-xl flex items-center justify-center gap-2 md:gap-2.5 font-bold text-xs md:text-base shadow-2xl group relative overflow-hidden"
+                style={{color: C.white}}
               >
-                <div className="sin-shimmer" />
-                <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <UserCircle size={16} color={C.primary400} />
-                  <span style={S.createText}>Create New Account</span>
-                  <ArrowRight size={16} color={C.primary400} />
+                <div className="sin-shimmer"></div>
+                <span className="relative flex items-center gap-2 md:gap-2.5">
+                  {loading && <Loader size={15} className="md:w-[18px] md:h-[18px] animate-spin" />}
+                  <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
+                  {!loading && captchaLoaded && <ArrowRight size={15} className="md:w-[18px] md:h-[18px] group-hover:translate-x-1 transition-transform" />}
                 </span>
               </button>
+            </form>
 
-              {/* Info Box */}
-              <div className="sin-info-box" style={S.infoBox}>
-                <div style={S.infoInner}>
-                  <div style={S.infoIconWrap}>
-                    <span style={{ fontSize: '0.75rem', color: C.textWhite, fontWeight: 700 }}>i</span>
-                  </div>
-                  <div>
-                    <strong style={S.infoTitle}>First time signing in?</strong>
-                    <p style={S.infoText}>Use the User ID provided during registration along with your password to access your account.</p>
-                  </div>
+            {/* Divider */}
+            <div className="relative my-3.5 md:my-5.5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700/50"></div>
+              </div>
+              <div className="relative flex justify-center text-[10px] md:text-xs">
+                <span className="px-2.5 md:px-4 bg-gray-900 font-medium" style={{color: C.gray500}}>New to our platform?</span>
+              </div>
+            </div>
+
+            {/* Create Account Button */}
+            <button 
+              type="button"
+              onClick={() => setShowRegister(true)}
+              className="sin-btn-secondary sin-account-btn w-full bg-gray-800/50 border-2 border-gray-700/50 py-2.5 md:py-3.5 rounded-xl flex items-center justify-center gap-2 md:gap-2.5 font-bold text-xs md:text-base shadow-lg group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{color: C.white}}
+              disabled={loading}
+            >
+              <span className="relative flex items-center gap-2 md:gap-2.5">
+                <UserCircle size={15} className="md:w-[18px] md:h-[18px] group-hover:rotate-12 transition-transform" />
+                <span style={{background: `linear-gradient(to right, ${C.primary400}, ${C.purple400})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'}}>
+                  Create New Account
+                </span>
+                <ArrowRight size={15} className="md:w-[18px] md:h-[18px] group-hover:translate-x-1 transition-transform" style={{color: C.primary400}} />
+              </span>
+            </button>
+
+            {/* Info Box */}
+            <div className="sin-info-box mt-3.5 md:mt-5.5 border rounded-xl p-2.5 md:p-4 shadow-lg" style={{background: 'linear-gradient(to bottom right, rgba(30,58,138,0.2), rgba(88,28,135,0.2))', borderColor: 'rgba(59,130,246,0.2)'}}>
+              <div className="flex items-start gap-2 md:gap-2.5">
+                <div className="h-5 w-5 md:h-7 md:w-7 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg" style={{background: 'linear-gradient(to bottom right, #3b82f6, #9333ea)'}}>
+                  <span className="text-[10px] md:text-sm font-bold" style={{color: C.white}}>i</span>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] md:text-xs leading-relaxed" style={{color: 'rgba(219,234,254,0.9)'}}>
+                    <strong className="font-semibold block mb-0.5 md:mb-1" style={{color: '#eff6ff'}}>First time signing in?</strong>
+                    Use the User ID provided during registration along with your password to access your account.
+                  </p>
                 </div>
               </div>
+            </div>
 
-              {/* Security Badge */}
-              {captchaLoaded && (
-                <div style={S.securityWrap}>
-                  <Shield size={12} color={C.green500} />
-                  <span style={S.securityText}>Protected by reCAPTCHA</span>
-                </div>
-              )}
-
-              {/* Terms */}
-              <div style={S.termsWrap}>
-                <p style={S.termsText}>
-                  By continuing, you agree to our{' '}
-                  <a href="/terms-of-service" target="_blank" rel="noopener noreferrer" className="sin-link">Terms of Service</a>
-                  {' '}and{' '}
-                  <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="sin-link">Privacy Policy</a>
-                </p>
+            {/* Security Badge */}
+            {captchaLoaded && (
+              <div className="mt-2.5 md:mt-3.5 flex items-center justify-center gap-1 md:gap-1.5 text-xs">
+                <Shield size={11} className="md:w-3.5 md:h-3.5" style={{color: C.green500}} />
+                <span className="text-[9px] md:text-xs" style={{color: C.gray500}}>Protected by reCAPTCHA</span>
               </div>
+            )}
+
+            {/* Terms and Privacy Notice */}
+            <div className="mt-2.5 md:mt-4.5 text-center pb-1">
+              <p className="text-[9px] md:text-xs leading-relaxed px-1" style={{color: C.gray500}}>
+                By continuing, you agree to our{' '}
+                <a 
+                  href="/terms-of-service" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="sin-link"
+                >
+                  Terms of Service
+                </a>
+                {' '}and{' '}
+                <a 
+                  href="/privacy-policy" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="sin-link"
+                >
+                  Privacy Policy
+                </a>
+              </p>
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
