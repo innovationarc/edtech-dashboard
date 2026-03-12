@@ -1,11 +1,11 @@
-/* Navigation.tsx  
+/* Navigation.tsx 
    — Solid frosted header (never transparent) — no overlap
    — Auto-hide sidebar: collapsed (64px icons) on desktop, expands on hover
    — Mobile: slide-in drawer + fixed top bar
    — Fluid spring animations throughout
 */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell, Search, LogOut, X,
   LayoutDashboard, Users, Upload, Calendar, Medal, BarChart3, Settings, Clock,
@@ -17,6 +17,7 @@ import {
 import { useDashboard } from '../../contexts/DashboardContext';
 import Profile from '../profile/Profile';
 import HamburgerMenuIcon from '../ui/HamburgerMenuIcon';
+import { notificationService } from '../../services/notificationService';
 
 const hexRgb = (hex: string) => {
   if (!hex || hex.length < 7) return '99,102,241';
@@ -92,40 +93,6 @@ const NavItem: React.FC<NavItemProps> = ({
   );
 };
 
-/* ── Notif Dropdown ── */
-const NotifDropdown: React.FC<{
-  darkMode: boolean; pRgb: string;
-  notifications: Array<{ id: string; message: string; type: string; timestamp: Date }>;
-  onClear: () => void; onRemove: (id: string) => void;
-}> = ({ darkMode, pRgb, notifications, onClear, onRemove }) => (
-  <div className="notif-dropdown absolute top-full right-0 mt-2 rounded-2xl overflow-hidden z-[200]"
-    style={{
-      width: 320,
-      background: darkMode ? '#0f1117' : '#ffffff',
-      border: `1px solid rgba(${pRgb},0.18)`,
-      boxShadow: '0 16px 48px rgba(0,0,0,0.28)',
-    }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid #f0f0f0' }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: darkMode ? '#fff' : '#111827' }}>Notifications</span>
-      {notifications.length > 0 && <button onClick={onClear} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer' }}>Clear all</button>}
-    </div>
-    <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-      {notifications.length === 0
-        ? <div style={{ padding: '24px 0', textAlign: 'center', color: '#64748b', fontSize: 13 }}>No notifications</div>
-        : notifications.map(n => (
-          <div key={n.id} style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: darkMode ? '1px solid rgba(255,255,255,0.04)' : '1px solid #f9fafb' }}>
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: 12, color: darkMode ? '#e2e8f0' : '#111827', margin: 0 }}>{n.message}</p>
-              <p style={{ fontSize: 10, color: '#64748b', margin: '2px 0 0' }}>{new Date(n.timestamp).toLocaleTimeString()}</p>
-            </div>
-            <button onClick={() => onRemove(n.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', flexShrink: 0 }}><X size={12}/></button>
-          </div>
-        ))
-      }
-    </div>
-  </div>
-);
-
 /* ════ NAVIGATION ════ */
 const Navigation = () => {
   const {
@@ -137,12 +104,21 @@ const Navigation = () => {
   } = useDashboard();
 
   const location = useLocation();
+  const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{ id: string; message: string; type: 'success'|'info'|'warning'|'error'; timestamp: Date }>>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [islandActive, setIslandActive] = useState(false);
+  const [islandExpanded, setIslandExpanded] = useState(false);
+  const [islandFullExpand, setIslandFullExpand] = useState(false);
+  const [islandPillRadius, setIslandPillRadius] = useState(false);
+  const [islandNotif, setIslandNotif] = useState<{ message: string; type: 'success'|'info'|'warning'|'error' } | null>(null);
+  const islandTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const islandAllTimeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const fullExpandTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const islandRef = useRef<HTMLDivElement>(null);
 
   /* Desktop sidebar: collapsed by default, expands on hover */
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -201,25 +177,99 @@ const Navigation = () => {
     try { await handleSignOut(); } catch {} finally { setIsSigningOut(false); }
   };
 
-  const addNotification = useCallback((message: string, type: 'success'|'info'|'warning'|'error' = 'info') => {
-    const n = { id: Date.now().toString(), message, type, timestamp: new Date() };
-    setNotifications(prev => [n, ...prev.slice(0,4)]);
-    setTimeout(() => setNotifications(prev => prev.filter(x => x.id !== n.id)), 5000);
+  // Clears every pending island timeout
+  const clearAllIslandTimeouts = useCallback(() => {
+    islandAllTimeouts.current.forEach(clearTimeout);
+    islandAllTimeouts.current = [];
+    if (islandTimeout.current) { clearTimeout(islandTimeout.current); islandTimeout.current = null; }
+    if (fullExpandTimeout.current) { clearTimeout(fullExpandTimeout.current); fullExpandTimeout.current = null; }
   }, []);
+
+  // Runs the pill→blob→gone collapse sequence from current state
+  const collapseIsland = useCallback(() => {
+    setIslandFullExpand(false);
+    // Start width collapsing immediately
+    const t1 = setTimeout(() => setIslandExpanded(false), 50);
+    // Snap to pill radius only after width has nearly finished collapsing (~900ms into 1s transition)
+    const tr = setTimeout(() => setIslandPillRadius(true), 950);
+    const t2 = setTimeout(() => setIslandActive(false), 1150);
+    const t3 = setTimeout(() => { setIslandNotif(null); setIslandPillRadius(false); }, 1550);
+    islandAllTimeouts.current.push(t1, tr, t2, t3);
+  }, []);
+
+  const addNotification = useCallback((message: string, type: 'success'|'info'|'warning'|'error' = 'info') => {
+    // Always start from collapsed state — fix #2
+    clearAllIslandTimeouts();
+    setIslandFullExpand(false);
+    setIslandExpanded(false);
+    setIslandActive(false);
+    setIslandPillRadius(true);
+    setIslandNotif({ message, type });
+
+    // Step 1: fade in as circle (20ms)
+    const t1 = setTimeout(() => setIslandActive(true), 20);
+    // Step 2: expand to pill (450ms)
+    const t2 = setTimeout(() => setIslandExpanded(true), 450);
+    // Step 3: auto-collapse pill after hold (3450ms) — cancelled if user manually expands
+    islandTimeout.current = setTimeout(() => collapseIsland(), 3450);
+    islandAllTimeouts.current.push(t1, t2);
+  }, [clearAllIslandTimeouts, collapseIsland]);
 
   useEffect(() => {
     (window as any).addNotification = addNotification;
     return () => { delete (window as any).addNotification; };
   }, [addNotification]);
 
+  // Fix #2: reset island completely on logout
   useEffect(() => {
-    const h = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (!t.closest('.notif-dropdown') && !t.closest('.notif-btn')) setShowNotifications(false);
+    if (!isAuthenticated) {
+      clearAllIslandTimeouts();
+      setIslandFullExpand(false);
+      setIslandExpanded(false);
+      setIslandActive(false);
+      setIslandPillRadius(false);
+      setIslandNotif(null);
+    }
+  }, [isAuthenticated]);
+
+  // When user manually full-expands: cancel auto-collapse, start 5s hold then collapse sequence
+  useEffect(() => {
+    if (!islandFullExpand) return;
+    // Cancel the pill auto-collapse that was running
+    if (islandTimeout.current) { clearTimeout(islandTimeout.current); islandTimeout.current = null; }
+    // After 5s: collapse fullExpand → pill → blob → gone
+    fullExpandTimeout.current = setTimeout(() => {
+      setIslandFullExpand(false);                        // snap back to pill
+      islandTimeout.current = setTimeout(() => collapseIsland(), 1000); // then collapse pill after 1s
+    }, 5000);
+    return () => {
+      if (fullExpandTimeout.current) clearTimeout(fullExpandTimeout.current);
     };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
+  }, [islandFullExpand]);
+
+  // Collapse full-expand when clicking outside the island
+  useEffect(() => {
+    if (!islandFullExpand) return;
+    const handler = (e: MouseEvent) => {
+      if (islandRef.current && !islandRef.current.contains(e.target as Node)) {
+        setIslandFullExpand(false);
+        // Resume normal pill collapse after outside click
+        if (fullExpandTimeout.current) { clearTimeout(fullExpandTimeout.current); fullExpandTimeout.current = null; }
+        islandTimeout.current = setTimeout(() => collapseIsland(), 1500);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [islandFullExpand]);
+
+  // Real-time unread count from Firestore
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    const unsub = notificationService.subscribeToNotifications(user.id, notifs => {
+      setUnreadCount(notifs.filter(n => !n.isRead).length);
+    });
+    return () => unsub();
+  }, [isAuthenticated, user?.id]);
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -576,10 +626,10 @@ const Navigation = () => {
       >
         {/* Left side: Bell + Date */}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Bell — moved to left */}
+          {/* Bell */}
           {isAuthenticated && (
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowNotifications(v => !v)} className="notif-btn" style={{
+              <button onClick={() => navigate('/notifications')} className="notif-btn" style={{
                 width: 38, height: 38, borderRadius: 12,
                 background: 'transparent', border: '1px solid transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -589,16 +639,21 @@ const Navigation = () => {
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent'; }}
               >
                 <Bell size={16} color={darkMode ? '#64748b' : '#9ca3af'}/>
-                {notifications.length > 0 && (
-                  <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: gradient }} />
+                {unreadCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 6, right: 6,
+                    minWidth: 16, height: 16, borderRadius: 99,
+                    background: gradient,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 800, color: '#fff',
+                    padding: '0 3px',
+                    boxShadow: `0 0 0 2px ${darkMode ? 'rgba(13,16,23,1)' : '#ffffff'}`,
+                    lineHeight: 1,
+                  }}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
                 )}
               </button>
-              {showNotifications && (
-                <NotifDropdown darkMode={darkMode} pRgb={pRgb}
-                  notifications={notifications} onClear={() => setNotifications([])}
-                  onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
-                />
-              )}
             </div>
           )}
           {/* Date */}
@@ -695,7 +750,7 @@ const Navigation = () => {
       >
         {/* Hamburger + Search */}
         {isAuthenticated ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: islandActive ? 0 : 1, transition: 'opacity 0.25s ease', pointerEvents: islandActive ? 'none' : 'auto' }}>
             <button onClick={toggleSidebarClick} style={{
               width: 38, height: 38, borderRadius: 10,
               background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
@@ -717,7 +772,7 @@ const Navigation = () => {
         ) : <div style={{ width: 38 }} />}
 
         {/* Logo center */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: islandActive ? 0 : 1, transition: 'opacity 0.2s ease', pointerEvents: islandActive ? 'none' : 'auto' }}>
           <div style={{ width: 30, height: 30, borderRadius: 9, background: gradient, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <GraduationCap size={14} color="#fff" strokeWidth={2.5}/>
           </div>
@@ -726,26 +781,29 @@ const Navigation = () => {
 
         {/* Right actions */}
         {isAuthenticated ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowNotifications(v => !v)} className="notif-btn" style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-                border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative',
-              }}>
-                <Bell size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
-                {notifications.length > 0 && <span style={{ position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: '50%', background: gradient }} />}
-              </button>
-              {showNotifications && (
-                <div style={{ position: 'fixed', top: 68, right: 12, zIndex: 200 }}>
-                  <NotifDropdown darkMode={darkMode} pRgb={pRgb}
-                    notifications={notifications} onClear={() => setNotifications([])}
-                    onRemove={id => setNotifications(p => p.filter(n => n.id !== id))}
-                  />
-                </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: islandActive ? 0 : 1, transition: 'opacity 0.25s ease', pointerEvents: islandActive ? 'none' : 'auto' }}>
+            <button onClick={() => navigate('/notifications')} style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+              border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative',
+            }}>
+              <Bell size={15} color={darkMode ? '#94a3b8' : '#6b7280'}/>
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: 5, right: 5,
+                  minWidth: 16, height: 16, borderRadius: 99,
+                  background: gradient,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9, fontWeight: 800, color: '#fff',
+                  padding: '0 3px',
+                  boxShadow: `0 0 0 2px ${darkMode ? 'rgba(13,16,23,1)' : '#ffffff'}`,
+                  lineHeight: 1,
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
               )}
-            </div>
+            </button>
             <button onClick={() => setShowProfile(true)} style={{
               width: 32, height: 32, borderRadius: '50%',
               background: gradient, color: '#fff',
@@ -757,6 +815,82 @@ const Navigation = () => {
           </div>
         ) : <div style={{ width: 38 }} />}
       </header>
+
+      {/* Dynamic Island — fixed floating overlay, never affects layout */}
+      {islandNotif && (
+        <div className="lg:hidden" ref={islandRef}
+          onClick={() => {
+            if (!islandExpanded) return;
+            if (islandFullExpand) {
+              if (fullExpandTimeout.current) { clearTimeout(fullExpandTimeout.current); fullExpandTimeout.current = null; }
+              setIslandFullExpand(false);
+              islandTimeout.current = setTimeout(() => collapseIsland(), 1500);
+            } else {
+              setIslandPillRadius(false);
+              setIslandFullExpand(true);
+            }
+          }}
+          style={{
+            position: 'fixed',
+            top: 10,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: islandFullExpand ? 'calc(100vw - 28px)' : islandExpanded ? 'calc(100vw - 28px)' : '44px',
+            height: islandFullExpand ? 110 : 44,
+            borderRadius: islandPillRadius ? 999 : 20,
+            background: darkMode ? '#0d1017' : '#111827',
+            border: `1.5px solid ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.45)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.45)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.45)' : `rgba(${pRgb},0.45)`}`,
+            boxShadow: `0 ${islandFullExpand ? 16 : 4}px ${islandFullExpand ? 48 : 24}px ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.22)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.22)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.22)' : `rgba(${pRgb},0.22)`}`,
+            overflow: 'hidden', cursor: 'pointer',
+            zIndex: 150,
+            opacity: islandActive ? 1 : 0,
+            transition: 'width 1s cubic-bezier(0.16,1,0.3,1), height 0.5s cubic-bezier(0.16,1,0.3,1), opacity 0.4s ease',
+          }}
+        >
+          {/* Pill row — always rendered, fades out when full expanded */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: 44,
+            display: 'flex', alignItems: 'center', padding: '0 14px', gap: 8,
+            opacity: islandFullExpand ? 0 : islandExpanded ? 1 : 0,
+            transition: 'opacity 0.2s ease',
+            pointerEvents: islandFullExpand ? 'none' : 'auto',
+          }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+              background: islandNotif.type === 'success' ? '#22c55e' : islandNotif.type === 'error' ? '#ef4444' : islandNotif.type === 'warning' ? '#f59e0b' : `rgb(${pRgb})`,
+              boxShadow: `0 0 6px ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.7)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.7)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.7)' : `rgba(${pRgb},0.7)`}`,
+            }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+              {islandNotif.message}
+            </span>
+          </div>
+
+          {/* Expanded card — always rendered, fades in when full expanded */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            padding: '16px 18px',
+            opacity: islandFullExpand ? 1 : 0,
+            transition: 'opacity 0.25s ease',
+            pointerEvents: islandFullExpand ? 'auto' : 'none',
+            display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+                background: islandNotif.type === 'success' ? '#22c55e' : islandNotif.type === 'error' ? '#ef4444' : islandNotif.type === 'warning' ? '#f59e0b' : `rgb(${pRgb})`,
+                boxShadow: `0 0 8px ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.8)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.8)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.8)' : `rgba(${pRgb},0.8)`}`,
+              }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {islandNotif.type === 'success' ? 'Success' : islandNotif.type === 'error' ? 'Error' : islandNotif.type === 'warning' ? 'Warning' : 'Notification'}
+              </span>
+            </div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: 0, lineHeight: 1.4 }}>
+              {islandNotif.message}
+            </p>
+            <p style={{ fontSize: 11, color: '#475569', margin: 0 }}>Tap to collapse</p>
+          </div>
+        </div>
+      )}
 
       {/* Search Modal */}
       {showMobileSearch && (
@@ -808,11 +942,6 @@ const Navigation = () => {
       <style>{`
         nav::-webkit-scrollbar { display: none; }
         @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
-        @keyframes notif-in {
-          from { opacity:0; transform:translateY(-6px) scale(0.97) }
-          to   { opacity:1; transform:translateY(0) scale(1) }
-        }
-        .notif-dropdown { animation: notif-in 0.18s cubic-bezier(0.34,1.2,0.64,1) forwards; }
       `}</style>
     </>
   );
