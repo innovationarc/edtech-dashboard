@@ -362,7 +362,7 @@ const DashboardLayout = () => {
     <div
       className="flex h-screen overflow-hidden"
       style={{
-        background: 'var(--color-background, #0d1117)',
+        backgroundColor: 'var(--color-background, #0d1117)',
         ...activeGlitter,
       }}
     >
@@ -379,8 +379,8 @@ const DashboardLayout = () => {
         so it overlays content — no layout shift needed.
         Mobile: ml-0, pt-[60px] for the fixed mobile header.
       */}
-      <div className={`flex-1 flex flex-col ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`}>
-        <main className="dl-main flex-1 overflow-auto" style={{ paddingTop: isMobile ? 60 : 64 }}>
+      <div className={`flex-1 flex flex-col ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`} style={{ background: 'transparent' }}>
+        <main className="dl-main flex-1 overflow-auto" style={{ paddingTop: isMobile ? 60 : 64, background: 'transparent' }}>
           <div className="p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8">
             <Outlet />
           </div>
