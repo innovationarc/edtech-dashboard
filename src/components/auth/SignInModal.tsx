@@ -318,8 +318,8 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   return (
     <div data-sin="" className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] overflow-y-auto">
       <style>{SIGN_IN_STYLES}</style>
-      <div className="flex justify-center min-h-full p-3 sm:p-4 md:p-6 items-start">
-      <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-[400px] sm:max-w-md md:max-w-lg border border-gray-700/50 relative overflow-hidden mt-0">
+      <div className="flex justify-center min-h-full p-3 sm:p-4 md:p-6 items-start" style={{paddingTop: '12px'}}>
+      <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-[400px] sm:max-w-md md:max-w-lg border border-gray-700/50 relative overflow-hidden mt-4 sm:mt-6 md:mt-0">
         {/* Animated background effects */}
         <div className="absolute inset-0 pointer-events-none" style={{background: 'linear-gradient(to bottom right, rgba(99,102,241,0.05), rgba(168,85,247,0.05), rgba(37,99,235,0.05))'}}></div>
         <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{background: 'rgba(99,102,241,0.1)'}}></div>
@@ -333,7 +333,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                 <Lock size={16} className="sm:w-[18px] sm:h-[18px] md:w-5 md:h-5" style={{color: C.white}} />
               </div>
               <div>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-300">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold" style={{background: `linear-gradient(to right, ${C.primary300}, ${C.purple400})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'}}>
                   Welcome Back
                 </h2>
                 <p className="text-[10px] sm:text-xs mt-0.5" style={{color: C.gray400}}>Sign in to continue</p>
@@ -503,7 +503,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                 <div className="w-full border-t border-gray-700/50"></div>
               </div>
               <div className="relative flex justify-center text-[10px] md:text-xs">
-                <span className="px-2.5 md:px-4 bg-gray-900 font-medium" style={{color: C.gray500}}>New to our platform?</span>
+                <span className="px-2.5 md:px-4 font-medium" style={{color: C.gray300, background: 'transparent'}}>New to our platform?</span>
               </div>
             </div>
 
