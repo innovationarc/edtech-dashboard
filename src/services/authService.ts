@@ -220,6 +220,13 @@ const generateDeviceId = (): string => {
   return 'device_' + Math.abs(hash).toString(36);
 };
 
+// NEW: Generate a unique session token for single-device enforcement
+const generateSessionToken = (): string => {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
 // Helper function to get client IP
 async function getClientIp(): Promise<string> {
   try {
@@ -406,6 +413,7 @@ export const authService = {
    * Sign in user
    * Supports sign-in with User ID only (normalized to uppercase)
    * ENHANCED with: formatted input, masked errors, remember me, passive multi-device, reCAPTCHA
+   * ENHANCED: single-device session enforcement via activeSessionToken
    */
   async signIn(userId: string, password: string, rememberMe: boolean = false): Promise<UserProfile> {
     try {
@@ -458,20 +466,24 @@ export const authService = {
       const currentDeviceId = generateDeviceId();
       const clientIp = await getClientIp();
 
+      // NEW: Generate unique session token for single-device enforcement
+      const sessionToken = generateSessionToken();
+
       // NEW: Handle multi-device session (PASSIVE - runs after login succeeds)
       handleMultiDeviceSession(user.uid, currentDeviceId, clientIp).catch(() => {
         // Fail silently - never block login
       });
 
-      // EXISTING: Update last login info
+      // EXISTING + NEW: Update last login info AND activeSessionToken atomically
+      // Writing activeSessionToken triggers onSnapshot on other devices → forces them out
       await updateDoc(doc(db, 'users', user.uid), {
         lastLogin: Timestamp.now(),
         deviceId: currentDeviceId,
-        lastLoginIp: clientIp
+        lastLoginIp: clientIp,
+        activeSessionToken: sessionToken  // NEW: single-device enforcement token
       });
       
       // AUTO-EXPIRE CHECK: Run expired admin check in background (non-blocking)
-      // Import adminService at the top of the file if not already imported
       import('./adminService').then(({ adminService }) => {
         adminService.autoCheckExpiredAdmins().catch(error => {
           console.warn('⚠️ Auto-expire check failed:', error);
@@ -480,7 +492,14 @@ export const authService = {
         console.warn('⚠️ Could not load adminService for auto-expire check');
       });
       
-      // NEW: Store remember me preference if enabled (ADDITIONAL, not replacing)
+      // NEW: Always store session token locally for single-device check
+      try {
+        localStorage.setItem('auth_session_token', sessionToken);
+      } catch {
+        // Fail silently if localStorage not available
+      }
+
+      // EXISTING: Store remember me preference if enabled
       if (rememberMe) {
         try {
           localStorage.setItem('auth_remember_me', 'true');
@@ -845,22 +864,24 @@ export const authService = {
 
   /**
    * Sign out current user and clear device ID
-   * ENHANCED: Also clears remember me data
+   * ENHANCED: Also clears remember me data and session token
    */
   async signOut(): Promise<void> {
     try {
-      // EXISTING: Clear device ID on sign out
+      // EXISTING: Clear device ID and session token on sign out
       const user = auth.currentUser;
       if (user) {
         await updateDoc(doc(db, 'users', user.uid), {
-          deviceId: null
+          deviceId: null,
+          activeSessionToken: null  // NEW: clear session token on sign out
         });
       }
       
-      // NEW: Clear remember me data
+      // NEW + EXISTING: Clear all auth-related localStorage items
       try {
         localStorage.removeItem('auth_remember_me');
         localStorage.removeItem('auth_user_id');
+        localStorage.removeItem('auth_session_token');  // NEW
       } catch {
         // Fail silently if localStorage not available
       }
