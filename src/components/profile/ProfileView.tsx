@@ -1,701 +1,716 @@
-// src/components/profile/ProfileView.tsx
-import { User, Mail, Phone, MapPin, GraduationCap, Building, Calendar, Users, Droplet, Shield, FileText, CreditCard, Award, Edit, Lock } from 'lucide-react';
+// src/components/profile/ProfileView.tsx — v3 Matte Crystal Sparkle Design
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { UserProfile } from '../../services/authService';
+import { useDashboard } from '../../contexts/DashboardContext';
 import QRCode from 'qrcode';
-import { useEffect, useState } from 'react';
+import {
+  User, Mail, Phone, MapPin, GraduationCap, Building,
+  Calendar, Users, Droplet, Shield, FileText, CreditCard,
+  Edit, Lock, X, Clock, CheckSquare, BarChart2, Award,
+  BookOpen, Flame, Zap
+} from 'lucide-react';
 
 interface ProfileViewProps {
   user: UserProfile;
   onEdit: () => void;
   onChangePassword: () => void;
+  onClose?: () => void;
 }
 
-const ProfileView = ({ user, onEdit, onChangePassword }: ProfileViewProps) => {
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+/* ─── tiny helpers ─── */
+const hexRgb = (hex = '#6366f1') => {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `${r},${g},${b}`;
+};
+
+const NOISE = `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;
+
+const SPARK_COLORS = ['#a5b4fc', '#c4b5fd', '#fbcfe8', '#fde68a', '#6ee7b7', 'rgba(255,255,255,0.9)'];
+
+/* ─── Sparkle hook ─── */
+function useSparkle() {
+  return useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const el = e.currentTarget;
+    const layer = document.createElement('div');
+    layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:30;overflow:hidden;border-radius:inherit';
+    el.appendChild(layer);
+    for (let i = 0; i < 12; i++) {
+      const sp = document.createElement('div');
+      const size = 2 + Math.random() * 4;
+      const x = 5 + Math.random() * 90;
+      const y = 5 + Math.random() * 90;
+      const dx = `${(Math.random() - 0.5) * 40}px`;
+      const dy = `${-(10 + Math.random() * 30)}px`;
+      const color = SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)];
+      const delay = Math.random() * 0.25;
+      sp.style.cssText = `
+        position:absolute;border-radius:50%;
+        width:${size}px;height:${size}px;
+        left:${x}%;top:${y}%;
+        background:${color};
+        box-shadow:0 0 ${size * 2}px ${color};
+        animation:spPop 0.75s ${delay}s ease-out forwards;
+        --dx:${dx};--dy:${dy};
+      `;
+      layer.appendChild(sp);
+    }
+    setTimeout(() => layer.remove(), 1100);
+  }, []);
+}
+
+/* ─── Glass card wrapper ─── */
+const GlassCard = ({
+  children, style, className = '', onMouseEnter,
+}: { children: React.ReactNode; style?: React.CSSProperties; className?: string; onMouseEnter?: React.MouseEventHandler<HTMLDivElement> }) => (
+  <div
+    className={className}
+    onMouseEnter={onMouseEnter}
+    style={{
+      position: 'relative', isolation: 'isolate', overflow: 'hidden',
+      background: 'rgba(22,26,40,0.82)',
+      backdropFilter: 'blur(32px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(32px) saturate(180%)',
+      border: '1px solid rgba(255,255,255,0.09)',
+      boxShadow: '0 8px 40px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.08)',
+      borderRadius: 24,
+      fontFamily: "'Outfit',sans-serif",
+      ...style,
+    }}
+  >
+    {/* Top shimmer edge */}
+    <div style={{
+      position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+      borderRadius: '24px 24px 0 0', pointerEvents: 'none', zIndex: 20,
+      background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.15)30%,rgba(255,255,255,0.32)50%,rgba(255,255,255,0.15)70%,transparent)',
+    }} />
+    {/* Noise texture */}
+    <div style={{
+      position: 'absolute', inset: 0, borderRadius: 'inherit',
+      pointerEvents: 'none', zIndex: 1,
+      background: NOISE, opacity: 0.04, mixBlendMode: 'overlay',
+    }} />
+    {children}
+  </div>
+);
+
+/* ─── Info Row ─── */
+const InfoRow = ({
+  icon: Icon, label, value, accent = 'rgba(99,102,241,0.14)',
+}: { icon: React.ElementType; label: string; value?: string; accent?: string }) => {
+  if (!value) return null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)',
+      position: 'relative', zIndex: 4,
+    }}>
+      <div style={{
+        width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+        background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={13} color="#94a3b8" />
+      </div>
+      <div>
+        <div style={{ fontSize: 9.5, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: '#cbd5e1' }}>{value}</div>
+      </div>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════ */
+const ProfileView = ({ user, onEdit, onChangePassword, onClose }: ProfileViewProps) => {
+  const { primaryColor = '#6366f1' } = useDashboard();
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [profileCompletion, setProfileCompletion] = useState(0);
+  const spawnSparkle = useSparkle();
+  const pRgb = hexRgb(primaryColor);
+  const gradient = `linear-gradient(135deg,${primaryColor},#8b5cf6)`;
 
+  /* QR code */
   useEffect(() => {
-    // Generate QR Code for profile verification
-    const generateQRCode = async () => {
-      try {
-        const verificationUrl = `${window.location.origin}/verify-profile?uid=${user.uid}`;
-        const qrUrl = await QRCode.toDataURL(verificationUrl, {
-          width: 300,
-          margin: 1,
-          color: {
-            dark: '#1a1a1a',
-            light: '#ffffff'
-          }
-        });
-        setQrCodeUrl(qrUrl);
-      } catch (error) {
-        console.error('Error generating QR code:', error);
-      }
-    };
-
-    generateQRCode();
+    QRCode.toDataURL(`${window.location.origin}/verify-profile?uid=${user.uid}`, {
+      width: 300, margin: 1, color: { dark: '#1a1a1a', light: '#ffffff' },
+    }).then(setQrCodeUrl).catch(console.error);
   }, [user.uid]);
 
+  /* Profile completion */
   useEffect(() => {
-    // Calculate profile completion percentage
-    const calculateCompletion = () => {
-      const fields = [
-        user.name,
-        user.surname,
-        user.email,
-        user.phoneNumber,
-        user.address,
-        user.dob,
-        user.gender,
-        user.bloodGroup,
-        user.religion,
-        user.profilePictureUrl,
-        user.class,
-        user.school,
-        user.college,
-        user.mobileNumber,
-        user.guardianPhone,
-        user.classGrade
-      ];
-
-      const filledFields = fields.filter(field => field && field.toString().trim() !== '').length;
-      const percentage = Math.round((filledFields / fields.length) * 100);
-      setProfileCompletion(percentage);
-    };
-
-    calculateCompletion();
+    const fields = [
+      user.name, user.surname, user.email, user.phoneNumber,
+      user.address, user.dob, user.gender, user.bloodGroup,
+      user.religion, user.profilePictureUrl, user.class,
+      user.school, user.college, user.mobileNumber,
+      user.guardianPhone, user.classGrade,
+    ];
+    const pct = Math.round(fields.filter(f => f && String(f).trim()).length / fields.length * 100);
+    setProfileCompletion(pct);
   }, [user]);
 
-  const handlePrintProfile = () => {
-    window.print();
-  };
+  const handlePrintProfile = () => window.print();
 
   const handlePrintIDCard = () => {
-    const printWindow = window.open('', '', 'width=1000,height=700');
-    if (!printWindow) return;
-
-    const idCardHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>ID Card - ${user.surname} ${user.name}</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          
-          @page {
-            size: 85.6mm 53.98mm landscape;
-            margin: 0;
-          }
-          
-          body {
-            font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: #f3f4f6;
-            padding: 20px;
-          }
-          
-          .id-card {
-            width: 85.6mm;
-            height: 53.98mm;
-            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #2563eb 100%);
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            position: relative;
-          }
-          
-          .pattern-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-image: 
-              radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-              radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-              repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255, 255, 255, 0.02) 10px, rgba(255, 255, 255, 0.02) 20px);
-            pointer-events: none;
-          }
-          
-          .id-card-inner {
-            padding: 14px;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            z-index: 1;
-          }
-          
-          .id-header {
-            text-align: center;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1.5px solid rgba(255,255,255,0.25);
-          }
-          
-          .org-name {
-            font-size: 11px;
-            font-weight: 700;
-            color: white;
-            margin-bottom: 1px;
-            letter-spacing: 0.8px;
-            text-transform: uppercase;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          }
-          
-          .card-title {
-            font-size: 7px;
-            color: rgba(255,255,255,0.85);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.2px;
-          }
-          
-          .id-content {
-            display: flex;
-            gap: 12px;
-            flex: 1;
-          }
-          
-          .photo-section {
-            width: 68px;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-          }
-          
-          .photo-container {
-            width: 68px;
-            height: 85px;
-            border-radius: 6px;
-            overflow: hidden;
-            border: 2.5px solid white;
-            background: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-          }
-          
-          .photo-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          }
-          
-          .photo-placeholder {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 34px;
-            font-weight: 700;
-            color: #1e40af;
-            background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-          }
-          
-          .qr-code {
-            width: 68px;
-            height: 68px;
-            background: white;
-            border-radius: 4px;
-            padding: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-          }
-          
-          .qr-code img {
-            width: 100%;
-            height: 100%;
-          }
-          
-          .details-section {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding-left: 2px;
-          }
-          
-          .user-name {
-            font-size: 13px;
-            font-weight: 700;
-            color: white;
-            margin-bottom: 6px;
-            line-height: 1.2;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          }
-          
-          .detail-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 3.5px;
-            font-size: 8.5px;
-          }
-          
-          .detail-label {
-            color: rgba(255,255,255,0.75);
-            font-weight: 600;
-            min-width: 52px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-size: 7.5px;
-          }
-          
-          .detail-value {
-            color: white;
-            font-weight: 700;
-            font-size: 9px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-          }
-          
-          .id-footer {
-            text-align: center;
-            margin-top: auto;
-            padding-top: 7px;
-            border-top: 1.5px solid rgba(255,255,255,0.25);
-          }
-          
-          .validity {
-            font-size: 6.5px;
-            color: rgba(255,255,255,0.85);
-            font-weight: 600;
-            letter-spacing: 0.3px;
-          }
-          
-          @media print {
-            @page {
-              size: 85.6mm 53.98mm landscape;
-              margin: 0;
-            }
-            
-            body {
-              background: white;
-              padding: 0;
-              margin: 0;
-            }
-            
-            .id-card {
-              box-shadow: none;
-              margin: 0;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="id-card">
-          <div class="pattern-overlay"></div>
-          <div class="id-card-inner">
-            <div class="id-header">
-              <div class="org-name">Learning Management Portal</div>
-              <div class="card-title">Official ${user.role === 'student' ? 'Student' : user.role === 'teacher' ? 'Teacher' : 'Staff'} ID Card</div>
-            </div>
-            
-            <div class="id-content">
-              <div class="photo-section">
-                <div class="photo-container">
-                  ${user.profilePictureUrl ? 
-                    `<img src="${user.profilePictureUrl}" alt="Profile" />` :
-                    `<div class="photo-placeholder">${user.name?.charAt(0) || user.surname?.charAt(0)}</div>`
-                  }
-                </div>
-                <div class="qr-code">
-                  <img src="${qrCodeUrl}" alt="QR Code" />
-                </div>
-              </div>
-              
-              <div class="details-section">
-                <div class="user-name">${user.surname} ${user.name}</div>
-                
-                <div class="detail-row">
-                  <div class="detail-label">ID:</div>
-                  <div class="detail-value">${user.userId}</div>
-                </div>
-                
-                <div class="detail-row">
-                  <div class="detail-label">Role:</div>
-                  <div class="detail-value">${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</div>
-                </div>
-                
-                ${user.phoneNumber ? `
-                <div class="detail-row">
-                  <div class="detail-label">Mobile:</div>
-                  <div class="detail-value">+880${user.phoneNumber}</div>
-                </div>
-                ` : ''}
-                
-                ${user.bloodGroup ? `
-                <div class="detail-row">
-                  <div class="detail-label">Blood:</div>
-                  <div class="detail-value">${user.bloodGroup}</div>
-                </div>
-                ` : ''}
-                
-                ${user.role === 'student' && user.classGrade ? `
-                <div class="detail-row">
-                  <div class="detail-label">Class:</div>
-                  <div class="detail-value">${user.classGrade.replace('class', 'Class ').toUpperCase()}</div>
-                </div>
-                ` : ''}
-              </div>
-            </div>
-            
-            <div class="id-footer">
-              <div class="validity">Valid Until: ${new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
-            </div>
-          </div>
-        </div>
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 800);
-          };
-          
-          window.onafterprint = function() {
-            setTimeout(function() {
-              window.close();
-            }, 100);
-          };
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(idCardHTML);
-    printWindow.document.close();
+    const w = window.open('', '', 'width=1000,height=700');
+    if (!w) return;
+    const html = `<!DOCTYPE html><html><head><title>ID Card</title>
+    <style>*{margin:0;padding:0;box-sizing:border-box}
+    @page{size:85.6mm 53.98mm landscape;margin:0}
+    body{font-family:'Inter',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f3f4f6;padding:20px}
+    .card{width:85.6mm;height:53.98mm;background:linear-gradient(135deg,#312e81,#4f46e5,#7c3aed);border-radius:8px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);position:relative;display:flex;flex-direction:column}
+    .inner{padding:8px 10px;display:flex;flex-direction:column;height:100%}
+    .hd{font-size:7px;color:rgba(255,255,255,.8);font-weight:700;margin-bottom:2px}
+    .body{display:flex;gap:8px;flex:1;align-items:center}
+    .photo{width:38px;height:38px;border-radius:6px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;overflow:hidden;flex-shrink:0}
+    .photo img{width:100%;height:100%;object-fit:cover}
+    .det{flex:1}
+    .name{font-size:9px;font-weight:800;color:#fff;margin-bottom:3px}
+    .row{font-size:7px;color:rgba(255,255,255,.75);margin-bottom:1px}
+    .ft{font-size:6px;color:rgba(255,255,255,.5);margin-top:auto}
+    </style></head><body>
+    <div class="card"><div class="inner">
+    <div class="hd">Learning Management Portal — Official ${user.role?.toUpperCase()} ID</div>
+    <div class="body">
+    <div class="photo">${user.profilePictureUrl ? `<img src="${user.profilePictureUrl}"/>` : (user.name?.charAt(0) || 'U')}</div>
+    <div class="det">
+    <div class="name">${user.surname || ''} ${user.name || ''}</div>
+    <div class="row">ID: ${user.userId || ''}</div>
+    ${user.phoneNumber ? `<div class="row">Mobile: +880${user.phoneNumber}</div>` : ''}
+    ${user.bloodGroup ? `<div class="row">Blood: ${user.bloodGroup}</div>` : ''}
+    ${user.classGrade ? `<div class="row">Class: ${user.classGrade}</div>` : ''}
+    ${qrCodeUrl ? `<img src="${qrCodeUrl}" style="width:32px;height:32px;margin-top:3px"/>` : ''}
+    </div></div>
+    <div class="ft">Valid Until: ${new Date(Date.now() + 365 * 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+    </div></div>
+    <script>window.onload=()=>{setTimeout(()=>window.print(),600)};window.onafterprint=()=>setTimeout(()=>window.close(),100)</script>
+    </body></html>`;
+    w.document.write(html);
+    w.document.close();
   };
 
-  const getRoleBadgeColors = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-gradient-to-r from-red-600 to-red-700';
-      case 'manager':
-        return 'bg-gradient-to-r from-blue-600 to-blue-700';
-      case 'coordinator':
-        return 'bg-gradient-to-r from-yellow-600 to-yellow-700';
-      case 'teacher':
-        return 'bg-gradient-to-r from-green-600 to-green-700';
-      case 'parent':
-        return 'bg-gradient-to-r from-purple-600 to-purple-700';
-      case 'student':
-        return 'bg-gradient-to-r from-cyan-600 to-cyan-700';
-      default:
-        return 'bg-gradient-to-r from-gray-600 to-gray-700';
-    }
+  const getRoleBadgeColor = (role: string) => {
+    const map: Record<string, string> = {
+      admin: '#ef4444', manager: '#3b82f6', coordinator: '#f59e0b',
+      teacher: '#10b981', parent: '#8b5cf6', student: primaryColor,
+    };
+    return map[role] || '#6b7280';
   };
 
-  const InfoRow = ({ icon: Icon, label, value }: { icon: any; label: string; value?: string }) => {
-    if (!value) return null;
-    
-    return (
-      <div className="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0">
-        <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-indigo-50 to-purple-50 flex items-center justify-center flex-shrink-0">
-          <Icon size={16} className="text-indigo-600" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-gray-500 mb-0.5" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>{label}</p>
-          <p className="text-sm text-gray-900 font-semibold break-words" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>{value}</p>
-        </div>
-      </div>
-    );
-  };
+  /* ── Hover tilt handler ── */
+  const makeTiltHandlers = () => ({
+    onMouseMove: (e: React.MouseEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      const r = el.getBoundingClientRect();
+      const x = e.clientX - r.left, y = e.clientY - r.top;
+      const rx = ((y - r.height / 2) / r.height) * -10;
+      const ry = ((x - r.width / 2) / r.width) * 10;
+      el.style.transform = `perspective(800px) rotateX(${rx}deg) rotateY(${ry}deg) translateZ(6px) scale(1.02)`;
+      el.style.boxShadow = '0 20px 48px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,255,255,0.10)';
+      el.style.borderColor = 'rgba(255,255,255,0.14)';
+    },
+    onMouseLeave: (e: React.MouseEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      el.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)';
+      el.style.boxShadow = '0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)';
+      el.style.borderColor = 'rgba(255,255,255,0.08)';
+    },
+  });
+
+  const tilt = makeTiltHandlers();
 
   return (
-    <div className="space-y-6">
-      {/* Print Styles */}
+    <>
+      {/* ── Keyframes injected once ── */}
       <style>{`
+        @keyframes spPop {
+          0%   { transform: scale(0) translate(0,0); opacity: 1; }
+          60%  { opacity: 0.8; }
+          100% { transform: scale(0) translate(var(--dx),var(--dy)); opacity: 0; }
+        }
+        @keyframes avSpin   { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
+        @keyframes avPulse  { 0%,100% { opacity:.5;transform:scale(1) } 50% { opacity:.9;transform:scale(1.1) } }
+        @keyframes lvSweep  { 0% { transform:translateX(-100%) } 100% { transform:translateX(100%) } }
+        @keyframes fpRise   { 0% { transform:translateY(0) scale(1);opacity:.9 } 100% { transform:translateY(-220px) scale(.2);opacity:0 } }
+        @keyframes sdPulse  { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.7;transform:scale(1.2)} }
+        @keyframes btnSweep { 0% { transform:translateX(-120%) } 100% { transform:translateX(120%) } }
+        .pv-btn-sweep::after {
+          content:''; position:absolute; inset:0; border-radius:12px;
+          background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,0.18)50%,transparent 70%);
+          animation:none; pointer-events:none;
+        }
+        .pv-btn-sweep:hover::after { animation:btnSweep 0.5s ease forwards; }
+        .pv-card-sweep::after {
+          content:''; position:absolute; inset:0; border-radius:inherit;
+          background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,0.06)50%,transparent 65%);
+          transform:translateX(-100%); transition:transform 0.55s ease;
+          pointer-events:none; z-index:3;
+        }
+        .pv-card-sweep:hover::after { transform:translateX(100%); }
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          #printable-profile,
-          #printable-profile * {
-            visibility: visible;
-          }
-          #printable-profile {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            background: white !important;
-            padding: 20px;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .print-profile-card {
-            background: white !important;
-            box-shadow: none !important;
-          }
+          body * { visibility:hidden }
+          #pv-printable, #pv-printable * { visibility:visible }
+          #pv-printable { position:absolute;left:0;top:0;width:100%;background:white!important;padding:20px }
+          .no-print { display:none!important }
         }
       `}</style>
 
-      {/* Profile Card */}
-      <div id="printable-profile" className="print-profile-card bg-white rounded-2xl overflow-hidden shadow-lg border border-gray-200">
-        {/* Professional Header with Fixed Background */}
-        <div className="relative h-48 bg-gray-900 overflow-hidden">
-          {/* Modern Geometric Pattern Background */}
-          <div className="absolute inset-0 opacity-30">
-            <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(99, 102, 241, 0.3)" strokeWidth="1"/>
-                </pattern>
-                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style={{ stopColor: '#4f46e5', stopOpacity: 1 }} />
-                  <stop offset="50%" style={{ stopColor: '#7c3aed', stopOpacity: 1 }} />
-                  <stop offset="100%" style={{ stopColor: '#4f46e5', stopOpacity: 1 }} />
-                </linearGradient>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grad1)" />
-              <rect width="100%" height="100%" fill="url(#grid)" />
-              <circle cx="10%" cy="20%" r="60" fill="rgba(139, 92, 246, 0.3)" />
-              <circle cx="90%" cy="80%" r="80" fill="rgba(99, 102, 241, 0.3)" />
-              <circle cx="50%" cy="50%" r="100" fill="rgba(167, 139, 250, 0.2)" />
-            </svg>
-          </div>
-          
-          {/* Profile Completion Badge */}
-          <div className="no-print absolute top-4 right-4">
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-lg">
-              <div className="flex items-center gap-3">
-                <div className="relative h-14 w-14">
-                  <svg className="transform -rotate-90" width="56" height="56">
-                    <circle
-                      cx="28"
-                      cy="28"
-                      r="24"
-                      stroke="#e5e7eb"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <circle
-                      cx="28"
-                      cy="28"
-                      r="24"
-                      stroke={profileCompletion >= 80 ? '#10b981' : profileCompletion >= 60 ? '#3b82f6' : profileCompletion >= 40 ? '#f59e0b' : '#ef4444'}
-                      strokeWidth="4"
-                      fill="none"
-                      strokeDasharray={`${2 * Math.PI * 24}`}
-                      strokeDashoffset={`${2 * Math.PI * 24 * (1 - profileCompletion / 100)}`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-sm font-bold text-gray-900" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>{profileCompletion}%</span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-600" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Profile</p>
-                  <p className="text-xs font-bold text-gray-900" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Completion</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div id="pv-printable" style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: "'Outfit',sans-serif" }}>
 
-        {/* Profile Content */}
-        <div className="relative px-6 sm:px-8 pb-8">
-          {/* Profile Picture and Name */}
-          <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6 -mt-20 mb-6">
-            <div className="relative group">
-              <div className="h-32 w-32 rounded-2xl overflow-hidden bg-white shadow-xl ring-4 ring-white">
+        {/* ══════════════════════════════════════
+            BANNER CARD
+        ══════════════════════════════════════ */}
+        <GlassCard>
+          {/* ── Hero gradient ── */}
+          <div style={{ position: 'relative', height: 190, overflow: 'hidden', borderRadius: '24px 24px 0 0' }}>
+            {/* Base gradient */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `linear-gradient(135deg,#312e81 0%,${primaryColor} 35%,#7c3aed 65%,#9333ea 100%)`,
+            }} />
+            {/* Orbs */}
+            {[
+              { w: 260, h: 260, t: -80, l: -50, bg: `rgba(${pRgb},0.6)` },
+              { w: 300, h: 300, t: -100, r: -80, bg: 'rgba(139,92,246,0.5)' },
+              { w: 220, h: 220, b: -100, l: '35%', bg: 'rgba(167,139,250,0.4)' },
+              { w: 180, h: 180, t: 20, l: '45%', bg: 'rgba(196,181,253,0.2)' },
+            ].map((o, i) => (
+              <div key={i} style={{
+                position: 'absolute', borderRadius: '50%', filter: 'blur(45px)',
+                width: o.w, height: o.h,
+                top: o.t, left: o.l as any, right: (o as any).r, bottom: (o as any).b,
+                background: o.bg,
+              }} />
+            ))}
+            {/* Grid overlay */}
+            <div style={{
+              position: 'absolute', inset: 0, opacity: 0.08,
+              backgroundImage: 'linear-gradient(rgba(255,255,255,.6)1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6)1px,transparent 1px)',
+              backgroundSize: '40px 40px',
+            }} />
+            {/* Diagonal gloss */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(135deg,rgba(255,255,255,.07)0%,transparent 50%,rgba(0,0,0,.10)100%)',
+            }} />
+            {/* Top shimmer */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+              background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.5)35%,rgba(255,255,255,.95)50%,rgba(255,255,255,.5)65%,transparent)',
+            }} />
+            {/* Floating particles */}
+            {[
+              { l: '12%', d: '5s', delay: '0s' }, { l: '28%', d: '4.2s', delay: '1.1s' },
+              { l: '48%', d: '5.8s', delay: '0.5s' }, { l: '68%', d: '3.9s', delay: '1.8s' },
+              { l: '84%', d: '4.6s', delay: '0.9s' }, { l: '93%', d: '5.2s', delay: '2.3s' },
+            ].map((p, i) => (
+              <div key={i} style={{
+                position: 'absolute', borderRadius: '50%', background: 'rgba(255,255,255,0.8)',
+                width: 3, height: 3, bottom: 0, left: p.l,
+                animation: `fpRise ${p.d} ${p.delay} linear infinite`,
+              }} />
+            ))}
+            {/* Close btn */}
+            {onClose && (
+              <button onClick={onClose} className="no-print" style={{
+                position: 'absolute', top: 14, right: 14, zIndex: 30,
+                width: 34, height: 34, borderRadius: 10,
+                background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)',
+                fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: "'Outfit',sans-serif",
+              }}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* ── Identity row ── */}
+          <div style={{ padding: '0 28px', marginTop: -55, position: 'relative', zIndex: 5, display: 'flex', alignItems: 'flex-end', gap: 22 }}>
+            {/* Avatar */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              {/* Glow pulse */}
+              <div style={{
+                position: 'absolute', inset: -10, borderRadius: 30,
+                background: `radial-gradient(circle,rgba(${pRgb},0.6)0%,transparent 70%)`,
+                filter: 'blur(12px)', animation: 'avPulse 2.8s ease-in-out infinite', zIndex: 0,
+              }} />
+              {/* Spinning ring */}
+              <div style={{
+                position: 'absolute', inset: -4, borderRadius: 26,
+                background: `conic-gradient(from 0deg,${primaryColor} 0%,#8b5cf6 33%,#a855f7 66%,${primaryColor} 100%)`,
+                animation: 'avSpin 5s linear infinite', zIndex: 1, filter: 'blur(0.5px)',
+              }} />
+              {/* Ring mask */}
+              <div style={{ position: 'absolute', inset: -2, borderRadius: 24, background: '#16182a', zIndex: 2 }} />
+              {/* Avatar itself */}
+              <div style={{
+                width: 108, height: 108, borderRadius: 22, overflow: 'hidden',
+                position: 'relative', zIndex: 3,
+                border: '1px solid rgba(255,255,255,0.12)',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
+              }}>
                 {user.profilePictureUrl ? (
-                  <img
-                    src={user.profilePictureUrl}
-                    alt={user.name}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={user.profilePictureUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                    <span className="text-5xl text-white font-bold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                      {user.name?.charAt(0) || user.surname?.charAt(0)}
-                    </span>
+                  <div style={{
+                    width: '100%', height: '100%',
+                    background: gradient,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 42, fontWeight: 900, color: '#fff',
+                  }}>
+                    {(user.name?.charAt(0) || user.surname?.charAt(0) || 'U').toUpperCase()}
                   </div>
                 )}
               </div>
-              <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-2 shadow-lg ring-4 ring-white">
-                <Award size={16} className="text-white" />
-              </div>
+              {/* Badge */}
+              <div style={{
+                position: 'absolute', bottom: -5, right: -5, zIndex: 10,
+                width: 28, height: 28, borderRadius: 8,
+                background: 'linear-gradient(135deg,#f59e0b,#ef4444)',
+                border: '2.5px solid #16182a',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12,
+                boxShadow: '0 3px 12px rgba(245,158,11,0.5)',
+              }}>🏆</div>
             </div>
 
-            <div className="flex-1 text-center sm:text-left">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
-                <h1 className="text-3xl sm:text-4xl font-bold text-gray-900" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                  {user.surname} {user.name}
-                </h1>
-                <span className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-semibold ${getRoleBadgeColors(user.role)} text-white shadow-md capitalize`} style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                  {user.role}
+            {/* Name + badges + level bar */}
+            <div style={{ paddingBottom: 16, flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.025em', lineHeight: 1.2, marginBottom: 8 }}>
+                {user.surname} {user.name}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 13 }}>
+                {/* Role badge */}
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '3px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                  background: `rgba(${pRgb},0.18)`, color: '#a5b4fc',
+                  border: `1px solid rgba(${pRgb},0.3)`,
+                }}>🎓 {user.role?.charAt(0).toUpperCase()}{user.role?.slice(1)}</span>
+                {user.classGrade && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '3px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                    background: 'rgba(255,255,255,0.07)', color: '#94a3b8',
+                    border: '1px solid rgba(255,255,255,0.09)',
+                  }}>{user.classGrade} · {user.class}</span>
+                )}
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 11px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                  background: 'rgba(16,185,129,0.12)', color: '#34d399',
+                  border: '1px solid rgba(16,185,129,0.25)',
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block', animation: 'sdPulse 2s infinite' }} />
+                  Active
                 </span>
               </div>
-              <p className="text-gray-600 text-sm mb-1 font-semibold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>ID: <span className="text-gray-900 font-mono font-bold">{user.userId}</span></p>
-              <div className="inline-flex items-center px-3 py-1.5 rounded-lg bg-green-50 border border-green-200">
-                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse mr-2"></div>
-                <span className="text-xs text-green-700 font-semibold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Active Account</span>
+              {/* Profile level bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Profile Level</span>
+                <div style={{ flex: 1, height: 7, borderRadius: 4, background: 'rgba(255,255,255,0.07)', overflow: 'hidden', position: 'relative' }}>
+                  <div style={{
+                    height: '100%', width: `${profileCompletion}%`, borderRadius: 4,
+                    background: `linear-gradient(90deg,${primaryColor},#8b5cf6,#a855f7)`,
+                    boxShadow: `0 0 12px rgba(${pRgb},0.6)`, position: 'relative', overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)',
+                      animation: 'lvSweep 2.2s ease-in-out infinite',
+                    }} />
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#818cf8', whiteSpace: 'nowrap' }}>{profileCompletion}%</span>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="no-print flex flex-wrap justify-center gap-3 mb-8 pb-8 border-b border-gray-200">
-            <button
-              onClick={handlePrintProfile}
-              className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-sm"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
-            >
-              <FileText size={18} />
-              <span>Print Profile</span>
-            </button>
-            <button
-              onClick={handlePrintIDCard}
-              className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-sm"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
-            >
-              <CreditCard size={18} />
-              <span>Print ID Card</span>
-            </button>
-            <button
-              onClick={onEdit}
-              className="px-5 py-2.5 bg-white hover:bg-gray-50 text-gray-900 rounded-xl transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-sm border-2 border-gray-200"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
-            >
-              <Edit size={18} />
-              <span>Edit Profile</span>
-            </button>
-            <button
-              onClick={onChangePassword}
-              className="px-5 py-2.5 bg-white hover:bg-gray-50 text-gray-900 rounded-xl transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg font-semibold text-sm border-2 border-gray-200"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif' }}
-            >
-              <Lock size={18} />
-              <span>Change Password</span>
-            </button>
+          {/* ── Stats grid ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, padding: '20px 28px 0' }}>
+            {[
+              { icon: Clock,       num: '4.5h',  lbl: 'Study Hours Today',  delta: '↑ +12% this week', dColor: '#34d399', dBg: 'rgba(16,185,129,0.12)',  glow: `rgba(${pRgb},0.5)`, iconBg: `rgba(${pRgb},0.14)` },
+              { icon: CheckSquare, num: '24',    lbl: 'Assignments Done',   delta: '↑ +5 this week',   dColor: '#34d399', dBg: 'rgba(16,185,129,0.12)',  glow: 'rgba(16,185,129,0.5)', iconBg: 'rgba(16,185,129,0.14)' },
+              { icon: BarChart2,   num: '91%',   lbl: 'Attendance Rate',    delta: '⚠ 3 days missed',  dColor: '#fbbf24', dBg: 'rgba(245,158,11,0.12)', glow: 'rgba(245,158,11,0.45)', iconBg: 'rgba(245,158,11,0.14)' },
+            ].map(({ icon: Icon, num, lbl, delta, dColor, dBg, glow, iconBg }, i) => (
+              <div key={i}
+                className="pv-card-sweep"
+                onMouseEnter={spawnSparkle}
+                {...tilt}
+                style={{
+                  borderRadius: 18, padding: '16px 18px', position: 'relative', overflow: 'hidden', isolation: 'isolate', cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.035)', backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06)',
+                  transition: 'transform 0.25s cubic-bezier(0.34,1.25,0.64,1),box-shadow 0.25s ease,border-color 0.25s ease',
+                  transformStyle: 'preserve-3d',
+                }}
+              >
+                <div style={{ position: 'absolute', bottom: -20, right: -20, width: 100, height: 100, borderRadius: '50%', background: glow, filter: 'blur(24px)', opacity: 0.35, zIndex: 0 }} />
+                <div style={{ position: 'relative', zIndex: 4 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 11, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                    <Icon size={17} color="#94a3b8" />
+                  </div>
+                  <div style={{ fontSize: 26, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.03em', lineHeight: 1 }}>{num}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#475569', marginTop: 4 }}>{lbl}</div>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, marginTop: 8, display: 'inline-block', background: dBg, color: dColor }}>{delta}</span>
+                </div>
+              </div>
+            ))}
           </div>
 
-          {/* Information Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Basic Information */}
-            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                  <User size={18} className="text-indigo-600" />
-                </div>
-                Basic Information
-              </h3>
-              <div className="space-y-1">
-                <InfoRow icon={User} label="Full Name" value={user.name} />
-                <InfoRow icon={User} label="Surname" value={user.surname} />
-                <InfoRow icon={Mail} label="Email" value={user.email} />
-                <InfoRow icon={Calendar} label="Date of Birth" value={user.dob ? new Date(user.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined} />
-                <InfoRow icon={Users} label="Gender" value={user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : undefined} />
-                <InfoRow icon={Droplet} label="Blood Group" value={user.bloodGroup} />
-                <InfoRow icon={Shield} label="Religion" value={user.religion} />
+          {/* ── ID chips ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: '14px 28px 0' }}>
+            {[
+              { lbl: 'Student ID',   val: user.userId },
+              { lbl: 'Reg. Number',  val: user.registrationNumber || user.userId },
+            ].map(({ lbl, val }) => (
+              <div key={lbl} style={{
+                padding: '13px 18px', borderRadius: 15,
+                background: `rgba(${pRgb},0.07)`,
+                border: `1px solid rgba(${pRgb},0.18)`,
+                transition: 'all 0.2s ease',
+              }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 4 }}>{lbl}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#e2e8f0', letterSpacing: '0.04em', fontFamily: "'Courier New',monospace" }}>{val || '—'}</div>
               </div>
-            </div>
-
-            {/* Contact Information */}
-            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Phone size={18} className="text-purple-600" />
-                </div>
-                Contact Information
-              </h3>
-              <div className="space-y-1">
-                <InfoRow 
-                  icon={Phone} 
-                  label="Phone Number" 
-                  value={user.phoneNumber ? `+880${user.phoneNumber}` : undefined} 
-                />
-                <InfoRow icon={Phone} label="Mobile Number" value={user.mobileNumber} />
-                <InfoRow 
-                  icon={Users} 
-                  label="Guardian Phone" 
-                  value={user.guardianPhone ? `+880${user.guardianPhone}` : undefined} 
-                />
-                <InfoRow icon={MapPin} label="Address" value={user.address} />
-              </div>
-            </div>
-
-            {/* Educational Information */}
-            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center">
-                  <GraduationCap size={18} className="text-green-600" />
-                </div>
-                Educational Information
-              </h3>
-              <div className="space-y-1">
-                <InfoRow icon={GraduationCap} label="Class/Grade" value={user.classGrade} />
-                <InfoRow icon={GraduationCap} label="Current Class" value={user.class} />
-                <InfoRow icon={Building} label="School" value={user.school} />
-                <InfoRow icon={GraduationCap} label="College/University" value={user.college} />
-              </div>
-            </div>
-
-            {/* Account Information */}
-            <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Shield size={18} className="text-blue-600" />
-                </div>
-                Account Information
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center shadow-sm ${getRoleBadgeColors(user.role)}`}>
-                    <Shield size={18} className="text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-gray-600 mb-0.5" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Account Type</p>
-                    <p className="text-sm text-gray-900 font-bold capitalize" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>{user.role}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-200">
-                  <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-gray-600 mb-0.5" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Status</p>
-                    <p className="text-sm text-green-700 font-bold capitalize" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>{user.status}</p>
-                  </div>
-                </div>
-                {user.createdAt && (
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                    <div className="h-10 w-10 rounded-lg bg-indigo-100 flex items-center justify-center">
-                      <Calendar size={18} className="text-indigo-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-xs font-semibold text-gray-600 mb-0.5" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Member Since</p>
-                      <p className="text-sm text-gray-900 font-bold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                        {new Date(user.createdAt).toLocaleDateString('en-US', { 
-                          year: 'numeric', 
-                          month: 'long', 
-                          day: 'numeric' 
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+            ))}
           </div>
+
+          {/* ── Action buttons ── */}
+          <div className="no-print" style={{ display: 'flex', gap: 10, padding: '14px 28px 24px', flexWrap: 'wrap' }}>
+            {[
+              { label: '✏️ Edit Profile',   onClick: onEdit,              primary: true  },
+              { label: '🔒 Password',        onClick: onChangePassword,    primary: false },
+              { label: '🖨 Print Profile',   onClick: handlePrintProfile,  primary: false },
+              { label: '💳 Print ID Card',   onClick: handlePrintIDCard,   primary: false },
+            ].map(({ label, onClick, primary }) => (
+              <button key={label}
+                onClick={onClick}
+                onMouseEnter={spawnSparkle}
+                className="pv-btn-sweep"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '9px 20px', borderRadius: 12,
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none',
+                  fontFamily: "'Outfit',sans-serif", position: 'relative', overflow: 'hidden',
+                  transition: 'all 0.25s cubic-bezier(0.34,1.25,0.64,1)',
+                  ...(primary
+                    ? { background: gradient, color: '#fff', boxShadow: `0 4px 18px rgba(${pRgb},0.45)` }
+                    : { background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', boxShadow: '0 2px 10px rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.10)' }
+                  ),
+                }}
+                onMouseEnterCapture={e => {
+                  const el = e.currentTarget;
+                  if (primary) {
+                    el.style.transform = 'translateY(-3px) scale(1.05)';
+                    el.style.boxShadow = `0 12px 30px rgba(${pRgb},0.55)`;
+                  } else {
+                    el.style.transform = 'translateY(-2px) scale(1.04)';
+                    el.style.boxShadow = '0 8px 24px rgba(0,0,0,0.35)';
+                    el.style.background = 'rgba(255,255,255,0.08)';
+                  }
+                }}
+                onMouseLeaveCapture={e => {
+                  const el = e.currentTarget;
+                  el.style.transform = '';
+                  el.style.boxShadow = primary ? `0 4px 18px rgba(${pRgb},0.45)` : '0 2px 10px rgba(0,0,0,0.25)';
+                  if (!primary) el.style.background = 'rgba(255,255,255,0.05)';
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </GlassCard>
+
+        {/* ══════════════════════════════════════
+            ACHIEVEMENT BADGES
+        ══════════════════════════════════════ */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+          {[
+            { icon: Award,    em: '🏆', title: 'Top Student',   sub: 'Rank #7 this month',    bg: 'rgba(245,158,11,0.08)',  border: 'rgba(245,158,11,0.22)',  glow: 'rgba(245,158,11,0.3)'  },
+            { icon: Flame,    em: '🔥', title: '7-Day Streak',  sub: 'Study consistency',      bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.20)',   glow: 'rgba(239,68,68,0.25)'  },
+            { icon: BookOpen, em: '📚', title: 'Fast Learner',  sub: '3 courses this term',    bg: `rgba(${pRgb},0.08)`,    border: `rgba(${pRgb},0.22)`,    glow: `rgba(${pRgb},0.25)`   },
+          ].map(({ em, title, sub, bg, border, glow }, i) => (
+            <div key={i}
+              className="pv-card-sweep"
+              onMouseEnter={spawnSparkle}
+              style={{
+                borderRadius: 18, padding: '14px 16px', position: 'relative', overflow: 'hidden', isolation: 'isolate', cursor: 'pointer',
+                background: bg, backdropFilter: 'blur(24px)',
+                border: `1px solid ${border}`,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)',
+                display: 'flex', alignItems: 'center', gap: 13,
+                transition: 'transform 0.25s cubic-bezier(0.34,1.25,0.64,1),box-shadow 0.25s ease',
+              }}
+              onMouseEnterCapture={e => { e.currentTarget.style.transform = 'translateY(-5px) scale(1.03)'; e.currentTarget.style.boxShadow = `0 16px 38px ${glow}`; }}
+              onMouseLeaveCapture={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)'; }}
+            >
+              {/* Gold orb */}
+              {i === 0 && <div style={{ position: 'absolute', bottom: -15, right: -15, width: 80, height: 80, borderRadius: '50%', background: 'rgba(245,158,11,0.3)', filter: 'blur(20px)' }} />}
+              <div style={{ fontSize: 24, flexShrink: 0, position: 'relative', zIndex: 4 }}>{em}</div>
+              <div style={{ position: 'relative', zIndex: 4 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: '#e2e8f0' }}>{title}</div>
+                <div style={{ fontSize: 10, color: '#475569', fontWeight: 600, marginTop: 2 }}>{sub}</div>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
-    </div>
+
+        {/* ══════════════════════════════════════
+            SEMESTER PROGRESS
+        ══════════════════════════════════════ */}
+        <GlassCard style={{ padding: '20px 22px' }}>
+          {/* Corner glow */}
+          <div style={{
+            position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: '50%',
+            background: `radial-gradient(circle,rgba(${pRgb},0.12)0%,transparent 70%)`,
+            filter: 'blur(24px)', zIndex: 0,
+          }} />
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 800, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Zap size={15} color="#818cf8" /> Semester Progress
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>Week 14 of 22</span>
+            </div>
+            {/* Bar */}
+            <div style={{ height: 10, borderRadius: 6, background: 'rgba(255,255,255,0.06)', overflow: 'hidden', marginBottom: 10 }}>
+              <div style={{
+                height: '100%', width: '62%', borderRadius: 6,
+                background: `linear-gradient(90deg,${primaryColor},#8b5cf6,#a855f7)`,
+                boxShadow: `0 0 14px rgba(${pRgb},0.5)`, position: 'relative', overflow: 'hidden',
+              }}>
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)', animation: 'lvSweep 2.5s ease-in-out infinite' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#334155' }}>Semester Start</span>
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#818cf8' }}>62% Complete</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: '#334155' }}>Finals</span>
+            </div>
+            {/* Subject pills */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+              {[
+                { name: 'Mathematics', grade: 'A+', pct: 95, bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.18)', color: '#34d399', fill: '#10b981' },
+                { name: 'Physics',     grade: 'B+', pct: 78, bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.18)', color: '#60a5fa', fill: '#3b82f6' },
+                { name: 'Biology',     grade: 'A',  pct: 87, bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.18)', color: '#34d399', fill: '#10b981' },
+                { name: 'Chemistry',   grade: 'B',  pct: 72, bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.18)', color: '#fbbf24', fill: '#f59e0b' },
+              ].map(({ name, grade, pct, bg, border, color, fill }) => (
+                <div key={name} style={{
+                  borderRadius: 12, padding: '10px 12px', textAlign: 'center',
+                  background: bg, border: `1px solid ${border}`,
+                  transition: 'transform 0.2s ease',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', marginBottom: 4 }}>{name}</div>
+                  <div style={{ fontSize: 17, fontWeight: 900, color }}>{grade}</div>
+                  <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.06)', marginTop: 6, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, borderRadius: 2, background: fill }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </GlassCard>
+
+        {/* ══════════════════════════════════════
+            INFO GRID
+        ══════════════════════════════════════ */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {[
+            {
+              title: 'Personal Information', icon: User, cls: 's-ind',
+              glowColor: `rgba(${pRgb},0.15)`, iconAccent: `rgba(${pRgb},0.14)`,
+              rows: [
+                { icon: User,     label: 'Full Name',     value: user.name },
+                { icon: User,     label: 'Surname',       value: user.surname },
+                { icon: Mail,     label: 'Email',         value: user.email },
+                { icon: Calendar, label: 'Date of Birth', value: user.dob ? new Date(user.dob).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined },
+                { icon: Users,    label: 'Gender',        value: user.gender ? user.gender.charAt(0).toUpperCase() + user.gender.slice(1) : undefined },
+                { icon: Droplet,  label: 'Blood Group',   value: user.bloodGroup },
+                { icon: Shield,   label: 'Religion',      value: user.religion },
+              ],
+            },
+            {
+              title: 'Contact Information', icon: Phone, cls: 's-pur',
+              glowColor: 'rgba(139,92,246,0.15)', iconAccent: 'rgba(139,92,246,0.14)',
+              rows: [
+                { icon: Phone,  label: 'Phone Number',   value: user.phoneNumber ? `+880${user.phoneNumber}` : undefined },
+                { icon: Phone,  label: 'Mobile Number',  value: user.mobileNumber },
+                { icon: Users,  label: 'Guardian Phone', value: user.guardianPhone ? `+880${user.guardianPhone}` : undefined },
+                { icon: MapPin, label: 'Address',        value: user.address },
+              ],
+            },
+            {
+              title: 'Educational Information', icon: GraduationCap, cls: 's-grn',
+              glowColor: 'rgba(16,185,129,0.12)', iconAccent: 'rgba(16,185,129,0.14)',
+              rows: [
+                { icon: GraduationCap, label: 'Class / Grade',     value: user.classGrade },
+                { icon: GraduationCap, label: 'Current Class',     value: user.class },
+                { icon: Building,      label: 'School',            value: user.school },
+                { icon: GraduationCap, label: 'College/University',value: user.college },
+              ],
+            },
+            {
+              title: 'Account Information', icon: Shield, cls: 's-blu',
+              glowColor: 'rgba(59,130,246,0.12)', iconAccent: 'rgba(59,130,246,0.14)',
+              rows: [
+                { icon: Shield,   label: 'Account Type', value: user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : undefined },
+                { icon: Shield,   label: 'Status',       value: user.status ? user.status.charAt(0).toUpperCase() + user.status.slice(1) : 'Active' },
+                { icon: Calendar, label: 'Member Since', value: user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined },
+              ],
+            },
+          ].map(({ title, icon: SectionIcon, glowColor, iconAccent, rows }) => (
+            <div key={title}
+              className="pv-card-sweep"
+              onMouseEnter={spawnSparkle}
+              style={{
+                borderRadius: 20, padding: '18px 20px', position: 'relative', overflow: 'hidden', isolation: 'isolate', cursor: 'pointer',
+                background: 'rgba(255,255,255,0.032)', backdropFilter: 'blur(24px)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)',
+                transition: 'transform 0.25s cubic-bezier(0.34,1.25,0.64,1),box-shadow 0.25s ease,border-color 0.25s ease',
+                transformStyle: 'preserve-3d',
+              }}
+              onMouseEnterCapture={e => {
+                e.currentTarget.style.transform = 'translateY(-5px)';
+                e.currentTarget.style.boxShadow = '0 20px 48px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,255,255,0.10)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.13)';
+              }}
+              onMouseLeaveCapture={e => {
+                e.currentTarget.style.transform = '';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+              }}
+            >
+              {/* Corner glow */}
+              <div style={{ position: 'absolute', top: -35, right: -35, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle,${glowColor} 0%,transparent 70%)`, filter: 'blur(22px)', zIndex: 0 }} />
+              {/* Top shimmer */}
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.10)40%,rgba(255,255,255,0.20)50%,rgba(255,255,255,0.10)60%,transparent)', zIndex: 2 }} />
+              {/* Noise */}
+              <div style={{ position: 'absolute', inset: 0, borderRadius: 'inherit', pointerEvents: 'none', zIndex: 1, background: NOISE, opacity: 0.04, mixBlendMode: 'overlay' }} />
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14, position: 'relative', zIndex: 4 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: iconAccent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <SectionIcon size={14} color="#94a3b8" />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#e2e8f0' }}>{title}</span>
+              </div>
+              {/* Rows */}
+              {rows.map(r => <InfoRow key={r.label} icon={r.icon} label={r.label} value={r.value} accent={iconAccent} />)}
+            </div>
+          ))}
+        </div>
+
+      </div>{/* /pv-printable */}
+    </>
   );
 };
 
