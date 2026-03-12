@@ -13,7 +13,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated } = useDashboard();
+  const { sidebarOpen, isAuthenticated, theme, glitterTheme } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
@@ -265,8 +265,107 @@ const DashboardLayout = () => {
     };
   }, []);
 
+  const isLight = theme === 'light';
+
+  // ── Glitter background definitions ──────────────────────────────────────────
+  // Each glitter option has a dark variant and a light variant so they always
+  // harmonise with the active dark / light mode.
+  const glitterStyles: Record<string, React.CSSProperties> = {
+    none: {},
+    silver: {
+      backgroundImage: isLight
+        ? `
+          radial-gradient(ellipse at 20% 20%, rgba(0,0,0,0.03) 0%, transparent 50%),
+          radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.02) 0%, transparent 50%),
+          radial-gradient(circle at 30% 40%, rgba(80,80,100,0.35) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 70% 20%, rgba(80,80,100,0.28) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 50% 70%, rgba(80,80,100,0.32) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 15% 80%, rgba(80,80,100,0.25) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 85% 60%, rgba(80,80,100,0.35) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 60% 45%, rgba(80,80,100,0.28) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 40% 15%, rgba(80,80,100,0.30) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 90% 35%, rgba(80,80,100,0.25) 0.5px, transparent 0.5px)
+        `
+        : `
+          radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.05) 0%, transparent 50%),
+          radial-gradient(ellipse at 80% 80%, rgba(255,255,255,0.03) 0%, transparent 50%),
+          radial-gradient(circle at 30% 40%, rgba(220,220,240,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 70% 20%, rgba(200,200,220,0.45) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 50% 70%, rgba(220,220,240,0.50) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 15% 80%, rgba(200,200,220,0.40) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 85% 60%, rgba(220,220,240,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 60% 45%, rgba(200,200,220,0.45) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 40% 15%, rgba(220,220,240,0.50) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 90% 35%, rgba(200,200,220,0.40) 0.5px, transparent 0.5px)
+        `,
+      backgroundSize: isLight
+        ? 'auto, auto, 80px 80px, 120px 120px, 90px 90px, 110px 110px, 70px 70px, 100px 100px, 85px 85px, 95px 95px'
+        : 'auto, auto, 80px 80px, 120px 120px, 90px 90px, 110px 110px, 70px 70px, 100px 100px, 85px 85px, 95px 95px',
+    },
+    gold: {
+      backgroundImage: isLight
+        ? `
+          radial-gradient(ellipse at 15% 15%, rgba(180,130,0,0.07) 0%, transparent 45%),
+          radial-gradient(ellipse at 85% 85%, rgba(150,110,0,0.05) 0%, transparent 45%),
+          radial-gradient(circle at 25% 35%, rgba(160,120,0,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 75% 25%, rgba(180,140,0,0.50) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 45% 65%, rgba(160,120,0,0.52) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 80% 70%, rgba(180,140,0,0.45) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 10% 55%, rgba(160,120,0,0.48) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 60% 15%, rgba(180,140,0,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 35% 85%, rgba(160,120,0,0.42) 0.5px, transparent 0.5px)
+        `
+        : `
+          radial-gradient(ellipse at 15% 15%, rgba(212,175,55,0.12) 0%, transparent 45%),
+          radial-gradient(ellipse at 85% 85%, rgba(180,140,30,0.08) 0%, transparent 45%),
+          radial-gradient(circle at 25% 35%, rgba(212,175,55,0.60) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 75% 25%, rgba(255,215,0,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 45% 65%, rgba(212,175,55,0.58) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 80% 70%, rgba(255,215,0,0.48) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 10% 55%, rgba(212,175,55,0.52) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 60% 15%, rgba(255,215,0,0.62) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 35% 85%, rgba(212,175,55,0.42) 0.5px, transparent 0.5px)
+        `,
+      backgroundSize: 'auto, auto, 60px 60px, 90px 90px, 75px 75px, 110px 110px, 50px 50px, 80px 80px, 95px 95px',
+    },
+    purple: {
+      backgroundImage: isLight
+        ? `
+          radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.08) 0%, transparent 45%),
+          radial-gradient(ellipse at 80% 70%, rgba(79,70,229,0.06) 0%, transparent 45%),
+          radial-gradient(circle at 30% 40%, rgba(99,102,241,0.50) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 70% 20%, rgba(79,70,229,0.45) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 55% 70%, rgba(99,102,241,0.48) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 15% 60%, rgba(79,70,229,0.42) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 88% 50%, rgba(99,102,241,0.47) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 45% 15%, rgba(79,70,229,0.52) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 75% 85%, rgba(99,102,241,0.38) 0.5px, transparent 0.5px)
+        `
+        : `
+          radial-gradient(ellipse at 20% 30%, rgba(139,92,246,0.12) 0%, transparent 45%),
+          radial-gradient(ellipse at 80% 70%, rgba(99,102,241,0.10) 0%, transparent 45%),
+          radial-gradient(circle at 30% 40%, rgba(200,180,255,0.70) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 70% 20%, rgba(180,160,240,0.62) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 55% 70%, rgba(220,200,255,0.68) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 15% 60%, rgba(200,180,255,0.58) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 88% 50%, rgba(180,160,240,0.64) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 45% 15%, rgba(220,200,255,0.72) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 75% 85%, rgba(200,180,255,0.50) 0.5px, transparent 0.5px)
+        `,
+      backgroundSize: 'auto, auto, 55px 55px, 85px 85px, 70px 70px, 100px 100px, 65px 65px, 90px 90px, 78px 78px',
+    },
+  };
+
+  const activeGlitter = glitterStyles[glitterTheme] ?? {};
+
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--color-background, #0d1117)' }}>
+    <div
+      className="flex h-screen overflow-hidden"
+      style={{
+        background: 'var(--color-background, #0d1117)',
+        ...activeGlitter,
+      }}
+    >
       <style>{`
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
