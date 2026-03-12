@@ -41,6 +41,8 @@ interface DashboardContextType {
   canAccessUserManagement: () => boolean;
   dashboardLayout: string;
   setDashboardLayout: (layout: string) => void;
+  glitterTheme: string;
+  setGlitterTheme: (glitter: string) => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -108,6 +110,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#10b981');
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
   const [dashboardLayout, setDashboardLayout] = useState(() => localStorage.getItem('dashboardLayout') || 'default');
+  const [glitterTheme, setGlitterTheme] = useState(() => localStorage.getItem('glitterTheme') || 'none');
   const [siteName, setSiteName] = useState(() => localStorage.getItem('siteName') || 'Learning Management Portal');
   const [siteTagline, setSiteTagline] = useState(() => localStorage.getItem('siteTagline') || 'Empowering educators, inspiring students');
   const [contactEmail, setContactEmail] = useState(() => localStorage.getItem('contactEmail') || 'admin@example.com');
@@ -283,6 +286,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     localStorage.setItem('accentColor', accentColor);
     localStorage.setItem('fontFamily', fontFamily);
     localStorage.setItem('dashboardLayout', dashboardLayout);
+    localStorage.setItem('glitterTheme', glitterTheme);
     localStorage.setItem('siteName', siteName);
     localStorage.setItem('siteTagline', siteTagline);
     localStorage.setItem('contactEmail', contactEmail);
@@ -351,7 +355,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     
     // Update body background
     document.body.style.backgroundColor = colors.bg;
-  }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
+  }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, glitterTheme, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -496,6 +500,10 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     setTimezone(tz);
   };
 
+  const handleSetGlitterTheme = (glitter: string) => {
+    setGlitterTheme(glitter);
+  };
+
   return (
     <DashboardContext.Provider 
       value={{ 
@@ -531,7 +539,9 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setTimezone: handleSetTimezone,
         canAccessUserManagement,
         dashboardLayout,
-        setDashboardLayout
+        setDashboardLayout,
+        glitterTheme,
+        setGlitterTheme: handleSetGlitterTheme,
       }}
     >
       {children}
