@@ -1,4 +1,4 @@
-// /src/contexts/DashboardContext.tsx 
+// /src/contexts/DashboardContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { authService, UserProfile, AccountStatusError } from '../services/authService';
@@ -415,6 +415,30 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       if (isDesktop) {
         setSidebarOpen(true);
       }
+
+      // Welcome dynamic island — fires only here (real login), never on refresh
+      const surname = userProfile.surname?.trim();
+      const name = surname || 'there';
+
+      const firstLoginMessage = `Welcome, ${name}! Your learning journey begins today.`;
+
+      const returningMessages = [
+        `Welcome back, ${name}! Glad you're here.`,
+        `Hey ${name}, good to see you again.`,
+        `You're back, ${name}. Right where you left off.`,
+        `Welcome back, ${name}. We kept your spot.`,
+        `${name}, great to have you back!`,
+        `Hey ${name}, ready to pick up where you left off?`,
+        `Welcome back, ${name}. Your progress is waiting.`,
+        `Good to see you again, ${name}.`,
+        `${name}, you showed up. That's what matters.`,
+        `${name}, welcome back. Good to have you here.`,
+      ];
+
+      const message = userProfile.isFirstLogin
+        ? firstLoginMessage
+        : returningMessages[Math.floor(Math.random() * returningMessages.length)];
+      setTimeout(() => (window as any).addNotification?.(message, userProfile.isFirstLogin ? 'success' : 'info'), 1200);
     } catch (error: any) {
       setLoading(false);
       // Re-throw AccountStatusError or other errors to be caught by SignInModal
