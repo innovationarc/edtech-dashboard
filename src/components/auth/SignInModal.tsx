@@ -8,6 +8,110 @@ import ForgotPasswordModal from './ForgotPasswordModal';
 import ForgotUserIdModal from './ForgotUserIdModal';
 import AccountStatusModal from './AccountStatusModal';
 
+// ─── Self-contained color tokens (no external config needed) ───────────────
+// primary = indigo-500 family
+const C = {
+  primary300: '#a5b4fc',
+  primary400: '#818cf8',
+  primary500: '#6366f1',
+  primary600: '#4f46e5',
+  primary700: '#4338ca',
+  purple400:  '#c084fc',
+  purple500:  '#a855f7',
+  purple600:  '#9333ea',
+  purple700:  '#7e22ce',
+  blue600:    '#2563eb',
+  blue700:    '#1d4ed8',
+} as const;
+
+const SIGN_IN_STYLES = `
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(6px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+  }
+  .sin-shake { animation: shake 0.4s ease-in-out; }
+
+  .sin-input:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 4px rgba(99,102,241,0.15) !important;
+    outline: none !important;
+  }
+
+  .sin-icon-hover:hover { color: #818cf8; }
+
+  .sin-link {
+    color: #818cf8;
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.2s;
+  }
+  .sin-link:hover { color: #a5b4fc; }
+
+  .sin-checkbox-box {
+    background: rgba(31,41,55,0.5);
+    border: 2px solid #4b5563;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .sin-checkbox-input:checked + .sin-checkbox-box {
+    background: linear-gradient(to bottom right, #6366f1, #9333ea);
+    border-color: #6366f1;
+  }
+  .sin-checkbox-label:hover .sin-checkbox-box { border-color: rgba(99,102,241,0.5); }
+
+  .sin-checkbox-check {
+    width: 10px; height: 10px;
+    color: white;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .sin-checkbox-input:not(:checked) ~ .sin-checkbox-check {
+    opacity: 0; transform: scale(0);
+  }
+  .sin-checkbox-input:checked ~ .sin-checkbox-check {
+    opacity: 1; transform: scale(1);
+  }
+
+  .sin-btn-primary {
+    background: linear-gradient(to right, #4f46e5, #9333ea, #2563eb);
+    transition: background 0.3s, transform 0.15s, box-shadow 0.3s;
+  }
+  .sin-btn-primary:hover:not(:disabled) {
+    background: linear-gradient(to right, #4338ca, #7e22ce, #1d4ed8);
+    transform: scale(1.02);
+    box-shadow: 0 10px 30px rgba(99,102,241,0.4);
+  }
+  .sin-btn-primary:active:not(:disabled) { transform: scale(0.98); }
+  .sin-btn-primary:disabled {
+    background: linear-gradient(to right, #374151, #374151, #374151);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .sin-btn-secondary { transition: background 0.2s, border-color 0.2s, transform 0.15s; }
+  .sin-btn-secondary:hover:not(:disabled) {
+    border-color: rgba(99,102,241,0.5);
+    transform: scale(1.02);
+  }
+  .sin-btn-secondary:active:not(:disabled) { transform: scale(0.98); }
+
+  .sin-account-btn:hover { background: rgba(31,41,55,0.8); }
+
+  .sin-shimmer {
+    position: absolute; inset: 0;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+    transform: translateX(-200%);
+    transition: transform 1s;
+  }
+  .sin-btn-primary:hover .sin-shimmer,
+  .sin-btn-secondary:hover .sin-shimmer { transform: translateX(200%); }
+
+  .sin-info-box:hover { transform: scale(1.02); }
+  .sin-info-box { transition: transform 0.3s; }
+`;
+
 interface SignInModalProps {
   onClose: () => void;
 }
@@ -206,18 +310,19 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] overflow-y-auto">
+      <style>{SIGN_IN_STYLES}</style>
       <div className="flex justify-center min-h-full p-3 sm:p-4 md:p-6 items-start">
       <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-[400px] sm:max-w-md md:max-w-lg border border-gray-700/50 relative overflow-hidden mt-0">
         {/* Animated background effects */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 via-purple-500/5 to-blue-500/5 pointer-events-none"></div>
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary-500/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute inset-0 pointer-events-none" style={{background: 'linear-gradient(to bottom right, rgba(99,102,241,0.05), rgba(168,85,247,0.05), rgba(37,99,235,0.05))'}}></div>
+        <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{background: 'rgba(99,102,241,0.1)'}}></div>
+        <div className="absolute -bottom-24 -left-24 w-48 h-48 rounded-full blur-3xl pointer-events-none" style={{background: 'rgba(168,85,247,0.1)'}}></div>
 
         <div className="relative">
           {/* Header */}
           <div className="flex items-center justify-between p-4 sm:p-5 md:p-6 border-b border-gray-700/50">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center shadow-lg">
+              <div className="h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 rounded-xl flex items-center justify-center shadow-lg" style={{background: `linear-gradient(to bottom right, ${C.primary500}, ${C.purple600})`}}>
                 <Lock size={16} className="sm:w-[18px] sm:h-[18px] md:w-5 md:h-5 text-white" />
               </div>
               <div>
@@ -241,7 +346,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
           <div className="p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4">
             {/* Error Message */}
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2 backdrop-blur-sm animate-shake">
+              <div className="sin-shake bg-red-500/10 border border-red-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2">
                 <AlertCircle size={16} className="sm:w-[18px] sm:h-[18px] text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] sm:text-xs md:text-sm text-red-200 leading-snug">{error}</p>
               </div>
@@ -252,7 +357,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               {/* User ID Input */}
               <div className="group">
                 <label className="block text-xs md:text-sm font-semibold text-gray-300 mb-1 md:mb-1.5 flex items-center gap-1 md:gap-1.5">
-                  <CreditCard size={12} className="md:w-[14px] md:h-[14px] text-primary-400" />
+                  <CreditCard size={12} className="md:w-[14px] md:h-[14px]" style={{color: C.primary400}} />
                   User ID
                 </label>
                 <div className="relative">
@@ -261,23 +366,21 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                     value={displayUserId}
                     onChange={(e) => handleUserIdChange(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.15)'; e.currentTarget.style.outline = 'none'; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(55,65,81,0.5)'; e.currentTarget.style.boxShadow = 'none'; }}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-3 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide text-xs md:text-base"
+                    className="sin-input w-full bg-gray-800/50 text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-3 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide text-xs md:text-base"
                     style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: 'rgba(55,65,81,0.5)', outline: 'none' }}
                     placeholder="ST-2601-00001"
                     disabled={loading}
                     autoComplete="username"
                     maxLength={13}
                   />
-                  <CreditCard size={14} className="md:w-[18px] md:h-[18px] absolute left-2.5 md:left-4 top-2 md:top-3.5 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
+                  <CreditCard size={14} className="sin-icon-hover md:w-[18px] md:h-[18px] absolute left-2.5 md:left-4 top-2 md:top-3.5 text-gray-500 transition-colors pointer-events-none" />
                 </div>
                 <div className="flex items-center justify-between -mt-2 md:mt-1">
                   <p className="text-[10px] md:text-xs text-gray-500">Format: XX-YYMM-XXXXX</p>
                   <button 
                     type="button"
                     onClick={() => setShowForgotUserId(true)}
-                    className="text-[10px] md:text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
+                    className="sin-link text-[10px] md:text-xs transition-colors duration-200"
                     disabled={loading}
                   >
                     Forgot User ID?
@@ -288,7 +391,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               {/* Password Input */}
               <div className="group">
                 <label className="block text-xs md:text-sm font-semibold text-gray-300 mb-1 md:mb-1.5 flex items-center gap-1 md:gap-1.5">
-                  <Lock size={12} className="md:w-[14px] md:h-[14px] text-primary-400" />
+                  <Lock size={12} className="md:w-[14px] md:h-[14px]" style={{color: C.primary400}} />
                   Password
                 </label>
                 <div className="relative">
@@ -297,15 +400,13 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    onFocus={(e) => { e.currentTarget.style.borderColor = '#6366f1'; e.currentTarget.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.15)'; e.currentTarget.style.outline = 'none'; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(55,65,81,0.5)'; e.currentTarget.style.boxShadow = 'none'; }}
-                    className="w-full bg-gray-800/50 backdrop-blur-sm text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-8 md:pr-12 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 placeholder:text-gray-500 group-hover:border-gray-600/70 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base"
+                    className="sin-input w-full bg-gray-800/50 text-white rounded-xl py-2 md:py-3.5 pl-8 md:pl-11 pr-8 md:pr-12 border-2 border-gray-700/50 focus:outline-none transition-all duration-300 placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-xs md:text-base"
                     style={{ borderWidth: '2px', borderStyle: 'solid', borderColor: 'rgba(55,65,81,0.5)', outline: 'none' }}
                     placeholder="Enter your password"
                     disabled={loading}
                     autoComplete="current-password"
                   />
-                  <Lock size={14} className="md:w-[18px] md:h-[18px] absolute left-2.5 md:left-4 top-2 md:top-3.5 text-gray-500 group-hover:text-primary-400 transition-colors pointer-events-none" />
+                  <Lock size={14} className="sin-icon-hover md:w-[18px] md:h-[18px] absolute left-2.5 md:left-4 top-2 md:top-3.5 text-gray-500 transition-colors pointer-events-none" />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
@@ -321,7 +422,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   <button 
                     type="button"
                     onClick={() => setShowForgotPassword(true)}
-                    className="text-[10px] md:text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
+                    className="sin-link text-[10px] md:text-xs transition-colors duration-200"
                     disabled={loading}
                   >
                     Forgot Password?
@@ -331,30 +432,42 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
 
               {/* Remember Me Checkbox */}
               <div className="flex items-center pt-0.5 md:pt-1">
-                <label className="flex items-center gap-2 md:gap-2.5 cursor-pointer group select-none">
-                  <div className="relative">
+                <label className="flex items-center gap-2 md:gap-2.5 cursor-pointer select-none sin-checkbox-label">
+                  <div className="relative w-4 h-4 md:w-5 md:h-5 flex-shrink-0">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="peer sr-only"
+                      className="sr-only"
                       disabled={loading}
                     />
-                    <div className="w-4 h-4 md:w-5 md:h-5 border-2 border-gray-600 rounded bg-gray-800/50 peer-checked:bg-gradient-to-br peer-checked:from-primary-500 peer-checked:to-purple-600 peer-checked:border-primary-500 transition-all duration-300 flex items-center justify-center group-hover:border-primary-500/50 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed">
-                      <svg 
-                        className={`w-2.5 h-2.5 md:w-3 md:h-3 text-white transition-all duration-300 ${rememberMe ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`}
-                        fill="none" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth="3" 
-                        viewBox="0 0 24 24" 
+                    <div
+                      className="w-4 h-4 md:w-5 md:h-5 rounded flex items-center justify-center transition-all duration-300"
+                      style={{
+                        border: '2px solid',
+                        borderColor: rememberMe ? C.primary500 : '#4b5563',
+                        background: rememberMe
+                          ? `linear-gradient(to bottom right, ${C.primary500}, ${C.purple600})`
+                          : 'rgba(31,41,55,0.5)',
+                        opacity: loading ? 0.5 : 1,
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <svg
+                        className="w-2.5 h-2.5 md:w-3 md:h-3 text-white transition-all duration-300"
+                        style={{ opacity: rememberMe ? 1 : 0, transform: rememberMe ? 'scale(1)' : 'scale(0)' }}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="3"
+                        viewBox="0 0 24 24"
                         stroke="currentColor"
                       >
                         <path d="M5 13l4 4L19 7"></path>
                       </svg>
                     </div>
                   </div>
-                  <span className="text-xs md:text-sm text-gray-400 group-hover:text-gray-300 transition-colors font-medium">
+                  <span className="text-xs md:text-sm text-gray-400 hover:text-gray-300 transition-colors font-medium">
                     Keep me signed in
                   </span>
                 </label>
@@ -364,11 +477,9 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               <button
                 type="submit"
                 disabled={loading || !captchaLoaded}
-                className="w-full bg-gradient-to-r from-primary-600 via-purple-600 to-blue-600 hover:from-primary-700 hover:via-purple-700 hover:to-blue-700 disabled:from-gray-700 disabled:via-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white py-2.5 md:py-3.5 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 md:gap-2.5 font-bold text-xs md:text-base shadow-2xl hover:shadow-primary-500/50 disabled:shadow-none group relative overflow-hidden"
+                className="sin-btn-primary w-full text-white py-2.5 md:py-3.5 rounded-xl flex items-center justify-center gap-2 md:gap-2.5 font-bold text-xs md:text-base shadow-2xl group relative overflow-hidden"
               >
-                {/* Button gradient overlay animation */}
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000"></div>
-                
+                <div className="sin-shimmer"></div>
                 <span className="relative flex items-center gap-2 md:gap-2.5">
                   {loading && <Loader size={15} className="md:w-[18px] md:h-[18px] animate-spin" />}
                   <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
@@ -391,27 +502,27 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
             <button 
               type="button"
               onClick={() => setShowRegister(true)}
-              className="w-full bg-gray-800/50 hover:bg-gray-800/80 backdrop-blur-sm border-2 border-gray-700/50 hover:border-primary-500/50 text-white py-2.5 md:py-3.5 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 md:gap-2.5 font-bold text-xs md:text-base shadow-lg group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
+              className="sin-btn-secondary sin-account-btn w-full bg-gray-800/50 border-2 border-gray-700/50 text-white py-2.5 md:py-3.5 rounded-xl flex items-center justify-center gap-2 md:gap-2.5 font-bold text-xs md:text-base shadow-lg group relative overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
               <span className="relative flex items-center gap-2 md:gap-2.5">
                 <UserCircle size={15} className="md:w-[18px] md:h-[18px] group-hover:rotate-12 transition-transform" />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-purple-400 group-hover:from-primary-300 group-hover:to-purple-300">
+                <span style={{background: `linear-gradient(to right, ${C.primary400}, ${C.purple400})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'}}>
                   Create New Account
                 </span>
-                <ArrowRight size={15} className="md:w-[18px] md:h-[18px] text-primary-400 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={15} className="md:w-[18px] md:h-[18px] group-hover:translate-x-1 transition-transform" style={{color: C.primary400}} />
               </span>
             </button>
 
             {/* Info Box */}
-            <div className="mt-3.5 md:mt-5.5 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/20 rounded-xl p-2.5 md:p-4 backdrop-blur-sm hover:scale-[1.02] transition-all duration-300 shadow-lg">
+            <div className="sin-info-box mt-3.5 md:mt-5.5 border rounded-xl p-2.5 md:p-4 shadow-lg" style={{background: 'linear-gradient(to bottom right, rgba(30,58,138,0.2), rgba(88,28,135,0.2))', borderColor: 'rgba(59,130,246,0.2)'}}>
               <div className="flex items-start gap-2 md:gap-2.5">
-                <div className="h-5 w-5 md:h-7 md:w-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-lg">
+                <div className="h-5 w-5 md:h-7 md:w-7 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg" style={{background: 'linear-gradient(to bottom right, #3b82f6, #9333ea)'}}>
                   <span className="text-[10px] md:text-sm text-white font-bold">i</span>
                 </div>
                 <div className="flex-1">
-                  <p className="text-[10px] md:text-xs text-blue-100/90 leading-relaxed">
-                    <strong className="text-blue-50 font-semibold block mb-0.5 md:mb-1">First time signing in?</strong>
+                  <p className="text-[10px] md:text-xs leading-relaxed" style={{color: 'rgba(219,234,254,0.9)'}}>
+                    <strong className="font-semibold block mb-0.5 md:mb-1" style={{color: '#eff6ff'}}>First time signing in?</strong>
                     Use the User ID provided during registration along with your password to access your account.
                   </p>
                 </div>
@@ -434,7 +545,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   href="/terms-of-service" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-primary-400 hover:text-primary-300 underline underline-offset-2 transition-colors font-medium"
+                  className="sin-link"
                 >
                   Terms of Service
                 </a>
@@ -443,7 +554,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   href="/privacy-policy" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="text-primary-400 hover:text-primary-300 underline underline-offset-2 transition-colors font-medium"
+                  className="sin-link"
                 >
                   Privacy Policy
                 </a>
