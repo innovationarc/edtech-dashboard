@@ -182,7 +182,9 @@ const AppearanceSettings = () => {
     accentColor, 
     setAccentColor,
     fontFamily,
-    setFontFamily
+    setFontFamily,
+    glitterTheme,
+    setGlitterTheme,
   } = useDashboard();
 
   const [colorMode, setColorMode] = useState<'gradient' | 'solid'>('gradient');
@@ -413,10 +415,133 @@ const AppearanceSettings = () => {
         </div>
       </div>
 
+      {/* ── 4. Glitter Background ── */}
+      <div style={{ background: cardBg, border: `1px solid ${border}`, borderRadius: 20, padding: '20px 22px', backdropFilter: 'blur(20px)', boxShadow: isLight ? '0 2px 16px rgba(0,0,0,0.07)' : '0 2px 16px rgba(0,0,0,0.3)' }}>
+        <SectionLabel>Glitter Background</SectionLabel>
+        <p style={{ fontSize: 12, color: descC, marginBottom: 16, marginTop: -6 }}>
+          Adds a sparkling matte particle texture to the dashboard. Automatically adapts to dark &amp; light mode.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+          {[
+            {
+              id: 'none',
+              name: 'Off',
+              desc: 'No texture',
+              darkBg: '#0d1117',
+              lightBg: '#ebe8e1',
+              particles: [],
+            },
+            {
+              id: 'silver',
+              name: 'Silver',
+              desc: 'Neutral shimmer',
+              darkBg: '#0d1117',
+              lightBg: '#ebe8e1',
+              particles: isLight
+                ? ['rgba(80,80,100,0.45)', 'rgba(60,60,80,0.35)', 'rgba(80,80,100,0.40)']
+                : ['rgba(220,220,240,0.7)', 'rgba(200,200,220,0.6)', 'rgba(240,240,255,0.65)'],
+            },
+            {
+              id: 'gold',
+              name: 'Gold',
+              desc: 'Luxury shimmer',
+              darkBg: '#13110d',
+              lightBg: '#f5f0e8',
+              particles: isLight
+                ? ['rgba(150,110,0,0.6)', 'rgba(170,130,0,0.5)', 'rgba(140,100,0,0.55)']
+                : ['rgba(212,175,55,0.75)', 'rgba(255,215,0,0.65)', 'rgba(200,160,40,0.70)'],
+            },
+            {
+              id: 'purple',
+              name: 'Purple Pearl',
+              desc: 'Brand shimmer',
+              darkBg: '#0e0c14',
+              lightBg: '#f0eeff',
+              particles: isLight
+                ? ['rgba(79,70,229,0.55)', 'rgba(99,102,241,0.45)', 'rgba(79,70,229,0.50)']
+                : ['rgba(200,180,255,0.75)', 'rgba(180,160,240,0.65)', 'rgba(220,200,255,0.70)'],
+            },
+          ].map(opt => {
+            const active = glitterTheme === opt.id;
+            const previewBg = isLight ? opt.lightBg : opt.darkBg;
+            return (
+              <button
+                key={opt.id}
+                onClick={() => setGlitterTheme(opt.id)}
+                style={{
+                  position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+                  border: active ? `2px solid ${primaryColor}` : `1px solid ${border}`,
+                  outline: 'none', transition: 'all 0.18s ease',
+                  transform: active ? 'scale(1.04)' : 'scale(1)',
+                  boxShadow: active ? `0 0 0 3px ${primaryColor}28` : 'none',
+                  background: 'transparent',
+                }}
+              >
+                {/* Preview canvas */}
+                <div style={{
+                  height: 56,
+                  background: previewBg,
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}>
+                  {opt.particles.length > 0 && (
+                    <svg width="100%" height="100%" style={{ position: 'absolute', inset: 0 }}>
+                      {Array.from({ length: 28 }).map((_, i) => {
+                        const col = opt.particles[i % opt.particles.length];
+                        const cx = ((i * 37 + 11) % 100);
+                        const cy = ((i * 53 + 7) % 100);
+                        return <circle key={i} cx={`${cx}%`} cy={`${cy}%`} r="0.8" fill={col} />;
+                      })}
+                    </svg>
+                  )}
+                  {opt.id === 'none' && (
+                    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 28, height: 2, background: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)', borderRadius: 2 }} />
+                    </div>
+                  )}
+                </div>
+                {/* Label */}
+                <div style={{ padding: '6px 8px', background: isLight ? '#fff' : '#1a1f2e' }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: headC, margin: 0 }}>{opt.name}</p>
+                  <p style={{ fontSize: 9, color: descC, margin: 0 }}>{opt.desc}</p>
+                </div>
+                {active && (
+                  <div style={{
+                    position: 'absolute', top: 5, right: 5, width: 16, height: 16,
+                    borderRadius: '50%', background: primaryColor,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="8" height="8" viewBox="0 0 10 8"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" fill="none"/></svg>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Mode-sync badge */}
+        <div style={{
+          marginTop: 12, display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 12px', borderRadius: 10,
+          background: isLight ? 'rgba(99,102,241,0.06)' : 'rgba(139,92,246,0.1)',
+          border: `1px solid ${isLight ? 'rgba(99,102,241,0.15)' : 'rgba(139,92,246,0.2)'}`,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <p style={{ fontSize: 11, color: isLight ? '#4338ca' : '#a5b4fc', margin: 0 }}>
+            <strong>Auto-synced</strong> — glitter colors automatically adapt to your current dark / light mode.
+          </p>
+        </div>
+      </div>
+
       {/* ── Save Button ── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button
-          onClick={() => { localStorage.setItem('theme', theme); alert('Appearance saved!'); }}
+          onClick={() => { localStorage.setItem('theme', theme); localStorage.setItem('glitterTheme', glitterTheme); alert('Appearance saved!'); }}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '10px 24px', borderRadius: 12, cursor: 'pointer',
