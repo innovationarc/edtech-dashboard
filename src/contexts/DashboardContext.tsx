@@ -1,4 +1,4 @@
-// /src/contexts/DashboardContext.tsx
+// /src/contexts/DashboardContext.tsx 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { authService, UserProfile, AccountStatusError } from '../services/authService';
