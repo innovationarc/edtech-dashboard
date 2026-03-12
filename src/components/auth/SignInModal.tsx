@@ -503,7 +503,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                 <div className="w-full border-t border-gray-700/50"></div>
               </div>
               <div className="relative flex justify-center text-[10px] md:text-xs">
-                <span className="px-2.5 md:px-4 font-medium" style={{color: C.gray300, background: 'transparent'}}>New to our platform?</span>
+                <span className="px-2.5 md:px-4 bg-gray-900 font-medium" style={{color: C.gray300}}>New to our platform?</span>
               </div>
             </div>
 
