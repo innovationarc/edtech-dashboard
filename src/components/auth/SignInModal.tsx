@@ -1,6 +1,6 @@
 // src/components/auth/SignInModal.tsx
 import { useState, useEffect } from 'react';
-import { X, Lock, Loader, CreditCard, AlertCircle, Eye, EyeOff, UserCircle, Shield, ArrowRight } from 'lucide-react';
+import { X, Lock, Loader, CreditCard, AlertCircle, Eye, EyeOff, UserCircle, Shield, ArrowRight, LogOut } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { AccountStatusError } from '../../services/authService';
 import RegisterModal from './RegisterModal';
@@ -124,7 +124,7 @@ interface SignInModalProps {
 }
 
 const SignInModal = ({ onClose }: SignInModalProps) => {
-  const { handleSignIn } = useDashboard();
+  const { handleSignIn, forcedLogoutMessage, setForcedLogoutMessage } = useDashboard();
   
   // State management
   const [userId, setUserId] = useState('');
@@ -351,6 +351,30 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
 
           {/* Content */}
           <div className="p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4">
+
+            {/* NEW: Forced Logout Banner */}
+            {forcedLogoutMessage && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2">
+                <LogOut size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5" style={{color: '#f59e0b'}} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] sm:text-xs md:text-sm leading-snug font-medium" style={{color: '#fde68a'}}>
+                    Session Ended
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] leading-snug mt-0.5" style={{color: '#fcd34d'}}>
+                    {forcedLogoutMessage}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForcedLogoutMessage(null)}
+                  className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                  aria-label="Dismiss"
+                >
+                  <X size={12} style={{color: '#f59e0b'}} />
+                </button>
+              </div>
+            )}
+
             {/* Error Message */}
             {error && (
               <div className="sin-shake bg-red-500/10 border border-red-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2">
