@@ -4,7 +4,7 @@ import { User } from 'firebase/auth';
 import { authService, UserProfile, AccountStatusError } from '../services/authService';
 import { userService } from '../services/userService';
 import { gamificationService } from '../services/gamificationService';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
 interface DashboardContextType {
@@ -43,6 +43,9 @@ interface DashboardContextType {
   setDashboardLayout: (layout: string) => void;
   glitterTheme: string;
   setGlitterTheme: (glitter: string) => void;
+  // NEW: forced logout message for single-device enforcement
+  forcedLogoutMessage: string | null;
+  setForcedLogoutMessage: (msg: string | null) => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -120,6 +123,12 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const isDesktopRef = React.useRef(window.innerWidth >= 1024);
 
+  // NEW: Forced logout message state (persists across sign-out so SignInModal can display it)
+  const [forcedLogoutMessage, setForcedLogoutMessage] = useState<string | null>(null);
+
+  // NEW: Ref to hold the Firestore session listener unsubscribe function
+  const sessionListenerRef = React.useRef<(() => void) | null>(null);
+
   // Function to check if user can access User Management
   const canAccessUserManagement = (): boolean => {
     if (!user) return false;
@@ -168,23 +177,11 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           const userProfile = await userService.getUserById(firebaseUser.uid);
           if (userProfile) {
             // FIXED: Device verification now PASSIVE - only logs, never blocks
-            // This fixes the "automatically logged out" problem
             const currentDeviceId = generateDeviceId();
             const storedDeviceId = userProfile.deviceId;
             
-            // REMOVED: Device mismatch logout (was causing automatic logout issue)
-            // OLD CODE (REMOVED):
-            // if (storedDeviceId && storedDeviceId !== currentDeviceId) {
-            //   await authService.signOut();
-            //   return;
-            // }
-            
-            // NEW: Passive device tracking - log for awareness but DON'T logout
-            // The device ID update happens during sign-in in authService
-            // Here we just check for awareness without blocking
             if (storedDeviceId && storedDeviceId !== currentDeviceId) {
-              // This is informational only - useful for admins monitoring sessions
-              // But we DON'T logout the user here
+              // Informational only - useful for admins monitoring sessions
             }
             
             // CRITICAL FIX: Set ALL auth states BEFORE clearing loading
@@ -198,6 +195,66 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
 
             // FIX: Clear loading immediately so dashboard renders without waiting for streak
             setLoading(false);
+
+            // NEW: Start single-device session listener
+            // Clean up any previous listener first
+            if (sessionListenerRef.current) {
+              sessionListenerRef.current();
+              sessionListenerRef.current = null;
+            }
+
+            // Only watch for forced logout if this device has a session token
+            const localSessionToken = (() => {
+              try { return localStorage.getItem('auth_session_token'); } catch { return null; }
+            })();
+
+            if (localSessionToken) {
+              sessionListenerRef.current = onSnapshot(
+                doc(db, 'users', firebaseUser.uid),
+                (snap) => {
+                  if (!snap.exists()) return;
+                  const data = snap.data();
+                  const firestoreToken = data.activeSessionToken;
+                  const currentLocalToken = (() => {
+                    try { return localStorage.getItem('auth_session_token'); } catch { return null; }
+                  })();
+
+                  // If Firestore token differs from our local token → another device logged in
+                  if (
+                    firestoreToken &&
+                    currentLocalToken &&
+                    firestoreToken !== currentLocalToken
+                  ) {
+                    const newIp = data.lastLoginIp || 'unknown';
+
+                    // Clean up snapshot listener immediately to prevent re-trigger
+                    if (sessionListenerRef.current) {
+                      sessionListenerRef.current();
+                      sessionListenerRef.current = null;
+                    }
+
+                    // Clear local session token
+                    try { localStorage.removeItem('auth_session_token'); } catch {}
+
+                    // Force sign out silently (don't throw)
+                    authService.signOut().catch(() => {});
+
+                    // Update UI state
+                    setUser(null);
+                    setIsAuthenticated(false);
+                    setSidebarOpen(false);
+
+                    // Set the forced logout message shown on SignInModal
+                    setForcedLogoutMessage(
+                      `You've been automatically logged out due to another login [IP: ${newIp}]`
+                    );
+                  }
+                },
+                () => {
+                  // onSnapshot error - fail silently, don't disrupt user
+                }
+              );
+            }
 
             // Update user data in context when profile is updated
             const refreshUserProfile = async () => {
@@ -238,16 +295,18 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                       await gamificationService.recordActivity(userProfile.uid, 'streak_updated', { newStreak: 1 });
                     }
                     // If diffDays is 0, it's the same day, no change to streak needed yet.
-                    // The study_session activity will update lastActivityDate.
                   }
                 } catch (streakError: any) {
                   // Silent fail for permission errors or missing gamification data
-                  // This is normal for non-student users (admin, teacher, etc.)
                 }
               })();
             }
           } else {
             // User exists in Firebase Auth but not in Firestore, sign them out
+            if (sessionListenerRef.current) {
+              sessionListenerRef.current();
+              sessionListenerRef.current = null;
+            }
             await authService.signOut();
             setUser(null);
             setIsAuthenticated(false);
@@ -256,13 +315,21 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
           }
         } catch (error) {
           // Silent fail in production - don't expose errors
+          if (sessionListenerRef.current) {
+            sessionListenerRef.current();
+            sessionListenerRef.current = null;
+          }
           setUser(null);
           setIsAuthenticated(false);
           setSidebarOpen(false);
           setLoading(false);
         }
       } else {
-        // No authenticated user
+        // No authenticated user - clean up session listener
+        if (sessionListenerRef.current) {
+          sessionListenerRef.current();
+          sessionListenerRef.current = null;
+        }
         setUser(null);
         setIsAuthenticated(false);
         setSidebarOpen(false);
@@ -273,6 +340,11 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     return () => {
       clearTimeout(authCheckTimeout);
       unsubscribe();
+      // Clean up session listener on unmount
+      if (sessionListenerRef.current) {
+        sessionListenerRef.current();
+        sessionListenerRef.current = null;
+      }
     };
   }, []);
 
@@ -386,8 +458,6 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     // Only handle hover on desktop
     if (!isDesktop) return;
     
-    // Use a longer delay (600ms) so brief cursor movements near the sidebar edge
-    // don't cause the sidebar to flicker closed/open rapidly
     const timeout = setTimeout(() => {
       setSidebarOpen(false);
       setHoverTimeout(null);
@@ -397,18 +467,14 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
 
   const handleSearch = (query: string) => {
     // Implement search functionality here
-    // Note: Removed console.log for production
   };
 
   const handleSignIn = async (userId: string, password: string, rememberMe: boolean = false) => {
     try {
       setLoading(true);
+      // NEW: Clear any previous forced logout message on new sign-in attempt
+      setForcedLogoutMessage(null);
       
-      // FIXED: Properly pass rememberMe to authService
-      // The authService.signIn now handles Firebase persistence based on rememberMe flag:
-      // - rememberMe=true → browserLocalPersistence (survives browser close)
-      // - rememberMe=false → browserSessionPersistence (cleared on browser close)
-      // Additionally stores user_id in localStorage for convenience
       const userProfile = await authService.signIn(userId, password, rememberMe);
       
       // Set user state immediately after successful sign-in
@@ -454,6 +520,11 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
 
   const handleSignOut = async () => {
     try {
+      // Clean up session listener before signing out
+      if (sessionListenerRef.current) {
+        sessionListenerRef.current();
+        sessionListenerRef.current = null;
+      }
       // This now clears both Firebase persistence AND localStorage remember me data
       await authService.signOut();
       setUser(null);
@@ -542,6 +613,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setDashboardLayout,
         glitterTheme,
         setGlitterTheme: handleSetGlitterTheme,
+        forcedLogoutMessage,
+        setForcedLogoutMessage,
       }}
     >
       {children}
