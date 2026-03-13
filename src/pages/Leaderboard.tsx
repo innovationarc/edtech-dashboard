@@ -3,7 +3,7 @@
 // - Admin/Manager/Student-Manager: all courses, full student list (name + surname + userId)
 // - Teacher: only courses where teacher has 'exams' permission
 // - Only 1-time limited exams count.
-
+import PageSkeleton from '../components/ui/PageSkeleton';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Trophy, Medal, Award, Search, RefreshCw, Download,
@@ -437,13 +437,7 @@ const Leaderboard = () => {
     return user.role;
   }, [user?.role]);
 
-  if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 12 }}>
-      <Loader size={32} color="#6366f1" style={{ animation: 'spin 1s linear infinite' }} />
-      <p style={{ color: '#555' }}>Loading leaderboard data...</p>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
+  if (loading) return <PageSkeleton variant="list" />;
 
   if (error) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, gap: 12 }}>
