@@ -6,7 +6,7 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { db } from '../config/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
