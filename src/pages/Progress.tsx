@@ -1,3 +1,4 @@
+import PageSkeleton from '../components/ui/PageSkeleton';
 // src/pages/Progress.tsx
 // Student Performance Hub — full-page detail drill-down, rich analytics
 // Only 1-time limited exams (maxAttempts === 1) count toward rankings.
