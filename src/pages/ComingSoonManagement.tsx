@@ -1,3 +1,4 @@
+import PageSkeleton from '../components/ui/PageSkeleton';
 // src/pages/ComingSoonManagement.tsx
 import { useState, useEffect } from 'react';
 import {
