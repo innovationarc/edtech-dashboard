@@ -402,43 +402,30 @@ const DashboardLayout = () => {
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
 
-        /* ── Login stagger animation ── */
-        @keyframes staggerFadeUp {
-          from { opacity: 0; transform: translateY(22px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0)   scale(1); }
+        /* ── Login stagger: GPU-only (transform + opacity only) ── */
+        @keyframes loginFadeUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        .login-stagger .dashboard-card,
-        .login-stagger .stats-card-hover,
-        .login-stagger .saas-card-hover,
-        .login-stagger .glass-card,
-        .login-stagger [class*="rounded-2xl"],
-        .login-stagger [class*="rounded-xl"] {
-          animation: staggerFadeUp 0.45s cubic-bezier(0.23, 1, 0.32, 1) both;
-        }
-        .login-stagger .dashboard-card:nth-child(1),  .login-stagger [class*="rounded-2xl"]:nth-child(1),  .login-stagger [class*="rounded-xl"]:nth-child(1)  { animation-delay: 0.00s; }
-        .login-stagger .dashboard-card:nth-child(2),  .login-stagger [class*="rounded-2xl"]:nth-child(2),  .login-stagger [class*="rounded-xl"]:nth-child(2)  { animation-delay: 0.06s; }
-        .login-stagger .dashboard-card:nth-child(3),  .login-stagger [class*="rounded-2xl"]:nth-child(3),  .login-stagger [class*="rounded-xl"]:nth-child(3)  { animation-delay: 0.12s; }
-        .login-stagger .dashboard-card:nth-child(4),  .login-stagger [class*="rounded-2xl"]:nth-child(4),  .login-stagger [class*="rounded-xl"]:nth-child(4)  { animation-delay: 0.18s; }
-        .login-stagger .dashboard-card:nth-child(5),  .login-stagger [class*="rounded-2xl"]:nth-child(5),  .login-stagger [class*="rounded-xl"]:nth-child(5)  { animation-delay: 0.24s; }
-        .login-stagger .dashboard-card:nth-child(6),  .login-stagger [class*="rounded-2xl"]:nth-child(6),  .login-stagger [class*="rounded-xl"]:nth-child(6)  { animation-delay: 0.30s; }
-        .login-stagger .dashboard-card:nth-child(7),  .login-stagger [class*="rounded-2xl"]:nth-child(7),  .login-stagger [class*="rounded-xl"]:nth-child(7)  { animation-delay: 0.36s; }
-        .login-stagger .dashboard-card:nth-child(8),  .login-stagger [class*="rounded-2xl"]:nth-child(8),  .login-stagger [class*="rounded-xl"]:nth-child(8)  { animation-delay: 0.42s; }
-        .login-stagger .dashboard-card:nth-child(n+9), .login-stagger [class*="rounded-2xl"]:nth-child(n+9), .login-stagger [class*="rounded-xl"]:nth-child(n+9) { animation-delay: 0.48s; }
-
-        /* Sidebar slides in from left during stagger */
-        @keyframes sidebarSlideIn {
-          from { opacity: 0; transform: translateX(-20px); }
+        @keyframes loginSidebarIn {
+          from { opacity: 0; transform: translateX(-14px); }
           to   { opacity: 1; transform: translateX(0); }
         }
-        .login-stagger-sidebar {
-          animation: sidebarSlideIn 0.45s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+        .login-stagger > * {
+          animation: loginFadeUp 0.4s cubic-bezier(0.23,1,0.32,1) both;
+          will-change: transform, opacity;
         }
-        body.login-stagger-active aside {
-          animation: sidebarSlideIn 0.45s cubic-bezier(0.34, 1.15, 0.64, 1) both;
-        }
-        body.login-stagger-active header,
-        body.login-stagger-active nav {
-          animation: sidebarSlideIn 0.4s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+        .login-stagger > *:nth-child(1)   { animation-delay: 0.00s; }
+        .login-stagger > *:nth-child(2)   { animation-delay: 0.07s; }
+        .login-stagger > *:nth-child(3)   { animation-delay: 0.14s; }
+        .login-stagger > *:nth-child(4)   { animation-delay: 0.21s; }
+        .login-stagger > *:nth-child(5)   { animation-delay: 0.28s; }
+        .login-stagger > *:nth-child(6)   { animation-delay: 0.35s; }
+        .login-stagger > *:nth-child(n+7) { animation-delay: 0.40s; }
+        body.login-stagger-active aside,
+        body.login-stagger-active header {
+          animation: loginSidebarIn 0.4s cubic-bezier(0.34,1.15,0.64,1) both;
+          will-change: transform, opacity;
         }
       `}</style>
 
