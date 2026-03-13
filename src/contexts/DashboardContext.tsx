@@ -422,7 +422,14 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   // Apply theme changes to document
   useEffect(() => {
     const root = document.documentElement;
-    
+
+    // Persist ALL appearance prefs so they survive page refresh
+    localStorage.setItem('theme',        theme);
+    localStorage.setItem('primaryColor', primaryColor);
+    localStorage.setItem('accentColor',  accentColor);
+    localStorage.setItem('fontFamily',   fontFamily);
+    localStorage.setItem('glitterTheme', glitterTheme);
+
     // Apply theme classes
     root.className = root.className.replace(/theme-\w+/g, '');
     root.classList.add(`theme-${theme}`);
@@ -483,7 +490,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     root.style.setProperty('--color-card', colors.card);
     root.style.setProperty('--color-card-light', colors.cardLight);
     
-    // Update body background
+    // Update BOTH html and body so no dark bleed shows behind content
+    document.documentElement.style.backgroundColor = colors.bg;
     document.body.style.backgroundColor = colors.bg;
   }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, glitterTheme, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
 
