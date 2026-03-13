@@ -1,3 +1,4 @@
+import PageSkeleton from '../components/ui/PageSkeleton';
 // src/pages/StudyPlan.tsx
 // Teacher/Admin Study Plan Management — Search · Filter · Sort · AI Tips
 
