@@ -48,6 +48,9 @@ import ComingSoonManagement from './pages/ComingSoonManagement';
 // AI Model Settings (Admin only)
 import AIModelSettings from './pages/AIModelSettings';
 
+// Nova Chatbot Context (Admin only)
+import AdminNovaContext from './pages/AdminNovaContext';
+
 // Notifications (all authenticated users)
 import NotificationsPage from './components/shared/NotificationsPage';
 
@@ -324,6 +327,13 @@ const AppRoutes = () => {
         <Route path="ai-settings" element={
           <AdminRoute>
             <AIModelSettings />
+          </AdminRoute>
+        } />
+
+        {/* Nova Chatbot Context - Admin only */}
+        <Route path="nova-context" element={
+          <AdminRoute>
+            <AdminNovaContext />
           </AdminRoute>
         } />
 
