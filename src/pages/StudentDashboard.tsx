@@ -1,9 +1,10 @@
 // src/pages/StudentDashboard.tsx — Student-friendly, professional, glass theme
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Target, Clock, Calendar, Star, Play, Pause, RotateCcw, Plus,
   CheckCircle, Circle, Megaphone, Award, BookOpen, Zap, Bell, X,
-  Loader, AlertCircle,
+  Loader, AlertCircle, Video,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -14,6 +15,8 @@ import { gamificationService } from '../services/gamificationService';
 import { qaService } from '../services/qaService';
 import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService';
 import StudyPlanEventModal from '../components/shared/StudyPlanEventModal';
+import { liveClassService } from '../services/liveClassService';
+import { LiveClass } from '../types/liveClassTypes';
 
 interface Objective { id:string; title:string; completed:boolean; priority:'high'|'medium'|'low'; }
 interface Goal { id:string; title:string; description:string; progress:number; target:number; category:string; deadline:Date; }
@@ -31,6 +34,7 @@ const EDC = (t:string) => { const s=t.toLowerCase(); return s.includes('exam')||
 
 const StudentDashboard = () => {
   const { user, primaryColor = '#6366f1', accentColor = '#8b5cf6', theme } = useDashboard();
+  const navigate = useNavigate();
   const isLight = theme === 'light';
 
   // Theme-aware text & surface colors
@@ -54,6 +58,7 @@ const StudentDashboard = () => {
   const [calendarEvents, setCalendarEvents]         = useState<StudyPlanEvent[]>([]);
   const [calendarLoading, setCalendarLoading]       = useState(true);
   const [calendarError, setCalendarError]           = useState('');
+  const [liveClasses, setLiveClasses]               = useState<LiveClass[]>([]);
   const [showObjModal, setShowObjModal]             = useState(false);
   const [showGoalModal, setShowGoalModal]           = useState(false);
   const [showEventModal, setShowEventModal]         = useState(false);
@@ -102,8 +107,8 @@ const StudentDashboard = () => {
   useEffect(() => {
     setDailyQuote(getRandomQuote());
     if (!user) return;
-    loadAnnouncements(); loadCalendarEvents();
-    const iv = setInterval(()=>{loadAnnouncements();loadCalendarEvents();},30000);
+    loadAnnouncements(); loadCalendarEvents(); loadLiveClasses();
+    const iv = setInterval(()=>{loadAnnouncements();loadCalendarEvents();loadLiveClasses();},30000);
     return ()=>clearInterval(iv);
   },[user]);
 
@@ -143,6 +148,22 @@ const StudentDashboard = () => {
       const next=new Date(today); next.setDate(today.getDate()+7);
       setCalendarEvents(all.filter(e=>{const d=new Date(e.date.getFullYear(),e.date.getMonth(),e.date.getDate());return d>=today&&d<=next;}).sort((a,b)=>a.date.getTime()-b.date.getTime()));
     } catch { setCalendarError('Failed to load'); setCalendarEvents([]); } finally { setCalendarLoading(false); }
+  };
+
+  const loadLiveClasses = async () => {
+    try {
+      const all = await liveClassService.getAll();
+      const now = new Date();
+      const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      setLiveClasses(all.filter(c => {
+        if (c.status === 'live') return true;
+        if (c.status === 'scheduled') {
+          const t = c.scheduledAt.toDate();
+          return t >= now && t <= in48h;
+        }
+        return false;
+      }));
+    } catch { /* silent — non-critical */ }
   };
 
   useEffect(()=>{
@@ -189,6 +210,71 @@ const StudentDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Live Classes Card — only shown when there are live or upcoming (48h) classes */}
+      {liveClasses.length > 0 && (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <Video size={15} color="#ef4444"/>
+            <span style={{fontSize:12,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'0.08em'}}>Live &amp; Upcoming Classes</span>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(100%,280px),1fr))',gap:'clamp(8px,1.2vw,14px)'}}>
+            {liveClasses.map(cls => {
+              const isLive = cls.status === 'live';
+              const scheduled = cls.scheduledAt.toDate();
+              const diffMs = scheduled.getTime() - Date.now();
+              const diffH = Math.floor(diffMs / 3600000);
+              const diffM = Math.floor((diffMs % 3600000) / 60000);
+              const timeLabel = isLive ? 'Happening now' : diffH > 0 ? `In ${diffH}h ${diffM}m` : `In ${diffM}m`;
+              return (
+                <div key={cls.id} style={{
+                  display:'flex',alignItems:'center',gap:12,
+                  padding:'11px 14px',borderRadius:13,
+                  background: isLive ? 'rgba(239,68,68,0.08)' : T.surface,
+                  border: isLive ? '1px solid rgba(239,68,68,0.28)' : `1px solid ${T.border}`,
+                  transition:'all 0.15s',
+                }}>
+                  {/* Status dot */}
+                  <div style={{
+                    width:36,height:36,borderRadius:10,flexShrink:0,
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    background: isLive ? 'rgba(239,68,68,0.15)' : 'rgba(99,102,241,0.12)',
+                  }}>
+                    {isLive
+                      ? <span style={{width:10,height:10,borderRadius:'50%',background:'#ef4444',boxShadow:'0 0 0 3px rgba(239,68,68,0.25)',display:'block',animation:'pulse 1.5s ease-in-out infinite'}}/>
+                      : <Video size={16} color="#6366f1"/>
+                    }
+                  </div>
+                  {/* Info */}
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:'clamp(0.72rem,1.1vw,0.8rem)',fontWeight:700,color:T.text,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cls.title}</p>
+                    <div style={{display:'flex',alignItems:'center',gap:5,marginTop:2}}>
+                      {isLive && <span style={{fontSize:9,fontWeight:800,background:'rgba(239,68,68,0.18)',color:'#ef4444',borderRadius:4,padding:'1px 5px',letterSpacing:'0.05em'}}>LIVE</span>}
+                      <span style={{fontSize:10,color: isLive ? 'rgba(239,68,68,0.7)' : T.text3}}>{timeLabel}</span>
+                      {cls.teacherName && <span style={{fontSize:10,color:T.text3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>· {cls.teacherName}</span>}
+                    </div>
+                  </div>
+                  {/* CTA */}
+                  <button
+                    onClick={() => navigate('/student-live-classes')}
+                    style={{
+                      flexShrink:0,display:'flex',alignItems:'center',gap:5,
+                      padding:'6px 12px',borderRadius:8,border:'none',cursor:'pointer',
+                      fontSize:11,fontWeight:700,fontFamily:"'Outfit',sans-serif",
+                      background: isLive ? '#ef4444' : 'rgba(99,102,241,0.85)',
+                      color:'#fff',
+                      boxShadow: isLive ? '0 2px 10px rgba(239,68,68,0.35)' : '0 2px 8px rgba(99,102,241,0.3)',
+                    }}
+                  >
+                    <Play size={10} fill="#fff"/>
+                    {isLive ? 'Join Now' : 'View'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Row 1: 4-column cards */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,230px),1fr))',gap:'clamp(10px,1.4vw,18px)'}}>
