@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowUpRight, TrendingUp, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
+import { useDashboard } from '../../contexts/DashboardContext';
 interface WelcomeCardProps {
   userName: string;
 }
@@ -21,6 +21,8 @@ const TIPS = [
 ];
 
 const WelcomeCard = ({ userName }: WelcomeCardProps) => {
+  const { theme } = useDashboard();
+  const isLight = theme === 'light';
   const [greeting, setGreeting] = useState(GREETINGS[0]);
   const [tipIndex, setTipIndex] = useState(0);
   const [tipVisible, setTipVisible] = useState(true);
@@ -49,8 +51,9 @@ const WelcomeCard = ({ userName }: WelcomeCardProps) => {
     <div
       className="relative h-full rounded-2xl overflow-hidden dashboard-card"
       style={{
-        /* Dark card — matches iDraft's "Overall Information" dark card */
-        background: 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
+        background: isLight
+          ? 'linear-gradient(145deg, rgba(255,255,255,0.90) 0%, rgba(245,243,240,0.95) 100%)'
+          : 'linear-gradient(145deg, #111827 0%, #0d1117 100%)',
         minHeight: '200px',
         padding: '24px',
       }}
