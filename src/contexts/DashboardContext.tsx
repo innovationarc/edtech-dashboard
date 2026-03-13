@@ -146,7 +146,6 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   // NEW: Forced logout message state (persists across sign-out so SignInModal can display it)
   const [forcedLogoutMessage, setForcedLogoutMessage] = useState<string | null>(null);
   const [showLoginAnimation, setShowLoginAnimation] = useState(false);
-  const prevAuthRef = useRef(false);
 
   // NEW: Ref to hold the Firestore session listener unsubscribe function
   const sessionListenerRef = React.useRef<(() => void) | null>(null);
@@ -424,14 +423,6 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     };
   }, []);
 
-  // Trigger login animation exactly once when isAuthenticated flips false → true
-  useEffect(() => {
-    if (isAuthenticated && !prevAuthRef.current) {
-      setShowLoginAnimation(true);
-    }
-    prevAuthRef.current = isAuthenticated;
-  }, [isAuthenticated]);
-
   // Apply theme changes to document
   useEffect(() => {
     const root = document.documentElement;
@@ -567,6 +558,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       // Set user state immediately after successful sign-in
       setUser(userProfile);
       setIsAuthenticated(true);
+      setShowLoginAnimation(true);
       
       // Only auto-open sidebar on desktop
       if (isDesktop) {
