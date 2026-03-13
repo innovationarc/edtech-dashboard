@@ -1,4 +1,4 @@
-// src/pages/admin/AdminNovaContext.tsx
+// src/pages/AdminNovaContext.tsx
 // Admin panel — Nova RAG Context Manager
 //
 // Tabs:
