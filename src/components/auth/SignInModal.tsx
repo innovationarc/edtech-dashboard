@@ -358,10 +358,16 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                 <LogOut size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5" style={{color: '#f59e0b'}} />
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] sm:text-xs md:text-sm leading-snug font-medium" style={{color: '#fde68a'}}>
-                    Session Ended
+                    Session Terminated
                   </p>
                   <p className="text-[10px] sm:text-[11px] leading-snug mt-0.5" style={{color: '#fcd34d'}}>
-                    {forcedLogoutMessage}
+                    {(() => {
+                      const ipMatch = forcedLogoutMessage?.match(/\[IP:\s*([\d.a-fA-F:]+)\]/);
+                      if (!ipMatch) return forcedLogoutMessage;
+                      const [full, ip] = ipMatch;
+                      const parts = forcedLogoutMessage!.split(full);
+                      return <>{parts[0]}<span style={{color: '#fb923c', fontWeight: 600}}>[IP: {ip}]</span>{parts[1]}</>;
+                    })()}
                   </p>
                 </div>
                 <button
