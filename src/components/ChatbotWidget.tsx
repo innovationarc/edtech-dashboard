@@ -94,6 +94,40 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
   const accent = accentColor || '#6366f1';
 
+  // Detect bottom nav height dynamically — tries multiple selectors, falls back to 64px on mobile
+  const [bottomNavHeight, setBottomNavHeight] = useState(0);
+  useEffect(() => {
+    const detect = () => {
+      const selectors = [
+        '[class*="bottom-nav"]', '[class*="bottomNav"]', '[class*="BottomNav"]',
+        '[class*="bottom-tab"]', '[class*="bottomTab"]', '[class*="tab-bar"]',
+        '[class*="mobile-nav"]', '[class*="MobileNav"]', 'nav.fixed', 'nav.bottom',
+        '.fixed.bottom-0', '[class*="footer-nav"]',
+      ];
+      for (const sel of selectors) {
+        const el = document.querySelector(sel) as HTMLElement | null;
+        if (el && el.offsetHeight > 40) { setBottomNavHeight(el.offsetHeight); return; }
+      }
+      // Last resort: find any fixed element anchored to the bottom of the viewport
+      const allFixed = Array.from(document.querySelectorAll('*')).filter(el => {
+        const s = window.getComputedStyle(el);
+        const rect = (el as HTMLElement).getBoundingClientRect();
+        return s.position === 'fixed' && rect.bottom >= window.innerHeight - 4 && rect.height >= 44 && rect.width > window.innerWidth * 0.5;
+      }) as HTMLElement[];
+      if (allFixed.length > 0) { setBottomNavHeight(allFixed[0].offsetHeight); return; }
+      // Fallback
+      setBottomNavHeight(window.innerWidth <= 1024 ? 64 : 0);
+    };
+    detect();
+    // Re-detect after a short delay (nav may mount after widget)
+    const t = setTimeout(detect, 500);
+    window.addEventListener('resize', detect);
+    return () => { clearTimeout(t); window.removeEventListener('resize', detect); };
+  }, []);
+
+  const fabBottom = bottomNavHeight + 12;
+  const panelBottom = fabBottom + 72 + 8;
+
   return (
     <>
       <style>{`
@@ -110,6 +144,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           --nova-text: #e2e8f0;
           --nova-muted: #64748b;
           --nova-radius: 20px;
+          --nova-nav-h: ${bottomNavHeight}px;
         }
 
         .nova-widget * { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; box-sizing: border-box; }
@@ -123,7 +158,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           animation: nova-pulse 3.4s ease-in-out infinite;
           transition: transform 0.2s cubic-bezier(.34,1.56,.64,1);
           background: none !important; border: none !important; padding: 0 !important;
-          cursor: pointer; position: fixed; bottom: 20px; right: 20px; z-index: 40;
+          cursor: pointer; position: fixed; right: 20px; z-index: 50;
           width: 72px; height: 72px;
         }
         .nova-ghost-btn:hover {
@@ -133,10 +168,10 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
         /* Chat panel */
         .nova-panel {
-          position: fixed; z-index: 40;
-          bottom: 104px; right: 20px;
+          position: fixed; z-index: 49;
+          right: 20px;
           width: min(420px, calc(100vw - 24px));
-          height: min(580px, calc(100dvh - 130px));
+          height: min(580px, calc(100dvh - var(--nova-nav-h) - 110px));
           display: flex; flex-direction: column;
           background: var(--nova-bg);
           border: 1px solid var(--nova-border);
@@ -329,8 +364,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
         /* Mobile adjustments */
         @media (max-width: 480px) {
-          .nova-panel { bottom: 96px; right: 12px; left: 12px; width: auto; border-radius: 18px; }
-          .nova-ghost-btn { bottom: 16px; right: 16px; }
+          .nova-panel { right: 12px; left: 12px; width: auto; border-radius: 18px; }
+          .nova-ghost-btn { right: 16px; }
         }
         @media (max-height: 600px) {
           .nova-panel { height: calc(100dvh - 110px); }
@@ -392,14 +427,14 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
       {/* Ghost FAB */}
       <button onClick={handleGhostTap} className="nova-ghost-btn nova-widget"
-        style={{ ['--ghost-glow-color' as any]: accent + 'a6', ['--ghost-glow-color-full' as any]: accent }}
+        style={{ bottom: fabBottom, ['--ghost-glow-color' as any]: accent + 'a6', ['--ghost-glow-color-full' as any]: accent }}
         aria-label={isOpen ? 'Close Nova' : 'Open Nova'}>
         <GhostIcon size={72} isActive={isOpen} />
       </button>
 
       {/* Chat Panel */}
       {isOpen && (
-        <div className={`nova-panel nova-widget ${isVisible ? 'entering' : 'exiting'}`} role="dialog" aria-label="Nova assistant">
+        <div className={`nova-panel nova-widget ${isVisible ? 'entering' : 'exiting'}`} style={{ bottom: panelBottom }} role="dialog" aria-label="Nova assistant">
           {/* Header */}
           <div className="nova-header">
             <div className="nova-avatar">
