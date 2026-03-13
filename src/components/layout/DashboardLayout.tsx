@@ -398,11 +398,15 @@ const DashboardLayout = () => {
             position: 'fixed',
             transform: `translate(${position.x}px, ${position.y}px)`,
             zIndex: 1000,
-            bottom: 0,
-            right: 0,
+            // On mobile, lift above the bottom nav (~64px). On desktop, sit at edge.
+            bottom: isMobile ? 76 : 20,
+            right: isMobile ? 16 : 20,
             userSelect: 'none',
             touchAction: 'none',
             cursor: 'grab',
+            // Must be visible so the chat panel (position:fixed inside a transformed
+            // parent would break, but modals use portal — ghost btn is relative here)
+            overflow: 'visible',
           }}
         >
           <ChatbotWidget eyeOffset={eyeOffset} />
