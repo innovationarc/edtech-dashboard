@@ -1,5 +1,6 @@
 // src/components/ChatbotWidget.tsx
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { Send, X, AlertTriangle, Info, Sparkles, Zap } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -93,42 +94,9 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const formatTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const accent = accentColor || '#6366f1';
+  const panelBottom = 104;
 
-  // Detect bottom nav height dynamically — tries multiple selectors, falls back to 64px on mobile
-  const [bottomNavHeight, setBottomNavHeight] = useState(0);
-  useEffect(() => {
-    const detect = () => {
-      const selectors = [
-        '[class*="bottom-nav"]', '[class*="bottomNav"]', '[class*="BottomNav"]',
-        '[class*="bottom-tab"]', '[class*="bottomTab"]', '[class*="tab-bar"]',
-        '[class*="mobile-nav"]', '[class*="MobileNav"]', 'nav.fixed', 'nav.bottom',
-        '.fixed.bottom-0', '[class*="footer-nav"]',
-      ];
-      for (const sel of selectors) {
-        const el = document.querySelector(sel) as HTMLElement | null;
-        if (el && el.offsetHeight > 40) { setBottomNavHeight(el.offsetHeight); return; }
-      }
-      // Last resort: find any fixed element anchored to the bottom of the viewport
-      const allFixed = Array.from(document.querySelectorAll('*')).filter(el => {
-        const s = window.getComputedStyle(el);
-        const rect = (el as HTMLElement).getBoundingClientRect();
-        return s.position === 'fixed' && rect.bottom >= window.innerHeight - 4 && rect.height >= 44 && rect.width > window.innerWidth * 0.5;
-      }) as HTMLElement[];
-      if (allFixed.length > 0) { setBottomNavHeight(allFixed[0].offsetHeight); return; }
-      // Fallback
-      setBottomNavHeight(window.innerWidth <= 1024 ? 64 : 0);
-    };
-    detect();
-    // Re-detect after a short delay (nav may mount after widget)
-    const t = setTimeout(detect, 500);
-    window.addEventListener('resize', detect);
-    return () => { clearTimeout(t); window.removeEventListener('resize', detect); };
-  }, []);
-
-  const fabBottom = bottomNavHeight + 12;
-  const panelBottom = fabBottom + 72 + 8;
-
-  return (
+  const portalContent = (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&display=swap');
@@ -158,7 +126,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           animation: nova-pulse 3.4s ease-in-out infinite;
           transition: transform 0.2s cubic-bezier(.34,1.56,.64,1);
           background: none !important; border: none !important; padding: 0 !important;
-          cursor: pointer; position: fixed; right: 20px; z-index: 50;
+          cursor: pointer; display: block;
           width: 72px; height: 72px;
         }
         .nova-ghost-btn:hover {
@@ -166,7 +134,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           filter: drop-shadow(0 0 28px var(--nova-accent)) drop-shadow(0 12px 32px rgba(0,0,0,0.55));
         }
 
-        /* Chat panel */
+        /* Chat panel — fixed to viewport, NOT relative to transformed parent */
         .nova-panel {
           position: fixed; z-index: 49;
           right: 20px;
@@ -425,13 +393,6 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
         </div>
       )}
 
-      {/* Ghost FAB */}
-      <button onClick={handleGhostTap} className="nova-ghost-btn nova-widget"
-        style={{ bottom: fabBottom, ['--ghost-glow-color' as any]: accent + 'a6', ['--ghost-glow-color-full' as any]: accent }}
-        aria-label={isOpen ? 'Close Nova' : 'Open Nova'}>
-        <GhostIcon size={72} isActive={isOpen} />
-      </button>
-
       {/* Chat Panel */}
       {isOpen && (
         <div className={`nova-panel nova-widget ${isVisible ? 'entering' : 'exiting'}`} style={{ bottom: panelBottom }} role="dialog" aria-label="Nova assistant">
@@ -521,6 +482,20 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           </div>
         </div>
       )}
+    </>
+  );
+
+  return (
+    <>
+      {/* Ghost button — renders as normal flow inside DashboardLayout's transformed wrapper */}
+      <button onClick={handleGhostTap} className="nova-ghost-btn nova-widget"
+        style={{ ['--ghost-glow-color' as any]: accent + 'a6', ['--ghost-glow-color-full' as any]: accent }}
+        aria-label={isOpen ? 'Close Nova' : 'Open Nova'}>
+        <GhostIcon size={72} isActive={isOpen} />
+      </button>
+
+      {/* Portal: renders modals + chat panel at document.body, escaping the transformed parent */}
+      {ReactDOM.createPortal(portalContent, document.body)}
     </>
   );
 };
