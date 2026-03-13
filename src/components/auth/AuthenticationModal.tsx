@@ -1,8 +1,9 @@
 // src/components/auth/AuthenticationModal.tsx
 import React, { useState } from 'react';
-import { LogIn, UserPlus, Shield, Lock, ArrowRight } from 'lucide-react';
+import { LogIn, UserPlus, Shield, Lock, ArrowRight, LogOut, X } from 'lucide-react';
 import SignInModal from './SignInModal';
 import RegisterModal from './RegisterModal';
+import { useDashboard } from '../../contexts/DashboardContext';
 
 // ─── Self-contained color tokens ───────────────────────────────────────────
 const C = {
@@ -89,6 +90,7 @@ interface AuthenticationModalProps {
 const AuthenticationModal: React.FC<AuthenticationModalProps> = ({ onClose }) => {
   const [showSignIn, setShowSignIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const { forcedLogoutMessage, setForcedLogoutMessage } = useDashboard();
 
   const handleRegisterSuccess = () => { setShowRegister(false); };
   const handleSwitchToSignIn = () => { setShowRegister(false); setShowSignIn(true); };
@@ -113,6 +115,36 @@ const AuthenticationModal: React.FC<AuthenticationModalProps> = ({ onClose }) =>
 
         {/* Content - Scrollable */}
         <div className="relative p-4 xs:p-6 sm:p-8 md:p-10 overflow-y-auto modal-scroll">
+
+          {/* Forced Logout Banner */}
+          {forcedLogoutMessage && (
+            <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2">
+              <LogOut size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5" style={{color: '#f59e0b'}} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] sm:text-xs font-medium leading-snug" style={{color: '#fde68a'}}>
+                  Session Terminated
+                </p>
+                <p className="text-[10px] sm:text-[11px] leading-snug mt-0.5" style={{color: '#fcd34d'}}>
+                  {(() => {
+                    const ipMatch = forcedLogoutMessage?.match(/\[IP:\s*([\d.a-fA-F:]+)\]/);
+                    if (!ipMatch) return forcedLogoutMessage;
+                    const [full, ip] = ipMatch;
+                    const parts = forcedLogoutMessage!.split(full);
+                    return <>{parts[0]}<span style={{color: '#fb923c', fontWeight: 600}}>[IP: {ip}]</span>{parts[1]}</>;
+                  })()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForcedLogoutMessage(null)}
+                className="flex-shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                aria-label="Dismiss"
+              >
+                <X size={12} style={{color: '#f59e0b'}} />
+              </button>
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex flex-col items-center mb-4 sm:mb-6 md:mb-8">
             {/* Icon */}
