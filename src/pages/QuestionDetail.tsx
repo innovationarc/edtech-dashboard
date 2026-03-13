@@ -364,7 +364,7 @@ const QuestionDetail = () => {
           </button>
 
           {showQuestionMenu && (
-            <Card>
+            <Card tilt={false}>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-white">Questions</h3>
@@ -478,7 +478,7 @@ const QuestionDetail = () => {
           <span>Back to Questions</span>
         </button>
 
-        <Card>
+        <Card tilt={false}>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -610,7 +610,7 @@ const QuestionDetail = () => {
 // src/pages/QuestionDetail.tsx - Part 3 of 5 (Answers Display & Satisfaction Handling)
 
         {isClosed ? (
-          <Card>
+          <Card tilt={false}>
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-error-light">
                 <XCircle size={20} />
@@ -639,7 +639,7 @@ const QuestionDetail = () => {
               </h2>
 
               {answers.length === 0 ? (
-                <Card>
+                <Card tilt={false}>
                   <div className="text-center py-12 text-gray-400">
                     <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
                     <p>No answers yet. Waiting for response...</p>
@@ -685,7 +685,7 @@ const QuestionDetail = () => {
             )}
 
             {isStudentQuestion && isAnswered && (
-              <Card>
+              <Card tilt={false}>
                 <div className="space-y-4">
                   <div className="text-xs text-red-400 mb-4">
                     N.B.: If you're still confused about an answer, press the "Still Confused" button to ask your doubt.
@@ -763,7 +763,7 @@ const QuestionDetail = () => {
         )}
 
         {isStudentQuestion && isClosed && (
-          <Card>
+          <Card tilt={false}>
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="w-full flex items-center justify-center gap-2 bg-error-dark hover:bg-error-DEFAULT text-error-light px-4 py-3 rounded-lg transition-colors font-medium"
@@ -991,7 +991,7 @@ const AnswerCard = ({ answer, questionId, isStudentQuestion, courseId, onViewDoc
   const answerSource = answer.type === 'ai' ? 'AI' : (courseId === 'help-support' ? 'Admin' : 'Teacher');
 
   return (
-    <Card>
+    <Card tilt={false}>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1167,7 +1167,7 @@ const FollowUpQuestionCard = ({ question, courseId, onViewDocument, onViewImage,
   };
 
   return (
-    <Card>
+    <Card tilt={false}>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
