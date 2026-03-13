@@ -1,4 +1,4 @@
-// src/components/ChatbotWidget.tsx
+// src/components/ChatbotWidget.tsx 
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { Send, X, AlertTriangle, Info, Sparkles, Zap } from 'lucide-react';
