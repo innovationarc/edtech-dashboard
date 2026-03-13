@@ -2024,7 +2024,7 @@ const StudentStudyPlan = () => {
 
           {/* Left column */}
           <div className="space-y-4">
-            <Card>
+            <Card tilt={false}>
               <h2 className="text-base font-semibold text-white mb-4">Calendar</h2>
               <div className="custom-calendar">
                 <style>{`.react-calendar__month-view__days__day--weekend { color: inherit !important; } .react-calendar__month-view__days__day--weekend abbr { color: inherit !important; }`}</style>
@@ -2046,7 +2046,7 @@ const StudentStudyPlan = () => {
             </Card>
 
             {/* Pomodoro Timer */}
-            <Card>
+            <Card tilt={false}>
               <h2 className="text-base font-semibold text-white mb-3 flex items-center gap-2">
                 <Timer size={14} className="text-primary-400" /> Focus Timer
                 {pomodoroSessionCount > 0 && (
@@ -2184,7 +2184,7 @@ const StudentStudyPlan = () => {
 
             {/* Events for selected day */}
             <div ref={dayEventsRef}>
-            <Card>
+            <Card tilt={false}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-white">
                   {isToday(selectedDate) ? 'Today' : isTomorrow(selectedDate) ? 'Tomorrow' : format(selectedDate, 'MMMM d, yyyy')}
@@ -2292,7 +2292,7 @@ const StudentStudyPlan = () => {
             </div>
 
             {/* Study Goals */}
-            <Card>
+            <Card tilt={false}>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-base font-semibold text-white flex items-center gap-2">
                   <Target size={14} className="text-primary-400" />Study Goals
@@ -2868,7 +2868,7 @@ const StudentStudyPlan = () => {
             </Card>
 
             {/* Custom Activities */}
-            <Card>
+            <Card tilt={false}>
               <button onClick={() => setShowActivitiesPanel(p => !p)} className="flex items-center justify-between w-full mb-1">
                 <h2 className="text-base font-semibold text-white flex items-center gap-2">
                   <Zap size={14} className="text-primary-400" /> Daily Activities
@@ -3117,7 +3117,7 @@ const StudentStudyPlan = () => {
       {view === 'list' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <Card>
+            <Card tilt={false}>
               {/* Feature #15: Sub-view toggle — Upcoming / History */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex gap-1 bg-background-700 p-1 rounded-xl">
@@ -3266,7 +3266,7 @@ const StudentStudyPlan = () => {
             </Card>
           </div>
           <div className="space-y-4">
-            <Card>
+            <Card tilt={false}>
               <h3 className="text-sm font-semibold text-white mb-3">Goals Progress</h3>
               {goals.length === 0 ? <p className="text-xs text-gray-500">No goals added</p> : goals.map(g => (
                 <div key={g.id} className="mb-3 last:mb-0">
@@ -3282,7 +3282,7 @@ const StudentStudyPlan = () => {
                 </div>
               ))}
             </Card>
-            <Card>
+            <Card tilt={false}>
               <h3 className="text-sm font-semibold text-white mb-3">By Event Type</h3>
               {['assignment', 'exam', 'class', 'study_session', 'deadline', 'personal'].map(t => {
                 const count = events.filter(e => e.eventType === t).length;
@@ -3422,7 +3422,7 @@ const StudentStudyPlan = () => {
 
       {/* ════════════════════════════════ AI CHAT VIEW ════════════════════════════ */}
       {view === 'chat' && (
-        <Card>
+        <Card tilt={false}>
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-background-700">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-gradient-to-br from-purple-600 to-primary-600 rounded-xl flex items-center justify-center">
