@@ -1,3 +1,4 @@
+import PageSkeleton from '../components/ui/PageSkeleton';
 // src/pages/Leaderboard.tsx
 // Admin / Teacher / Manager Leaderboard — production grade
 // - Admin/Manager/Student-Manager: all courses, full student list (name + surname + userId)
