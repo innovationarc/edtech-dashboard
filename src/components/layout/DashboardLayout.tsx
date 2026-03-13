@@ -1,5 +1,5 @@
 // src/components/layout/DashboardLayout.tsx
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
 import { useDashboard } from '../../contexts/DashboardContext';
@@ -30,6 +30,21 @@ const DashboardLayout = () => {
   const eyeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flyRafId = useRef(0);
   const isFlying = useRef(false);
+
+  // Nova navigation — ChatbotWidget dispatches 'nova-navigate' with { path }
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handleNovaNavigate = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>).detail?.path;
+      if (path && typeof path === 'string' && path.startsWith('/')) {
+        navigate(path);
+      }
+    };
+    window.addEventListener('nova-navigate', handleNovaNavigate);
+    return () => {
+      window.removeEventListener('nova-navigate', handleNovaNavigate);
+    };
+  }, [navigate]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
