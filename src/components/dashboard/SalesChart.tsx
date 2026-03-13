@@ -1,5 +1,6 @@
 // src/components/dashboard/SalesChart.tsx
 import { Line } from 'react-chartjs-2';
+import { useDashboard } from '../../contexts/DashboardContext';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -28,6 +29,8 @@ interface SalesChartProps {
 }
 
 const SalesChart = ({ chartData }: SalesChartProps) => {
+  const { theme } = useDashboard();
+  const isLight = theme === 'light';
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   
   // Aggregate sales data by month
@@ -63,10 +66,10 @@ const SalesChart = ({ chartData }: SalesChartProps) => {
         display: false,
       },
       tooltip: {
-        backgroundColor: '#1f2937',
-        titleColor: '#fff',
-        bodyColor: '#e5e7eb',
-        borderColor: '#374151',
+        backgroundColor: isLight ? 'rgba(255,255,255,0.96)' : '#1f2937',
+        titleColor: isLight ? '#111827' : '#fff',
+        bodyColor: isLight ? '#374151' : '#e5e7eb',
+        borderColor: isLight ? 'rgba(0,0,0,0.08)' : '#374151',
         borderWidth: 1,
         padding: 10,
         displayColors: false,
@@ -79,16 +82,16 @@ const SalesChart = ({ chartData }: SalesChartProps) => {
           drawBorder: false,
         },
         ticks: {
-          color: '#9ca3af',
+          color: isLight ? '#6b7280' : '#9ca3af',
         },
       },
       y: {
         grid: {
-          color: 'rgba(75, 85, 99, 0.2)',
+          color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(75, 85, 99, 0.2)',
           drawBorder: false,
         },
         ticks: {
-          color: '#9ca3af',
+          color: isLight ? '#6b7280' : '#9ca3af',
           stepSize: 100,
         },
       },
