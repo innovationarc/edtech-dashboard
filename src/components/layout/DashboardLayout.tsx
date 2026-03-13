@@ -285,7 +285,7 @@ const DashboardLayout = () => {
     };
   }, []);
 
-  // When login animation fires, trigger card stagger 200ms after it dissolves (at ~1.2s)
+  // Trigger card stagger at 2700ms — just as the overlay finishes dissolving (phase 6 = 2600ms + 100ms buffer)
   useEffect(() => {
     if (!showLoginAnimation) return;
     const t = setTimeout(() => {
@@ -294,8 +294,8 @@ const DashboardLayout = () => {
       setTimeout(() => {
         setStaggerActive(false);
         document.body.classList.remove('login-stagger-active');
-      }, 1400);
-    }, 1200);
+      }, 1200);
+    }, 2700);
     return () => clearTimeout(t);
   }, [showLoginAnimation]);
 
@@ -406,27 +406,27 @@ const DashboardLayout = () => {
 
         /* ── Login stagger: GPU-only (transform + opacity only) ── */
         @keyframes loginFadeUp {
-          from { opacity: 0; transform: translateY(16px); }
+          from { opacity: 0; transform: translateY(20px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes loginSidebarIn {
-          from { opacity: 0; transform: translateX(-14px); }
+          from { opacity: 0; transform: translateX(-18px); }
           to   { opacity: 1; transform: translateX(0); }
         }
         .login-stagger > * {
-          animation: loginFadeUp 0.4s cubic-bezier(0.23,1,0.32,1) both;
+          animation: loginFadeUp 0.55s cubic-bezier(0.25,0.46,0.45,0.94) both;
           will-change: transform, opacity;
         }
         .login-stagger > *:nth-child(1)   { animation-delay: 0.00s; }
-        .login-stagger > *:nth-child(2)   { animation-delay: 0.07s; }
-        .login-stagger > *:nth-child(3)   { animation-delay: 0.14s; }
-        .login-stagger > *:nth-child(4)   { animation-delay: 0.21s; }
-        .login-stagger > *:nth-child(5)   { animation-delay: 0.28s; }
-        .login-stagger > *:nth-child(6)   { animation-delay: 0.35s; }
-        .login-stagger > *:nth-child(n+7) { animation-delay: 0.40s; }
+        .login-stagger > *:nth-child(2)   { animation-delay: 0.08s; }
+        .login-stagger > *:nth-child(3)   { animation-delay: 0.16s; }
+        .login-stagger > *:nth-child(4)   { animation-delay: 0.24s; }
+        .login-stagger > *:nth-child(5)   { animation-delay: 0.32s; }
+        .login-stagger > *:nth-child(6)   { animation-delay: 0.40s; }
+        .login-stagger > *:nth-child(n+7) { animation-delay: 0.46s; }
         body.login-stagger-active aside,
         body.login-stagger-active header {
-          animation: loginSidebarIn 0.4s cubic-bezier(0.34,1.15,0.64,1) both;
+          animation: loginSidebarIn 0.55s cubic-bezier(0.25,0.46,0.45,0.94) both;
           will-change: transform, opacity;
         }
       `}</style>
