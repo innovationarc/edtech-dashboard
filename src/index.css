@@ -94,6 +94,17 @@
 
   /* dl-main is transparent so glitter on the outer wrapper shows through */
 
+  /* Mobile nav bottom bar — needs light-mode surface color */
+  .theme-light .mobile-nav,
+  .theme-light nav.mobile-nav {
+    background-color: rgba(255,255,255,0.95) !important;
+    border-top-color: rgba(0,0,0,0.08) !important;
+    backdrop-filter: blur(20px);
+  }
+  .theme-light .bg-background-900 { background-color: rgba(255,255,255,0.92) !important; }
+  .theme-light .bg-background-800 { background-color: rgba(0,0,0,0.04) !important; }
+  .theme-light .border-background-800 { border-color: rgba(0,0,0,0.08) !important; }
+
   /* Utility dark backgrounds → crystal white */
   .theme-light .bg-background-950,
   .theme-light .bg-background-900,
