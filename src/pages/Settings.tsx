@@ -1,9 +1,15 @@
 import { useState, useRef } from 'react';
-import { Save, Upload, Globe, Mail, BellRing, Lock, Users, Palette, Shield, MessageSquare } from 'lucide-react'; // Import MessageSquare
+import { Save, Upload, Globe, Mail, BellRing, Lock, Users, Palette, Shield } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
-import MyQAActivity from '../components/settings/MyQAActivity'; // Import MyQAActivity
-import ChangePasswordForm from '../components/profile/ChangePasswordModal'; // Import ChangePasswordModal
+import ChangePasswordForm from '../components/profile/ChangePasswordModal';
+import {
+  saveAppearanceSettings,
+  saveGeneralSettings,
+  saveNotificationSettings,
+  saveSecuritySettings,
+  saveUsersPermissionsSettings,
+} from '../services/settingsService';
 
 const Settings = () => {
   const { user } = useDashboard();
@@ -11,8 +17,6 @@ const Settings = () => {
   
   // Check if user is admin
   const isAdmin = user?.role === 'admin';
-  const isStudent = user?.role === 'student';
-  const isTeacher = user?.role === 'teacher';
   
   const tabs = [
     { id: 'general', label: 'General', icon: <Globe size={18} />, adminOnly: true },
@@ -21,7 +25,6 @@ const Settings = () => {
     { id: 'notifications', label: 'Notifications', icon: <BellRing size={18} />, adminOnly: false },
     { id: 'security', label: 'Security', icon: <Lock size={18} />, adminOnly: true },
     { id: 'users', label: 'Users & Permissions', icon: <Users size={18} />, adminOnly: true },
-    { id: 'qa-activity', label: 'My Q&A Activity', icon: <MessageSquare size={18} />, adminOnly: false, roles: ['student', 'teacher'] }, // New Q&A tab
   ];
 
   // Filter tabs based on user role
@@ -35,10 +38,6 @@ const Settings = () => {
 
   // If not admin and trying to access admin-only tab, redirect to general
   if (!isAdmin && ['security', 'users'].includes(activeTab)) {
-    setActiveTab('general');
-  }
-  // If not student/teacher and trying to access Q&A tab, redirect to general
-  if (!isStudent && !isTeacher && activeTab === 'qa-activity') {
     setActiveTab('general');
   }
 
@@ -88,7 +87,6 @@ const Settings = () => {
           {activeTab === 'notifications' && <NotificationSettings />}
           {activeTab === 'security' && isAdmin && <SecuritySettings />}
           {activeTab === 'users' && isAdmin && <UsersPermissionsSettings />}
-          {activeTab === 'qa-activity' && (isStudent || isTeacher) && <MyQAActivity />} {/* Render MyQAActivity */}
         </div>
       </div>
     </div>
@@ -96,6 +94,23 @@ const Settings = () => {
 };
 
 const GeneralSettings = () => {
+  const { user } = useDashboard();
+  const [siteName, setSiteName] = useState('Learning Management Portal');
+  const [siteTagline, setSiteTagline] = useState('Empowering educators, inspiring students');
+  const [contactEmail, setContactEmail] = useState('admin@example.com');
+  const [timezone, setTimezone] = useState('utc');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await saveGeneralSettings({ siteName, siteTagline, contactEmail, timezone });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card title="General Settings">
       <div className="space-y-6">
@@ -103,7 +118,8 @@ const GeneralSettings = () => {
           <label className="block text-sm text-gray-400 mb-1">Site Name</label>
           <input
             type="text"
-            defaultValue="Learning Management Portal"
+            value={siteName}
+            onChange={e => setSiteName(e.target.value)}
             className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
@@ -112,7 +128,8 @@ const GeneralSettings = () => {
           <label className="block text-sm text-gray-400 mb-1">Site Tagline</label>
           <input
             type="text"
-            defaultValue="Empowering educators, inspiring students"
+            value={siteTagline}
+            onChange={e => setSiteTagline(e.target.value)}
             className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
@@ -125,7 +142,8 @@ const GeneralSettings = () => {
             </div>
             <input
               type="email"
-              defaultValue="admin@example.com"
+              value={contactEmail}
+              onChange={e => setContactEmail(e.target.value)}
               className="flex-1 bg-background-800 text-white rounded-r py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
@@ -153,7 +171,11 @@ const GeneralSettings = () => {
         
         <div>
           <label className="block text-sm text-gray-400 mb-1">Timezone</label>
-          <select className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <select
+            value={timezone}
+            onChange={e => setTimezone(e.target.value)}
+            className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
             <option value="utc">UTC (Coordinated Universal Time)</option>
             <option value="est">EST (Eastern Standard Time)</option>
             <option value="cst">CST (Central Standard Time)</option>
@@ -163,9 +185,13 @@ const GeneralSettings = () => {
         </div>
         
         <div className="flex justify-end">
-          <button className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors disabled:opacity-60"
+          >
             <Save size={18} />
-            <span>Save Settings</span>
+            <span>{saving ? 'Saving…' : 'Save Settings'}</span>
           </button>
         </div>
       </div>
@@ -185,9 +211,21 @@ const AppearanceSettings = () => {
     setFontFamily,
     glitterTheme,
     setGlitterTheme,
+    user,
   } = useDashboard();
 
   const [colorMode, setColorMode] = useState<'gradient' | 'solid'>('gradient');
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveAppearance = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await saveAppearanceSettings(user.uid, { theme, primaryColor, accentColor, fontFamily, glitterTheme });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // ── Base themes (light/dark/etc) ──
   const themes = [
@@ -538,24 +576,25 @@ const AppearanceSettings = () => {
         </div>
       </div>
 
-      {/* ── Save Button ── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button
-          onClick={() => { localStorage.setItem('theme', theme); localStorage.setItem('glitterTheme', glitterTheme); alert('Appearance saved!'); }}
+          onClick={handleSaveAppearance}
+          disabled={saving}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 24px', borderRadius: 12, cursor: 'pointer',
+            padding: '10px 24px', borderRadius: 12, cursor: saving ? 'not-allowed' : 'pointer',
             background: `linear-gradient(135deg,${primaryColor},${accentColor})`,
             color: '#fff', fontSize: 14, fontWeight: 700, border: 'none',
             boxShadow: `0 4px 16px ${primaryColor}44`,
             fontFamily: "'Outfit',sans-serif",
             transition: 'all 0.18s ease',
+            opacity: saving ? 0.7 : 1,
           }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; }}
+          onMouseEnter={e => { if (!saving) e.currentTarget.style.transform = 'scale(1.04)'; }}
           onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
         >
           <Save size={16}/>
-          Save Appearance
+          {saving ? 'Saving…' : 'Save Appearance'}
         </button>
       </div>
 
@@ -563,83 +602,77 @@ const AppearanceSettings = () => {
   );
 };
 const NotificationSettings = () => {
+  const { user } = useDashboard();
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState({
+    newUserRegistrations: true,
+    newContentUploads: true,
+    studyPlanUpdates: false,
+    systemAlerts: true,
+    userActivityUpdates: true,
+    contentEngagementMetrics: true,
+    weeklySummaryReports: false,
+    notificationFrequency: 'immediate' as const,
+  });
+
+  const toggle = (key: keyof typeof settings) =>
+    setSettings(s => ({ ...s, [key]: !s[key as keyof typeof s] }));
+
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await saveNotificationSettings(user.uid, settings);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card title="Notification Settings">
       <div className="space-y-6">
         <div>
           <h3 className="text-white font-medium mb-3">Email Notifications</h3>
           <div className="space-y-3">
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>New user registrations</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>New content uploads</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Study plan updates</span>
-              <input
-                type="checkbox"
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>System alerts</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
+            {([
+              ['newUserRegistrations', 'New user registrations'],
+              ['newContentUploads', 'New content uploads'],
+              ['studyPlanUpdates', 'Study plan updates'],
+              ['systemAlerts', 'System alerts'],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between text-gray-300 cursor-pointer">
+                <span>{label}</span>
+                <input type="checkbox" checked={settings[key]} onChange={() => toggle(key)}
+                  className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded" />
+              </label>
+            ))}
           </div>
         </div>
         
         <div>
           <h3 className="text-white font-medium mb-3">Dashboard Notifications</h3>
           <div className="space-y-3">
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>User activity updates</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Content engagement metrics</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Weekly summary reports</span>
-              <input
-                type="checkbox"
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
+            {([
+              ['userActivityUpdates', 'User activity updates'],
+              ['contentEngagementMetrics', 'Content engagement metrics'],
+              ['weeklySummaryReports', 'Weekly summary reports'],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between text-gray-300 cursor-pointer">
+                <span>{label}</span>
+                <input type="checkbox" checked={settings[key]} onChange={() => toggle(key)}
+                  className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded" />
+              </label>
+            ))}
           </div>
         </div>
         
         <div>
           <h3 className="text-white font-medium mb-3">Notification Frequency</h3>
-          <select className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <select
+            value={settings.notificationFrequency}
+            onChange={e => setSettings(s => ({ ...s, notificationFrequency: e.target.value as typeof s.notificationFrequency }))}
+            className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
             <option value="immediate">Immediate</option>
             <option value="hourly">Hourly Digest</option>
             <option value="daily">Daily Digest</option>
@@ -648,9 +681,10 @@ const NotificationSettings = () => {
         </div>
         
         <div className="flex justify-end">
-          <button className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors">
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors disabled:opacity-60">
             <Save size={18} />
-            <span>Save Settings</span>
+            <span>{saving ? 'Saving…' : 'Save Settings'}</span>
           </button>
         </div>
       </div>
@@ -659,69 +693,68 @@ const NotificationSettings = () => {
 };
 
 const SecuritySettings = () => {
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState({
+    requireStrongPasswords: true,
+    forcePasswordReset90Days: false,
+    preventPasswordReuse: true,
+    require2FAForAdmins: true,
+    allowSMSVerification: true,
+    allowAuthenticatorApps: true,
+    autoLogoutMinutes: 30,
+    allowConcurrentSessions: false,
+    maxFailedLoginAttempts: 5,
+    lockoutDurationMinutes: 15,
+  });
+
+  const toggle = (key: keyof typeof settings) =>
+    setSettings(s => ({ ...s, [key]: !s[key as keyof typeof s] }));
+  const setNum = (key: keyof typeof settings, val: number) =>
+    setSettings(s => ({ ...s, [key]: val }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveSecuritySettings(settings);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card title="Security Settings" subtitle="Administrator access required">
       <div className="space-y-6">
         <div>
           <h3 className="text-white font-medium mb-3">Password Policy</h3>
           <div className="space-y-3">
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Require strong passwords (min. 8 characters with uppercase, number, symbol)</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Force password reset every 90 days</span>
-              <input
-                type="checkbox"
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Prevent password reuse (last 5 passwords)</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
+            {([
+              ['requireStrongPasswords', 'Require strong passwords (min. 8 characters with uppercase, number, symbol)'],
+              ['forcePasswordReset90Days', 'Force password reset every 90 days'],
+              ['preventPasswordReuse', 'Prevent password reuse (last 5 passwords)'],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between text-gray-300 cursor-pointer">
+                <span>{label}</span>
+                <input type="checkbox" checked={settings[key]} onChange={() => toggle(key)}
+                  className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded" />
+              </label>
+            ))}
           </div>
         </div>
         
         <div>
           <h3 className="text-white font-medium mb-3">Two-Factor Authentication</h3>
           <div className="space-y-3">
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Require 2FA for admin accounts</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Allow SMS verification</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
-            
-            <label className="flex items-center justify-between text-gray-300 cursor-pointer">
-              <span>Allow authenticator apps</span>
-              <input
-                type="checkbox"
-                defaultChecked
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
-            </label>
+            {([
+              ['require2FAForAdmins', 'Require 2FA for admin accounts'],
+              ['allowSMSVerification', 'Allow SMS verification'],
+              ['allowAuthenticatorApps', 'Allow authenticator apps'],
+            ] as const).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between text-gray-300 cursor-pointer">
+                <span>{label}</span>
+                <input type="checkbox" checked={settings[key]} onChange={() => toggle(key)}
+                  className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded" />
+              </label>
+            ))}
           </div>
         </div>
         
@@ -730,21 +763,14 @@ const SecuritySettings = () => {
           <div className="space-y-3">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Auto-logout after inactivity (minutes)</label>
-              <input
-                type="number"
-                defaultValue="30"
-                min="5"
-                max="240"
-                className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+              <input type="number" value={settings.autoLogoutMinutes} min="5" max="240"
+                onChange={e => setNum('autoLogoutMinutes', Number(e.target.value))}
+                className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500" />
             </div>
-            
             <label className="flex items-center justify-between text-gray-300 cursor-pointer">
               <span>Allow multiple concurrent sessions</span>
-              <input
-                type="checkbox"
-                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
-              />
+              <input type="checkbox" checked={settings.allowConcurrentSessions} onChange={() => toggle('allowConcurrentSessions')}
+                className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded" />
             </label>
           </div>
         </div>
@@ -754,32 +780,24 @@ const SecuritySettings = () => {
           <div className="space-y-3">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Max failed login attempts before lockout</label>
-              <input
-                type="number"
-                defaultValue="5"
-                min="3"
-                max="10"
-                className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+              <input type="number" value={settings.maxFailedLoginAttempts} min="3" max="10"
+                onChange={e => setNum('maxFailedLoginAttempts', Number(e.target.value))}
+                className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500" />
             </div>
-            
             <div>
               <label className="block text-sm text-gray-400 mb-1">Account lockout duration (minutes)</label>
-              <input
-                type="number"
-                defaultValue="15"
-                min="5"
-                max="60"
-                className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              />
+              <input type="number" value={settings.lockoutDurationMinutes} min="5" max="60"
+                onChange={e => setNum('lockoutDurationMinutes', Number(e.target.value))}
+                className="w-32 bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500" />
             </div>
           </div>
         </div>
         
         <div className="flex justify-end">
-          <button className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors">
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors disabled:opacity-60">
             <Save size={18} />
-            <span>Save Settings</span>
+            <span>{saving ? 'Saving…' : 'Save Settings'}</span>
           </button>
         </div>
       </div>
@@ -788,7 +806,23 @@ const SecuritySettings = () => {
 };
 
 const UsersPermissionsSettings = () => {
+  const [saving, setSaving] = useState(false);
+  const [allowPublicRegistration, setAllowPublicRegistration] = useState(true);
+  const [requireEmailVerification, setRequireEmailVerification] = useState(true);
   const [requireApproval, setRequireApproval] = useState(true);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveUsersPermissionsSettings({
+        allowPublicRegistration,
+        requireEmailVerification,
+        requireAdminApproval: requireApproval,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Card title="Users & Permissions Settings" subtitle="Administrator access required">
@@ -878,7 +912,8 @@ const UsersPermissionsSettings = () => {
               <span>Allow public registration</span>
               <input
                 type="checkbox"
-                defaultChecked
+                checked={allowPublicRegistration}
+                onChange={e => setAllowPublicRegistration(e.target.checked)}
                 className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
               />
             </label>
@@ -887,7 +922,8 @@ const UsersPermissionsSettings = () => {
               <span>Require email verification</span>
               <input
                 type="checkbox"
-                defaultChecked
+                checked={requireEmailVerification}
+                onChange={e => setRequireEmailVerification(e.target.checked)}
                 className="h-5 w-5 text-primary-600 focus:ring-primary-500 border-gray-700 bg-background-800 rounded"
               />
             </label>
@@ -920,9 +956,10 @@ const UsersPermissionsSettings = () => {
         </div>
         
         <div className="flex justify-end">
-          <button className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors">
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors disabled:opacity-60">
             <Save size={18} />
-            <span>Save Settings</span>
+            <span>{saving ? 'Saving…' : 'Save Settings'}</span>
           </button>
         </div>
       </div>
