@@ -173,7 +173,7 @@ const SimpleEditor = ({ value, onChange, placeholder, wordLimit }: {
       <div
         contentEditable suppressContentEditableWarning
         className="min-h-28 p-3 text-sm outline-none"
-        style={{ color: '#e5e7eb', lineHeight: 1.6 }}
+        style={{ color: isLight ? '#374151' : '#e5e7eb', lineHeight: 1.6 }}
         onInput={e => onChange((e.target as HTMLDivElement).innerHTML)}
         dangerouslySetInnerHTML={{ __html: value }}
       />
@@ -235,7 +235,7 @@ const SubmissionForm = ({
   };
 
   const secBg: React.CSSProperties = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' };
-  const inputStyle: React.CSSProperties = { borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb', background: 'transparent' };
+  const inputStyle: React.CSSProperties = { borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb', background: 'transparent' };
   const inputCls = 'w-full rounded-xl px-3 py-2 text-sm border outline-none focus:ring-1 focus:ring-white/20';
 
   // Exam: redirect to ExamViewer
@@ -705,7 +705,8 @@ const GroupCard = ({
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const StudentTaskDashboard: React.FC = () => {
-  const { user } = useDashboard();
+  const { user, theme } = useDashboard();
+  const isLight = theme === 'light';
   const [groups, setGroups] = useState<TaskGroup[]>([]);
   const [tasksByGroup, setTasksByGroup] = useState<Record<string, Task[]>>({});
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -793,7 +794,7 @@ const StudentTaskDashboard: React.FC = () => {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Tasks', value: allTasks.length, color: '#e5e7eb' },
+          { label: 'Total Tasks', value: allTasks.length, color: isLight ? '#374151' : '#e5e7eb' },
           { label: 'Pending', value: pendingCount, color: '#fcd34d' },
           { label: 'Reviewed', value: reviewedCount, color: '#6ee7b7' },
           { label: 'Points Earned', value: earnedPoints, color: '#a5b4fc' },
@@ -811,7 +812,7 @@ const StudentTaskDashboard: React.FC = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
             className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border bg-transparent outline-none focus:ring-1 focus:ring-white/20"
-            style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb' }}
+            style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb' }}
             placeholder="Search tasks..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <button onClick={load} className="p-2 rounded-xl hover:bg-white/5 text-gray-400" title="Refresh">
