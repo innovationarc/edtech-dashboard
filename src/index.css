@@ -10,13 +10,13 @@
   
   html {
     @apply text-white;
-    background-color: #0f1117;
+    background-color: var(--color-background, #0f1117);
     scroll-behavior: smooth;
   }
   
   body {
     font-family: 'Outfit', var(--font-sans), sans-serif;
-    background-color: #0f1117;
+    background-color: var(--color-background, #0f1117);
     @apply text-white;
     transition: background-color 0.3s ease;
     -webkit-font-smoothing: antialiased;
@@ -88,14 +88,11 @@
   .theme-light,
   .theme-light body,
   .theme-light #root {
-    background-color: #ebe8e1 !important;
+    background-color: var(--color-background, #ebe8e1) !important;
     color: #111827 !important;
   }
 
-  .theme-light .dl-main,
-  .theme-light .flex.h-screen {
-    background-color: #ebe8e1 !important;
-  }
+  /* dl-main is transparent so glitter on the outer wrapper shows through */
 
   /* Utility dark backgrounds → crystal white */
   .theme-light .bg-background-950,
@@ -690,7 +687,7 @@
   position: relative;
   background-color: var(--color-background, #0f1117);
 }
-.theme-light .dl-main { background-color: #ebe8e1 !important; }
+.theme-light .dl-main { background-color: transparent; }
 
 /* Theme variants — solid clean backgrounds */
 .theme-ocean .dl-main  { background-color: #0c1a2e; }
