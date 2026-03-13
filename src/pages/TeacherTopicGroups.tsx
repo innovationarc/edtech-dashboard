@@ -1,3 +1,4 @@
+import PageSkeleton from '../components/ui/PageSkeleton';
 // src/pages/TeacherTopicGroups.tsx
 // Teacher Topic Group Manager — Create groups · Add subjects/chapters/topics · CSV import · Assign to courses
 
