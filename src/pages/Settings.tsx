@@ -1,11 +1,10 @@
 import { useState, useRef } from 'react';
-import { Save, Globe, Mail, BellRing, Lock, Users, Palette, Shield } from 'lucide-react';
+import { Save, BellRing, Lock, Users, Palette, Shield } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
 import ChangePasswordForm from '../components/profile/ChangePasswordModal';
 import {
   saveAppearanceSettings,
-  saveGeneralSettings,
   saveNotificationSettings,
   saveSecuritySettings,
   saveUsersPermissionsSettings,
@@ -19,7 +18,6 @@ const Settings = () => {
   const isAdmin = user?.role === 'admin';
   
   const tabs = [
-    { id: 'general', label: 'General', icon: <Globe size={18} />, adminOnly: true },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={18} />, adminOnly: false },
     { id: 'password', label: 'Change Password', icon: <Lock size={18} />, adminOnly: false },
     { id: 'notifications', label: 'Notifications', icon: <BellRing size={18} />, adminOnly: false },
@@ -36,9 +34,9 @@ const Settings = () => {
     return true;
   });
 
-  // If not admin and trying to access admin-only tab, redirect to general
+  // If not admin and trying to access admin-only tab, redirect to appearance
   if (!isAdmin && ['security', 'users'].includes(activeTab)) {
-    setActiveTab('general');
+    setActiveTab('appearance');
   }
 
   return (
@@ -77,7 +75,6 @@ const Settings = () => {
         </div>
         
         <div className="lg:col-span-4">
-          {activeTab === 'general' && <GeneralSettings />}
           {activeTab === 'appearance' && <AppearanceSettings />}
           {activeTab === 'password' && (
             <Card title="Change Password" subtitle="Update your account password">
@@ -90,70 +87,6 @@ const Settings = () => {
         </div>
       </div>
     </div>
-  );
-};
-
-const GeneralSettings = () => {
-  const { user } = useDashboard();
-  const [contactEmail, setContactEmail] = useState('admin@example.com');
-  const [timezone, setTimezone] = useState('utc');
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!user) return;
-    setSaving(true);
-    try {
-      await saveGeneralSettings({ contactEmail, timezone });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card title="General Settings">
-      <div className="space-y-6">
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">Contact Email</label>
-          <div className="flex">
-            <div className="flex-shrink-0 bg-background-700 flex items-center px-3 rounded-l">
-              <Mail size={18} className="text-gray-400" />
-            </div>
-            <input
-              type="email"
-              value={contactEmail}
-              onChange={e => setContactEmail(e.target.value)}
-              className="flex-1 bg-background-800 text-white rounded-r py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </div>
-        </div>
-        
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">Timezone</label>
-          <select
-            value={timezone}
-            onChange={e => setTimezone(e.target.value)}
-            className="w-full bg-background-800 text-white rounded py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="utc">UTC (Coordinated Universal Time)</option>
-            <option value="est">EST (Eastern Standard Time)</option>
-            <option value="cst">CST (Central Standard Time)</option>
-            <option value="mst">MST (Mountain Standard Time)</option>
-            <option value="pst">PST (Pacific Standard Time)</option>
-          </select>
-        </div>
-        
-        <div className="flex justify-end">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded transition-colors disabled:opacity-60"
-          >
-            <Save size={18} />
-            <span>{saving ? 'Saving…' : 'Save Settings'}</span>
-          </button>
-        </div>
-      </div>
-    </Card>
   );
 };
 
