@@ -218,7 +218,7 @@ const StudentQA = () => {
         </div>
       )}
 
-      <Card>
+      <Card tilt={false}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="relative flex-1 max-w-md">
             <input
