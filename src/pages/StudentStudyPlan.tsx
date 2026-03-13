@@ -55,6 +55,7 @@ import {
   Dumbbell, Briefcase, Palette, Users, Church, PartyPopper, Bus, Pin,
   CalendarPlus,
 } from 'lucide-react';
+import PageSkeleton from '../components/ui/PageSkeleton';
 
 const TYPE_ICON: Record<string, any> = {
   assignment: ClipboardList, exam: Crosshair, class: School,
@@ -1748,11 +1749,7 @@ const StudentStudyPlan = () => {
     );
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader size={32} className="animate-spin text-primary-500" />
-    </div>
-  );
+  if (loading) return <PageSkeleton variant="mixed" />;
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
