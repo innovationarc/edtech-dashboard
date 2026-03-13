@@ -17,11 +17,6 @@ const TypingIndicator = () => (
 
 const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const { accentColor, user, siteName } = useDashboard();
-
-  // ── DIAGNOSTIC LOGS — remove after confirming fix ──────────────────────────
-  console.log('[ChatbotWidget] RENDER — user:', user?.uid ?? 'null', '| role:', user?.role ?? 'null');
-  // ──────────────────────────────────────────────────────────────────────────
-
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -38,15 +33,6 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const sessionId = useRef<string>(
     Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
   );
-
-  // ── DIAGNOSTIC: mount / unmount tracking ──────────────────────────────────
-  useEffect(() => {
-    console.log('[ChatbotWidget] MOUNTED — uid:', user?.uid ?? 'null', '| role:', user?.role ?? 'null');
-    return () => {
-      console.log('[ChatbotWidget] UNMOUNTED — this means the widget tree was torn down');
-    };
-  }, []);
-  // ──────────────────────────────────────────────────────────────────────────
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
@@ -90,12 +76,20 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
         siteName
       );
       setMessages(p => [...p, { sender: 'ai', text: response.text, timestamp: new Date() }]);
-      // Navigation: dispatch custom event → DashboardLayout handles useNavigate
+      // Navigation: close panel cleanly first, then navigate, then reset ghost state.
+      // Without the ghost-land dispatch after navigation, GhostIcon stays stuck in its
+      // "flew away" invisible state — ghost-land resets it so the button is always visible.
       if (response.navigateTo) {
-        console.log('[ChatbotWidget] NAVIGATE dispatching — path:', response.navigateTo);
+        setIsOpen(false);
+        setIsVisible(false);
+        isFlying.current = false;
         window.dispatchEvent(
           new CustomEvent('nova-navigate', { detail: { path: response.navigateTo } })
         );
+        // Let DashboardLayout navigate first, then reset GhostIcon to visible state
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('ghost-land'));
+        }, 300);
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
