@@ -847,7 +847,7 @@ const Navigation = () => {
             width: islandFullExpand ? 'calc(100vw - 28px)' : islandExpanded ? 'calc(100vw - 28px)' : '44px',
             height: islandFullExpand ? 110 : 44,
             borderRadius: islandPillRadius ? 999 : 20,
-            background: darkMode ? '#0d1017' : '#111827',
+            background: darkMode ? '#0d1017' : 'rgba(255,255,255,0.95)',
             border: `1.5px solid ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.45)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.45)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.45)' : `rgba(${pRgb},0.45)`}`,
             boxShadow: `0 ${islandFullExpand ? 16 : 4}px ${islandFullExpand ? 48 : 24}px ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.22)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.22)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.22)' : `rgba(${pRgb},0.22)`}`,
             overflow: 'hidden', cursor: 'pointer',
