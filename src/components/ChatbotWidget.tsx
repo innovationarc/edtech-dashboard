@@ -112,7 +112,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           --nova-text: #e2e8f0;
           --nova-muted: #64748b;
           --nova-radius: 20px;
-          --nova-nav-h: ${bottomNavHeight}px;
+          --nova-nav-h: 0px;
         }
 
         .nova-widget * { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; box-sizing: border-box; }
