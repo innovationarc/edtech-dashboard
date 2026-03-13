@@ -161,11 +161,7 @@ const StudyPlan: React.FC = () => {
 
   const inputCls = 'bg-background-800 text-white text-sm rounded-xl px-3 py-2 border border-background-700 focus:outline-none focus:border-primary-500 transition-colors placeholder-gray-500';
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <Loader size={28} className="animate-spin text-primary-500" />
-    </div>
-  );
+  if (loading) return <PageSkeleton variant="mixed" />;
 
   return (
     <div className="space-y-6">
