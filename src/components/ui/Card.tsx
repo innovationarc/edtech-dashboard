@@ -12,6 +12,7 @@ interface CardProps {
   footer?: ReactNode;
   onClick?: () => void;
   hover?: boolean;
+  tilt?: boolean;
   variant?: 'default' | 'dark' | 'glass';
   padding?: 'none' | 'sm' | 'md' | 'lg';
 }
@@ -28,7 +29,7 @@ const hexRgb = (hex: string) => {
 
 const Card = ({
   children, className, title, subtitle, icon, footer,
-  onClick, hover = false, variant = 'default', padding = 'md',
+  onClick, hover = false, tilt = true, variant = 'default', padding = 'md',
 }: CardProps) => {
   const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6' } = useDashboard();
   const isLight = theme === 'light';
@@ -50,6 +51,7 @@ const Card = ({
   const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!tilt) return;
     const el = cardRef.current;
     const glow = glowRef.current;
     if (!el) return;
@@ -70,6 +72,7 @@ const Card = ({
   };
 
   const handleMouseLeave = () => {
+    if (!tilt) return;
     const el = cardRef.current;
     const glow = glowRef.current;
     if (el) {
@@ -94,7 +97,7 @@ const Card = ({
         transition: 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease',
         cursor: onClick ? 'pointer' : 'default',
         isolation: 'isolate',
-        transformStyle: 'preserve-3d',
+        transformStyle: tilt ? 'preserve-3d' : 'flat',
       }}
       onClick={onClick}
       onMouseMove={handleMouseMove}
