@@ -891,12 +891,7 @@ const Progress = () => {
     );
   }
 
-  if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 12, fontFamily: "'DM Sans', sans-serif" }}>
-      <Loader size={32} color={ACCENT} className="animate-spin" />
-      <p style={{ color: '#555' }}>Loading your performance data...</p>
-    </div>
-  );
+  if (loading) return <PageSkeleton variant="stats" />;
 
   if (error) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, gap: 12, fontFamily: "'DM Sans', sans-serif" }}>
