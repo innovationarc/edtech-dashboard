@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import { Send, X, AlertTriangle, Info, Sparkles, Zap } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
 import { useDashboard } from '../contexts/DashboardContext';
-import { callWithFailover } from '../services/aiModelConfigService';
+import { novaRAGService } from '../services/novaRAGService';
 
 interface ChatbotWidgetProps { eyeOffset?: { x: number; y: number }; }
 interface ChatMessage { sender: 'user' | 'ai'; text: string; timestamp: Date; }
@@ -16,7 +16,7 @@ const TypingIndicator = () => (
 );
 
 const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
-  const { accentColor } = useDashboard();
+  const { accentColor, user, siteName } = useDashboard();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -29,6 +29,10 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFlying = useRef(false);
+  // Unique session ID for this widget open — persists across messages, resets on page reload
+  const sessionId = useRef<string>(
+    Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+  );
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
@@ -61,12 +65,26 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
     setIsLoading(true);
     setErrorDetails('');
     try {
-      const assistantPrompt = `You are Nova, a smart and friendly AI assistant built into an educational platform. You help students, teachers, and admins with any questions they have — whether it's about the platform, their studies, assignments, schedules, or general knowledge. Be concise, warm, and genuinely helpful. Don't add unnecessary filler phrases.\n\nUser's message: "${userMessageText}"\n\nRespond as Nova — helpful, clear, and friendly.`;
-      const text = await callWithFailover(assistantPrompt, 'chatbot', 1024, 0.7);
-      setMessages(p => [...p, { sender: 'ai', text, timestamp: new Date() }]);
+      // Full RAG pipeline:
+      //   • embedText uses 'vector' key group (Gemini)
+      //   • callWithFailover uses 'chatbot' key group (Groq)
+      //   • memory + context docs injected into prompt automatically
+      const response = await novaRAGService.sendMessage(
+        userMessageText,
+        user ?? null,
+        sessionId.current,
+        siteName
+      );
+      setMessages(p => [...p, { sender: 'ai', text: response.text, timestamp: new Date() }]);
+      // Navigation: dispatch custom event → DashboardLayout handles useNavigate
+      if (response.navigateTo) {
+        window.dispatchEvent(
+          new CustomEvent('nova-navigate', { detail: { path: response.navigateTo } })
+        );
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setErrorDetails(`Error: ${errorMsg}\n\nPossible causes:\n1. No AI key configured (Admin → AI Model Settings)\n2. CORS blocking\n3. Network issue\n4. Rate limit exceeded — failover exhausted`);
+      setErrorDetails(`Error: ${errorMsg}\n\nPossible causes:\n1. No AI key configured (Admin → AI Model Settings → 'chatbot' group)\n2. No vector key configured (Admin → AI Model Settings → 'vector' group)\n3. CORS blocking\n4. Network issue\n5. Rate limit exceeded — failover exhausted`);
       setMessages(p => [...p, { sender: 'ai', text: `Something went wrong. Tap the info icon for details.`, timestamp: new Date() }]);
     } finally {
       setIsLoading(false);
