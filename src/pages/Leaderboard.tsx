@@ -3,7 +3,7 @@
 // - Admin/Manager/Student-Manager: all courses, full student list (name + surname + userId)
 // - Teacher: only courses where teacher has 'exams' permission
 // - Only 1-time limited exams count.
-import PageSkeleton from '../components/ui/PageSkeleton';
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Trophy, Medal, Award, Search, RefreshCw, Download,
@@ -436,6 +436,7 @@ const Leaderboard = () => {
     if (user.role === 'teacher') return 'Teacher';
     return user.role;
   }, [user?.role]);
+
 
   if (loading) return <PageSkeleton variant="list" />;
 
