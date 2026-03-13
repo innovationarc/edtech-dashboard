@@ -6,6 +6,7 @@ import { useDashboard } from '../../contexts/DashboardContext';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
+import LoginAnimation from '../ui/LoginAnimation';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -13,12 +14,14 @@ import { onAuthStateChanged } from 'firebase/auth';
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated, theme, glitterTheme } = useDashboard();
+  const { sidebarOpen, isAuthenticated, theme, glitterTheme, showLoginAnimation } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
+  // Stagger state — true while cards should be animating in
+  const [staggerActive, setStaggerActive] = useState(false);
 
   const dragging = useRef(false);
   const hasMoved = useRef(false);
@@ -280,6 +283,20 @@ const DashboardLayout = () => {
     };
   }, []);
 
+  // When login animation fires, trigger card stagger 200ms after it dissolves (at ~1.2s)
+  useEffect(() => {
+    if (!showLoginAnimation) return;
+    const t = setTimeout(() => {
+      setStaggerActive(true);
+      document.body.classList.add('login-stagger-active');
+      setTimeout(() => {
+        setStaggerActive(false);
+        document.body.classList.remove('login-stagger-active');
+      }, 1400);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [showLoginAnimation]);
+
   const isLight = theme === 'light';
 
   // ── Glitter background definitions ──────────────────────────────────────────
@@ -384,19 +401,52 @@ const DashboardLayout = () => {
       <style>{`
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+
+        /* ── Login stagger animation ── */
+        @keyframes staggerFadeUp {
+          from { opacity: 0; transform: translateY(22px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0)   scale(1); }
+        }
+        .login-stagger .dashboard-card,
+        .login-stagger .stats-card-hover,
+        .login-stagger .saas-card-hover,
+        .login-stagger .glass-card,
+        .login-stagger [class*="rounded-2xl"],
+        .login-stagger [class*="rounded-xl"] {
+          animation: staggerFadeUp 0.45s cubic-bezier(0.23, 1, 0.32, 1) both;
+        }
+        .login-stagger .dashboard-card:nth-child(1),  .login-stagger [class*="rounded-2xl"]:nth-child(1),  .login-stagger [class*="rounded-xl"]:nth-child(1)  { animation-delay: 0.00s; }
+        .login-stagger .dashboard-card:nth-child(2),  .login-stagger [class*="rounded-2xl"]:nth-child(2),  .login-stagger [class*="rounded-xl"]:nth-child(2)  { animation-delay: 0.06s; }
+        .login-stagger .dashboard-card:nth-child(3),  .login-stagger [class*="rounded-2xl"]:nth-child(3),  .login-stagger [class*="rounded-xl"]:nth-child(3)  { animation-delay: 0.12s; }
+        .login-stagger .dashboard-card:nth-child(4),  .login-stagger [class*="rounded-2xl"]:nth-child(4),  .login-stagger [class*="rounded-xl"]:nth-child(4)  { animation-delay: 0.18s; }
+        .login-stagger .dashboard-card:nth-child(5),  .login-stagger [class*="rounded-2xl"]:nth-child(5),  .login-stagger [class*="rounded-xl"]:nth-child(5)  { animation-delay: 0.24s; }
+        .login-stagger .dashboard-card:nth-child(6),  .login-stagger [class*="rounded-2xl"]:nth-child(6),  .login-stagger [class*="rounded-xl"]:nth-child(6)  { animation-delay: 0.30s; }
+        .login-stagger .dashboard-card:nth-child(7),  .login-stagger [class*="rounded-2xl"]:nth-child(7),  .login-stagger [class*="rounded-xl"]:nth-child(7)  { animation-delay: 0.36s; }
+        .login-stagger .dashboard-card:nth-child(8),  .login-stagger [class*="rounded-2xl"]:nth-child(8),  .login-stagger [class*="rounded-xl"]:nth-child(8)  { animation-delay: 0.42s; }
+        .login-stagger .dashboard-card:nth-child(n+9), .login-stagger [class*="rounded-2xl"]:nth-child(n+9), .login-stagger [class*="rounded-xl"]:nth-child(n+9) { animation-delay: 0.48s; }
+
+        /* Sidebar slides in from left during stagger */
+        @keyframes sidebarSlideIn {
+          from { opacity: 0; transform: translateX(-20px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        .login-stagger-sidebar {
+          animation: sidebarSlideIn 0.45s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+        }
+        body.login-stagger-active aside {
+          animation: sidebarSlideIn 0.45s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+        }
+        body.login-stagger-active header,
+        body.login-stagger-active nav {
+          animation: sidebarSlideIn 0.4s cubic-bezier(0.34, 1.15, 0.64, 1) both;
+        }
       `}</style>
 
       {isAuthenticated && <Navigation />}
 
-      {/* 
-        Desktop: ml-[64px] matches the collapsed sidebar (64px icon strip).
-        The sidebar expands to 220px on hover but uses position:fixed + overflow:hidden
-        so it overlays content — no layout shift needed.
-        Mobile: ml-0, pt-[60px] for the fixed mobile header.
-      */}
       <div className={`flex-1 flex flex-col ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`} style={{ background: 'transparent' }}>
         <main className="dl-main flex-1 overflow-auto" style={{ paddingTop: isMobile ? 60 : 64, background: 'transparent' }}>
-          <div className="p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8">
+          <div className={`p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`}>
             <Outlet />
           </div>
         </main>
@@ -431,6 +481,8 @@ const DashboardLayout = () => {
       {showAuthModal && !isAuthenticated && (
         <AuthenticationModal onClose={() => setShowAuthModal(false)} />
       )}
+
+      <LoginAnimation />
     </div>
   );
 };
