@@ -129,7 +129,7 @@ const FileUploader = ({ files, onAdd, onRemove, label = 'Upload files', bucket =
     <div className="space-y-2">
       <div onClick={() => inputRef.current?.click()}
         className="border border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors hover:border-blue-500/50"
-        style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
+        style={{ borderColor: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)' }}>
         {uploading ? <div className="flex items-center justify-center gap-2 text-sm text-gray-400"><Spinner sm /> Uploading...</div> :
           <><Upload className="w-4 h-4 mx-auto mb-1 text-gray-500" />
             <span className="text-xs text-gray-400">{label}</span></>}
@@ -313,7 +313,7 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
                   className="py-2 rounded-lg text-xs font-medium transition-all border"
                   style={f.assignType === val
                     ? { background: 'var(--color-primary, #6366f1)', borderColor: 'transparent', color: '#fff' }
-                    : { background: 'transparent', borderColor: 'rgba(255,255,255,0.1)', color: '#9ca3af' }}>
+                    : { background: 'transparent', borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: '#9ca3af' }}>
                   {lbl}
                 </button>
               ))}
@@ -391,7 +391,7 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
                   className="flex-1 py-1.5 rounded-lg text-xs font-medium capitalize border transition-all"
                   style={f.status === s
                     ? { background: 'var(--color-primary, #6366f1)', borderColor: 'transparent', color: '#fff' }
-                    : { background: 'transparent', borderColor: 'rgba(255,255,255,0.1)', color: '#9ca3af' }}>
+                    : { background: 'transparent', borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: '#9ca3af' }}>
                   {s}
                 </button>
               ))}
@@ -531,7 +531,7 @@ const TaskModal = ({ groupId, teacherId, existingTasks, editTask, onClose, onSav
   const modalBg: React.CSSProperties = { background: 'var(--color-surface, #1f2937)', border: '1px solid var(--color-border, rgba(255,255,255,0.08))' };
   const secBg: React.CSSProperties = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' };
   const pillActive: React.CSSProperties = { background: 'var(--color-primary, #6366f1)', color: '#fff', borderColor: 'transparent' };
-  const pillIdle: React.CSSProperties = { background: 'transparent', borderColor: 'rgba(255,255,255,0.1)', color: '#9ca3af' };
+  const pillIdle: React.CSSProperties = { background: 'transparent', borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: '#9ca3af' };
 
   const typeMeta = TASK_TYPES.find(t => t.type === f.type)!;
   const TypeIcon = typeMeta.icon;
@@ -945,14 +945,14 @@ const GradingModal = ({ sub, task, teacherId, teacherName, onClose, onGraded }: 
                     <div className="flex items-center gap-1.5">
                       <input type="number" min={0} max={rs.maxPoints}
                         className="w-14 text-center rounded-lg px-2 py-1 text-sm border bg-transparent"
-                        style={{ borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                        style={{ borderColor: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)', color: '#fff' }}
                         value={rs.score}
                         onChange={e => setRubricScores(s => s.map((x, j) => j === i ? { ...x, score: Math.min(Number(e.target.value), x.maxPoints) } : x))} />
                       <span className="text-xs text-gray-500">/ {rs.maxPoints}</span>
                     </div>
                   </div>
                   <input className="w-full rounded-lg px-2 py-1 text-xs border bg-transparent"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#9ca3af' }}
+                    style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: '#9ca3af' }}
                     placeholder="Comment (optional)"
                     value={rs.comment ?? ''} onChange={e => setRubricScores(s => s.map((x, j) => j === i ? { ...x, comment: e.target.value } : x))} />
                 </div>
@@ -1010,7 +1010,8 @@ const GradingModal = ({ sub, task, teacherId, teacherName, onClose, onGraded }: 
 type TabKey = 'manage' | 'evaluate';
 
 const TeacherTaskManagement: React.FC = () => {
-  const { user } = useDashboard();
+  const { user, theme } = useDashboard();
+  const isLight = theme === 'light';
   const [tab, setTab] = useState<TabKey>('manage');
 
   // Data
@@ -1408,7 +1409,7 @@ const TeacherTaskManagement: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button onClick={() => { setEditingGroup(selectedGroup); setShowGroupModal(true); }}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-300 hover:bg-white/5 border"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                    style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)' }}>
                     <Edit2 className="w-3.5 h-3.5" /> Edit Group
                   </button>
                   {selectedGroup.status === 'draft' && (
@@ -1529,13 +1530,13 @@ const TeacherTaskManagement: React.FC = () => {
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border bg-transparent outline-none focus:ring-1 focus:ring-white/20"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb' }}
+                    style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb' }}
                     placeholder="Search groups..." value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
                 {coursesInGroups.length > 0 && (
                   <select
                     className="rounded-xl px-3 py-2 text-sm border outline-none"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
+                    style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
                     value={courseFilter} onChange={e => setCourseFilter(e.target.value)}>
                     <option value="all">All Courses</option>
                     {coursesInGroups.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
@@ -1544,7 +1545,7 @@ const TeacherTaskManagement: React.FC = () => {
                 {subjectsInGroups.length > 0 && (
                   <select
                     className="rounded-xl px-3 py-2 text-sm border outline-none"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
+                    style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
                     value={subjectFilter} onChange={e => setSubjectFilter(e.target.value)}>
                     <option value="all">All Subjects</option>
                     {subjectsInGroups.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1624,7 +1625,7 @@ const TeacherTaskManagement: React.FC = () => {
                         <div className="px-4 pb-4 flex items-center gap-2">
                           <button onClick={() => loadDetail(group)}
                             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium text-gray-300 hover:text-white transition-colors border"
-                            style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+                            style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)' }}>
                             <Eye className="w-3.5 h-3.5" /> View Tasks
                           </button>
                           {group.status === 'draft' && (
@@ -1654,7 +1655,7 @@ const TeacherTaskManagement: React.FC = () => {
               <div>
                 <SectionLabel>Task Group</SectionLabel>
                 <select className="rounded-xl px-3 py-2 text-sm border bg-transparent outline-none min-w-48"
-                  style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
+                  style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
                   value={evalGroupId} onChange={e => setEvalGroupId(e.target.value)}>
                   <option value="">— Select group —</option>
                   {groups.map(g => <option key={g.id} value={g.id}>{g.title}</option>)}
@@ -1664,7 +1665,7 @@ const TeacherTaskManagement: React.FC = () => {
                 <div>
                   <SectionLabel>Task</SectionLabel>
                   <select className="rounded-xl px-3 py-2 text-sm border bg-transparent outline-none"
-                    style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
+                    style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
                     value={evalTaskFilter} onChange={e => setEvalTaskFilter(e.target.value)}>
                     <option value="all">All Tasks</option>
                     {evalTasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
@@ -1674,7 +1675,7 @@ const TeacherTaskManagement: React.FC = () => {
               <div>
                 <SectionLabel>Status</SectionLabel>
                 <select className="rounded-xl px-3 py-2 text-sm border bg-transparent outline-none"
-                  style={{ borderColor: 'rgba(255,255,255,0.1)', color: '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
+                  style={{ borderColor: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)', color: isLight ? '#374151' : '#e5e7eb', background: 'var(--color-surface, #1f2937)' }}
                   value={evalStatusFilter} onChange={e => setEvalStatusFilter(e.target.value)}>
                   <option value="all">All Status</option>
                   <option value="submitted">Submitted</option>
