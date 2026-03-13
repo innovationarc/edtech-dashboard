@@ -12,7 +12,7 @@ import {
   Cpu, Clock, FileText, Tag, ChevronDown, ChevronUp,
   Search, RotateCcw,
 } from 'lucide-react';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../contexts/DashboardContext';
 import { novaContextService, NovaContextDoc, NovaConfig } from '../../services/novaContextService';
 
 // ─── Shared style constants (matches AIModelSettings design system) ──────────
