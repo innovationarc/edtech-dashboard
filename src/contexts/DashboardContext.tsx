@@ -86,10 +86,26 @@ const generateDeviceId = (): string => {
   return 'device_' + Math.abs(hash).toString(36);
 };
 
-// CRITICAL FIX: Check if user has auth tokens immediately
+// RELIABLE auth check:
+// - auth_firebase_session: set after real Firebase sign-in, cleared on signOut or null user
+// - For remember-me sessions: also validates expiry so stale data never causes a false positive
+// - For non-remember-me sessions: just checks the flag (session-scoped, clears on signOut)
 const hasAuthTokens = (): boolean => {
   try {
-    return !!(localStorage.getItem('token') || localStorage.getItem('auth_user_id'));
+    if (localStorage.getItem('auth_firebase_session') !== 'true') return false;
+    // If this was a remember-me session, validate the rolling expiry
+    if (localStorage.getItem('auth_remember_me') === 'true') {
+      const expiry = parseInt(localStorage.getItem('auth_remember_me_expiry') || '0', 10);
+      if (expiry && Date.now() > expiry) {
+        // Expired: clean up stale keys so we don't loop
+        localStorage.removeItem('auth_firebase_session');
+        localStorage.removeItem('auth_remember_me');
+        localStorage.removeItem('auth_remember_me_expiry');
+        localStorage.removeItem('auth_session_token');
+        return false;
+      }
+    }
+    return true;
   } catch {
     return false;
   }
@@ -158,14 +174,26 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    // CRITICAL FIX: Shorter timeout (1.5s instead of 3s) for faster failure
+    // Re-assert browserLocalPersistence for remember-me sessions on every page load.
+    // Firebase normally remembers this, but re-asserting it on startup guarantees it
+    // survives across days, browser updates, and edge-case SDK resets.
+    const rememberMeActive = (() => {
+      try { return localStorage.getItem('auth_remember_me') === 'true'; } catch { return false; }
+    })();
+    if (rememberMeActive) {
+      authService.assertLocalPersistence().catch(() => {});
+    }
+
+    // Timeout: give Firebase more time to restore a remember-me session from disk.
+    // Non-remember sessions are ephemeral — 1.5s is fine.
+    // Remember-me sessions restore from localStorage → needs up to 8s on slow mobile/cold start.
+    const timeoutMs = rememberMeActive ? 8000 : 1500;
     const authCheckTimeout = setTimeout(() => {
       setLoading(false);
-      // If Firebase didn't respond, assume not authenticated
       if (!user) {
         setIsAuthenticated(false);
       }
-    }, 1500);
+    }, timeoutMs);
 
     const unsubscribe = authService.onAuthStateChanged(async (firebaseUser: User | null) => {
       // Clear timeout since Firebase responded
@@ -187,6 +215,15 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             // CRITICAL FIX: Set ALL auth states BEFORE clearing loading
             setUser(userProfile);
             setIsAuthenticated(true);
+            // Confirm Firebase session is valid — used by hasAuthTokens() on next page load
+            try {
+              localStorage.setItem('auth_firebase_session', 'true');
+              // Renew rolling expiry on every confirmed visit so active users never get cut off
+              if (localStorage.getItem('auth_remember_me') === 'true') {
+                localStorage.setItem('auth_remember_me_expiry',
+                  String(Date.now() + 365 * 24 * 60 * 60 * 1000));
+              }
+            } catch {}
             
             // Only auto-open sidebar on desktop
             if (isDesktopRef.current) {
@@ -236,8 +273,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                     // Clear local session token
                     try { localStorage.removeItem('auth_session_token'); } catch {}
 
-                    // Force sign out silently (don't throw)
-                    authService.signOut().catch(() => {});
+                    // Force sign out - preserve remember-me so user can re-login immediately
+                    authService.signOut(true).catch(() => {});
 
                     // Update UI state
                     setUser(null);
@@ -246,7 +283,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
 
                     // Set the forced logout message shown on SignInModal
                     setForcedLogoutMessage(
-                      `You've been automatically logged out due to another login [IP: ${newIp}]`
+                      `You have been logged out because another login was detected. [IP: ${newIp}]`
                     );
                   }
                 },
@@ -326,6 +363,12 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         }
       } else {
         // No authenticated user - clean up session listener
+        // Clear auth_firebase_session so hasAuthTokens()=false on next page load
+        // This prevents the optimistic-render flash loop when session expires naturally
+        try {
+          localStorage.removeItem('auth_firebase_session');
+          localStorage.removeItem('auth_session_token');
+        } catch {}
         if (sessionListenerRef.current) {
           sessionListenerRef.current();
           sessionListenerRef.current = null;
