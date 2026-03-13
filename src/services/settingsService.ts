@@ -5,6 +5,12 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  limit,
+  getDocs,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -55,9 +61,25 @@ export interface UsersPermissionsSettings {
   requireAdminApproval: boolean;
 }
 
+export interface UserGeneralSettings {
+  language: 'en' | 'bn';
+  timezoneMode: 'auto' | 'manual';
+  manualTimezone: string;
+}
+
+export interface LoginLog {
+  browser: string;
+  os: string;
+  ip: string;
+  city: string;
+  country: string;
+  createdAt: unknown; // Firestore Timestamp
+}
+
 export interface UserSettings {
   appearance?: AppearanceSettings;
   notifications?: NotificationSettings;
+  general?: UserGeneralSettings;
   updatedAt?: unknown;
 }
 
@@ -156,4 +178,57 @@ export const saveUsersPermissionsSettings = async (
   } else {
     await setDoc(ref, payload);
   }
+};
+
+// ─── User general settings (language, timezone) ───────────────────────────────
+
+export const saveUserGeneralSettings = async (
+  uid: string,
+  settings: UserGeneralSettings
+): Promise<void> => {
+  const ref = userSettingsRef(uid);
+  const snap = await getDoc(ref);
+  const payload = { general: settings, updatedAt: serverTimestamp() };
+  if (snap.exists()) {
+    await updateDoc(ref, payload);
+  } else {
+    await setDoc(ref, payload);
+  }
+};
+
+export const getUserGeneralSettings = async (
+  uid: string
+): Promise<UserGeneralSettings | null> => {
+  const snap = await getDoc(userSettingsRef(uid));
+  if (!snap.exists()) return null;
+  return (snap.data() as UserSettings).general ?? null;
+};
+
+// ─── Login logs ───────────────────────────────────────────────────────────────
+// Each login writes a document to users/{uid}/loginLogs
+
+const loginLogsRef = (uid: string) =>
+  collection(db, 'users', uid, 'loginLogs');
+
+export const saveLoginLog = async (
+  uid: string,
+  log: Omit<LoginLog, 'createdAt'>
+): Promise<void> => {
+  try {
+    await addDoc(loginLogsRef(uid), {
+      ...log,
+      createdAt: serverTimestamp(),
+    });
+  } catch {
+    // Non-blocking — never fail a login because of log write
+  }
+};
+
+export const getLoginLogs = async (
+  uid: string,
+  limitCount = 10
+): Promise<LoginLog[]> => {
+  const q = query(loginLogsRef(uid), orderBy('createdAt', 'desc'), limit(limitCount));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => d.data() as LoginLog);
 };
