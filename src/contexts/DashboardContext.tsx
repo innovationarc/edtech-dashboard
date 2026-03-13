@@ -6,6 +6,7 @@ import { userService } from '../services/userService';
 import { gamificationService } from '../services/gamificationService';
 import { getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { getUserSettings, getGlobalSettings } from '../services/settingsService';
 
 interface DashboardContextType {
   sidebarOpen: boolean;
@@ -130,11 +131,11 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
   const [dashboardLayout, setDashboardLayout] = useState(() => localStorage.getItem('dashboardLayout') || 'default');
   const [glitterTheme, setGlitterTheme] = useState(() => localStorage.getItem('glitterTheme') || 'none');
-  const [siteName, setSiteName] = useState(() => localStorage.getItem('siteName') || 'Learning Management Portal');
-  const [siteTagline, setSiteTagline] = useState(() => localStorage.getItem('siteTagline') || 'Empowering educators, inspiring students');
-  const [contactEmail, setContactEmail] = useState(() => localStorage.getItem('contactEmail') || 'admin@example.com');
-  const [siteLogoUrl, setSiteLogoUrl] = useState(() => localStorage.getItem('siteLogoUrl') || '');
-  const [timezone, setTimezone] = useState(() => localStorage.getItem('timezone') || 'utc');
+  const [siteName, setSiteName] = useState('Learning Management Portal');
+  const [siteTagline, setSiteTagline] = useState('Empowering educators, inspiring students');
+  const [contactEmail, setContactEmail] = useState('admin@example.com');
+  const [siteLogoUrl, setSiteLogoUrl] = useState('');
+  const [timezone, setTimezone] = useState('utc');
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
   const isDesktopRef = React.useRef(window.innerWidth >= 1024);
@@ -308,6 +309,33 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
             // Expose refresh function globally for profile updates
             (window as any).refreshUserProfile = refreshUserProfile;
 
+            // Load persisted settings from Firestore (fire-and-forget, never blocks render)
+            (async () => {
+              try {
+                const [userSettings, globalSettings] = await Promise.all([
+                  getUserSettings(firebaseUser.uid),
+                  getGlobalSettings(),
+                ]);
+                if (userSettings.appearance) {
+                  const a = userSettings.appearance;
+                  if (a.theme)        { setTheme(a.theme);               localStorage.setItem('theme', a.theme); }
+                  if (a.primaryColor) { setPrimaryColor(a.primaryColor); localStorage.setItem('primaryColor', a.primaryColor); }
+                  if (a.accentColor)  { setAccentColor(a.accentColor);   localStorage.setItem('accentColor', a.accentColor); }
+                  if (a.fontFamily)   { setFontFamily(a.fontFamily);     localStorage.setItem('fontFamily', a.fontFamily); }
+                  if (a.glitterTheme) { setGlitterTheme(a.glitterTheme); localStorage.setItem('glitterTheme', a.glitterTheme); }
+                }
+                if (globalSettings.general) {
+                  const g = globalSettings.general;
+                  if (g.siteName)      setSiteName(g.siteName);
+                  if (g.siteTagline)   setSiteTagline(g.siteTagline);
+                  if (g.contactEmail)  setContactEmail(g.contactEmail);
+                  if (g.timezone)      setTimezone(g.timezone);
+                }
+              } catch {
+                // Silent fail — defaults remain in place
+              }
+            })();
+
             // Streak logic: fire-and-forget so it never blocks dashboard load
             // ONLY for student role - skip for admin, teacher, coordinator, etc.
             if (userProfile.role === 'student') {
@@ -394,19 +422,6 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   // Apply theme changes to document
   useEffect(() => {
     const root = document.documentElement;
-    
-    // Save to localStorage
-    localStorage.setItem('theme', theme);
-    localStorage.setItem('primaryColor', primaryColor);
-    localStorage.setItem('accentColor', accentColor);
-    localStorage.setItem('fontFamily', fontFamily);
-    localStorage.setItem('dashboardLayout', dashboardLayout);
-    localStorage.setItem('glitterTheme', glitterTheme);
-    localStorage.setItem('siteName', siteName);
-    localStorage.setItem('siteTagline', siteTagline);
-    localStorage.setItem('contactEmail', contactEmail);
-    localStorage.setItem('siteLogoUrl', siteLogoUrl);
-    localStorage.setItem('timezone', timezone);
     
     // Apply theme classes
     root.className = root.className.replace(/theme-\w+/g, '');
