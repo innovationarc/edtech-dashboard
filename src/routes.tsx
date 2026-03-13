@@ -68,6 +68,11 @@ import ExamViewer from './pages/ExamViewer';
 // NEW: Exam Evaluation Page (teacher/admin/evaluator)
 import ExamEvaluation from './pages/ExamEvaluation';
 
+// NEW: Live Class Pages
+import TeacherLiveClass from './pages/TeacherLiveClass';
+import StudentLiveClass from './pages/StudentLiveClass';
+import LiveClassSettings from './components/admin/LiveClassSettings';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Returns the correct home dashboard path for any role
@@ -462,6 +467,26 @@ const AppRoutes = () => {
           <EvaluatorRoute>
             <ExamEvaluation />
           </EvaluatorRoute>
+        } />
+
+        {/* ── Live Class Routes ── */}
+        {/* Teacher + Admin: schedule, host, and manage live classes */}
+        <Route path="live-classes" element={
+          <TeacherAdminRoute>
+            <TeacherLiveClass />
+          </TeacherAdminRoute>
+        } />
+        {/* Student: view upcoming, join live, and rewatch recordings */}
+        <Route path="student-live-classes" element={
+          <StudentRoute>
+            <StudentLiveClass />
+          </StudentRoute>
+        } />
+        {/* Admin only: configure provider, API keys, and Bunny.net */}
+        <Route path="live-class-settings" element={
+          <AdminRoute>
+            <LiveClassSettings />
+          </AdminRoute>
         } />
 
       </Route>
