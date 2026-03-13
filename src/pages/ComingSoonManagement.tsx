@@ -463,7 +463,7 @@ const EarlyAccessPanel = ({ featureId, featureTitle, actor }: EarlyAccessPanelPr
     load();
   };
 
-  if (loading) return <div className="py-4 text-center"><Spinner /></div>;
+  if (loading) return <PageSkeleton variant="cards" />;
 
   return (
     <div className="mt-4 space-y-2">
