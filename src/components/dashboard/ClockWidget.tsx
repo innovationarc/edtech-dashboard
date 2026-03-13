@@ -1,8 +1,11 @@
 // src/components/dashboard/ClockWidget.tsx
 import { useState, useEffect } from 'react';
+import { useDashboard } from '../../contexts/DashboardContext';
 
 const ClockWidget = () => {
   const [time, setTime] = useState(new Date());
+  const { theme } = useDashboard();
+  const isLight = theme === 'light';
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -35,7 +38,9 @@ const ClockWidget = () => {
   return (
     <div className="h-full rounded-2xl overflow-hidden relative flex flex-col items-center justify-center p-4"
       style={{
-        background: 'linear-gradient(145deg, #0a0a0f 0%, #111827 60%, #0d1117 100%)',
+        background: isLight
+          ? 'linear-gradient(145deg, #f8f7f4 0%, #eeecea 60%, #f0eeeb 100%)'
+          : 'linear-gradient(145deg, #0a0a0f 0%, #111827 60%, #0d1117 100%)',
         minHeight: '200px',
       }}
     >
@@ -51,7 +56,7 @@ const ClockWidget = () => {
         <svg width="90" height="90" viewBox="0 0 90 90" className="absolute inset-0">
           {/* Outer ring */}
           <circle cx="45" cy="45" r="43" fill="none" stroke="rgba(99,102,241,0.15)" strokeWidth="1.5" />
-          <circle cx="45" cy="45" r="38" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+          <circle cx="45" cy="45" r="38" fill={isLight ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.03)'} stroke={isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)'} strokeWidth="1" />
           
           {/* Hour ticks */}
           {Array.from({ length: 12 }).map((_, i) => {
@@ -60,7 +65,7 @@ const ClockWidget = () => {
             const y1 = 45 - 33 * Math.cos(angle);
             const x2 = 45 + 38 * Math.sin(angle);
             const y2 = 45 - 38 * Math.cos(angle);
-            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" strokeLinecap="round" />;
+            return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.3)'} strokeWidth="1.5" strokeLinecap="round" />;
           })}
 
           {/* Hour hand */}
@@ -68,9 +73,69 @@ const ClockWidget = () => {
             x1="45" y1="45"
             x2={45 + 20 * Math.sin(hourDeg * Math.PI / 180)}
             y2={45 - 20 * Math.cos(hourDeg * Math.PI / 180)}
-            stroke="white" strokeWidth="2.5" strokeLinecap="round"
+            stroke={isLight ? '#1f2937' : 'white'} strokeWidth="2.5" strokeLinecap="round"
             style={{ transition: 'all 0.3s ease', transformOrigin: '45px 45px' }}
           />
+          {/* Minute hand */}
+          <line
+            x1="45" y1="45"
+            x2={45 + 28 * Math.sin(minDeg * Math.PI / 180)}
+            y2={45 - 28 * Math.cos(minDeg * Math.PI / 180)}
+            stroke={isLight ? 'rgba(31,41,55,0.75)' : 'rgba(255,255,255,0.85)'} strokeWidth="1.8" strokeLinecap="round"
+            style={{ transition: 'all 0.3s ease', transformOrigin: '45px 45px' }}
+          />
+          {/* Second hand */}
+          <line
+            x1="45" y1="45"
+            x2={45 + 32 * Math.sin(secDeg * Math.PI / 180)}
+            y2={45 - 32 * Math.cos(secDeg * Math.PI / 180)}
+            stroke="#6366f1" strokeWidth="1" strokeLinecap="round"
+          />
+          {/* Tail */}
+          <line
+            x1="45" y1="45"
+            x2={45 - 8 * Math.sin(secDeg * Math.PI / 180)}
+            y2={45 + 8 * Math.cos(secDeg * Math.PI / 180)}
+            stroke="#6366f1" strokeWidth="1" strokeLinecap="round"
+          />
+          {/* Center dot */}
+          <circle cx="45" cy="45" r="3" fill="#6366f1" />
+          <circle cx="45" cy="45" r="1.5" fill={isLight ? '#fff' : 'white'} />
+        </svg>
+      </div>
+
+      {/* Digital time */}
+      <div className="text-center relative z-10">
+        <div className="flex items-end justify-center gap-1">
+          <span className="font-bold leading-none" style={{
+            fontSize: '2.2rem',
+            fontFamily: '"SF Pro Display", -apple-system, sans-serif',
+            letterSpacing: '-0.03em',
+            fontVariantNumeric: 'tabular-nums',
+            color: isLight ? '#111827' : 'white',
+          }}>
+            {pad(displayHours)}:{pad(minutes)}
+          </span>
+          <div className="flex flex-col items-start mb-1 ml-1">
+            <span className="text-xs font-bold text-primary-400 leading-none">{ampm}</span>
+            <span className="text-[10px] leading-none mt-0.5" style={{ color: isLight ? '#9ca3af' : '#6b7280' }}>{pad(seconds)}</span>
+          </div>
+        </div>
+
+        {/* Date */}
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <div className="h-px w-6" style={{ background: isLight ? 'linear-gradient(to right, transparent, rgba(0,0,0,0.12))' : 'linear-gradient(to right, transparent, rgba(255,255,255,0.20))' }} />
+          <p className="text-xs font-medium tracking-wide" style={{ color: isLight ? '#6b7280' : '#9ca3af' }}>
+            {dayName}, {monthName} {dateNum}
+          </p>
+          <div className="h-px w-6" style={{ background: isLight ? 'linear-gradient(to left, transparent, rgba(0,0,0,0.12))' : 'linear-gradient(to left, transparent, rgba(255,255,255,0.20))' }} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ClockWidget;
           {/* Minute hand */}
           <line
             x1="45" y1="45"
