@@ -1,5 +1,5 @@
 // /src/contexts/DashboardContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { authService, UserProfile, AccountStatusError } from '../services/authService';
 import { userService } from '../services/userService';
@@ -47,6 +47,9 @@ interface DashboardContextType {
   // NEW: forced logout message for single-device enforcement
   forcedLogoutMessage: string | null;
   setForcedLogoutMessage: (msg: string | null) => void;
+  // Login animation trigger
+  showLoginAnimation: boolean;
+  setShowLoginAnimation: (v: boolean) => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -142,6 +145,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
 
   // NEW: Forced logout message state (persists across sign-out so SignInModal can display it)
   const [forcedLogoutMessage, setForcedLogoutMessage] = useState<string | null>(null);
+  const [showLoginAnimation, setShowLoginAnimation] = useState(false);
+  const prevAuthRef = useRef(false);
 
   // NEW: Ref to hold the Firestore session listener unsubscribe function
   const sessionListenerRef = React.useRef<(() => void) | null>(null);
@@ -419,6 +424,14 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     };
   }, []);
 
+  // Trigger login animation exactly once when isAuthenticated flips false → true
+  useEffect(() => {
+    if (isAuthenticated && !prevAuthRef.current) {
+      setShowLoginAnimation(true);
+    }
+    prevAuthRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
   // Apply theme changes to document
   useEffect(() => {
     const root = document.documentElement;
@@ -689,6 +702,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setGlitterTheme: handleSetGlitterTheme,
         forcedLogoutMessage,
         setForcedLogoutMessage,
+        showLoginAnimation,
+        setShowLoginAnimation,
       }}
     >
       {children}
