@@ -13,7 +13,7 @@ import {
   Search, RotateCcw,
 } from 'lucide-react';
 import { useDashboard } from '../contexts/DashboardContext';
-import { novaContextService, NovaContextDoc, NovaConfig } from '../../services/novaContextService';
+import { novaContextService, NovaContextDoc, NovaConfig } from '../services/novaContextService';
 
 // ─── Shared style constants (matches AIModelSettings design system) ──────────
 
