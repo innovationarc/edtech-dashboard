@@ -487,8 +487,16 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     
     const colors = themeColors[theme as keyof typeof themeColors] || themeColors.dark;
     root.style.setProperty('--color-background', colors.bg);
-    root.style.setProperty('--color-card', colors.card);
-    root.style.setProperty('--color-card-light', colors.cardLight);
+    root.style.setProperty('--color-card',        colors.card);
+    root.style.setProperty('--color-card-light',  colors.cardLight);
+
+    // --color-surface: used by task/modal pages as card background fallback
+    // --color-border:  used by task/modal pages for borders
+    const isLightTheme = theme === 'light';
+    root.style.setProperty('--color-surface', isLightTheme ? 'rgba(255,255,255,0.82)' : '#1f2937');
+    root.style.setProperty('--color-border',  isLightTheme ? 'rgba(0,0,0,0.08)'       : 'rgba(255,255,255,0.08)');
+    root.style.setProperty('--color-text',    isLightTheme ? '#111827' : '#ffffff');
+    root.style.setProperty('--color-text2',   isLightTheme ? '#6b7280' : '#9ca3af');
     
     // Update BOTH html and body so no dark bleed shows behind content
     document.documentElement.style.backgroundColor = colors.bg;
