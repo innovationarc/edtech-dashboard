@@ -66,7 +66,6 @@ const Card = ({
         '0 4px 12px rgba(0,0,0,0.45)',
         '0 16px 48px rgba(0,0,0,0.55)',
         'inset 0 1px 0 rgba(255,255,255,0.07)',
-        'inset 0 0 0 1px rgba(255,255,255,0.03)',
       ].join(',')
     : [
         '0 1px 2px rgba(0,0,0,0.04)',
@@ -82,7 +81,6 @@ const Card = ({
         '0 8px 24px rgba(0,0,0,0.52)',
         '0 28px 72px rgba(0,0,0,0.65)',
         'inset 0 1px 0 rgba(255,255,255,0.10)',
-        'inset 0 0 0 1px rgba(255,255,255,0.055)',
       ].join(',')
     : [
         '0 2px 6px rgba(0,0,0,0.06)',
@@ -172,7 +170,7 @@ const Card = ({
         {(title || subtitle || icon) && (
           <div style={{
             padding: '17px 22px 14px',
-            borderBottom: `1px solid ${divClr}`,
+            borderBottom: 'none',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -199,7 +197,7 @@ const Card = ({
         )}
         <div style={{ padding: PAD[padding] }}>{children}</div>
         {footer && (
-          <div style={{ padding: '12px 22px', borderTop: `1px solid ${divClr}`, background: footBg }}>
+          <div style={{ padding: '12px 22px', borderTop: 'none', background: footBg }}>
             {footer}
           </div>
         )}
