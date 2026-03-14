@@ -1,5 +1,5 @@
 // src/services/novaEmbeddingService.ts
-// Nova RAG — Gemini text-embedding-004 embeddings with key rotation
+// Nova RAG — Gemini gemini-embedding-001 embeddings with key rotation
 //
 // Key group: looks up the group named exactly "vector" (case-insensitive) in
 // aiKeyGroupService. Only Gemini keys in that group are eligible (this is a
@@ -12,8 +12,8 @@ import { aiKeyGroupService } from './aiModelConfigService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const EMBEDDING_MODEL      = 'text-embedding-004';
-const EMBEDDING_DIMENSIONS = 768;
+const EMBEDDING_MODEL      = 'gemini-embedding-001';
+const EMBEDDING_DIMENSIONS = 3072;
 
 const embeddingUrl = (apiKey: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
@@ -102,7 +102,7 @@ async function callGeminiEmbed(text: string, apiKey: string): Promise<number[]> 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Embed a text string using Gemini text-embedding-004.
+ * Embed a text string using Gemini gemini-embedding-001.
  * Rotates through all active keys in the "vector" group with automatic failover.
  *
  * @throws Error if all keys fail or none are configured.
