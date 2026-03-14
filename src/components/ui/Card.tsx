@@ -55,9 +55,19 @@ const Card = ({
   // DashboardContext sets --color-card per theme; reading it here ensures
   // Midnight, Blossom, Forest, etc. all render with their correct hue
   // instead of leaking the hardcoded blueish fallback.
+  // Card bg: center holds the theme colour, edges fade to transparent — glass effect
+  const cardColor = 'var(--color-card)';
   const bg = dark
-    ? 'color-mix(in srgb, var(--color-card) 62%, transparent)'
-    : 'rgba(255, 255, 255, 0.60)';
+    ? `radial-gradient(ellipse at 50% 50%,
+        color-mix(in srgb, ${cardColor} 68%, transparent) 0%,
+        color-mix(in srgb, ${cardColor} 52%, transparent) 50%,
+        color-mix(in srgb, ${cardColor} 18%, transparent) 80%,
+        transparent 100%)`
+    : `radial-gradient(ellipse at 50% 50%,
+        rgba(255,255,255,0.58) 0%,
+        rgba(255,255,255,0.42) 55%,
+        rgba(255,255,255,0.10) 82%,
+        transparent 100%)`;
 
   const border = 'none';
 
@@ -144,12 +154,12 @@ const Card = ({
         transform: 'translateX(-120%) skewX(-12deg)',
       }}/>
 
-      {/* ③ Subtle inner vignette for depth */}
+      {/* ③ Subtle top highlight for glass depth */}
       <div style={{
-        position: 'absolute', inset: 0, borderRadius: 24, pointerEvents: 'none', zIndex: 1,
+        position: 'absolute', inset: 0, borderRadius: 24, pointerEvents: 'none', zIndex: 2,
         background: dark
-          ? 'radial-gradient(ellipse at 50% 0%,rgba(255,255,255,0.03) 0%,transparent 65%)'
-          : 'radial-gradient(ellipse at 50% 0%,rgba(255,255,255,0.6) 0%,transparent 65%)',
+          ? 'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.04) 0%, transparent 60%)'
+          : 'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.5) 0%, transparent 60%)',
       }}/>
 
       {/* ④ Content */}
