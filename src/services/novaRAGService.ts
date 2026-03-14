@@ -173,7 +173,7 @@ export const novaRAGService = {
     // ── 1+2+3+4+5: fetch everything in parallel ────────────────────────────
     const [contextResult, userContext, memory, config] = await Promise.all([
       // RAG retrieval — embed + cosine similarity (uses 'vector' key group)
-      novaContextService.getTopRelevantDocs(userMessage, 3, 0.35).then((docs) => {
+      novaContextService.getTopRelevantDocs(userMessage, 3, 0.0).then((docs) => {
         console.log('[novaRAG] Query:', userMessage);
         console.log('[novaRAG] Docs retrieved:', docs.length);
         docs.forEach((d, i) => console.log(`[novaRAG]   [${i+1}] "${d.title}" — similarity: ${d.similarity.toFixed(4)}`));
