@@ -215,7 +215,7 @@ const StudentDashboard = () => {
     <div style={{display:'flex',flexDirection:'column',gap:'clamp(18px,2.8vw,30px)',fontFamily:"'Outfit',sans-serif"}}>
 
       {/* Welcome Banner */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between" style={{animation:'cardReveal 500ms cubic-bezier(0.22,1,0.36,1) 0ms both'}}>
         <div>
           <h1 style={{fontSize:'clamp(1.2rem,2.5vw,1.6rem)',fontWeight:800,color:T.text,margin:0}}>
             Welcome back, {user?.name || 'Student'}! 🌟
@@ -350,10 +350,10 @@ const StudentDashboard = () => {
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,230px),1fr))',gap:'clamp(14px,1.8vw,22px)'}}>
 
         {/* Objectives */}
-        <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>} enterDelay={0}>
+        <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>} accent="#6366f1" enterDelay={0}>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {objectives.map(o=>(
-              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,background:T.surface,border:`1px solid ${T.border}`,cursor:'pointer',transition:'background 0.15s',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}
+              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${PC(o.priority)}`,cursor:'pointer',transition:'all 0.15s',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}
                 onMouseEnter={e=>(e.currentTarget.style.background=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.10)')}
                 onMouseLeave={e=>(e.currentTarget.style.background=T.surface)}
               >
@@ -369,7 +369,7 @@ const StudentDashboard = () => {
         </Card>
 
         {/* Timer */}
-        <Card title="Focus Timer" icon={<Clock size={15} color={timerMode==='focus'?'#10b981':'#f59e0b'}/>} enterDelay={90}>
+        <Card title="Focus Timer" icon={<Clock size={15} color={timerMode==='focus'?'#10b981':'#f59e0b'}/>} accent={timerMode==='focus'?'#10b981':'#f59e0b'} enterDelay={90}>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
             <div style={{display:'flex',gap:6,width:'100%'}}>
               {(['focus','break'] as const).map(m=>(
@@ -401,7 +401,7 @@ const StudentDashboard = () => {
         </Card>
 
         {/* Announcements */}
-        <Card title="Latest Updates" icon={<Megaphone size={15} color="#a78bfa"/>} enterDelay={180}>
+        <Card title="Latest Updates" icon={<Megaphone size={15} color="#a78bfa"/>} accent="#8b5cf6" enterDelay={180}>
           {announcementsLoading?(
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'28px 0'}}>
               <Loader size={16} color="#6366f1" className="animate-spin"/>
@@ -436,7 +436,7 @@ const StudentDashboard = () => {
         </Card>
 
         {/* Daily Quote */}
-        <Card title="Daily Inspiration" icon={<Star size={15} color="#f59e0b"/>} enterDelay={270}>
+        <Card title="Daily Inspiration" icon={<Star size={15} color="#f59e0b"/>} accent="#f59e0b" enterDelay={270}>
           <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:14}}>
             <div style={{fontSize:36}}>💡</div>
             <blockquote style={{fontSize:'clamp(0.76rem,1.15vw,0.86rem)',color:T.text2,fontStyle:'italic',lineHeight:1.65,margin:0}}>"{dailyQuote.text}"</blockquote>
@@ -454,7 +454,7 @@ const StudentDashboard = () => {
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,290px),1fr))',gap:'clamp(14px,1.8vw,22px)'}}>
 
         {/* Schedule */}
-        <Card title="Weekly Schedule" subtitle="Events this week" icon={<Calendar size={15} color="#6366f1"/>}>
+        <Card title="Weekly Schedule" subtitle="Events this week" icon={<Calendar size={15} color="#06b6d4"/>} accent="#06b6d4" enterDelay={360}>
           <div style={{display:'flex',flexDirection:'column',gap:11}}>
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>
               {['S','M','T','W','T','F','S'].map((d,i)=><div key={i} style={{textAlign:'center',fontSize:9,fontWeight:600,color:T.text3,padding:'2px 0'}}>{d}</div>)}
@@ -473,7 +473,7 @@ const StudentDashboard = () => {
               {calendarLoading?<div style={{display:'flex',alignItems:'center',gap:5,padding:'6px 0'}}><Loader size={13} color="#6366f1" className="animate-spin"/><span style={{fontSize:11,color:T.text2}}>Loading…</span></div>
               :calendarEvents.length===0?<div style={{textAlign:'center',padding:'10px 0'}}><Calendar size={20} color={T.dimIcon} style={{margin:'0 auto 5px'}}/><p style={{fontSize:11,color:T.text3,margin:0}}>No upcoming events</p></div>
               :calendarEvents.slice(0,4).map(ev=>(
-                <div key={ev.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
+                <div key={ev.id} style={{display:'flex',alignItems:'center',gap:8,padding:'9px 11px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${EDC(ev.title)}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
                   <div style={{width:7,height:7,borderRadius:'50%',background:EDC(ev.title),flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:'clamp(0.68rem,1.05vw,0.76rem)',fontWeight:650,color:T.text,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</p>
@@ -490,10 +490,10 @@ const StudentDashboard = () => {
         </Card>
 
         {/* Goals */}
-        <Card title="My Goals" subtitle="Track your progress" icon={<Award size={15} color="#f59e0b"/>}>
+        <Card title="My Goals" subtitle="Track your progress" icon={<Award size={15} color="#f97316"/>} accent="#f97316" enterDelay={450}>
           <div style={{display:'flex',flexDirection:'column',gap:9}}>
             {goals.map(g=>(
-              <div key={g.id} style={{padding:'11px 13px',borderRadius:13,background:T.surface,border:`1px solid ${T.border}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
+              <div key={g.id} style={{padding:'12px 14px',borderRadius:13,background:T.surface,border:`1px solid ${T.border}`,borderLeft:'3px solid rgba(249,115,22,0.65)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:7,marginBottom:7}}>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:'clamp(0.72rem,1.1vw,0.8rem)',fontWeight:650,color:T.text,margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.title}</p>
@@ -518,7 +518,7 @@ const StudentDashboard = () => {
       </div>
 
       {/* Row 3: Constellations */}
-      <Card title="Subject Constellations" subtitle="Your knowledge map across subjects">
+      <Card title="Subject Constellations" subtitle="Your knowledge map across subjects" accent="#ec4899" enterDelay={540}>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,200px),1fr))',gap:'clamp(12px,2vw,20px)'}}>
           {constellations.map(c=>(
             <div key={c.id} style={{display:'flex',flexDirection:'column',gap:8}}>
