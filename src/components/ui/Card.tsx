@@ -56,10 +56,13 @@ const Card = ({
   // Midnight, Blossom, Forest, etc. all render with their correct hue
   // instead of leaking the hardcoded blueish fallback.
   const bg = dark
-    ? 'color-mix(in srgb, var(--color-card) 85%, transparent)'
+    ? 'color-mix(in srgb, var(--color-card) 62%, transparent)'
     : 'rgba(255, 255, 255, 0.60)';
 
-  const border = 'none';
+  // Thin rim separates card from the background layer beneath it
+  const border = dark
+    ? '1px solid rgba(255,255,255,0.07)'
+    : 'none';
 
   const baseShadow = dark
     ? [
@@ -120,8 +123,8 @@ const Card = ({
       className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
-        backdropFilter: 'blur(56px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(56px) saturate(180%)',
+        backdropFilter: 'blur(28px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(160%)',
         border,
         borderRadius: 24,        // generous corners — key to the iDraft look
         boxShadow: baseShadow,
