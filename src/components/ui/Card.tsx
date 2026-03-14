@@ -55,13 +55,10 @@ const Card = ({
   // DashboardContext sets --color-card per theme; reading it here ensures
   // Midnight, Blossom, Forest, etc. all render with their correct hue
   // instead of leaking the hardcoded blueish fallback.
-  // Card bg: four-sided linear fade — even fade on every straight edge, no corner bias
-  const cardColor = 'var(--color-card)';
+  // Flat solid bg — edge fading is handled by four dedicated overlay divs below
   const bg = dark
-    ? `linear-gradient(to right,  transparent 0%, color-mix(in srgb,${cardColor} 55%,transparent) 12%, color-mix(in srgb,${cardColor} 55%,transparent) 88%, transparent 100%),
-       linear-gradient(to bottom, transparent 0%, color-mix(in srgb,${cardColor} 55%,transparent) 10%, color-mix(in srgb,${cardColor} 55%,transparent) 90%, transparent 100%)`
-    : `linear-gradient(to right,  transparent 0%, rgba(255,255,255,0.48) 12%, rgba(255,255,255,0.48) 88%, transparent 100%),
-       linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.48) 10%, rgba(255,255,255,0.48) 90%, transparent 100%)`;
+    ? 'color-mix(in srgb, var(--color-card) 48%, transparent)'
+    : 'rgba(255,255,255,0.44)';
 
   const border = 'none';
 
@@ -148,13 +145,13 @@ const Card = ({
         transform: 'translateX(-120%) skewX(-12deg)',
       }}/>
 
-      {/* ③ Subtle top highlight for glass depth */}
-      <div style={{
-        position: 'absolute', inset: 0, borderRadius: 24, pointerEvents: 'none', zIndex: 2,
-        background: dark
-          ? 'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.04) 0%, transparent 60%)'
-          : 'radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.5) 0%, transparent 60%)',
-      }}/>
+      {/* ③ Four individual edge fades — each side independently fades to transparent */}
+      {dark && <>
+        <div style={{position:'absolute',inset:0,top:0,left:0,right:0,height:'18%',pointerEvents:'none',zIndex:3,borderRadius:'24px 24px 0 0',background:'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,bottom:0,left:0,right:0,height:'18%',top:'auto',pointerEvents:'none',zIndex:3,borderRadius:'0 0 24px 24px',background:'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,top:0,left:0,bottom:0,width:'6%',pointerEvents:'none',zIndex:3,borderRadius:'24px 0 0 24px',background:'linear-gradient(to right, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,top:0,right:0,bottom:0,left:'auto',width:'6%',pointerEvents:'none',zIndex:3,borderRadius:'0 24px 24px 0',background:'linear-gradient(to left, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
+      </>}
 
       {/* ④ Content */}
       <div style={{ position: 'relative', zIndex: 6 }}>
