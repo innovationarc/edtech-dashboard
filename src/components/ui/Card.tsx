@@ -53,8 +53,8 @@ const Card = ({
 
   // ── Neutral palette — zero colour bleed ──────────────────────────────────
   const bg = dark
-    ? 'rgba(14, 14, 16, 0.78)'   // neutral dark, no blue cast
-    : 'rgba(255, 255, 255, 0.80)';
+    ? 'rgba(255, 255, 255, 0.07)'  // whitish frosted glass — light veil over dark bg
+    : 'rgba(255, 255, 255, 0.72)';
 
   // No outer border — smooth edges
   const border = 'none';
