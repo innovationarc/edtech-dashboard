@@ -73,6 +73,11 @@ import TeacherLiveClass from './pages/TeacherLiveClass';
 import StudentLiveClass from './pages/StudentLiveClass';
 import LiveClassSettings from './components/admin/LiveClassSettings';
 
+// NEW: Streaming Pages
+import TeacherStream from './pages/TeacherStream';
+import StudentStream from './pages/StudentStream';
+import StreamSettings from './components/admin/StreamSettings';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Returns the correct home dashboard path for any role
@@ -486,6 +491,26 @@ const AppRoutes = () => {
         <Route path="live-class-settings" element={
           <AdminRoute>
             <LiveClassSettings />
+          </AdminRoute>
+        } />
+
+        {/* ── Streaming Routes ── */}
+        {/* Teacher + Admin: create and manage live streams (YouTube, Bunny, Cloudflare) */}
+        <Route path="streams" element={
+          <TeacherAdminRoute>
+            <TeacherStream />
+          </TeacherAdminRoute>
+        } />
+        {/* Student: watch live streams and recordings */}
+        <Route path="student-streams" element={
+          <StudentRoute>
+            <StudentStream />
+          </StudentRoute>
+        } />
+        {/* Admin only: configure streaming provider API keys */}
+        <Route path="stream-settings" element={
+          <AdminRoute>
+            <StreamSettings />
           </AdminRoute>
         } />
 
