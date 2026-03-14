@@ -147,10 +147,10 @@ const Card = ({
 
       {/* ③ Four individual edge fades — each side independently fades to transparent */}
       {dark && <>
-        <div style={{position:'absolute',inset:0,top:0,left:0,right:0,height:'18%',pointerEvents:'none',zIndex:3,borderRadius:'24px 24px 0 0',background:'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
-        <div style={{position:'absolute',inset:0,bottom:0,left:0,right:0,height:'18%',top:'auto',pointerEvents:'none',zIndex:3,borderRadius:'0 0 24px 24px',background:'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
-        <div style={{position:'absolute',inset:0,top:0,left:0,bottom:0,width:'6%',pointerEvents:'none',zIndex:3,borderRadius:'24px 0 0 24px',background:'linear-gradient(to right, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
-        <div style={{position:'absolute',inset:0,top:0,right:0,bottom:0,left:'auto',width:'6%',pointerEvents:'none',zIndex:3,borderRadius:'0 24px 24px 0',background:'linear-gradient(to left, rgba(0,0,0,0.55) 0%, transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,top:0,left:0,right:0,height:'18%',pointerEvents:'none',zIndex:3,borderRadius:'24px 24px 0 0',background:'linear-gradient(to bottom, rgba(0,0,0,0.22) 0%, transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,bottom:0,left:0,right:0,height:'18%',top:'auto',pointerEvents:'none',zIndex:3,borderRadius:'0 0 24px 24px',background:'linear-gradient(to top, rgba(0,0,0,0.22) 0%, transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,top:0,left:0,bottom:0,width:'6%',pointerEvents:'none',zIndex:3,borderRadius:'24px 0 0 24px',background:'linear-gradient(to right, rgba(0,0,0,0.22) 0%, transparent 100%)'}}/>
+        <div style={{position:'absolute',inset:0,top:0,right:0,bottom:0,left:'auto',width:'6%',pointerEvents:'none',zIndex:3,borderRadius:'0 24px 24px 0',background:'linear-gradient(to left, rgba(0,0,0,0.22) 0%, transparent 100%)'}}/>
       </>}
 
       {/* ④ Content */}
