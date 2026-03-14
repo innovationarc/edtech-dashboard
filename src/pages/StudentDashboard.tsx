@@ -45,13 +45,13 @@ const StudentDashboard = () => {
     text2:   isLight ? '#6b7280'              : 'rgba(255,255,255,0.52)',
     text3:   isLight ? '#9ca3af'              : 'rgba(255,255,255,0.32)',
     muted:   isLight ? 'rgba(0,0,0,0.45)'    : 'rgba(255,255,255,0.38)',
-    surface: isLight ? 'rgba(0,0,0,0.04)'    : 'rgba(255,255,255,0.04)',
-    border:  isLight ? 'rgba(0,0,0,0.07)'    : 'rgba(255,255,255,0.07)',
-    dimIcon: isLight ? 'rgba(0,0,0,0.25)'    : 'rgba(255,255,255,0.22)',
-    ring:    isLight ? 'rgba(0,0,0,0.08)'    : 'rgba(255,255,255,0.06)',
-    trackBg: isLight ? 'rgba(0,0,0,0.08)'    : 'rgba(255,255,255,0.08)',
-    starBg:  isLight ? 'rgba(0,0,0,0.06)'    : 'rgba(0,0,0,0.18)',
-    tagBg:   isLight ? 'rgba(0,0,0,0.06)'    : 'rgba(255,255,255,0.05)',
+    surface: isLight ? 'rgba(0,0,0,0.045)'   : 'rgba(255,255,255,0.058)',
+    border:  isLight ? 'rgba(0,0,0,0.075)'   : 'rgba(255,255,255,0.095)',
+    dimIcon: isLight ? 'rgba(0,0,0,0.25)'    : 'rgba(255,255,255,0.24)',
+    ring:    isLight ? 'rgba(0,0,0,0.08)'    : 'rgba(255,255,255,0.08)',
+    trackBg: isLight ? 'rgba(0,0,0,0.08)'    : 'rgba(255,255,255,0.09)',
+    starBg:  isLight ? 'rgba(0,0,0,0.06)'    : 'rgba(0,0,0,0.22)',
+    tagBg:   isLight ? 'rgba(0,0,0,0.06)'    : 'rgba(255,255,255,0.065)',
   };
   const [dailyQuote, setDailyQuote]                 = useState(() => getRandomQuote());
   const [announcements, setAnnouncements]           = useState<Announcement[]>([]);
@@ -353,8 +353,8 @@ const StudentDashboard = () => {
         <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>}>
           <div style={{display:'flex',flexDirection:'column',gap:5}}>
             {objectives.map(o=>(
-              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:9,padding:'7px 9px',borderRadius:9,background:T.surface,border:`1px solid ${T.border}`,cursor:'pointer',transition:'background 0.12s'}}
-                onMouseEnter={e=>(e.currentTarget.style.background=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.07)')}
+              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 10px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,cursor:'pointer',transition:'background 0.12s',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}
+                onMouseEnter={e=>(e.currentTarget.style.background=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.09)')}
                 onMouseLeave={e=>(e.currentTarget.style.background=T.surface)}
               >
                 {o.completed?<CheckCircle size={17} color="#10b981" style={{flexShrink:0}}/>:<Circle size={17} color={T.dimIcon} style={{flexShrink:0}}/>}
@@ -421,7 +421,7 @@ const StudentDashboard = () => {
           ):(
             <div style={{display:'flex',flexDirection:'column',gap:7}}>
               {announcements.slice(0,3).map(a=>(
-                <div key={a.id} style={{padding:'8px 10px',borderRadius:9,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${APB(a.priority)}`}}>
+                <div key={a.id} style={{padding:'9px 11px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${APB(a.priority)}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
                   <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
                     <p style={{fontSize:'clamp(0.7rem,1.05vw,0.78rem)',fontWeight:650,color:T.text,margin:0,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.title}</p>
                     {a.priority==='high'&&<span style={{fontSize:9,fontWeight:700,background:'rgba(239,68,68,0.18)',color:'#ef4444',borderRadius:4,padding:'1px 5px',flexShrink:0}}>URGENT</span>}
@@ -473,7 +473,7 @@ const StudentDashboard = () => {
               {calendarLoading?<div style={{display:'flex',alignItems:'center',gap:5,padding:'6px 0'}}><Loader size={13} color="#6366f1" className="animate-spin"/><span style={{fontSize:11,color:T.text2}}>Loading…</span></div>
               :calendarEvents.length===0?<div style={{textAlign:'center',padding:'10px 0'}}><Calendar size={20} color={T.dimIcon} style={{margin:'0 auto 5px'}}/><p style={{fontSize:11,color:T.text3,margin:0}}>No upcoming events</p></div>
               :calendarEvents.slice(0,4).map(ev=>(
-                <div key={ev.id} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 9px',borderRadius:9,background:T.surface,border:`1px solid ${T.border}`}}>
+                <div key={ev.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
                   <div style={{width:7,height:7,borderRadius:'50%',background:EDC(ev.title),flexShrink:0}}/>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:'clamp(0.68rem,1.05vw,0.76rem)',fontWeight:650,color:T.text,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</p>
@@ -493,7 +493,7 @@ const StudentDashboard = () => {
         <Card title="My Goals" subtitle="Track your progress" icon={<Award size={15} color="#f59e0b"/>}>
           <div style={{display:'flex',flexDirection:'column',gap:9}}>
             {goals.map(g=>(
-              <div key={g.id} style={{padding:'10px 12px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`}}>
+              <div key={g.id} style={{padding:'11px 13px',borderRadius:13,background:T.surface,border:`1px solid ${T.border}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:7,marginBottom:7}}>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:'clamp(0.72rem,1.1vw,0.8rem)',fontWeight:650,color:T.text,margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.title}</p>
@@ -503,7 +503,7 @@ const StudentDashboard = () => {
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <div style={{flex:1,height:4,borderRadius:2,background:T.trackBg,overflow:'hidden'}}>
-                    <div style={{height:'100%',width:`${g.progress}%`,borderRadius:2,background:'linear-gradient(90deg,#6366f1,#10b981)',boxShadow:'0 0 5px rgba(99,102,241,0.4)'}}/>
+                    <div style={{height:'100%',width:`${g.progress}%`,borderRadius:2,background:'linear-gradient(90deg,#6366f1,#8b5cf6,#10b981)',boxShadow:'0 0 8px rgba(99,102,241,0.5)'}}/>
                   </div>
                   <span style={{fontSize:11,fontWeight:700,color:g.progress>70?'#10b981':g.progress>40?'#f59e0b':T.muted,flexShrink:0}}>{g.progress}%</span>
                 </div>
