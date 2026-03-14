@@ -53,15 +53,15 @@ const Card = ({
 
   // ── Neutral palette — zero colour bleed ──────────────────────────────────
   const bg = dark
-    ? 'rgba(20, 18, 35, 0.72)'   // dark navy-purple glass — matches reference
-    : 'rgba(255, 255, 255, 0.72)';
+    ? 'rgba(20, 18, 35, 0.55)'
+    : 'rgba(255, 255, 255, 0.60)';
 
   const border = 'none';
 
   const baseShadow = dark
     ? [
-        '0 4px 24px rgba(0,0,0,0.35)',
-        '0 16px 48px rgba(0,0,0,0.28)',
+        '0 4px 20px rgba(0,0,0,0.22)',
+        '0 12px 36px rgba(0,0,0,0.18)',
       ].join(',')
     : [
         '0 1px 2px rgba(0,0,0,0.04)',
@@ -72,8 +72,8 @@ const Card = ({
 
   const hoverShadow = dark
     ? [
-        '0 6px 32px rgba(0,0,0,0.45)',
-        '0 24px 64px rgba(0,0,0,0.38)',
+        '0 6px 28px rgba(0,0,0,0.30)',
+        '0 20px 52px rgba(0,0,0,0.24)',
       ].join(',')
     : [
         '0 2px 6px rgba(0,0,0,0.06)',
