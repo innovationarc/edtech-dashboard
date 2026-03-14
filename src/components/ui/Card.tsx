@@ -51,9 +51,12 @@ const Card = ({
 
   useEffect(() => { injectStyles(); }, []);
 
-  // ── Neutral palette — zero colour bleed ──────────────────────────────────
+  // ── Palette — reads active environment theme card colour from CSS var ────
+  // DashboardContext sets --color-card per theme; reading it here ensures
+  // Midnight, Blossom, Forest, etc. all render with their correct hue
+  // instead of leaking the hardcoded blueish fallback.
   const bg = dark
-    ? 'rgba(20, 18, 35, 0.55)'
+    ? 'color-mix(in srgb, var(--color-card) 85%, transparent)'
     : 'rgba(255, 255, 255, 0.60)';
 
   const border = 'none';
