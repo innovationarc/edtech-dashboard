@@ -53,19 +53,15 @@ const Card = ({
 
   // ── Neutral palette — zero colour bleed ──────────────────────────────────
   const bg = dark
-    ? 'rgba(255, 255, 255, 0.07)'  // whitish frosted glass — light veil over dark bg
+    ? 'rgba(20, 18, 35, 0.72)'   // dark navy-purple glass — matches reference
     : 'rgba(255, 255, 255, 0.72)';
 
-  // No outer border — smooth edges
   const border = 'none';
 
-  // Neutral multi-layer shadow — depth without colour
   const baseShadow = dark
     ? [
-        '0 1px 2px rgba(0,0,0,0.40)',
-        '0 4px 12px rgba(0,0,0,0.45)',
-        '0 16px 48px rgba(0,0,0,0.55)',
-        'inset 0 1px 0 rgba(255,255,255,0.07)',
+        '0 4px 24px rgba(0,0,0,0.35)',
+        '0 16px 48px rgba(0,0,0,0.28)',
       ].join(',')
     : [
         '0 1px 2px rgba(0,0,0,0.04)',
@@ -74,13 +70,10 @@ const Card = ({
         'inset 0 1px 0 rgba(255,255,255,1)',
       ].join(',');
 
-  // Hover — lift only, still no colour
   const hoverShadow = dark
     ? [
-        '0 2px 4px rgba(0,0,0,0.45)',
-        '0 8px 24px rgba(0,0,0,0.52)',
-        '0 28px 72px rgba(0,0,0,0.65)',
-        'inset 0 1px 0 rgba(255,255,255,0.10)',
+        '0 6px 32px rgba(0,0,0,0.45)',
+        '0 24px 64px rgba(0,0,0,0.38)',
       ].join(',')
     : [
         '0 2px 6px rgba(0,0,0,0.06)',
@@ -141,15 +134,6 @@ const Card = ({
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
-      {/* ① Top-edge glass rim — only light, no colour */}
-      <div style={{
-        position: 'absolute', top: 0, left: '8%', right: '8%', height: 1,
-        background: dark
-          ? 'linear-gradient(90deg,transparent,rgba(255,255,255,0.22) 30%,rgba(255,255,255,0.38) 50%,rgba(255,255,255,0.22) 70%,transparent)'
-          : 'linear-gradient(90deg,transparent,rgba(255,255,255,0.9) 30%,rgba(255,255,255,1) 50%,rgba(255,255,255,0.9) 70%,transparent)',
-        pointerEvents: 'none', zIndex: 8,
-      }}/>
-
       {/* ② Hover shimmer sweep — white only */}
       <div ref={shimRef} style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5,
