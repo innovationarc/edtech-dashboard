@@ -353,16 +353,52 @@ const StudentDashboard = () => {
         <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>} accent="#6366f1" enterDelay={0}>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {objectives.map(o=>(
-              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${PC(o.priority)}`,cursor:'pointer',transition:'all 0.15s',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}
-                onMouseEnter={e=>(e.currentTarget.style.background=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.10)')}
-                onMouseLeave={e=>(e.currentTarget.style.background=T.surface)}
+              <div key={o.id} onClick={()=>toggleObj(o.id)}
+                style={{
+                  display:'flex',alignItems:'center',gap:10,
+                  padding:'10px 12px',borderRadius:12,cursor:'pointer',
+                  background: o.completed
+                    ? (isLight?'rgba(16,185,129,0.06)':'rgba(16,185,129,0.08)')
+                    : T.surface,
+                  border:`1px solid ${o.completed?(isLight?'rgba(16,185,129,0.18)':'rgba(16,185,129,0.14)'):T.border}`,
+                  transition:'all 0.18s cubic-bezier(0.4,0,0.2,1)',
+                }}
+                onMouseEnter={e=>{
+                  e.currentTarget.style.background=isLight?'rgba(99,102,241,0.06)':'rgba(99,102,241,0.10)';
+                  e.currentTarget.style.border=`1px solid rgba(99,102,241,${isLight?0.22:0.28})`;
+                  e.currentTarget.style.transform='translateX(2px)';
+                }}
+                onMouseLeave={e=>{
+                  e.currentTarget.style.background=o.completed?(isLight?'rgba(16,185,129,0.06)':'rgba(16,185,129,0.08)'):T.surface;
+                  e.currentTarget.style.border=`1px solid ${o.completed?(isLight?'rgba(16,185,129,0.18)':'rgba(16,185,129,0.14)'):T.border}`;
+                  e.currentTarget.style.transform='translateX(0)';
+                }}
               >
-                {o.completed?<CheckCircle size={18} color="#10b981" style={{flexShrink:0}}/>:<Circle size={18} color={T.dimIcon} style={{flexShrink:0}}/>}
+                {o.completed
+                  ?<CheckCircle size={18} color="#10b981" style={{flexShrink:0}}/>
+                  :<Circle size={18} color={T.dimIcon} style={{flexShrink:0}}/>
+                }
                 <p style={{flex:1,fontSize:'clamp(0.72rem,1.08vw,0.82rem)',color:o.completed?T.text3:T.text,margin:0,textDecoration:o.completed?'line-through':'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.title}</p>
-                <div style={{width:7,height:7,borderRadius:'50%',background:PC(o.priority),flexShrink:0,boxShadow:`0 0 5px ${PC(o.priority)}80`}}/>
+                <span style={{
+                  fontSize:9,fontWeight:700,letterSpacing:'0.04em',
+                  padding:'2px 7px',borderRadius:99,flexShrink:0,
+                  background:`${PC(o.priority)}1a`,
+                  color:PC(o.priority),
+                  border:`1px solid ${PC(o.priority)}30`,
+                }}>{o.priority}</span>
               </div>
             ))}
-            <button onClick={()=>setShowObjModal(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px',borderRadius:11,border:'1px dashed rgba(99,102,241,0.30)',background:'transparent',color:'rgba(99,102,241,0.68)',fontSize:12,fontWeight:600,cursor:'pointer',marginTop:4,fontFamily:"'Outfit',sans-serif"}}>
+            <button onClick={()=>setShowObjModal(true)} style={{
+              display:'flex',alignItems:'center',justifyContent:'center',gap:6,
+              padding:'9px 14px',borderRadius:12,marginTop:4,
+              background: isLight?'rgba(99,102,241,0.07)':'rgba(99,102,241,0.10)',
+              border:'1px solid rgba(99,102,241,0.20)',
+              color:'#818cf8',fontSize:12,fontWeight:600,cursor:'pointer',
+              fontFamily:"'Outfit',sans-serif",transition:'all 0.18s',
+            }}
+              onMouseEnter={e=>{e.currentTarget.style.background=isLight?'rgba(99,102,241,0.13)':'rgba(99,102,241,0.18)';e.currentTarget.style.borderColor='rgba(99,102,241,0.35)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background=isLight?'rgba(99,102,241,0.07)':'rgba(99,102,241,0.10)';e.currentTarget.style.borderColor='rgba(99,102,241,0.20)';}}
+            >
               <Plus size={13}/> Add objective
             </button>
           </div>
@@ -421,13 +457,26 @@ const StudentDashboard = () => {
           ):(
             <div style={{display:'flex',flexDirection:'column',gap:9}}>
               {announcements.slice(0,3).map(a=>(
-                <div key={a.id} style={{padding:'11px 13px',borderRadius:12,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${APB(a.priority)}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
-                    <p style={{fontSize:'clamp(0.7rem,1.05vw,0.78rem)',fontWeight:650,color:T.text,margin:0,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.title}</p>
-                    {a.priority==='high'&&<span style={{fontSize:9,fontWeight:700,background:'rgba(239,68,68,0.18)',color:'#ef4444',borderRadius:4,padding:'1px 5px',flexShrink:0}}>URGENT</span>}
+                <div key={a.id} style={{
+                  padding:'11px 13px',borderRadius:13,
+                  background:T.surface,
+                  border:`1px solid ${T.border}`,
+                  transition:'all 0.18s',
+                }}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
+                    <div style={{
+                      width:28,height:28,borderRadius:8,flexShrink:0,
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      background:`${APB(a.priority)}18`,
+                      border:`1px solid ${APB(a.priority)}30`,
+                    }}>
+                      <div style={{width:7,height:7,borderRadius:'50%',background:APB(a.priority),boxShadow:`0 0 6px ${APB(a.priority)}`}}/>
+                    </div>
+                    <p style={{fontSize:'clamp(0.71rem,1.05vw,0.79rem)',fontWeight:700,color:T.text,margin:0,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.title}</p>
+                    {a.priority==='high'&&<span style={{fontSize:9,fontWeight:800,background:'rgba(239,68,68,0.15)',color:'#ef4444',borderRadius:99,padding:'2px 7px',flexShrink:0,letterSpacing:'0.05em',border:'1px solid rgba(239,68,68,0.25)'}}>URGENT</span>}
                   </div>
-                  <p style={{fontSize:10,color:T.text2,margin:'0 0 3px'}}>{a.teacherName} · {a.subject}</p>
-                  <p style={{fontSize:11,color:T.text2,margin:0,overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any}}>{a.message}</p>
+                  <p style={{fontSize:10,color:T.text2,margin:'0 0 3px 36px'}}>{a.teacherName} · {a.subject}</p>
+                  <p style={{fontSize:11,color:T.text2,margin:'0 0 0 36px',overflow:'hidden',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any}}>{a.message}</p>
                 </div>
               ))}
               {announcements.length>3&&<button style={{fontSize:11,color:'#6366f1',background:'none',border:'none',cursor:'pointer',padding:'3px 0'}}>View all {announcements.length} →</button>}
@@ -473,8 +522,20 @@ const StudentDashboard = () => {
               {calendarLoading?<div style={{display:'flex',alignItems:'center',gap:5,padding:'6px 0'}}><Loader size={13} color="#6366f1" className="animate-spin"/><span style={{fontSize:11,color:T.text2}}>Loading…</span></div>
               :calendarEvents.length===0?<div style={{textAlign:'center',padding:'10px 0'}}><Calendar size={20} color={T.dimIcon} style={{margin:'0 auto 5px'}}/><p style={{fontSize:11,color:T.text3,margin:0}}>No upcoming events</p></div>
               :calendarEvents.slice(0,4).map(ev=>(
-                <div key={ev.id} style={{display:'flex',alignItems:'center',gap:8,padding:'9px 11px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${EDC(ev.title)}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
-                  <div style={{width:7,height:7,borderRadius:'50%',background:EDC(ev.title),flexShrink:0}}/>
+                <div key={ev.id} style={{
+                  display:'flex',alignItems:'center',gap:10,
+                  padding:'9px 12px',borderRadius:12,
+                  background:T.surface,border:`1px solid ${T.border}`,
+                  transition:'all 0.18s',
+                }}>
+                  <div style={{
+                    width:32,height:32,borderRadius:9,flexShrink:0,
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    background:`${EDC(ev.title)}18`,
+                    border:`1px solid ${EDC(ev.title)}28`,
+                  }}>
+                    <div style={{width:8,height:8,borderRadius:'50%',background:EDC(ev.title),boxShadow:`0 0 6px ${EDC(ev.title)}`}}/>
+                  </div>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:'clamp(0.68rem,1.05vw,0.76rem)',fontWeight:650,color:T.text,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</p>
                     <p style={{fontSize:10,color:T.text3,margin:'1px 0 0'}}>{ev.date.toLocaleDateString('en-US',{month:'short',day:'numeric'})} · {ev.startTime}</p>
@@ -482,7 +543,17 @@ const StudentDashboard = () => {
                   <span style={{fontSize:9,fontWeight:600,color:T.muted,background:T.tagBg,borderRadius:5,padding:'2px 6px',flexShrink:0,maxWidth:65,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.course}</span>
                 </div>
               ))}
-              <button onClick={()=>setShowEventModal(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,padding:'7px',borderRadius:9,border:'1px dashed rgba(99,102,241,0.27)',background:'transparent',color:'rgba(99,102,241,0.62)',fontSize:11,fontWeight:600,cursor:'pointer',marginTop:2,fontFamily:"'Outfit',sans-serif"}}>
+              <button onClick={()=>setShowEventModal(true)} style={{
+                display:'flex',alignItems:'center',justifyContent:'center',gap:5,
+                padding:'8px 14px',borderRadius:12,marginTop:4,
+                background:isLight?'rgba(6,182,212,0.07)':'rgba(6,182,212,0.10)',
+                border:'1px solid rgba(6,182,212,0.20)',
+                color:'#22d3ee',fontSize:11,fontWeight:600,cursor:'pointer',
+                fontFamily:"'Outfit',sans-serif",transition:'all 0.18s',
+              }}
+                onMouseEnter={e=>{e.currentTarget.style.background=isLight?'rgba(6,182,212,0.13)':'rgba(6,182,212,0.18)';}}
+                onMouseLeave={e=>{e.currentTarget.style.background=isLight?'rgba(6,182,212,0.07)':'rgba(6,182,212,0.10)';}}
+              >
                 <Plus size={11}/> Add event
               </button>
             </div>
@@ -493,7 +564,12 @@ const StudentDashboard = () => {
         <Card title="My Goals" subtitle="Track your progress" icon={<Award size={15} color="#f97316"/>} accent="#f97316" enterDelay={450}>
           <div style={{display:'flex',flexDirection:'column',gap:9}}>
             {goals.map(g=>(
-              <div key={g.id} style={{padding:'12px 14px',borderRadius:13,background:T.surface,border:`1px solid ${T.border}`,borderLeft:'3px solid rgba(249,115,22,0.65)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
+              <div key={g.id} style={{
+                padding:'12px 14px',borderRadius:14,
+                background:T.surface,
+                border:`1px solid ${T.border}`,
+                transition:'all 0.18s',
+              }}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:7,marginBottom:7}}>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:'clamp(0.72rem,1.1vw,0.8rem)',fontWeight:650,color:T.text,margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.title}</p>
@@ -502,15 +578,25 @@ const StudentDashboard = () => {
                   <span style={{fontSize:9,fontWeight:700,background:'rgba(99,102,241,0.14)',color:'#818cf8',border:'1px solid rgba(99,102,241,0.22)',borderRadius:5,padding:'2px 6px',flexShrink:0}}>{g.category}</span>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
-                  <div style={{flex:1,height:4,borderRadius:2,background:T.trackBg,overflow:'hidden'}}>
-                    <div style={{height:'100%',width:`${g.progress}%`,borderRadius:2,background:'linear-gradient(90deg,#6366f1,#8b5cf6,#10b981)',boxShadow:'0 0 8px rgba(99,102,241,0.5)'}}/>
+                  <div style={{flex:1,height:5,borderRadius:99,background:T.trackBg,overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${g.progress}%`,borderRadius:99,background:'linear-gradient(90deg,#6366f1,#8b5cf6,#06b6d4)',boxShadow:'0 0 10px rgba(99,102,241,0.55)'}}/>
                   </div>
-                  <span style={{fontSize:11,fontWeight:700,color:g.progress>70?'#10b981':g.progress>40?'#f59e0b':T.muted,flexShrink:0}}>{g.progress}%</span>
+                  <span style={{fontSize:11,fontWeight:700,color:g.progress>70?'#10b981':g.progress>40?'#f59e0b':T.muted,flexShrink:0,minWidth:30,textAlign:'right'}}>{g.progress}%</span>
                 </div>
                 <p style={{fontSize:10,color:T.text3,margin:'4px 0 0'}}>Due {g.deadline.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</p>
               </div>
             ))}
-            <button onClick={()=>setShowGoalModal(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,padding:'7px',borderRadius:9,border:'1px dashed rgba(245,158,11,0.28)',background:'transparent',color:'rgba(245,158,11,0.62)',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:"'Outfit',sans-serif"}}>
+            <button onClick={()=>setShowGoalModal(true)} style={{
+              display:'flex',alignItems:'center',justifyContent:'center',gap:5,
+              padding:'9px 14px',borderRadius:12,
+              background:isLight?'rgba(249,115,22,0.07)':'rgba(249,115,22,0.10)',
+              border:'1px solid rgba(249,115,22,0.20)',
+              color:'#fb923c',fontSize:12,fontWeight:600,cursor:'pointer',
+              fontFamily:"'Outfit',sans-serif",transition:'all 0.18s',
+            }}
+              onMouseEnter={e=>{e.currentTarget.style.background=isLight?'rgba(249,115,22,0.13)':'rgba(249,115,22,0.18)';}}
+              onMouseLeave={e=>{e.currentTarget.style.background=isLight?'rgba(249,115,22,0.07)':'rgba(249,115,22,0.10)';}}
+            >
               <Plus size={11}/> Add new goal
             </button>
           </div>
