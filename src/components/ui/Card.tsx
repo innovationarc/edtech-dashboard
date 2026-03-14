@@ -55,19 +55,13 @@ const Card = ({
   // DashboardContext sets --color-card per theme; reading it here ensures
   // Midnight, Blossom, Forest, etc. all render with their correct hue
   // instead of leaking the hardcoded blueish fallback.
-  // Card bg: center holds the theme colour, edges fade to transparent — glass effect
+  // Card bg: four-sided linear fade — even fade on every straight edge, no corner bias
   const cardColor = 'var(--color-card)';
   const bg = dark
-    ? `radial-gradient(ellipse at 50% 50%,
-        color-mix(in srgb, ${cardColor} 68%, transparent) 0%,
-        color-mix(in srgb, ${cardColor} 52%, transparent) 50%,
-        color-mix(in srgb, ${cardColor} 18%, transparent) 80%,
-        transparent 100%)`
-    : `radial-gradient(ellipse at 50% 50%,
-        rgba(255,255,255,0.58) 0%,
-        rgba(255,255,255,0.42) 55%,
-        rgba(255,255,255,0.10) 82%,
-        transparent 100%)`;
+    ? `linear-gradient(to right,  transparent 0%, color-mix(in srgb,${cardColor} 55%,transparent) 12%, color-mix(in srgb,${cardColor} 55%,transparent) 88%, transparent 100%),
+       linear-gradient(to bottom, transparent 0%, color-mix(in srgb,${cardColor} 55%,transparent) 10%, color-mix(in srgb,${cardColor} 55%,transparent) 90%, transparent 100%)`
+    : `linear-gradient(to right,  transparent 0%, rgba(255,255,255,0.48) 12%, rgba(255,255,255,0.48) 88%, transparent 100%),
+       linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.48) 10%, rgba(255,255,255,0.48) 90%, transparent 100%)`;
 
   const border = 'none';
 
