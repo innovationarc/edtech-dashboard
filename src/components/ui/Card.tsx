@@ -53,13 +53,11 @@ const Card = ({
 
   // ── Neutral palette — zero colour bleed ──────────────────────────────────
   const bg = dark
-    ? 'rgba(18, 22, 38, 0.90)'   // deep navy-black
-    : 'rgba(255, 255, 255, 0.92)';
+    ? 'rgba(14, 14, 16, 0.78)'   // neutral dark, no blue cast
+    : 'rgba(255, 255, 255, 0.80)';
 
-  // Single clean border — no accent tinting
-  const border = dark
-    ? '1px solid rgba(255,255,255,0.08)'
-    : '1px solid rgba(0,0,0,0.07)';
+  // No outer border — smooth edges
+  const border = 'none';
 
   // Neutral multi-layer shadow — depth without colour
   const baseShadow = dark
