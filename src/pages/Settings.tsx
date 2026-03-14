@@ -1,13 +1,16 @@
-import { useState, useRef } from 'react';
-import { Save, BellRing, Lock, Users, Palette, Shield } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Save, BellRing, Lock, Users, Palette, Shield, Globe, Monitor, Smartphone, MapPin, Clock } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
 import ChangePasswordForm from '../components/profile/ChangePasswordModal';
 import {
   saveAppearanceSettings,
   saveNotificationSettings,
-  saveSecuritySettings,
   saveUsersPermissionsSettings,
+  saveUserGeneralSettings,
+  getUserGeneralSettings,
+  getLoginLogs,
+  type LoginLog,
 } from '../services/settingsService';
 
 const Settings = () => {
@@ -18,10 +21,12 @@ const Settings = () => {
   const isAdmin = user?.role === 'admin';
   
   const tabs = [
+    { id: 'general', label: 'General', icon: <Globe size={18} />, adminOnly: false },
     { id: 'appearance', label: 'Appearance', icon: <Palette size={18} />, adminOnly: false },
     { id: 'password', label: 'Change Password', icon: <Lock size={18} />, adminOnly: false },
     { id: 'notifications', label: 'Notifications', icon: <BellRing size={18} />, adminOnly: false },
-    { id: 'security', label: 'Security', icon: <Lock size={18} />, adminOnly: true },
+    { id: 'login-activity', label: 'Security', icon: <Shield size={18} />, adminOnly: false },
+    { id: 'security', label: 'Security Settings', icon: <Lock size={18} />, adminOnly: true },
     { id: 'users', label: 'Users & Permissions', icon: <Users size={18} />, adminOnly: true },
   ];
 
@@ -34,9 +39,9 @@ const Settings = () => {
     return true;
   });
 
-  // If not admin and trying to access admin-only tab, redirect to appearance
+  // If not admin and trying to access admin-only tab, redirect to general
   if (!isAdmin && ['security', 'users'].includes(activeTab)) {
-    setActiveTab('appearance');
+    setActiveTab('general');
   }
 
   return (
@@ -44,7 +49,7 @@ const Settings = () => {
       <div>
         <h1 className="text-2xl font-bold" style={{color:'var(--color-text,#111827)'}}>Settings</h1>
         <p className="text-sm mt-1" style={{color:'var(--color-text2,#6b7280)'}}>
-          {isAdmin ? 'Administrator settings' : 'User preferences'}
+          Manage your account preferences
         </p>
       </div>
       
@@ -75,6 +80,7 @@ const Settings = () => {
         </div>
         
         <div className="lg:col-span-4">
+          {activeTab === 'general' && <StudentGeneralSettings />}
           {activeTab === 'appearance' && <AppearanceSettings />}
           {activeTab === 'password' && (
             <Card title="Change Password" subtitle="Update your account password">
@@ -82,11 +88,273 @@ const Settings = () => {
             </Card>
           )}
           {activeTab === 'notifications' && <NotificationSettings />}
+          {activeTab === 'login-activity' && <LoginActivitySettings />}
           {activeTab === 'security' && isAdmin && <SecuritySettings />}
           {activeTab === 'users' && isAdmin && <UsersPermissionsSettings />}
         </div>
       </div>
     </div>
+  );
+};
+
+const StudentGeneralSettings = () => {
+  const { user } = useDashboard();
+  const [language, setLanguage] = useState<'en' | 'bn'>('en');
+  const [timezoneMode, setTimezoneMode] = useState<'auto' | 'manual'>('auto');
+  const [manualTimezone, setManualTimezone] = useState('Asia/Dhaka');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saved, setSaved] = useState(false);
+
+  // Load saved settings on mount
+  useEffect(() => {
+    if (!user?.uid) return;
+    getUserGeneralSettings(user.uid).then(settings => {
+      if (settings) {
+        setLanguage(settings.language ?? 'en');
+        setTimezoneMode(settings.timezoneMode ?? 'auto');
+        setManualTimezone(settings.manualTimezone ?? 'Asia/Dhaka');
+      }
+    }).finally(() => setLoading(false));
+  }, [user?.uid]);
+
+  const handleSave = async () => {
+    if (!user?.uid) return;
+    setSaving(true);
+    try {
+      await saveUserGeneralSettings(user.uid, { language, timezoneMode, manualTimezone });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const timezones = [
+    { value: 'Asia/Dhaka',          label: 'Dhaka — GMT+6' },
+    { value: 'Asia/Kolkata',        label: 'Kolkata — GMT+5:30' },
+    { value: 'Asia/Karachi',        label: 'Karachi — GMT+5' },
+    { value: 'Asia/Dubai',          label: 'Dubai — GMT+4' },
+    { value: 'Europe/London',       label: 'London — GMT+0' },
+    { value: 'America/New_York',    label: 'New York — GMT-5' },
+    { value: 'America/Los_Angeles', label: 'Los Angeles — GMT-8' },
+    { value: 'Asia/Tokyo',          label: 'Tokyo — GMT+9' },
+    { value: 'Australia/Sydney',    label: 'Sydney — GMT+11' },
+  ];
+
+  if (loading) {
+    return (
+      <Card title="General" subtitle="Language and time preferences">
+        <div className="flex items-center justify-center py-12">
+          <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card title="General" subtitle="Language and time preferences">
+      <div className="space-y-8">
+
+        {/* Language */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-3">Language</label>
+          <div className="grid grid-cols-2 gap-3 max-w-sm">
+            {[
+              { value: 'en' as const, label: 'English', flag: '🇬🇧' },
+              { value: 'bn' as const, label: 'বাংলা',   flag: '🇧🇩' },
+            ].map(lang => (
+              <button
+                key={lang.value}
+                onClick={() => setLanguage(lang.value)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
+                  language === lang.value
+                    ? 'border-primary-500 bg-primary-900/30 text-white'
+                    : 'border-background-700 bg-background-800 text-gray-400 hover:border-background-600 hover:text-gray-200'
+                }`}
+              >
+                <span className="text-xl">{lang.flag}</span>
+                <span className="font-medium text-sm">{lang.label}</span>
+                {language === lang.value && (
+                  <svg className="ml-auto w-4 h-4 text-primary-400" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Timezone */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-3">Timezone</label>
+          <div className="space-y-3">
+            {/* Auto */}
+            <button
+              onClick={() => setTimezoneMode('auto')}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border-2 transition-all text-left ${
+                timezoneMode === 'auto'
+                  ? 'border-primary-500 bg-primary-900/30'
+                  : 'border-background-700 bg-background-800 hover:border-background-600'
+              }`}
+            >
+              <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${timezoneMode === 'auto' ? 'bg-primary-500/20' : 'bg-background-700'}`}>
+                <MapPin size={16} className={timezoneMode === 'auto' ? 'text-primary-400' : 'text-gray-500'} />
+              </div>
+              <div>
+                <p className={`text-sm font-medium ${timezoneMode === 'auto' ? 'text-white' : 'text-gray-400'}`}>Automatically from location</p>
+                <p className="text-xs text-gray-500 mt-0.5">Detects your local timezone automatically</p>
+              </div>
+              {timezoneMode === 'auto' && (
+                <svg className="ml-auto w-4 h-4 text-primary-400 flex-shrink-0" viewBox="0 0 10 8" fill="none">
+                  <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              )}
+            </button>
+
+            {/* Manual */}
+            <button
+              onClick={() => setTimezoneMode('manual')}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border-2 transition-all text-left ${
+                timezoneMode === 'manual'
+                  ? 'border-primary-500 bg-primary-900/30'
+                  : 'border-background-700 bg-background-800 hover:border-background-600'
+              }`}
+            >
+              <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${timezoneMode === 'manual' ? 'bg-primary-500/20' : 'bg-background-700'}`}>
+                <Clock size={16} className={timezoneMode === 'manual' ? 'text-primary-400' : 'text-gray-500'} />
+              </div>
+              <div>
+                <p className={`text-sm font-medium ${timezoneMode === 'manual' ? 'text-white' : 'text-gray-400'}`}>Set manually</p>
+                <p className="text-xs text-gray-500 mt-0.5">Choose a specific timezone</p>
+              </div>
+              {timezoneMode === 'manual' && (
+                <svg className="ml-auto w-4 h-4 text-primary-400 flex-shrink-0" viewBox="0 0 10 8" fill="none">
+                  <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              )}
+            </button>
+
+            {timezoneMode === 'manual' && (
+              <select
+                value={manualTimezone}
+                onChange={e => setManualTimezone(e.target.value)}
+                className="w-full bg-background-800 text-white rounded-xl py-2.5 px-4 border border-background-600 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              >
+                {timezones.map(tz => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3">
+          {saved && (
+            <span className="text-sm text-green-400 flex items-center gap-1.5">
+              <svg className="w-4 h-4" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+              Saved
+            </span>
+          )}
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white py-2 px-5 rounded-lg transition-colors disabled:opacity-60 text-sm font-medium">
+            <Save size={16} />
+            <span>{saving ? 'Saving…' : 'Save Changes'}</span>
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+const LoginActivitySettings = () => {
+  const { user } = useDashboard();
+  const [logs, setLogs] = useState<LoginLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getLoginLogs(user.uid, 10).then(data => {
+      setLogs(data);
+    }).finally(() => setLoading(false));
+  }, [user?.uid]);
+
+  const getDeviceIcon = (os: string) => {
+    const mobile = ['Android', 'iPhone', 'iPad'];
+    return mobile.includes(os)
+      ? <Smartphone size={18} className="text-primary-400" />
+      : <Monitor size={18} className="text-primary-400" />;
+  };
+
+  const maskIp = (ip: string) => {
+    if (!ip || ip === 'unknown') return 'Unknown';
+    const parts = ip.split('.');
+    if (parts.length !== 4) return ip;
+    return `${parts[0]}.xxx.xxx.${parts[3]}`;
+  };
+
+  const formatTime = (createdAt: any): string => {
+    if (!createdAt) return 'Unknown';
+    const date: Date = createdAt?.toDate?.() ?? new Date(createdAt);
+    const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diff < 60)  return `${diff} seconds ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+    if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
+    return `${Math.floor(diff / 2592000)} months ago`;
+  };
+
+  return (
+    <Card title="Login Activity" subtitle="Recent sign-ins to your account">
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : logs.length === 0 ? (
+        <div className="text-center py-12 text-gray-500 text-sm">
+          No login history found.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {logs.map((log, i) => (
+            <div key={i} className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${
+              i === 0
+                ? 'border-primary-500/40 bg-primary-900/20'
+                : 'border-background-700 bg-background-800/50'
+            }`}>
+              {/* Icon */}
+              <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${
+                i === 0 ? 'bg-primary-500/20' : 'bg-background-700'
+              }`}>
+                {getDeviceIcon(log.os)}
+              </div>
+
+              {/* Details */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-white">{log.browser} • {log.os}</span>
+                  {i === 0 && (
+                    <span className="text-xs bg-primary-500/20 text-primary-300 border border-primary-500/30 px-2 py-0.5 rounded-full font-medium">
+                      Current session
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">IP: {maskIp(log.ip)}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {log.city}, {log.country} · {formatTime(log.createdAt)}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          <p className="text-xs text-gray-600 text-center pt-2">
+            Showing last {logs.length} login session{logs.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+      )}
+    </Card>
   );
 };
 
