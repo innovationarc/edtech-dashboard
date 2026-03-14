@@ -132,9 +132,12 @@ function buildPrompt(params: {
   if (navigationEnabled) {
     parts.push(
       '\n=== NAVIGATION ===\n' +
-      'If the user wants to navigate somewhere on the platform, ' +
-      'append [NAVIGATE:/path] at the very end of your response — after your full answer. ' +
-      'Only navigate when clearly and explicitly requested by the user. ' +
+      'You can navigate the user to a page ONLY when they explicitly ask to go there, ' +
+      'open a page, or say "take me to", "go to", "open", "navigate to", "show me the X page". ' +
+      'NEVER navigate based on the topic of a question. ' +
+      'If a user asks ABOUT exams, study plans, payments, or any other topic — answer the question using PLATFORM KNOWLEDGE, do NOT navigate. ' +
+      'Navigation is ONLY for requests like "take me to my study plan" or "open the leaderboard". ' +
+      'When navigation is appropriate, append [NAVIGATE:/path] at the very end of your response, after your full answer. ' +
       'Available routes:\n' + NAVIGATION_ROUTES +
       '\n=== END NAVIGATION ==='
     );
