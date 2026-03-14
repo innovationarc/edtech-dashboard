@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Target, Clock, Calendar, Star, Play, Pause, RotateCcw, Plus,
   CheckCircle, Circle, Megaphone, Award, BookOpen, Zap, Bell, X,
-  Loader, AlertCircle, Video,
+  Loader, AlertCircle, Video, Radio,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -17,6 +17,8 @@ import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService';
 import StudyPlanEventModal from '../components/shared/StudyPlanEventModal';
 import { liveClassService } from '../services/liveClassService';
 import { LiveClass } from '../types/liveClassTypes';
+import { streamService } from '../services/streamService';
+import { LiveStream } from '../types/streamTypes';
 
 interface Objective { id:string; title:string; completed:boolean; priority:'high'|'medium'|'low'; }
 interface Goal { id:string; title:string; description:string; progress:number; target:number; category:string; deadline:Date; }
@@ -59,6 +61,7 @@ const StudentDashboard = () => {
   const [calendarLoading, setCalendarLoading]       = useState(true);
   const [calendarError, setCalendarError]           = useState('');
   const [liveClasses, setLiveClasses]               = useState<LiveClass[]>([]);
+  const [liveStreams, setLiveStreams]                = useState<LiveStream[]>([]);
   const [showObjModal, setShowObjModal]             = useState(false);
   const [showGoalModal, setShowGoalModal]           = useState(false);
   const [showEventModal, setShowEventModal]         = useState(false);
@@ -107,8 +110,8 @@ const StudentDashboard = () => {
   useEffect(() => {
     setDailyQuote(getRandomQuote());
     if (!user) return;
-    loadAnnouncements(); loadCalendarEvents(); loadLiveClasses();
-    const iv = setInterval(()=>{loadAnnouncements();loadCalendarEvents();loadLiveClasses();},30000);
+    loadAnnouncements(); loadCalendarEvents(); loadLiveClasses(); loadLiveStreams();
+    const iv = setInterval(()=>{loadAnnouncements();loadCalendarEvents();loadLiveClasses();loadLiveStreams();},30000);
     return ()=>clearInterval(iv);
   },[user]);
 
@@ -166,6 +169,22 @@ const StudentDashboard = () => {
     } catch { /* silent — non-critical */ }
   };
 
+  const loadLiveStreams = async () => {
+    try {
+      const all = await streamService.getAll();
+      const now = new Date();
+      const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      setLiveStreams(all.filter(s => {
+        if (s.status === 'live') return true;
+        if (s.status === 'scheduled' && s.scheduledAt) {
+          const t = s.scheduledAt.toDate();
+          return t >= now && t <= in48h;
+        }
+        return false;
+      }));
+    } catch { /* silent — non-critical */ }
+  };
+
   useEffect(()=>{
     if (!timerRunning) return;
     const iv=setInterval(()=>{
@@ -210,6 +229,57 @@ const StudentDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Live Streams Card — only shown when there are live or upcoming (48h) streams */}
+      {liveStreams.length > 0 && (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <Radio size={15} color={primaryColor}/>
+            <span style={{fontSize:12,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'0.08em'}}>Live Streams</span>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(100%,280px),1fr))',gap:'clamp(8px,1.2vw,14px)'}}>
+            {liveStreams.map(s => {
+              const isLive = s.status === 'live';
+              const scheduledDate = s.scheduledAt?.toDate() ?? new Date();
+              const diffMs = scheduledDate.getTime() - Date.now();
+              const diffH = Math.floor(diffMs / 3600000);
+              const diffM = Math.floor((diffMs % 3600000) / 60000);
+              const timeLabel = isLive ? 'Live now' : diffH > 0 ? `In ${diffH}h ${diffM}m` : `In ${diffM}m`;
+              return (
+                <div key={s.id} style={{
+                  display:'flex',alignItems:'center',gap:12,
+                  padding:'11px 14px',borderRadius:13,
+                  background: isLive ? 'rgba(99,102,241,0.08)' : T.surface,
+                  border: isLive ? `1px solid rgba(99,102,241,0.28)` : `1px solid ${T.border}`,
+                  transition:'all 0.15s',
+                }}>
+                  <div style={{width:36,height:36,borderRadius:10,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background: isLive ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.08)'}}>
+                    {isLive
+                      ? <span style={{width:10,height:10,borderRadius:'50%',background:primaryColor,boxShadow:`0 0 0 3px ${primaryColor}40`,display:'block',animation:'pulse 1.5s ease-in-out infinite'}}/>
+                      : <Radio size={16} color={primaryColor}/>
+                    }
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:'clamp(0.72rem,1.1vw,0.8rem)',fontWeight:700,color:T.text,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.title}</p>
+                    <div style={{display:'flex',alignItems:'center',gap:5,marginTop:2}}>
+                      {isLive && <span style={{fontSize:9,fontWeight:800,background:'rgba(99,102,241,0.18)',color:primaryColor,borderRadius:4,padding:'1px 5px',letterSpacing:'0.05em'}}>LIVE</span>}
+                      <span style={{fontSize:10,color:isLive ? `${primaryColor}bb` : T.text3}}>{timeLabel}</span>
+                      {s.teacherName && <span style={{fontSize:10,color:T.text3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>· {s.teacherName}</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate('/student-streams')}
+                    style={{flexShrink:0,display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:8,border:'none',cursor:'pointer',fontSize:11,fontWeight:700,fontFamily:"'Outfit',sans-serif",background:`${primaryColor}cc`,color:'#fff',boxShadow:`0 2px 8px ${primaryColor}40`}}
+                  >
+                    <Play size={10} fill="#fff"/>
+                    {isLive ? 'Watch' : 'View'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Live Classes Card — only shown when there are live or upcoming (48h) classes */}
       {liveClasses.length > 0 && (
