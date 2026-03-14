@@ -11,6 +11,9 @@ import {
   orderBy,
   limit,
   getDocs,
+  where,
+  writeBatch,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -228,7 +231,23 @@ export const getLoginLogs = async (
   uid: string,
   limitCount = 10
 ): Promise<LoginLog[]> => {
+  const cutoff = Timestamp.fromDate(
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  );
+
+  // Fetch recent logs to display
   const q = query(loginLogsRef(uid), orderBy('createdAt', 'desc'), limit(limitCount));
   const snap = await getDocs(q);
+
+  // Purge logs older than 30 days — non-blocking, never throws
+  getDocs(query(loginLogsRef(uid), where('createdAt', '<', cutoff)))
+    .then(oldSnap => {
+      if (oldSnap.empty) return;
+      const batch = writeBatch(db);
+      oldSnap.docs.forEach(d => batch.delete(d.ref));
+      return batch.commit();
+    })
+    .catch(() => {});
+
   return snap.docs.map(d => d.data() as LoginLog);
 };
