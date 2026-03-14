@@ -212,7 +212,7 @@ const StudentDashboard = () => {
   const greeting = hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:'clamp(12px,2vw,22px)',fontFamily:"'Outfit',sans-serif"}}>
+    <div style={{display:'flex',flexDirection:'column',gap:'clamp(18px,2.8vw,30px)',fontFamily:"'Outfit',sans-serif"}}>
 
       {/* Welcome Banner */}
       <div className="flex items-center justify-between">
@@ -347,33 +347,33 @@ const StudentDashboard = () => {
       )}
 
       {/* Row 1: 4-column cards */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,230px),1fr))',gap:'clamp(10px,1.4vw,18px)'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,230px),1fr))',gap:'clamp(14px,1.8vw,22px)'}}>
 
         {/* Objectives */}
-        <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>}>
-          <div style={{display:'flex',flexDirection:'column',gap:5}}>
+        <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>} enterDelay={0}>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {objectives.map(o=>(
-              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 10px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,cursor:'pointer',transition:'background 0.12s',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}
-                onMouseEnter={e=>(e.currentTarget.style.background=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.09)')}
+              <div key={o.id} onClick={()=>toggleObj(o.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,background:T.surface,border:`1px solid ${T.border}`,cursor:'pointer',transition:'background 0.15s',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}
+                onMouseEnter={e=>(e.currentTarget.style.background=isLight?'rgba(0,0,0,0.07)':'rgba(255,255,255,0.10)')}
                 onMouseLeave={e=>(e.currentTarget.style.background=T.surface)}
               >
-                {o.completed?<CheckCircle size={17} color="#10b981" style={{flexShrink:0}}/>:<Circle size={17} color={T.dimIcon} style={{flexShrink:0}}/>}
-                <p style={{flex:1,fontSize:'clamp(0.7rem,1.05vw,0.79rem)',color:o.completed?T.text3:T.text,margin:0,textDecoration:o.completed?'line-through':'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.title}</p>
-                <div style={{width:5,height:5,borderRadius:'50%',background:PC(o.priority),flexShrink:0}}/>
+                {o.completed?<CheckCircle size={18} color="#10b981" style={{flexShrink:0}}/>:<Circle size={18} color={T.dimIcon} style={{flexShrink:0}}/>}
+                <p style={{flex:1,fontSize:'clamp(0.72rem,1.08vw,0.82rem)',color:o.completed?T.text3:T.text,margin:0,textDecoration:o.completed?'line-through':'none',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{o.title}</p>
+                <div style={{width:7,height:7,borderRadius:'50%',background:PC(o.priority),flexShrink:0,boxShadow:`0 0 5px ${PC(o.priority)}80`}}/>
               </div>
             ))}
-            <button onClick={()=>setShowObjModal(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,padding:'7px',borderRadius:9,border:'1px dashed rgba(99,102,241,0.28)',background:'transparent',color:'rgba(99,102,241,0.65)',fontSize:11,fontWeight:600,cursor:'pointer',marginTop:3,fontFamily:"'Outfit',sans-serif"}}>
-              <Plus size={12}/> Add objective
+            <button onClick={()=>setShowObjModal(true)} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'9px',borderRadius:11,border:'1px dashed rgba(99,102,241,0.30)',background:'transparent',color:'rgba(99,102,241,0.68)',fontSize:12,fontWeight:600,cursor:'pointer',marginTop:4,fontFamily:"'Outfit',sans-serif"}}>
+              <Plus size={13}/> Add objective
             </button>
           </div>
         </Card>
 
         {/* Timer */}
-        <Card title="Focus Timer" icon={<Clock size={15} color={timerMode==='focus'?'#10b981':'#f59e0b'}/>}>
-          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-            <div style={{display:'flex',gap:5,width:'100%'}}>
+        <Card title="Focus Timer" icon={<Clock size={15} color={timerMode==='focus'?'#10b981':'#f59e0b'}/>} enterDelay={90}>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+            <div style={{display:'flex',gap:6,width:'100%'}}>
               {(['focus','break'] as const).map(m=>(
-                <button key={m} onClick={()=>{setTimerMode(m);setTimerMin(m==='focus'?25:5);setTimerSec(0);setTimerRunning(false);}} style={{flex:1,padding:'5px 0',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:"'Outfit',sans-serif",background:timerMode===m?(m==='focus'?'rgba(16,185,129,0.18)':'rgba(245,158,11,0.18)'):T.surface,border:timerMode===m?`1px solid ${m==='focus'?'rgba(16,185,129,0.35)':'rgba(245,158,11,0.35)'}`:`1px solid ${T.border}`,color:timerMode===m?(m==='focus'?'#10b981':'#f59e0b'):T.muted}}>
+                <button key={m} onClick={()=>{setTimerMode(m);setTimerMin(m==='focus'?25:5);setTimerSec(0);setTimerRunning(false);}} style={{flex:1,padding:'9px 0',borderRadius:10,fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:"'Outfit',sans-serif",background:timerMode===m?(m==='focus'?'rgba(16,185,129,0.18)':'rgba(245,158,11,0.18)'):T.surface,border:timerMode===m?`1px solid ${m==='focus'?'rgba(16,185,129,0.38)':'rgba(245,158,11,0.38)'}`:`1px solid ${T.border}`,color:timerMode===m?(m==='focus'?'#10b981':'#f59e0b'):T.muted}}>
                   {m==='focus'?'Focus':'Break'}
                 </button>
               ))}
@@ -388,12 +388,12 @@ const StudentDashboard = () => {
                 <span style={{fontSize:9,color:T.text3,textTransform:'capitalize',marginTop:2}}>{timerMode}</span>
               </div>
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button onClick={timerRunning?()=>setTimerRunning(false):()=>setTimerRunning(true)} style={{width:36,height:36,borderRadius:10,border:'none',cursor:'pointer',background:timerRunning?'rgba(245,158,11,0.18)':'rgba(16,185,129,0.18)',color:timerRunning?'#f59e0b':'#10b981',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                {timerRunning?<Pause size={15}/>:<Play size={15}/>}
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={timerRunning?()=>setTimerRunning(false):()=>setTimerRunning(true)} style={{width:42,height:42,borderRadius:13,border:'none',cursor:'pointer',background:timerRunning?'rgba(245,158,11,0.18)':'rgba(16,185,129,0.18)',color:timerRunning?'#f59e0b':'#10b981',display:'flex',alignItems:'center',justifyContent:'center',transition:'transform 0.15s',boxShadow:timerRunning?'0 0 14px rgba(245,158,11,0.25)':'0 0 14px rgba(16,185,129,0.25)'}}>
+                {timerRunning?<Pause size={17}/>:<Play size={17}/>}
               </button>
-              <button onClick={()=>{setTimerRunning(false);setTimerMin(timerMode==='focus'?25:5);setTimerSec(0);}} style={{width:36,height:36,borderRadius:10,border:`1px solid ${T.ring}`,background:T.surface,color:T.muted,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <RotateCcw size={13}/>
+              <button onClick={()=>{setTimerRunning(false);setTimerMin(timerMode==='focus'?25:5);setTimerSec(0);}} style={{width:42,height:42,borderRadius:13,border:`1px solid ${T.ring}`,background:T.surface,color:T.muted,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <RotateCcw size={15}/>
               </button>
             </div>
             <p style={{fontSize:10,color:T.text3,textAlign:'center',margin:0}}>{timerMode==='focus'?'Stay focused 🎯':'Take a breath 🌿'}</p>
@@ -401,27 +401,27 @@ const StudentDashboard = () => {
         </Card>
 
         {/* Announcements */}
-        <Card title="Latest Updates" icon={<Megaphone size={15} color="#a78bfa"/>}>
+        <Card title="Latest Updates" icon={<Megaphone size={15} color="#a78bfa"/>} enterDelay={180}>
           {announcementsLoading?(
-            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:7,padding:'22px 0'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,padding:'28px 0'}}>
               <Loader size={16} color="#6366f1" className="animate-spin"/>
               <span style={{fontSize:12,color:T.text2}}>Loading…</span>
             </div>
           ):announcementsError?(
-            <div style={{textAlign:'center',padding:'18px 0'}}>
+            <div style={{textAlign:'center',padding:'22px 0'}}>
               <AlertCircle size={22} color="#ef4444" style={{margin:'0 auto 5px'}}/>
               <p style={{fontSize:11,color:'rgba(239,68,68,0.8)',margin:'0 0 5px'}}>{announcementsError}</p>
               <button onClick={loadAnnouncements} style={{fontSize:11,color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}>Retry</button>
             </div>
           ):announcements.length===0?(
-            <div style={{textAlign:'center',padding:'18px 0'}}>
-              <Megaphone size={26} color={T.dimIcon} style={{margin:'0 auto 7px'}}/>
+            <div style={{textAlign:'center',padding:'24px 0'}}>
+              <Megaphone size={28} color={T.dimIcon} style={{margin:'0 auto 8px'}}/>
               <p style={{fontSize:12,color:T.text3,margin:0}}>No announcements yet</p>
             </div>
           ):(
-            <div style={{display:'flex',flexDirection:'column',gap:7}}>
+            <div style={{display:'flex',flexDirection:'column',gap:9}}>
               {announcements.slice(0,3).map(a=>(
-                <div key={a.id} style={{padding:'9px 11px',borderRadius:11,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${APB(a.priority)}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
+                <div key={a.id} style={{padding:'11px 13px',borderRadius:12,background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${APB(a.priority)}`,backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>
                   <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:2}}>
                     <p style={{fontSize:'clamp(0.7rem,1.05vw,0.78rem)',fontWeight:650,color:T.text,margin:0,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.title}</p>
                     {a.priority==='high'&&<span style={{fontSize:9,fontWeight:700,background:'rgba(239,68,68,0.18)',color:'#ef4444',borderRadius:4,padding:'1px 5px',flexShrink:0}}>URGENT</span>}
@@ -436,11 +436,11 @@ const StudentDashboard = () => {
         </Card>
 
         {/* Daily Quote */}
-        <Card title="Daily Inspiration" icon={<Star size={15} color="#f59e0b"/>}>
-          <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:12}}>
-            <div style={{fontSize:32}}>💡</div>
-            <blockquote style={{fontSize:'clamp(0.72rem,1.1vw,0.82rem)',color:T.text2,fontStyle:'italic',lineHeight:1.6,margin:0}}>"{dailyQuote.text}"</blockquote>
-            <cite style={{fontSize:11,fontWeight:650,color:'#a78bfa',fontStyle:'normal'}}>— {dailyQuote.author}</cite>
+        <Card title="Daily Inspiration" icon={<Star size={15} color="#f59e0b"/>} enterDelay={270}>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',textAlign:'center',gap:14}}>
+            <div style={{fontSize:36}}>💡</div>
+            <blockquote style={{fontSize:'clamp(0.76rem,1.15vw,0.86rem)',color:T.text2,fontStyle:'italic',lineHeight:1.65,margin:0}}>"{dailyQuote.text}"</blockquote>
+            <cite style={{fontSize:12,fontWeight:700,color:'#a78bfa',fontStyle:'normal'}}>— {dailyQuote.author}</cite>
             <div style={{width:'100%',borderTop:`1px solid ${T.border}`,paddingTop:9}}>
               <button onClick={()=>setDailyQuote(getRandomQuote())} style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,color:T.muted,background:T.surface,border:`1px solid ${T.border}`,borderRadius:20,padding:'5px 11px',cursor:'pointer',fontFamily:"'Outfit',sans-serif"}}>
                 <RotateCcw size={10}/> New Quote
@@ -451,7 +451,7 @@ const StudentDashboard = () => {
       </div>
 
       {/* Row 2: Schedule + Goals */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,290px),1fr))',gap:'clamp(10px,1.4vw,18px)'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,290px),1fr))',gap:'clamp(14px,1.8vw,22px)'}}>
 
         {/* Schedule */}
         <Card title="Weekly Schedule" subtitle="Events this week" icon={<Calendar size={15} color="#6366f1"/>}>
