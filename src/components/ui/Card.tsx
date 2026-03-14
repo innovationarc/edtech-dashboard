@@ -1,4 +1,5 @@
-// Card.tsx — Premium frosted silver-glass card + staggered entrance animation
+// Card.tsx — "Aurora" brand card system
+// Signature: coloured top stripe + tinted shadow per card identity
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../contexts/DashboardContext';
@@ -15,273 +16,210 @@ interface CardProps {
   tilt?: boolean;
   variant?: 'default' | 'dark' | 'glass';
   padding?: 'none' | 'sm' | 'md' | 'lg';
-  enterDelay?: number; // ms — stagger entrance animation
+  enterDelay?: number;
+  accent?: string;
 }
 
-const PADDING = { none: '0', sm: '14px 18px', md: '22px 26px', lg: '30px 36px' };
-const NOISE = `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;
+const PAD = { none:'0', sm:'14px 18px', md:'22px 26px', lg:'30px 36px' };
 
-// Inject global keyframes once
-let _stylesInjected = false;
-const injectCardStyles = () => {
-  if (_stylesInjected || typeof document === 'undefined') return;
-  _stylesInjected = true;
-  const el = document.createElement('style');
-  el.textContent = `
-    @keyframes cardEnter {
-      0%   { opacity:0; transform:translateY(24px) scale(0.965); filter:blur(2px); }
-      60%  { filter:blur(0); }
+let _injected = false;
+const inject = () => {
+  if (_injected || typeof document==='undefined') return;
+  _injected = true;
+  const s = document.createElement('style');
+  s.textContent = `
+    @keyframes cardReveal {
+      0%   { opacity:0; transform:translateY(36px) scale(0.93); filter:blur(5px); }
+      55%  { filter:blur(0); }
       100% { opacity:1; transform:translateY(0) scale(1); filter:blur(0); }
     }
-    @keyframes shimmerSweep {
-      0%   { transform:translateX(-120%) skewX(-12deg); }
-      100% { transform:translateX(220%) skewX(-12deg); }
+    @keyframes shimPass {
+      0%   { transform:translateX(-130%) skewX(-18deg); }
+      100% { transform:translateX(240%)  skewX(-18deg); }
     }
-    @keyframes pulse {
-      0%,100% { opacity:1; transform:scale(1); }
-      50%     { opacity:0.55; transform:scale(1.18); }
+    @keyframes stripeGlow {
+      0%,100% { opacity:0.85; }
+      50%     { opacity:1; filter:brightness(1.25); }
     }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.22)} }
   `;
-  document.head.appendChild(el);
+  document.head.appendChild(s);
 };
 
-const hexRgb = (hex: string) => {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return `${r},${g},${b}`;
+const rgb = (hex:string) => {
+  const h = hex.replace('#','');
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)].join(',');
 };
 
 const Card = ({
   children, className, title, subtitle, icon, footer,
-  onClick, hover = false, tilt = true, variant = 'default', padding = 'md',
-  enterDelay = 0,
+  onClick, tilt=true, padding='md', enterDelay=0, accent,
+  hover=false, variant='default',
 }: CardProps) => {
-  const { theme, primaryColor = '#6366f1' } = useDashboard();
-  const isLight = theme === 'light';
-  const cardRef  = useRef<HTMLDivElement>(null);
-  const glowRef  = useRef<HTMLDivElement>(null);
-  const shimRef  = useRef<HTMLDivElement>(null);
-  const pRgb = hexRgb(primaryColor);
+  const { theme, primaryColor='#6366f1' } = useDashboard();
+  const isLight = theme==='light';
+  const cardRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
+  const shimRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { injectCardStyles(); }, []);
+  const a    = accent || primaryColor;
+  const aRgb = rgb(a);
 
-  // ── Glass base ────────────────────────────────────────────────────────────
-  const bg = isLight
-    ? 'rgba(255,255,255,0.78)'
-    : 'rgba(12,16,30,0.72)';
+  useEffect(()=>{ inject(); },[]);
 
-  const glassOverlay = isLight
-    ? 'linear-gradient(135deg,rgba(255,255,255,0.60) 0%,rgba(255,255,255,0.12) 50%,rgba(220,230,255,0.05) 100%)'
-    : 'linear-gradient(135deg,rgba(255,255,255,0.095) 0%,rgba(190,200,255,0.028) 42%,rgba(99,102,241,0.025) 100%)';
-
+  const bg     = isLight ? 'rgba(255,255,255,0.86)' : 'rgba(10,14,28,0.84)';
   const border = isLight
-    ? '1px solid rgba(255,255,255,0.97)'
-    : '1px solid rgba(255,255,255,0.12)';
+    ? `1px solid rgba(${aRgb},0.16)`
+    : `1px solid rgba(255,255,255,0.088)`;
 
   const baseShadow = isLight
-    ? '0 6px 32px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,1)'
-    : [
-        '0 12px 48px rgba(0,0,0,0.58)',
-        '0 5px 16px rgba(0,0,0,0.38)',
-        '0 1px 4px rgba(0,0,0,0.28)',
-        'inset 0 1px 0 rgba(255,255,255,0.12)',
-        'inset 0 0 0 1px rgba(255,255,255,0.048)',
-      ].join(', ');
+    ? [ `0 6px 36px rgba(0,0,0,0.10)`,`0 2px 6px rgba(0,0,0,0.06)`,
+        `0 0 0 1px rgba(${aRgb},0.11)`,`inset 0 1px 0 rgba(255,255,255,1)` ].join(',')
+    : [ `0 14px 52px rgba(0,0,0,0.62)`,`0 5px 16px rgba(0,0,0,0.42)`,
+        `0 1px 3px rgba(0,0,0,0.32)`,  `0 0 0 1px rgba(${aRgb},0.15)`,
+        `inset 0 1px 0 rgba(255,255,255,0.08)` ].join(',');
 
   const hoverShadow = isLight
-    ? '0 22px 56px rgba(0,0,0,0.15), 0 6px 14px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)'
-    : [
-        '0 28px 72px rgba(0,0,0,0.68)',
-        '0 12px 32px rgba(0,0,0,0.48)',
-        '0 3px 8px rgba(0,0,0,0.32)',
-        `0 0 0 1px rgba(${pRgb},0.24)`,
-        'inset 0 1px 0 rgba(255,255,255,0.16)',
-        `inset 0 0 40px rgba(${pRgb},0.04)`,
-      ].join(', ');
+    ? [ `0 22px 64px rgba(0,0,0,0.14)`,`0 6px 20px rgba(${aRgb},0.20)`,
+        `0 0 0 1.5px rgba(${aRgb},0.32)`,`inset 0 1px 0 rgba(255,255,255,1)` ].join(',')
+    : [ `0 28px 80px rgba(0,0,0,0.72)`,`0 10px 28px rgba(${aRgb},0.24)`,
+        `0 0 0 1.5px rgba(${aRgb},0.36)`,`inset 0 1px 0 rgba(255,255,255,0.13)`,
+        `inset 0 0 40px rgba(${aRgb},0.04)` ].join(',');
 
-  const titleColor    = isLight ? '#0f172a' : 'rgba(241,245,249,0.97)';
-  const subtitleColor = isLight ? '#64748b' : 'rgba(148,163,184,0.60)';
-  const dividerColor  = isLight ? 'rgba(0,0,0,0.058)' : 'rgba(255,255,255,0.065)';
-  const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.24)';
-  const iconPillBg    = isLight ? 'rgba(0,0,0,0.048)' : 'rgba(255,255,255,0.075)';
-  const iconPillBord  = isLight ? 'rgba(0,0,0,0.058)' : 'rgba(255,255,255,0.095)';
+  const titleColor    = isLight ? '#0f172a'             : 'rgba(241,245,249,0.97)';
+  const subtitleColor = isLight ? '#64748b'             : 'rgba(148,163,184,0.55)';
+  const divColor      = isLight ? `rgba(${aRgb},0.10)` : `rgba(${aRgb},0.13)`;
+  const footerBg      = isLight ? 'rgba(0,0,0,0.025)'  : 'rgba(0,0,0,0.26)';
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const onMove = (e:React.MouseEvent<HTMLDivElement>) => {
     if (!tilt) return;
-    const el  = cardRef.current;
-    const glow = glowRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
-    const rotX = ((y - cy) / cy) * -7;
-    const rotY = ((x - cx) / cx) *  7;
-    el.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.018)`;
-    el.style.boxShadow = hoverShadow;
-    if (glow) {
-      glow.style.left    = `${x}px`;
-      glow.style.top     = `${y}px`;
-      glow.style.opacity = isLight ? '0.50' : '0.40';
-    }
+    const el=cardRef.current, gl=glowRef.current; if (!el) return;
+    const r=el.getBoundingClientRect();
+    const x=e.clientX-r.left, y=e.clientY-r.top;
+    el.style.transform=`perspective(1000px) rotateX(${((y-r.height/2)/(r.height/2))*-5.5}deg) rotateY(${((x-r.width/2)/(r.width/2))*5.5}deg) translateZ(8px) scale(1.016)`;
+    el.style.boxShadow=hoverShadow;
+    if (gl){ gl.style.left=`${x}px`; gl.style.top=`${y}px`; gl.style.opacity=isLight?'0.42':'0.36'; }
   };
 
-  const handleMouseEnter = () => {
-    // One-shot shimmer sweep on hover
-    if (shimRef.current) {
-      shimRef.current.style.animation = 'none';
-      // Trigger reflow
-      void shimRef.current.offsetWidth;
-      shimRef.current.style.animation = 'shimmerSweep 520ms cubic-bezier(0.4,0,0.2,1) forwards';
-    }
+  const onEnter = () => {
+    const sh=shimRef.current; if (!sh) return;
+    sh.style.animation='none'; void sh.offsetWidth;
+    sh.style.animation='shimPass 650ms cubic-bezier(0.4,0,0.2,1) forwards';
   };
 
-  const handleMouseLeave = () => {
-    if (!tilt) return;
-    const el   = cardRef.current;
-    const glow = glowRef.current;
-    if (el) {
-      el.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)';
-      el.style.boxShadow = baseShadow;
-    }
-    if (glow) glow.style.opacity = '0';
+  const onLeave = () => {
+    const el=cardRef.current, gl=glowRef.current;
+    if (el){ el.style.transform='perspective(1000px) rotateX(0) rotateY(0) translateZ(0) scale(1)'; el.style.boxShadow=baseShadow; }
+    if (gl) gl.style.opacity='0';
   };
 
   return (
     <div
       ref={cardRef}
-      className={clsx('relative overflow-hidden', className)}
+      className={clsx('relative overflow-hidden',className)}
       style={{
-        background: bg,
-        backdropFilter: 'blur(48px) saturate(220%) brightness(1.04)',
-        WebkitBackdropFilter: 'blur(48px) saturate(220%) brightness(1.04)',
-        border,
-        borderRadius: 24,
-        boxShadow: baseShadow,
-        fontFamily: "'Outfit', sans-serif",
-        transition: 'transform 0.22s cubic-bezier(0.23,1,0.32,1), box-shadow 0.22s ease',
-        cursor: onClick ? 'pointer' : 'default',
-        isolation: 'isolate',
-        transformStyle: tilt ? 'preserve-3d' : 'flat',
-        animation: `cardEnter 600ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
+        background:bg,
+        backdropFilter:'blur(44px) saturate(215%)',
+        WebkitBackdropFilter:'blur(44px) saturate(215%)',
+        border, borderRadius:22, boxShadow:baseShadow,
+        fontFamily:"'Outfit',sans-serif",
+        cursor:onClick?'pointer':'default',
+        isolation:'isolate',
+        transformStyle:tilt?'preserve-3d':'flat',
+        transition:'transform 0.22s cubic-bezier(0.23,1,0.32,1), box-shadow 0.22s ease',
+        animation:`cardReveal 620ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseMove={onMove}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
     >
-      {/* ① Diagonal silver-glass gradient sheen */}
+      {/* ① Signature accent stripe */}
       <div style={{
-        position:'absolute', inset:0, borderRadius:24, pointerEvents:'none', zIndex:1,
-        background: glassOverlay,
+        position:'absolute',top:0,left:0,right:0,height:3,
+        borderRadius:'22px 22px 0 0',pointerEvents:'none',zIndex:9,
+        background:`linear-gradient(90deg, ${a} 0%, rgba(${aRgb},0.48) 58%, transparent 100%)`,
+        boxShadow:`0 0 16px rgba(${aRgb},0.55), 0 0 4px rgba(${aRgb},0.8)`,
+        animation:'stripeGlow 3s ease-in-out infinite',
       }}/>
 
-      {/* ② Noise sparkle micro-texture */}
+      {/* ② Accent top wash */}
       <div style={{
-        position:'absolute', inset:0, borderRadius:24, pointerEvents:'none', zIndex:1,
-        background: NOISE,
-        opacity: isLight ? 0.024 : 0.040,
-        mixBlendMode:'overlay',
+        position:'absolute',top:0,left:0,right:0,height:100,
+        pointerEvents:'none',zIndex:1,
+        background:`linear-gradient(180deg,rgba(${aRgb},${isLight?0.042:0.082}) 0%,transparent 100%)`,
       }}/>
 
-      {/* ③ Top-edge glass rim highlight */}
+      {/* ③ Bottom-right ambient blob */}
       <div style={{
-        position:'absolute', top:0, left:0, right:0, height:1,
-        borderRadius:'24px 24px 0 0', pointerEvents:'none', zIndex:6,
-        background: isLight
-          ? 'linear-gradient(90deg,transparent 3%,rgba(255,255,255,0.92) 25%,rgba(255,255,255,1) 50%,rgba(255,255,255,0.92) 75%,transparent 97%)'
-          : 'linear-gradient(90deg,transparent 3%,rgba(255,255,255,0.22) 25%,rgba(255,255,255,0.44) 50%,rgba(255,255,255,0.22) 75%,transparent 97%)',
+        position:'absolute',bottom:-55,right:-55,width:200,height:200,
+        borderRadius:'50%',pointerEvents:'none',zIndex:0,
+        background:`radial-gradient(circle,rgba(${aRgb},${isLight?0.05:0.075}) 0%,transparent 70%)`,
+        filter:'blur(28px)',
       }}/>
 
-      {/* ④ Left-edge partial shimmer */}
-      <div style={{
-        position:'absolute', top:0, left:0, bottom:0, width:1,
-        borderRadius:'24px 0 0 24px', pointerEvents:'none', zIndex:6,
-        background: isLight
-          ? 'linear-gradient(180deg,rgba(255,255,255,0.90) 0%,rgba(255,255,255,0.30) 50%,transparent 100%)'
-          : 'linear-gradient(180deg,rgba(255,255,255,0.20) 0%,rgba(255,255,255,0.07) 45%,transparent 100%)',
-      }}/>
-
-      {/* ⑤ Bottom-right subtle gradient fade */}
-      <div style={{
-        position:'absolute', bottom:0, right:0, width:'55%', height:'45%',
-        borderRadius:'0 0 24px 0', pointerEvents:'none', zIndex:0,
-        background: isLight
-          ? 'radial-gradient(ellipse at bottom right,rgba(220,220,255,0.08) 0%,transparent 70%)'
-          : `radial-gradient(ellipse at bottom right,rgba(${pRgb},0.055) 0%,transparent 70%)`,
-      }}/>
-
-      {/* ⑥ Hover shimmer sweep */}
+      {/* ④ Shimmer sweep */}
       <div ref={shimRef} style={{
-        position:'absolute', top:0, bottom:0, left:0, width:'40%',
-        pointerEvents:'none', zIndex:5,
-        background: isLight
-          ? 'linear-gradient(105deg,transparent 20%,rgba(255,255,255,0.40) 50%,transparent 80%)'
-          : 'linear-gradient(105deg,transparent 20%,rgba(255,255,255,0.07) 50%,transparent 80%)',
-        opacity:1,
-        transform:'translateX(-120%) skewX(-12deg)',
+        position:'absolute',inset:0,pointerEvents:'none',zIndex:5,overflow:'hidden',
+        background:`linear-gradient(108deg,transparent 20%,rgba(255,255,255,${isLight?0.28:0.052}) 50%,transparent 80%)`,
+        transform:'translateX(-130%) skewX(-18deg)',
       }}/>
 
-      {/* ⑦ Cursor glow */}
+      {/* ⑤ Cursor glow */}
       <div ref={glowRef} style={{
-        position:'absolute', pointerEvents:'none', zIndex:2,
-        width:300, height:300, borderRadius:'50%',
+        position:'absolute',pointerEvents:'none',zIndex:3,
+        width:320,height:320,borderRadius:'50%',
         transform:'translate(-50%,-50%)',
-        background:`radial-gradient(circle,rgba(${pRgb},${isLight?0.13:0.19}) 0%,transparent 65%)`,
-        opacity:0,
-        transition:'opacity 0.28s ease',
-        left:'50%', top:'50%',
+        background:`radial-gradient(circle,rgba(${aRgb},${isLight?0.11:0.16}) 0%,transparent 65%)`,
+        opacity:0,transition:'opacity 0.28s ease',
+        left:'50%',top:'50%',
       }}/>
 
-      {/* ⑧ Corner accent tint */}
+      {/* ⑥ Left-edge glass catch */}
       <div style={{
-        position:'absolute', top:-60, right:-60, width:190, height:190,
-        borderRadius:'50%', pointerEvents:'none', zIndex:0,
-        background:`radial-gradient(circle,rgba(${pRgb},${isLight?0.06:0.085}) 0%,transparent 70%)`,
-        filter:'blur(26px)',
+        position:'absolute',top:0,left:0,bottom:0,width:1,
+        borderRadius:'22px 0 0 22px',pointerEvents:'none',zIndex:7,
+        background:isLight
+          ? 'linear-gradient(180deg,rgba(255,255,255,0.85) 0%,rgba(255,255,255,0.2) 50%,transparent 100%)'
+          : 'linear-gradient(180deg,rgba(255,255,255,0.16) 0%,rgba(255,255,255,0.05) 50%,transparent 100%)',
       }}/>
 
-      {/* ⑨ Content */}
-      <div style={{position:'relative', zIndex:7}}>
-        {(title || subtitle || icon) && (
+      {/* ⑦ Content */}
+      <div style={{position:'relative',zIndex:6}}>
+        {(title||subtitle||icon)&&(
           <div style={{
-            padding: '18px 26px 15px',
-            borderBottom:`1px solid ${dividerColor}`,
-            display:'flex', justifyContent:'space-between', alignItems:'center',
+            padding:'18px 24px 15px',
+            borderBottom:`1px solid ${divColor}`,
+            display:'flex',justifyContent:'space-between',alignItems:'center',
           }}>
-            <div className="min-w-0 flex-1">
-              {title && (
+            <div style={{minWidth:0,flex:1}}>
+              {title&&(
                 <h3 style={{
-                  fontSize:'0.96rem', fontWeight:700, color:titleColor,
-                  letterSpacing:'-0.015em', lineHeight:1.3, margin:0,
-                }}>
-                  {title}
-                </h3>
+                  fontSize:'0.95rem',fontWeight:700,color:titleColor,
+                  letterSpacing:'-0.016em',lineHeight:1.3,margin:0,
+                }}>{title}</h3>
               )}
-              {subtitle && (
-                <p style={{fontSize:'0.73rem',color:subtitleColor,margin:'3px 0 0',lineHeight:1.4}}>
+              {subtitle&&(
+                <p style={{fontSize:'0.72rem',color:subtitleColor,margin:'3px 0 0',lineHeight:1.4}}>
                   {subtitle}
                 </p>
               )}
             </div>
-            {icon && (
+            {icon&&(
               <div style={{
-                marginLeft:14, flexShrink:0,
-                width:32, height:32, borderRadius:10,
-                display:'flex', alignItems:'center', justifyContent:'center',
-                background:iconPillBg, border:`1px solid ${iconPillBord}`,
-                backdropFilter:'blur(8px)',
-              }}>
-                {icon}
-              </div>
+                marginLeft:12,flexShrink:0,
+                width:33,height:33,borderRadius:10,
+                display:'flex',alignItems:'center',justifyContent:'center',
+                background:`rgba(${aRgb},${isLight?0.10:0.16})`,
+                border:`1px solid rgba(${aRgb},${isLight?0.18:0.26})`,
+                boxShadow:`0 0 10px rgba(${aRgb},${isLight?0.10:0.20})`,
+              }}>{icon}</div>
             )}
           </div>
         )}
-        <div style={{padding:PADDING[padding]}}>{children}</div>
-        {footer && (
-          <div style={{padding:'14px 26px',borderTop:`1px solid ${dividerColor}`,background:footerBg}}>
+        <div style={{padding:PAD[padding]}}>{children}</div>
+        {footer&&(
+          <div style={{padding:'13px 24px',borderTop:`1px solid ${divColor}`,background:footerBg}}>
             {footer}
           </div>
         )}
