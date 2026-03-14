@@ -247,7 +247,7 @@ export const novaContextService = {
     ]);
 
     const readyDocs = allDocs.filter(
-      d => d.embeddingStatus === 'ready' && d.embedding.length === 768
+      d => d.embeddingStatus === 'ready' && d.embedding.length > 0
     );
 
     const scored = readyDocs
