@@ -52,7 +52,7 @@ const Card = ({
   useEffect(() => { injectStyles(); }, []);
 
   const bg = dark
-    ? 'color-mix(in srgb, var(--color-card) 35%, transparent)'
+    ? 'rgba(255,255,255,0.07)'
     : 'rgba(255,255,255,0.40)';
 
   const border = 'none';
@@ -61,7 +61,7 @@ const Card = ({
     ? [
         '0 4px 24px rgba(0,0,0,0.28)',
         '0 12px 40px rgba(0,0,0,0.20)',
-        'inset 0 1px 0 rgba(255,255,255,0.06)',   // top glass refraction line
+        'inset 0 1px 0 rgba(255,255,255,0.18)',   // top glass refraction line
       ].join(',')
     : [
         '0 1px 2px rgba(0,0,0,0.04)',
@@ -74,7 +74,7 @@ const Card = ({
     ? [
         '0 6px 32px rgba(0,0,0,0.34)',
         '0 20px 56px rgba(0,0,0,0.26)',
-        'inset 0 1px 0 rgba(255,255,255,0.09)',
+        'inset 0 1px 0 rgba(255,255,255,0.22)',
       ].join(',')
     : [
         '0 2px 6px rgba(0,0,0,0.06)',
@@ -118,8 +118,8 @@ const Card = ({
       className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
-        backdropFilter: 'blur(40px) saturate(180%) brightness(1.04)',
-        WebkitBackdropFilter: 'blur(40px) saturate(180%) brightness(1.04)',
+        backdropFilter: 'blur(48px) saturate(200%) brightness(1.12)',
+        WebkitBackdropFilter: 'blur(48px) saturate(200%) brightness(1.12)',
         border,
         borderRadius: 24,        // generous corners — key to the iDraft look
         boxShadow: baseShadow,
