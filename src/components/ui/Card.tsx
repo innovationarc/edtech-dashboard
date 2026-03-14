@@ -1,4 +1,4 @@
-// Card.tsx — 3D tilt + matte sparkle crystal card
+// Card.tsx — Premium frosted silver-glass card
 import { ReactNode, useRef } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../contexts/DashboardContext';
@@ -37,18 +37,46 @@ const Card = ({
   const glowRef = useRef<HTMLDivElement>(null);
   const pRgb = hexRgb(primaryColor);
 
-  const bg = isLight ? 'rgba(255,255,255,0.80)' : 'rgba(22,26,37,0.82)';
-  const border = isLight ? '1px solid rgba(255,255,255,0.95)' : '1px solid rgba(255,255,255,0.09)';
+  // ── Glass base ──────────────────────────────────────────────────────────
+  const bg = isLight
+    ? 'rgba(255,255,255,0.80)'
+    : 'rgba(14,18,32,0.70)';   // deep navy — lets backdrop-blur shine
+
+  // Diagonal silver sheen overlaid on the base
+  const glassOverlay = isLight
+    ? 'linear-gradient(135deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.10) 55%,rgba(235,240,255,0.06) 100%)'
+    : 'linear-gradient(135deg,rgba(255,255,255,0.085) 0%,rgba(200,210,255,0.030) 45%,rgba(99,102,241,0.030) 100%)';
+
+  const border = isLight
+    ? '1px solid rgba(255,255,255,0.96)'
+    : '1px solid rgba(255,255,255,0.115)';
+
   const baseShadow = isLight
-    ? '0 4px 24px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,1)'
-    : '0 4px 24px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.07)';
+    ? '0 4px 28px rgba(0,0,0,0.09), 0 1px 3px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,1)'
+    : [
+        '0 10px 40px rgba(0,0,0,0.55)',    // deep ambient
+        '0 4px 12px rgba(0,0,0,0.36)',      // mid lift
+        '0 1px 3px rgba(0,0,0,0.26)',       // tight crisp
+        'inset 0 1px 0 rgba(255,255,255,0.11)',  // top inner highlight
+        'inset 0 0 0 1px rgba(255,255,255,0.045)',// inner rim
+      ].join(', ');
+
   const hoverShadow = isLight
-    ? '0 20px 48px rgba(0,0,0,0.14), 0 4px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,1)'
-    : '0 20px 48px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.10)';
-  const titleColor    = isLight ? '#111827' : 'rgba(241,245,249,0.95)';
-  const subtitleColor = isLight ? '#6b7280' : 'rgba(148,163,184,0.7)';
-  const dividerColor  = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
-  const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
+    ? '0 20px 50px rgba(0,0,0,0.14), 0 4px 10px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,1)'
+    : [
+        '0 24px 64px rgba(0,0,0,0.65)',
+        '0 10px 28px rgba(0,0,0,0.45)',
+        '0 2px 6px rgba(0,0,0,0.30)',
+        `0 0 0 1px rgba(${pRgb},0.22)`,    // accent rim on hover
+        'inset 0 1px 0 rgba(255,255,255,0.14)',
+      ].join(', ');
+
+  const titleColor    = isLight ? '#111827' : 'rgba(241,245,249,0.96)';
+  const subtitleColor = isLight ? '#6b7280' : 'rgba(148,163,184,0.62)';
+  const dividerColor  = isLight ? 'rgba(0,0,0,0.055)' : 'rgba(255,255,255,0.062)';
+  const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.22)';
+  const iconPillBg    = isLight ? 'rgba(0,0,0,0.05)'  : 'rgba(255,255,255,0.07)';
+  const iconPillBord  = isLight ? 'rgba(0,0,0,0.055)' : 'rgba(255,255,255,0.09)';
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!tilt) return;
@@ -60,14 +88,14 @@ const Card = ({
     const y = e.clientY - rect.top;
     const cx = rect.width / 2;
     const cy = rect.height / 2;
-    const rotX = ((y - cy) / cy) * -10;
-    const rotY = ((x - cx) / cx) * 10;
-    el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.02)`;
+    const rotX = ((y - cy) / cy) * -8;
+    const rotY = ((x - cx) / cx) * 8;
+    el.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(6px) scale(1.016)`;
     el.style.boxShadow = hoverShadow;
     if (glow) {
       glow.style.left = `${x}px`;
       glow.style.top  = `${y}px`;
-      glow.style.opacity = isLight ? '0.6' : '0.45';
+      glow.style.opacity = isLight ? '0.55' : '0.42';
     }
   };
 
@@ -76,7 +104,7 @@ const Card = ({
     const el = cardRef.current;
     const glow = glowRef.current;
     if (el) {
-      el.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)';
+      el.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)';
       el.style.boxShadow = baseShadow;
     }
     if (glow) glow.style.opacity = '0';
@@ -88,13 +116,13 @@ const Card = ({
       className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
-        backdropFilter: 'blur(28px) saturate(190%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+        backdropFilter: 'blur(42px) saturate(210%) brightness(1.04)',
+        WebkitBackdropFilter: 'blur(42px) saturate(210%) brightness(1.04)',
         border,
-        borderRadius: 20,
+        borderRadius: 22,
         boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
-        transition: 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease',
+        transition: 'transform 0.20s cubic-bezier(0.23,1,0.32,1), box-shadow 0.20s ease',
         cursor: onClick ? 'pointer' : 'default',
         isolation: 'isolate',
         transformStyle: tilt ? 'preserve-3d' : 'flat',
@@ -103,68 +131,92 @@ const Card = ({
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Noise sparkle texture */}
+      {/* ① Diagonal silver-glass gradient sheen */}
       <div style={{
-        position: 'absolute', inset: 0, borderRadius: 20, pointerEvents: 'none', zIndex: 1,
+        position:'absolute', inset:0, borderRadius:22, pointerEvents:'none', zIndex:1,
+        background: glassOverlay,
+      }}/>
+
+      {/* ② Noise sparkle micro-texture */}
+      <div style={{
+        position:'absolute', inset:0, borderRadius:22, pointerEvents:'none', zIndex:1,
         background: NOISE,
-        opacity: isLight ? 0.028 : 0.045,
-        mixBlendMode: 'overlay',
+        opacity: isLight ? 0.025 : 0.042,
+        mixBlendMode:'overlay',
       }}/>
 
-      {/* Top edge shimmer */}
+      {/* ③ Top-edge glass rim highlight (brightest at center) */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-        borderRadius: '20px 20px 0 0', pointerEvents: 'none', zIndex: 2,
+        position:'absolute', top:0, left:0, right:0, height:1,
+        borderRadius:'22px 22px 0 0', pointerEvents:'none', zIndex:4,
         background: isLight
-          ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 70%, transparent)'
-          : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18) 30%, rgba(255,255,255,0.30) 50%, rgba(255,255,255,0.18) 70%, transparent)',
+          ? 'linear-gradient(90deg,transparent 4%,rgba(255,255,255,0.92) 28%,rgba(255,255,255,1) 50%,rgba(255,255,255,0.92) 72%,transparent 96%)'
+          : 'linear-gradient(90deg,transparent 4%,rgba(255,255,255,0.24) 28%,rgba(255,255,255,0.42) 50%,rgba(255,255,255,0.24) 72%,transparent 96%)',
       }}/>
 
-      {/* Cursor glow spot */}
-      <div ref={glowRef} style={{
-        position: 'absolute', pointerEvents: 'none', zIndex: 1,
-        width: 220, height: 220, borderRadius: '50%',
-        transform: 'translate(-50%, -50%)',
-        background: `radial-gradient(circle, rgba(${pRgb},${isLight ? 0.18 : 0.22}) 0%, transparent 65%)`,
-        opacity: 0,
-        transition: 'opacity 0.2s ease',
-        left: '50%', top: '50%',
-      }}/>
-
-      {/* Corner accent tint */}
+      {/* ④ Left-edge partial shimmer (light source from top-left) */}
       <div style={{
-        position: 'absolute', top: -40, right: -40, width: 130, height: 130,
-        borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
-        background: `radial-gradient(circle, rgba(${pRgb},${isLight ? 0.07 : 0.10}) 0%, transparent 70%)`,
-        filter: 'blur(14px)',
+        position:'absolute', top:0, left:0, bottom:0, width:1,
+        borderRadius:'22px 0 0 22px', pointerEvents:'none', zIndex:4,
+        background: isLight
+          ? 'linear-gradient(180deg,rgba(255,255,255,0.88) 0%,rgba(255,255,255,0.28) 50%,transparent 100%)'
+          : 'linear-gradient(180deg,rgba(255,255,255,0.18) 0%,rgba(255,255,255,0.06) 45%,transparent 100%)',
       }}/>
 
-      {/* Content layer */}
-      <div style={{ position: 'relative', zIndex: 3 }}>
+      {/* ⑤ Cursor glow */}
+      <div ref={glowRef} style={{
+        position:'absolute', pointerEvents:'none', zIndex:2,
+        width:280, height:280, borderRadius:'50%',
+        transform:'translate(-50%,-50%)',
+        background:`radial-gradient(circle,rgba(${pRgb},${isLight?0.14:0.20}) 0%,transparent 65%)`,
+        opacity:0,
+        transition:'opacity 0.25s ease',
+        left:'50%', top:'50%',
+      }}/>
+
+      {/* ⑥ Corner accent tint */}
+      <div style={{
+        position:'absolute', top:-55, right:-55, width:170, height:170,
+        borderRadius:'50%', pointerEvents:'none', zIndex:0,
+        background:`radial-gradient(circle,rgba(${pRgb},${isLight?0.06:0.09}) 0%,transparent 70%)`,
+        filter:'blur(22px)',
+      }}/>
+
+      {/* ⑦ Content */}
+      <div style={{position:'relative', zIndex:5}}>
         {(title || subtitle || icon) && (
           <div style={{
-            padding: '16px 24px',
-            borderBottom: `1px solid ${dividerColor}`,
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding:'15px 22px 13px',
+            borderBottom:`1px solid ${dividerColor}`,
+            display:'flex', justifyContent:'space-between', alignItems:'center',
           }}>
             <div className="min-w-0 flex-1">
               {title && (
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: titleColor, letterSpacing: '-0.01em', lineHeight: 1.3, margin: 0 }}>
+                <h3 style={{fontSize:'0.93rem',fontWeight:700,color:titleColor,letterSpacing:'-0.01em',lineHeight:1.3,margin:0}}>
                   {title}
                 </h3>
               )}
               {subtitle && (
-                <p style={{ fontSize: '0.73rem', color: subtitleColor, margin: '2px 0 0', lineHeight: 1.4 }}>
+                <p style={{fontSize:'0.72rem',color:subtitleColor,margin:'2px 0 0',lineHeight:1.4}}>
                   {subtitle}
                 </p>
               )}
             </div>
-            {icon && <div className="ml-3 flex-shrink-0">{icon}</div>}
+            {icon && (
+              <div style={{
+                marginLeft:12, flexShrink:0,
+                width:30, height:30, borderRadius:9,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                background:iconPillBg, border:`1px solid ${iconPillBord}`,
+              }}>
+                {icon}
+              </div>
+            )}
           </div>
         )}
-        <div style={{ padding: PADDING[padding] }}>{children}</div>
+        <div style={{padding:PADDING[padding]}}>{children}</div>
         {footer && (
-          <div style={{ padding: '12px 24px', borderTop: `1px solid ${dividerColor}`, background: footerBg }}>
+          <div style={{padding:'12px 22px',borderTop:`1px solid ${dividerColor}`,background:footerBg}}>
             {footer}
           </div>
         )}
