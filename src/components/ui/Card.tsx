@@ -60,10 +60,12 @@ const STYLES: Record<string, {
   hoverShadow: (dark: boolean, pRgb: string) => string;
 }> = {
 
-  // 1. Liquid Glass (default)
+  // 1. Liquid Glass (default) — theme-aware, no border, soft glass
   liquid: {
-    bg: (dark) => dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.40)',
-    backdropFilter: 'blur(48px) saturate(200%) brightness(1.12)',
+    bg: (dark) => dark
+      ? 'color-mix(in srgb, var(--color-card) 38%, transparent)'
+      : 'rgba(255,255,255,0.44)',
+    backdropFilter: 'blur(40px) saturate(180%) brightness(1.04)',
     border: () => 'none',
     borderRadius: 24,
     baseShadow: (dark) => dark
