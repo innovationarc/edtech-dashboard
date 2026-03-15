@@ -1,4 +1,4 @@
-// CardMatte.tsx — hardcoded tilt, CSS class-based, diagnostic border flash
+// CardMatte.tsx — 3D tilt + matte sparkle crystal card
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
@@ -32,45 +32,15 @@ let _inj = false;
 const injectStyles = () => {
   if (_inj || typeof document==='undefined') return; _inj = true;
   const s = document.createElement('style');
-  s.textContent = `
-    @keyframes cardReveal{0%{opacity:0;transform:translateY(28px) scale(0.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
-
-    /* Diagnostic: red flash on touch */
-    .cm-touch { outline: 3px solid red !important; }
-
-    /* CSS tilt classes — applied via JS, rendered by CSS engine directly */
-    .cm-tilt-TL { transform: perspective(800px) rotateX(8deg)  rotateY(-8deg) translateZ(10px) scale(1.03) !important; }
-    .cm-tilt-TR { transform: perspective(800px) rotateX(8deg)  rotateY(8deg)  translateZ(10px) scale(1.03) !important; }
-    .cm-tilt-BL { transform: perspective(800px) rotateX(-8deg) rotateY(-8deg) translateZ(10px) scale(1.03) !important; }
-    .cm-tilt-BR { transform: perspective(800px) rotateX(-8deg) rotateY(8deg)  translateZ(10px) scale(1.03) !important; }
-    .cm-tilt-C  { transform: perspective(800px) rotateX(0deg)  rotateY(0deg)  translateZ(10px) scale(1.03) !important; }
-    .cm-reset   { transform: perspective(800px) rotateX(0deg)  rotateY(0deg)  translateZ(0px)  scale(1)    !important; }
-
-    .cm-card {
-      transition: transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease;
-      transform-style: preserve-3d;
-    }
-  `;
+  s.textContent = `@keyframes cardReveal{0%{opacity:0;transform:translateY(28px) scale(0.96)}100%{opacity:1;transform:translateY(0) scale(1)}}`;
   document.head.appendChild(s);
 };
-
-const getTiltClass = (x: number, y: number, w: number, h: number): string => {
-  const cx = w / 2, cy = h / 2;
-  const top = y < cy, left = x < cx;
-  if (Math.abs(x - cx) < w * 0.2 && Math.abs(y - cy) < h * 0.2) return 'cm-tilt-C';
-  if (top  && left)  return 'cm-tilt-TL';
-  if (top  && !left) return 'cm-tilt-TR';
-  if (!top && left)  return 'cm-tilt-BL';
-  return 'cm-tilt-BR';
-};
-
-const TILT_CLASSES = ['cm-tilt-TL','cm-tilt-TR','cm-tilt-BL','cm-tilt-BR','cm-tilt-C','cm-reset'];
 
 const CardMatte = ({
   children, className, title, subtitle, icon, footer,
   onClick, hover = false, tilt = true, variant = 'default', padding = 'md', enterDelay = 0,
 }: CardProps) => {
-  const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6' } = useDashboard();
+  const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6', cardAnimation = 'tilt' } = useDashboard();
   const isLight = theme === 'light';
   const cardRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
@@ -90,43 +60,61 @@ const CardMatte = ({
   const dividerColor  = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
   const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
 
-  const setTilt = (clientX: number, clientY: number) => {
+  const doTilt = (clientX: number, clientY: number) => {
     const el = cardRef.current; if (!el) return;
     const r = el.getBoundingClientRect();
     const x = clientX - r.left, y = clientY - r.top;
-    // Remove all tilt classes, add the right one
-    el.classList.remove(...TILT_CLASSES);
-    el.classList.add(getTiltClass(x, y, r.width, r.height));
+    const cx = r.width / 2, cy = r.height / 2;
+    const rotX = ((y - cy) / cy) * -10;
+    const rotY = ((x - cx) / cx) * 10;
+    el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.02)`;
     el.style.boxShadow = hoverShadow;
     const glow = glowRef.current;
     if (glow) { glow.style.left=`${x}px`; glow.style.top=`${y}px`; glow.style.opacity=isLight?'0.6':'0.45'; }
   };
 
-  const resetTilt = () => {
+  const doEnter = () => {
     const el = cardRef.current; if (!el) return;
-    el.classList.remove(...TILT_CLASSES);
-    el.classList.add('cm-reset');
-    el.style.boxShadow = baseShadow;
-    const glow = glowRef.current;
-    if (glow) glow.style.opacity = '0';
-    // clean up reset class after transition
-    setTimeout(() => el.classList.remove('cm-reset'), 300);
+    switch (cardAnimation) {
+      case 'lift':   el.style.transform='translateY(-8px) scale(1.01)'; el.style.boxShadow=hoverShadow; break;
+      case 'spring': el.style.transform='scale(1.04)';                  el.style.boxShadow=hoverShadow; break;
+      case 'glow':   el.style.transform='translateY(-2px)';             el.style.boxShadow=`${hoverShadow}, 0 0 28px 6px rgba(${pRgb},0.30)`; break;
+      default:       el.style.boxShadow=hoverShadow; break;
+    }
   };
 
-  const handleMouseMove  = (e: React.MouseEvent<HTMLDivElement>)  => setTilt(e.clientX, e.clientY);
-  const handleMouseLeave = ()                                       => resetTilt();
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    const el = cardRef.current;
-    if (el) { el.classList.add('cm-touch'); setTimeout(() => el.classList.remove('cm-touch'), 400); }
-    setTilt(e.touches[0].clientX, e.touches[0].clientY);
+  const doReset = () => {
+    const el = cardRef.current; const glow = glowRef.current;
+    if (el) { el.style.transform='perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)'; el.style.boxShadow=baseShadow; }
+    if (glow) glow.style.opacity='0';
   };
-  const handleTouchMove  = (e: React.TouchEvent<HTMLDivElement>)  => setTilt(e.touches[0].clientX, e.touches[0].clientY);
-  const handleTouchEnd   = ()                                       => setTimeout(resetTilt, 350);
+
+  const handleMouseMove  = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') doTilt(e.clientX, e.clientY);
+  };
+  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    doEnter();
+    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') doTilt(e.clientX, e.clientY);
+  };
+  const handleMouseLeave = () => doReset();
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    doTilt(e.touches[0].clientX, e.touches[0].clientY);
+    doEnter();
+  };
+  const handleTouchMove  = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') doTilt(e.touches[0].clientX, e.touches[0].clientY);
+  };
+  const handleTouchEnd   = () => setTimeout(doReset, 350);
+
+  const transition = cardAnimation === 'spring'
+    ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.26s ease'
+    : 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease';
 
   return (
     <div
       ref={cardRef}
-      className={clsx('relative overflow-hidden cm-card', className)}
+      className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
         backdropFilter: 'blur(28px) saturate(190%)',
@@ -135,11 +123,14 @@ const CardMatte = ({
         borderRadius: 20,
         boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
+        transition,
         cursor: onClick ? 'pointer' : 'default',
+        transformStyle: 'preserve-3d',
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
       onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
