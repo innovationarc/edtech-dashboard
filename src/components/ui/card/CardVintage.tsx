@@ -1,7 +1,7 @@
 // CardVintage.tsx — Warm aged paper with grain texture
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
-import { useDashboard } from '../../../contexts/DashboardContext';
+import { useDashboard } from '../../contexts/DashboardContext';
 
 interface CardProps {
   children: ReactNode;
@@ -39,7 +39,9 @@ const CardVintage = ({
   const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
 
-  const bg          = dark ? 'linear-gradient(145deg,rgba(45,35,20,0.92),rgba(35,28,16,0.88))' : 'linear-gradient(145deg,rgba(253,246,227,0.97),rgba(245,232,196,0.95))';
+  const bg          = dark
+    ? 'color-mix(in srgb, var(--color-card) 88%, rgba(45,35,20,1))'
+    : 'linear-gradient(145deg,rgba(253,246,227,0.97),rgba(245,232,196,0.95))';
   const border      = dark ? '1px solid rgba(180,140,60,0.22)' : '1px solid rgba(180,140,60,0.35)';
   const baseShadow  = dark ? '0 4px 20px rgba(0,0,0,0.5),inset 0 1px 0 rgba(180,140,60,0.15)' : '0 4px 20px rgba(100,70,20,0.15),inset 0 1px 0 rgba(255,255,255,0.8)';
   const hoverShadow = dark ? '0 8px 32px rgba(0,0,0,0.6),inset 0 1px 0 rgba(180,140,60,0.2)' : '0 8px 32px rgba(100,70,20,0.22),inset 0 1px 0 rgba(255,255,255,0.9)';
