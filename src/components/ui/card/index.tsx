@@ -8,6 +8,8 @@ import CardSolid        from './CardSolid';
 import CardGlassmorphism from './CardGlassmorphism';
 import CardVintage      from './CardVintage';
 import CardNeon         from './CardNeon';
+import CardFrost        from './CardFrost';
+import CardMatte        from './CardMatte';
 
 // Re-export props type from the default card so consumers can type-check
 export type { default as CardProps } from './CardLiquid';
@@ -19,6 +21,8 @@ const CARDS: Record<string, React.ComponentType<any>> = {
   glassmorphism: CardGlassmorphism,
   vintage:       CardVintage,
   neon:          CardNeon,
+  frost:         CardFrost,
+  matte:         CardMatte,
 };
 
 const Card = (props: React.ComponentProps<typeof CardLiquid>) => {
