@@ -52,15 +52,6 @@ const CardGlassmorphism = ({
   const iconBg      = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.045)';
   const iconBd      = dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)';
 
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!tilt) return;
-    const el = cardRef.current; if (!el) return;
-    const r = el.getBoundingClientRect();
-    el.style.transform = `perspective(1200px) rotateX(${((e.clientY-r.top-r.height/2)/r.height)*-7}deg) rotateY(${((e.clientX-r.left-r.width/2)/r.width)*7}deg) translateZ(6px) scale(1.012)`;
-    el.style.boxShadow = hoverShadow;
-  };
-  const onEnter = () => { const sh=shimRef.current; if(!sh)return; sh.style.animation='none'; void sh.offsetWidth; sh.style.animation='shimPass 600ms ease forwards'; };
-  const onLeave = () => { const el=cardRef.current; if(el){el.style.transform='none';el.style.boxShadow=baseShadow;} };
 
 
   const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: pRgb, isLight: !dark });
