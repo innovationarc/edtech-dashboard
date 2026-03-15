@@ -1,6 +1,7 @@
 // CardSolid.tsx — Fully opaque flat card, no blur
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
+import { useCardAnim } from './useCardAnim';
 import { useDashboard } from '../../../contexts/DashboardContext';
 
 interface CardProps {
@@ -33,9 +34,8 @@ const CardSolid = ({
   children, className, title, subtitle, icon, footer,
   onClick, tilt=true, padding='md', enterDelay=0,
 }: CardProps) => {
-  const { theme } = useDashboard();
+  const { theme, cardAnimation = 'tilt' } = useDashboard();
   const dark = theme !== 'light';
-  const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
 
   const bg          = dark ? 'var(--color-card)' : '#ffffff';
@@ -60,10 +60,12 @@ const CardSolid = ({
     if (el) { el.style.transform='none'; el.style.boxShadow=baseShadow; }
   };
 
+
+  const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: '99,102,241', isLight: !dark });
   return (
-    <div ref={cardRef} className={clsx('relative overflow-hidden', className)}
-      style={{ background:bg, border, borderRadius:16, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', isolation:'isolate', transformStyle:tilt?'preserve-3d':'flat', transition:'transform 0.26s cubic-bezier(0.23,1,0.32,1),box-shadow 0.26s ease', animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
-      onClick={onClick} onMouseMove={onMove} onMouseLeave={onLeave}>
+    <div ref={anim.cardRef} className={clsx('relative overflow-hidden', className)}
+      style={{ background:bg, border, borderRadius:16, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', isolation:'isolate', animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
+      onClick={onClick} onMouseMove={anim.onMouseMove} onMouseEnter={anim.onMouseEnter} onMouseLeave={anim.onMouseLeave} onTouchStart={anim.onTouchStart} onTouchMove={anim.onTouchMove} onTouchEnd={anim.onTouchEnd} onTouchCancel={anim.onTouchCancel}>
       <div style={{position:'relative',zIndex:6}}>
         {(title||subtitle||icon)&&(
           <div style={{padding:'17px 22px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
