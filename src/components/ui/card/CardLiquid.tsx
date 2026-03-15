@@ -2,7 +2,7 @@
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
-import { useCardAnimation } from './useCardAnimation';
+import { useCardAnim } from './useCardAnim';
 
 interface CardProps {
   children: ReactNode;
@@ -88,14 +88,13 @@ const CardLiquid = ({
   const iconBg      = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.045)';
   const iconBd      = dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)';
 
-  const anim = useCardAnimation({ animation: cardAnimation as any, baseShadow, hoverShadow });
+  const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: '99,102,241', isLight: !dark });
 
-  const onEnter = () => {
+  const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
     const sh = shimRef.current; if (!sh) return;
-    sh.style.animation = 'none';
-    void sh.offsetWidth;
+    sh.style.animation = 'none'; void sh.offsetWidth;
     sh.style.animation = 'shimPass 600ms ease forwards';
-    anim.onMouseEnter?.();
+    anim.onMouseEnter(e);
   };
 
   return (
@@ -111,15 +110,16 @@ const CardLiquid = ({
         boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
         cursor: onClick ? 'pointer' : 'default',
-        isolation: 'isolate',
-        transformStyle: anim.transformStyle,
-        transition: anim.transition,
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
       onMouseMove={anim.onMouseMove}
       onMouseEnter={onEnter}
       onMouseLeave={anim.onMouseLeave}
+      onTouchStart={anim.onTouchStart}
+      onTouchMove={anim.onTouchMove}
+      onTouchEnd={anim.onTouchEnd}
+      onTouchCancel={anim.onTouchCancel}
     >
       {/* ② Hover shimmer sweep — white only */}
       <div ref={shimRef} style={{
