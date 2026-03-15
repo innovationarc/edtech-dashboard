@@ -15,6 +15,13 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
+// Clamp ghost position so it can never be saved/loaded in a permanently off-screen state.
+// The ghost is anchored bottom-right; tx/ty are offsets from that base corner.
+const clampPosition = (pos: { x: number; y: number }): { x: number; y: number } => ({
+  x: Math.max(-(window.innerWidth  - 80), Math.min(window.innerWidth  - 80, pos.x)),
+  y: Math.max(-(window.innerHeight - 80), Math.min(window.innerHeight - 80, pos.y)),
+});
+
 const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated, theme, glitterTheme, showLoginAnimation } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
@@ -73,8 +80,10 @@ const DashboardLayout = () => {
         if (snap.exists()) {
           const saved = snap.data()?.preferences?.chatbotWidgetPosition;
           if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
-            positionRef.current = saved;
-            setPosition(saved);
+            // Clamp loaded position — recovers any previously-saved off-screen coordinates
+            const clamped = clampPosition(saved);
+            positionRef.current = clamped;
+            setPosition(clamped);
           }
         }
       } catch { /* fail silently */ }
@@ -118,8 +127,11 @@ const DashboardLayout = () => {
       dragging.current = true;
       hasMoved.current = true;
 
-      const newX = dragStart.current.posX + dx;
-      const newY = dragStart.current.posY + dy;
+      // Clamp during drag to prevent ghost going permanently off-screen
+      const rawX = dragStart.current.posX + dx;
+      const rawY = dragStart.current.posY + dy;
+      const newX = Math.max(-(window.innerWidth - 80), Math.min(window.innerWidth - 80, rawX));
+      const newY = Math.max(-(window.innerHeight - 80), Math.min(window.innerHeight - 80, rawY));
 
       // Eye offset from frame delta
       const fdx = newX - prevDragPos.current.x;
@@ -136,7 +148,9 @@ const DashboardLayout = () => {
       if (!dragStart.current) return;
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
-      const finalPos = { ...positionRef.current };
+      // Clamp final position before saving to Firestore
+      const finalPos = clampPosition({ ...positionRef.current });
+      positionRef.current = finalPos;
       setPosition(finalPos);
       savePosition(finalPos);
       resetEyes();
@@ -150,6 +164,8 @@ const DashboardLayout = () => {
   }, [savePosition]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    // Block drag during fly animation to prevent position state conflicts
+    if (isFlying.current) return;
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
     prevDragPos.current = { ...positionRef.current };
@@ -169,8 +185,11 @@ const DashboardLayout = () => {
       hasMoved.current = true;
       e.preventDefault();
 
-      const newX = dragStart.current.posX + dx;
-      const newY = dragStart.current.posY + dy;
+      // Clamp during drag to prevent ghost going permanently off-screen
+      const rawX = dragStart.current.posX + dx;
+      const rawY = dragStart.current.posY + dy;
+      const newX = Math.max(-(window.innerWidth - 80), Math.min(window.innerWidth - 80, rawX));
+      const newY = Math.max(-(window.innerHeight - 80), Math.min(window.innerHeight - 80, rawY));
 
       const fdx = newX - prevDragPos.current.x;
       const fdy = newY - prevDragPos.current.y;
@@ -186,7 +205,9 @@ const DashboardLayout = () => {
       if (!dragStart.current) return;
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
-      const finalPos = { ...positionRef.current };
+      // Clamp final position before saving to Firestore
+      const finalPos = clampPosition({ ...positionRef.current });
+      positionRef.current = finalPos;
       setPosition(finalPos);
       savePosition(finalPos);
       resetEyes();
@@ -200,6 +221,8 @@ const DashboardLayout = () => {
   }, [savePosition]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
+    // Block drag during fly animation to prevent position state conflicts
+    if (isFlying.current) return;
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
     const t = e.touches[0];
@@ -281,7 +304,18 @@ const DashboardLayout = () => {
     window.addEventListener('ghost-fly', handleFly);
     return () => {
       window.removeEventListener('ghost-fly', handleFly);
-      cancelAnimationFrame(flyRafId.current);
+      // If fly animation was in progress when this effect cleans up, reset all state
+      // so the ghost is never left stuck off-screen with isFlying permanently true.
+      if (isFlying.current) {
+        cancelAnimationFrame(flyRafId.current);
+        isFlying.current = false;
+        if (widgetRef.current) {
+          widgetRef.current.style.transform = `translate(${positionRef.current.x}px, ${positionRef.current.y}px)`;
+        }
+        window.dispatchEvent(new CustomEvent('ghost-land'));
+      } else {
+        cancelAnimationFrame(flyRafId.current);
+      }
     };
   }, []);
 
