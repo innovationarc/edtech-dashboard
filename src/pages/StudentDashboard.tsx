@@ -218,8 +218,9 @@ const StudentDashboard = () => {
       {/* Welcome Banner */}
       <div className="flex items-center justify-between" style={{animation:'cardReveal 500ms cubic-bezier(0.22,1,0.36,1) 0ms both'}}>
         <div>
-          <h1 style={{fontSize:'clamp(1.2rem,2.5vw,1.6rem)',fontWeight:800,color:T.text,margin:0}}>
-            Welcome back, {user?.name || 'Student'}! 🌟
+          <h1 style={{fontSize:'clamp(1.2rem,2.5vw,1.6rem)',fontWeight:800,color:T.text,margin:0,display:'flex',flexWrap:'wrap',alignItems:'baseline',gap:'0 0.35em'}}>
+            <span style={{whiteSpace:'nowrap'}}>Welcome back,</span>
+            <span style={{whiteSpace:'nowrap'}}>{user?.name || 'Student'}! 🌟</span>
           </h1>
           <p style={{color:T.text2,marginTop:4,fontSize:14}}>Ready to conquer your learning goals today?</p>
         </div>
