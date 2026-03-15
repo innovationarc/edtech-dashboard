@@ -1,24 +1,9 @@
 // src/services/novaRAGService.ts
-// Nova RAG — Full pipeline orchestrator.
-//
-// Flow per message:
-//   1. Embed user query  (Gemini, 'vector' key group)
-//   2. Cosine similarity → top-N relevant context docs
-//   3. Fetch user personal data (courses, goals, upcoming events)
-//   4. Fetch last `memoryHours` of conversation
-//   5. Load novaConfig (system prompt override, nav flag, limits)
-//   6. Build prompt
-//   7. callWithFailover(prompt, 'chatbot', ...)  ← Groq 'chatbot' group
-//   8. Parse & strip [NAVIGATE:/path] from response
-//   9. Save both messages to novaMemoryService
-//  10. Return { text, navigateTo? }
-//
-// Chat uses 'chatbot' key group (Groq).
-// Embeddings use 'vector' key group (Gemini). Completely separate.
 
 import { callWithFailover } from './aiModelConfigService';
 import { novaContextService } from './novaContextService';
 import { novaMemoryService } from './novaMemoryService';
+import { novaChatHistoryService } from './novaChatHistoryService';
 import { novaUserDataService } from './novaUserDataService';
 import { UserProfile } from './authService';
 
@@ -37,8 +22,10 @@ export interface NovaResponse {
 const MAX_DOC_CHARS = 900;
 // Max chars per memory message
 const MAX_MSG_CHARS = 220;
-// Max memory messages to include
+// Max memory messages to include (short-term RAG memory)
 const MAX_MEMORY_MSGS = 12;
+// Max persistent history messages to include as context
+const MAX_HISTORY_CONTEXT = 6;
 // Max tokens for chatbot response
 const CHAT_MAX_TOKENS = 1200;
 const CHAT_TEMPERATURE = 0.7;
@@ -75,12 +62,13 @@ function buildPrompt(params: {
   userFormatted:  string;
   contextDocs:    Array<{ title: string; content: string; similarity: number }>;
   memory:         Array<{ sender: 'user' | 'ai'; text: string }>;
+  chatHistory:    Array<{ sender: 'user' | 'ai'; text: string }>;
   systemPrompt:   string;  // custom override from novaConfig (may be empty)
   navigationEnabled: boolean;
 }): string {
   const {
     userMessage, siteName, userFormatted, contextDocs,
-    memory, systemPrompt, navigationEnabled,
+    memory, chatHistory, systemPrompt, navigationEnabled,
   } = params;
 
   const parts: string[] = [];
@@ -116,10 +104,13 @@ function buildPrompt(params: {
     parts.push('=== END USER ===');
   }
 
-  // ── Memory ─────────────────────────────────────────────────────────────────
-  if (memory.length > 0) {
+  // ── Persistent chat history (last N messages across sessions) ─────────────
+  // Prefer chatHistory over memory if both exist to avoid duplication;
+  // chatHistory is a superset. Only inject memory if chatHistory is empty.
+  const conversationContext = chatHistory.length > 0 ? chatHistory : memory;
+  if (conversationContext.length > 0) {
     parts.push('\n=== RECENT CONVERSATION ===');
-    memory.forEach(m => {
+    conversationContext.forEach(m => {
       const label = m.sender === 'user' ? 'User' : 'Nova';
       const text = m.text.length > MAX_MSG_CHARS
         ? m.text.slice(0, MAX_MSG_CHARS) + '…'
@@ -171,8 +162,8 @@ export const novaRAGService = {
   ): Promise<NovaResponse> {
     const userId = user?.uid || '';
 
-    // ── 1+2+3+4+5: fetch everything in parallel ────────────────────────────
-    const [contextResult, userContext, memory, config] = await Promise.all([
+    // ── 1+2+3+4+5+6: fetch everything in parallel ──────────────────────────
+    const [contextResult, userContext, memory, chatHistory, config] = await Promise.all([
       // RAG retrieval — embed + cosine similarity (uses 'vector' key group)
       novaContextService.getTopRelevantDocs(userMessage, 3, 0.35).catch((e) => {
         console.warn('[novaRAG] Context retrieval failed (non-fatal):', e);
@@ -183,11 +174,15 @@ export const novaRAGService = {
         formatted: '',
         raw: { profile: user, enrolledCourses: [], activeGoals: [], upcomingEvents: [] },
       })),
-      // Conversation memory
+      // Short-term RAG memory (novaMessages — kept for fallback when history empty)
       userId
         ? novaMemoryService.getRecentMessages(userId, 48).then(msgs =>
-            msgs.slice(-MAX_MEMORY_MSGS)  // keep only the last N messages
+            msgs.slice(-MAX_MEMORY_MSGS)
           )
+        : Promise.resolve([]),
+      // Persistent chat history — last 6 messages for context
+      userId
+        ? novaChatHistoryService.getRecentForContext(userId, MAX_HISTORY_CONTEXT)
         : Promise.resolve([]),
       // Nova config
       novaContextService.getConfig().catch(() => ({
@@ -195,27 +190,25 @@ export const novaRAGService = {
       })),
     ]);
 
-    // ── 6: Build prompt ────────────────────────────────────────────────────
+    // ── 7: Build prompt ────────────────────────────────────────────────────
     const prompt = buildPrompt({
       userMessage,
       siteName,
       userFormatted:     userContext.formatted,
       contextDocs:       contextResult,
       memory:            memory.map(m => ({ sender: m.sender, text: m.text })),
+      chatHistory,
       systemPrompt:      config.systemPrompt,
       navigationEnabled: config.navigationEnabled,
     });
 
-    // ── 7: Call chat AI via 'chatbot' key group ────────────────────────────
-    // callWithFailover handles key rotation, rate limiting, error logs.
-    // 'chatbot' group is Groq — completely separate from 'vector' (Gemini).
+    // ── 8: Call chat AI via 'chatbot' key group ────────────────────────────
     const rawResponse = await callWithFailover(prompt, 'chatbot', CHAT_MAX_TOKENS, CHAT_TEMPERATURE);
 
-    // ── 8: Parse navigation ────────────────────────────────────────────────
+    // ── 9: Parse navigation ────────────────────────────────────────────────
     let navigateTo: string | undefined;
     const navMatch = rawResponse.match(NAV_REGEX);
     if (navMatch && navMatch.length > 0) {
-      // Extract the path from the first match
       const firstMatch = navMatch[0];
       const pathMatch = firstMatch.match(/\[NAVIGATE:([^\]]+)\]/);
       if (pathMatch?.[1]) {
@@ -225,8 +218,9 @@ export const novaRAGService = {
     // Strip all [NAVIGATE:...] tokens from displayed text
     const cleanText = rawResponse.replace(NAV_REGEX, '').trim();
 
-    // ── 9: Persist both messages (fire-and-forget) ─────────────────────────
+    // ── 10: Persist both messages (fire-and-forget) ────────────────────────
     if (userId) {
+      // Short-term RAG memory (existing — unchanged)
       novaMemoryService.saveMessage(userId, {
         text:      userMessage,
         sender:    'user',
@@ -239,11 +233,24 @@ export const novaRAGService = {
         sessionId,
       }).catch(() => {});
 
-      // Opportunistically prune messages older than 72h (fire-and-forget)
+      // Opportunistically prune short-term memory (fire-and-forget)
       novaMemoryService.pruneOldMessages(userId, 72).catch(() => {});
+
+      // Persistent chat history (new — for UI display + cross-session context)
+      novaChatHistoryService.saveMessage(userId, {
+        text:      userMessage,
+        sender:    'user',
+        sessionId,
+      }).catch(() => {});
+
+      novaChatHistoryService.saveMessage(userId, {
+        text:      cleanText,
+        sender:    'ai',
+        sessionId,
+      }).catch(() => {});
     }
 
-    // ── 10: Return ─────────────────────────────────────────────────────────
+    // ── 11: Return ─────────────────────────────────────────────────────────
     return {
       text: cleanText || 'Sorry, I couldn\'t generate a response. Please try again.',
       navigateTo,
