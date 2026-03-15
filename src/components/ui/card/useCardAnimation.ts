@@ -1,7 +1,6 @@
 // src/components/ui/card/useCardAnimation.ts
-// Shared animation hook for all card styles.
-// Styles stay 100% intact — only transform/shadow/transition are touched.
-import { useRef, useCallback } from 'react';
+// Shared animation hook — mouse + touch support for all 6 animation types.
+import { useRef, useCallback, useEffect } from 'react';
 
 export type CardAnimationType = 'tilt' | 'lift' | 'glow' | 'spring' | 'magnetic' | 'none';
 
@@ -9,7 +8,7 @@ interface UseCardAnimationOptions {
   animation: CardAnimationType;
   baseShadow: string;
   hoverShadow: string;
-  primaryRgb?: string; // for glow: "r,g,b"
+  primaryRgb?: string;
 }
 
 export function useCardAnimation({
@@ -20,88 +19,89 @@ export function useCardAnimation({
 }: UseCardAnimationOptions) {
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // ── transition string per animation ──────────────────────────────────────
   const transition = animation === 'spring'
     ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.26s ease'
     : 'transform 0.26s cubic-bezier(0.23,1,0.32,1), box-shadow 0.26s ease';
 
-  // ── transformStyle ────────────────────────────────────────────────────────
   const transformStyle: 'preserve-3d' | 'flat' =
     animation === 'tilt' || animation === 'magnetic' ? 'preserve-3d' : 'flat';
 
-  // ── handlers ──────────────────────────────────────────────────────────────
-  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const el = cardRef.current;
-    if (!el) return;
+  // ── shared position-based transform (tilt + magnetic) ────────────────────
+  const applyPositional = useCallback((clientX: number, clientY: number) => {
+    const el = cardRef.current; if (!el) return;
     const r = el.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    const cx = r.width / 2;
-    const cy = r.height / 2;
-
-    switch (animation) {
-      case 'tilt': {
-        const rx = ((y - cy) / cy) * -7;
-        const ry = ((x - cx) / cx) * 7;
-        el.style.transform = `perspective(1200px) rotateX(${rx}deg) rotateY(${ry}deg) translateZ(6px) scale(1.012)`;
-        el.style.boxShadow = hoverShadow;
-        break;
-      }
-      case 'magnetic': {
-        // Subtle follow — card shifts slightly toward cursor
-        const dx = ((x - cx) / cx) * 8;
-        const dy = ((y - cy) / cy) * 8;
-        el.style.transform = `perspective(1200px) translate(${dx}px, ${dy}px) scale(1.012)`;
-        el.style.boxShadow = hoverShadow;
-        break;
-      }
-      default:
-        break;
+    const cx = r.width / 2, cy = r.height / 2;
+    const x = clientX - r.left, y = clientY - r.top;
+    if (animation === 'tilt') {
+      el.style.transform = `perspective(1200px) rotateX(${((y-cy)/cy)*-7}deg) rotateY(${((x-cx)/cx)*7}deg) translateZ(6px) scale(1.012)`;
+    } else if (animation === 'magnetic') {
+      el.style.transform = `perspective(1200px) translate(${((x-cx)/cx)*8}px,${((y-cy)/cy)*8}px) scale(1.012)`;
     }
+    el.style.boxShadow = hoverShadow;
   }, [animation, hoverShadow]);
 
-  const onMouseEnter = useCallback(() => {
-    const el = cardRef.current;
-    if (!el) return;
-
+  // ── shared "activate" for enter-based animations ──────────────────────────
+  const activate = useCallback(() => {
+    const el = cardRef.current; if (!el) return;
     switch (animation) {
       case 'tilt':
-      case 'magnetic':
-        // Shadow lifts on enter; transform updates live via onMouseMove
-        el.style.boxShadow = hoverShadow;
-        break;
-      case 'lift':
-        el.style.transform = 'translateY(-8px) scale(1.01)';
-        el.style.boxShadow = hoverShadow;
-        break;
-      case 'spring':
-        el.style.transform = 'scale(1.04)';
-        el.style.boxShadow = hoverShadow;
-        break;
-      case 'glow':
-        el.style.transform = 'translateY(-2px)';
-        el.style.boxShadow = `${hoverShadow}, 0 0 28px 6px rgba(${primaryRgb},0.30)`;
-        break;
-      default:
-        break;
+      case 'magnetic': el.style.boxShadow = hoverShadow; break;
+      case 'lift':     el.style.transform = 'translateY(-8px) scale(1.01)'; el.style.boxShadow = hoverShadow; break;
+      case 'spring':   el.style.transform = 'scale(1.04)';                  el.style.boxShadow = hoverShadow; break;
+      case 'glow':     el.style.transform = 'translateY(-2px)';             el.style.boxShadow = `${hoverShadow}, 0 0 28px 6px rgba(${primaryRgb},0.30)`; break;
     }
   }, [animation, hoverShadow, primaryRgb]);
 
-  const onMouseLeave = useCallback(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    // Always reset fully — guarantees "back to normal" regardless of animation
+  // ── shared reset ──────────────────────────────────────────────────────────
+  const reset = useCallback(() => {
+    const el = cardRef.current; if (!el) return;
     el.style.transform = 'none';
     el.style.boxShadow = baseShadow;
   }, [baseShadow]);
 
-  // For 'none' — return no-ops
+  // ── touch event listeners (passive-safe, no React synthetic needed) ───────
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || animation === 'none') return;
+
+    const onTouchStart = () => activate();
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (animation === 'tilt' || animation === 'magnetic') {
+        const t = e.touches[0];
+        applyPositional(t.clientX, t.clientY);
+      }
+    };
+
+    const onTouchEnd = () => {
+      // Brief delay so the animation is visible before resetting
+      setTimeout(reset, 350);
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove',  onTouchMove,  { passive: true });
+    el.addEventListener('touchend',   onTouchEnd);
+    el.addEventListener('touchcancel',onTouchEnd);
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove',  onTouchMove);
+      el.removeEventListener('touchend',   onTouchEnd);
+      el.removeEventListener('touchcancel',onTouchEnd);
+    };
+  }, [animation, activate, applyPositional, reset]);
+
+  // ── mouse handlers ────────────────────────────────────────────────────────
+  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    applyPositional(e.clientX, e.clientY);
+  }, [applyPositional]);
+
   if (animation === 'none') {
     return {
       cardRef,
       transition: 'box-shadow 0.26s ease',
       transformStyle: 'flat' as const,
-      onMouseMove: undefined,
+      onMouseMove:  undefined,
       onMouseEnter: undefined,
       onMouseLeave: undefined,
     };
@@ -112,7 +112,7 @@ export function useCardAnimation({
     transition,
     transformStyle,
     onMouseMove:  (animation === 'tilt' || animation === 'magnetic') ? onMouseMove : undefined,
-    onMouseEnter,
-    onMouseLeave,
+    onMouseEnter: activate,
+    onMouseLeave: reset,
   };
 }
