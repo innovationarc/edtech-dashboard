@@ -2,6 +2,7 @@
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
+import { useCardAnimation } from './useCardAnimation';
 
 interface CardProps {
   children: ReactNode;
@@ -40,9 +41,8 @@ const CardMatte = ({
   children, className, title, subtitle, icon, footer,
   onClick, hover = false, tilt = true, variant = 'default', padding = 'md', enterDelay = 0,
 }: CardProps) => {
-  const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6' } = useDashboard();
+  const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6', cardAnimation = 'tilt' } = useDashboard();
   const isLight = theme === 'light';
-  const cardRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
   const pRgb = hexRgb(primaryColor);
@@ -60,41 +60,53 @@ const CardMatte = ({
   const dividerColor  = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
   const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!tilt) return;
-    const el = cardRef.current;
+  const anim = useCardAnimation({ animation: cardAnimation as any, baseShadow, hoverShadow, primaryRgb: pRgb });
+
+  // ── Cursor/touch glow position update ────────────────────────────────────
+  const updateGlow = (clientX: number, clientY: number) => {
     const glow = glowRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
-    const rotX = ((y - cy) / cy) * -10;
-    const rotY = ((x - cx) / cx) * 10;
-    el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.02)`;
-    el.style.boxShadow = hoverShadow;
-    if (glow) {
-      glow.style.left = `${x}px`;
-      glow.style.top  = `${y}px`;
+    const r = anim.cardRef.current?.getBoundingClientRect();
+    if (glow && r) {
+      glow.style.left = `${clientX - r.left}px`;
+      glow.style.top  = `${clientY - r.top}px`;
       glow.style.opacity = isLight ? '0.6' : '0.45';
     }
   };
 
-  const handleMouseLeave = () => {
-    if (!tilt) return;
-    const el = cardRef.current;
+  const hideGlow = () => {
     const glow = glowRef.current;
-    if (el) {
-      el.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)';
-      el.style.boxShadow = baseShadow;
-    }
     if (glow) glow.style.opacity = '0';
+  };
+
+  // Touch glow wiring (native events so we can read touch coords)
+  useEffect(() => {
+    const el = anim.cardRef.current;
+    if (!el) return;
+    const onTouchMove = (e: TouchEvent) => updateGlow(e.touches[0].clientX, e.touches[0].clientY);
+    const onTouchEnd  = () => hideGlow();
+    el.addEventListener('touchmove',   onTouchMove,  { passive: true });
+    el.addEventListener('touchend',    onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      el.removeEventListener('touchmove',   onTouchMove);
+      el.removeEventListener('touchend',    onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    anim.onMouseMove?.(e);
+    updateGlow(e.clientX, e.clientY);
+  };
+  const handleMouseLeave = () => {
+    anim.onMouseLeave?.();
+    hideGlow();
   };
 
   return (
     <div
-      ref={cardRef}
+      ref={anim.cardRef}
       className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
@@ -104,14 +116,15 @@ const CardMatte = ({
         borderRadius: 20,
         boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
-        transition: 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease',
+        transition: anim.transition,
         cursor: onClick ? 'pointer' : 'default',
         isolation: 'isolate',
-        transformStyle: tilt ? 'preserve-3d' : 'flat',
+        transformStyle: anim.transformStyle,
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
       onMouseMove={handleMouseMove}
+      onMouseEnter={(e) => { anim.onMouseEnter?.(); updateGlow(e.clientX, e.clientY); }}
       onMouseLeave={handleMouseLeave}
     >
       {/* Noise sparkle texture */}
