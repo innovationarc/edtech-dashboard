@@ -216,7 +216,7 @@ const StudentDashboard = () => {
     <div style={{display:'flex',flexDirection:'column',gap:'clamp(18px,2.8vw,30px)',fontFamily:"'Outfit',sans-serif"}}>
 
       {/* Welcome Banner */}
-      <div className="flex items-center justify-between" style={{animation:'cardReveal 500ms cubic-bezier(0.22,1,0.36,1) 0ms both'}}>
+      <div className="flex items-start justify-between" style={{animation:'cardReveal 500ms cubic-bezier(0.22,1,0.36,1) 0ms both'}}>
         <div>
           <h1 style={{fontSize:'clamp(1.2rem,2.5vw,1.6rem)',fontWeight:800,color:T.text,margin:0,lineHeight:1.25}}>
             <span>Welcome back, </span>
