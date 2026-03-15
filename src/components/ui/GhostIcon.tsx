@@ -172,6 +172,8 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
     window.addEventListener('touchmove',  onMove as EventListener);
     window.addEventListener('touchend',   onUp);
     const onLand = () => {
+      // Reset isDragging so the rAF tick stops calling setPupils and blink resumes
+      isDragging.current = false;
       targetTilt.current = 0; pupilY.current = 0;
       setPupils(0, 0); setMouth(false); setEyeRy(12);
       scheduleBlinkRef.current();
