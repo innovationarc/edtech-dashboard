@@ -17,11 +17,20 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
-import clsx from 'clsx';
+
+const hexRgb = (hex: string) => {
+  if (!hex || hex.length < 7) return '99,102,241';
+  return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
+};
 
 const MobileNavigation = () => {
-  const { user } = useDashboard();
+  const { user, theme, primaryColor, accentColor } = useDashboard();
   const location = useLocation();
+  const darkMode = theme !== 'light';
+  const pRgb = hexRgb(primaryColor);
+  const gradient = `linear-gradient(135deg,${primaryColor} 0%,${accentColor} 100%)`;
+  const navBg    = darkMode ? 'rgba(13,16,23,0.96)'          : 'rgba(255,255,255,0.96)';
+  const navBorder = darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)';
 
   // Get primary navigation items based on user role
   const getPrimaryNavItems = () => {
@@ -70,27 +79,59 @@ const MobileNavigation = () => {
   const navItems = getPrimaryNavItems();
 
   return (
-    <nav className="mobile-nav fixed bottom-0 left-0 right-0 bg-background-900 border-t border-background-800 z-30 lg:hidden safe-area-bottom">
-      <div className="flex justify-around items-center py-1.5 sm:py-2 px-1 sm:px-2">
-        {navItems.slice(0, 5).map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={clsx(
-              "flex flex-col items-center justify-center p-1.5 sm:p-2 rounded-lg transition-all duration-200 min-w-0 flex-1 touch-manipulation active:scale-95",
-              location.pathname === item.path 
-                ? "text-primary-400 bg-background-800 scale-105" 
-                : "text-gray-400 hover:text-white hover:bg-background-800"
-            )}
-          >
-            <div className="mb-0.5 sm:mb-1 flex-shrink-0 scale-90 sm:scale-100">
-              {item.icon}
-            </div>
-            <span className="text-[10px] xs:text-xs font-medium truncate w-full text-center px-0.5 sm:px-1 leading-tight">
-              {item.name}
-            </span>
-          </Link>
-        ))}
+    <nav
+      className="mobile-nav lg:hidden safe-area-bottom"
+      style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30,
+        background: navBg,
+        borderTop: navBorder,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: darkMode ? '0 -2px 16px rgba(0,0,0,0.3)' : '0 -2px 12px rgba(0,0,0,0.07)',
+        fontFamily: "'Outfit', sans-serif",
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '6px 4px' }}>
+        {navItems.slice(0, 5).map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: '6px 8px', borderRadius: 10, flex: 1, minWidth: 0,
+                textDecoration: 'none',
+                background: isActive ? `rgba(${pRgb},0.12)` : 'transparent',
+                transform: isActive ? 'scale(1.05)' : 'scale(1)',
+                transition: 'all 0.18s cubic-bezier(0.34,1.25,0.64,1)',
+              }}
+            >
+              <div style={{
+                marginBottom: 3, flexShrink: 0,
+                color: isActive ? primaryColor : (darkMode ? '#64748b' : '#9ca3af'),
+                transition: 'color 0.15s ease',
+              }}>
+                {item.icon}
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: isActive ? 700 : 500,
+                color: isActive ? primaryColor : (darkMode ? '#64748b' : '#9ca3af'),
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                width: '100%', textAlign: 'center',
+                transition: 'color 0.15s ease',
+              }}>
+                {item.name}
+              </span>
+              {isActive && (
+                <div style={{
+                  width: 16, height: 2, borderRadius: 99, marginTop: 2,
+                  background: gradient,
+                }} />
+              )}
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );
