@@ -220,7 +220,7 @@ const StudentDashboard = () => {
   const greeting = hour<12?'Good morning':hour<17?'Good afternoon':'Good evening';
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:'clamp(18px,2.8vw,30px)',fontFamily:"'Outfit',sans-serif"}}>
+    <div style={{display:'flex',flexDirection:'column',gap:'clamp(18px,2.8vw,30px)',fontFamily:"'Outfit',sans-serif",transformStyle:'preserve-3d'}}>
 
       {/* Welcome Banner */}
       <div style={{animation:'cardReveal 500ms cubic-bezier(0.22,1,0.36,1) 0ms both'}}>
@@ -368,7 +368,7 @@ const StudentDashboard = () => {
       )}
 
       {/* Row 1: 4-column cards */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,230px),1fr))',gap:'clamp(14px,1.8vw,22px)'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,230px),1fr))',gap:'clamp(14px,1.8vw,22px)',transformStyle:'preserve-3d'}}>
 
         {/* Objectives */}
         <Card title="Today's Objectives" icon={<Target size={15} color="#6366f1"/>} accent="#6366f1" enterDelay={0}>
@@ -518,7 +518,7 @@ const StudentDashboard = () => {
       </div>
 
       {/* Row 2: Schedule + Goals */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,290px),1fr))',gap:'clamp(14px,1.8vw,22px)'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,290px),1fr))',gap:'clamp(14px,1.8vw,22px)',transformStyle:'preserve-3d'}}>
 
         {/* Schedule */}
         <Card title="Weekly Schedule" subtitle="Events this week" icon={<Calendar size={15} color="#06b6d4"/>} accent="#06b6d4" enterDelay={360}>
