@@ -2,7 +2,6 @@
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
-import { useCardAnimation } from './useCardAnimation';
 
 interface CardProps {
   children: ReactNode;
@@ -43,6 +42,7 @@ const CardMatte = ({
 }: CardProps) => {
   const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6', cardAnimation = 'tilt' } = useDashboard();
   const isLight = theme === 'light';
+  const cardRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
   const pRgb = hexRgb(primaryColor);
@@ -60,53 +60,96 @@ const CardMatte = ({
   const dividerColor  = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
   const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
 
-  const anim = useCardAnimation({ animation: cardAnimation as any, baseShadow, hoverShadow, primaryRgb: pRgb });
-
-  // ── Cursor/touch glow position update ────────────────────────────────────
-  const updateGlow = (clientX: number, clientY: number) => {
+  // ── Shared apply/reset — direct DOM, no hook indirection ─────────────────
+  const applyTilt = (clientX: number, clientY: number) => {
+    const el = cardRef.current;
     const glow = glowRef.current;
-    const r = anim.cardRef.current?.getBoundingClientRect();
-    if (glow && r) {
-      glow.style.left = `${clientX - r.left}px`;
-      glow.style.top  = `${clientY - r.top}px`;
-      glow.style.opacity = isLight ? '0.6' : '0.45';
+    if (!el) { console.debug('[CardMatte] applyTilt: cardRef null'); return; }
+    const rect = el.getBoundingClientRect();
+    const x = clientX - rect.left, y = clientY - rect.top;
+    const cx = rect.width / 2, cy = rect.height / 2;
+    if (cardAnimation === 'tilt') {
+      const rotX = ((y - cy) / cy) * -10;
+      const rotY = ((x - cx) / cx) * 10;
+      el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.02)`;
+      console.debug('[CardMatte] tilt', rotX.toFixed(1), rotY.toFixed(1));
+    } else if (cardAnimation === 'magnetic') {
+      el.style.transform = `translate(${((x-cx)/cx)*10}px,${((y-cy)/cy)*10}px) scale(1.01)`;
+    }
+    el.style.boxShadow = hoverShadow;
+    if (glow) { glow.style.left=`${x}px`; glow.style.top=`${y}px`; glow.style.opacity=isLight?'0.6':'0.45'; }
+  };
+
+  const applyEnter = () => {
+    const el = cardRef.current; if (!el) return;
+    console.debug('[CardMatte] enter, animation:', cardAnimation);
+    switch (cardAnimation) {
+      case 'lift':   el.style.transform='translateY(-8px) scale(1.01)'; el.style.boxShadow=hoverShadow; break;
+      case 'spring': el.style.transform='scale(1.04)';                  el.style.boxShadow=hoverShadow; break;
+      case 'glow':   el.style.transform='translateY(-2px)';             el.style.boxShadow=`${hoverShadow}, 0 0 28px 6px rgba(${pRgb},0.30)`; break;
+      default:       el.style.boxShadow=hoverShadow; break;
     }
   };
 
-  const hideGlow = () => {
-    const glow = glowRef.current;
-    if (glow) glow.style.opacity = '0';
+  const applyReset = () => {
+    const el = cardRef.current; const glow = glowRef.current;
+    if (el) { el.style.transform='perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)'; el.style.boxShadow=baseShadow; }
+    if (glow) glow.style.opacity='0';
+    console.debug('[CardMatte] reset');
   };
 
-  // Touch glow wiring (native events so we can read touch coords)
+  // ── Touch listeners — attached natively so they fire on mobile ───────────
   useEffect(() => {
-    const el = anim.cardRef.current;
-    if (!el) return;
-    const onTouchMove = (e: TouchEvent) => updateGlow(e.touches[0].clientX, e.touches[0].clientY);
-    const onTouchEnd  = () => hideGlow();
-    el.addEventListener('touchmove',   onTouchMove,  { passive: true });
+    const el = cardRef.current;
+    if (!el) { console.debug('[CardMatte] mount: cardRef null'); return; }
+    console.debug('[CardMatte] attaching touch listeners, animation:', cardAnimation);
+
+    const onTouchStart = (e: TouchEvent) => {
+      console.debug('[CardMatte] touchstart');
+      applyEnter();
+      if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
+        applyTilt(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
+        applyTilt(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+    const onTouchEnd = () => { console.debug('[CardMatte] touchend'); setTimeout(applyReset, 350); };
+
+    el.addEventListener('touchstart',  onTouchStart,  { passive: true });
+    el.addEventListener('touchmove',   onTouchMove,   { passive: true });
     el.addEventListener('touchend',    onTouchEnd);
     el.addEventListener('touchcancel', onTouchEnd);
     return () => {
+      el.removeEventListener('touchstart',  onTouchStart);
       el.removeEventListener('touchmove',   onTouchMove);
       el.removeEventListener('touchend',    onTouchEnd);
       el.removeEventListener('touchcancel', onTouchEnd);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cardAnimation, baseShadow, hoverShadow, isLight, pRgb]);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    anim.onMouseMove?.(e);
-    updateGlow(e.clientX, e.clientY);
+  // ── Mouse handlers ────────────────────────────────────────────────────────
+  const handleMouseMove  = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') applyTilt(e.clientX, e.clientY);
   };
-  const handleMouseLeave = () => {
-    anim.onMouseLeave?.();
-    hideGlow();
+  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    applyEnter();
+    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') applyTilt(e.clientX, e.clientY);
   };
+  const handleMouseLeave = () => applyReset();
+
+  const transition = cardAnimation === 'spring'
+    ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.26s ease'
+    : 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease';
+  const transformStyle: React.CSSProperties['transformStyle'] =
+    (cardAnimation === 'tilt' || cardAnimation === 'magnetic') ? 'preserve-3d' : 'flat';
 
   return (
     <div
-      ref={anim.cardRef}
+      ref={cardRef}
       className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
@@ -116,15 +159,15 @@ const CardMatte = ({
         borderRadius: 20,
         boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
-        transition: anim.transition,
+        transition,
         cursor: onClick ? 'pointer' : 'default',
         isolation: 'isolate',
-        transformStyle: anim.transformStyle,
+        transformStyle,
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
       onMouseMove={handleMouseMove}
-      onMouseEnter={(e) => { anim.onMouseEnter?.(); updateGlow(e.clientX, e.clientY); }}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       {/* Noise sparkle texture */}
