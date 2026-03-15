@@ -309,16 +309,16 @@ const DashboardLayout = () => {
     silver: {
       backgroundImage: isLight
         ? `
-          radial-gradient(ellipse at 20% 20%, rgba(0,0,0,0.03) 0%, transparent 50%),
-          radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.02) 0%, transparent 50%),
-          radial-gradient(circle at 30% 40%, rgba(80,80,100,0.35) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 70% 20%, rgba(80,80,100,0.28) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 50% 70%, rgba(80,80,100,0.32) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 15% 80%, rgba(80,80,100,0.25) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 85% 60%, rgba(80,80,100,0.35) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 60% 45%, rgba(80,80,100,0.28) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 40% 15%, rgba(80,80,100,0.30) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 90% 35%, rgba(80,80,100,0.25) 0.5px, transparent 0.5px)
+          radial-gradient(ellipse at 20% 20%, rgba(0,0,0,0.04) 0%, transparent 50%),
+          radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.03) 0%, transparent 50%),
+          radial-gradient(circle at 30% 40%, rgba(80,80,100,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 70% 20%, rgba(80,80,100,0.52) 1px, transparent 1px),
+          radial-gradient(circle at 50% 70%, rgba(80,80,100,0.56) 1px, transparent 1px),
+          radial-gradient(circle at 15% 80%, rgba(80,80,100,0.48) 1px, transparent 1px),
+          radial-gradient(circle at 85% 60%, rgba(80,80,100,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 60% 45%, rgba(80,80,100,0.52) 1px, transparent 1px),
+          radial-gradient(circle at 40% 15%, rgba(80,80,100,0.55) 1px, transparent 1px),
+          radial-gradient(circle at 90% 35%, rgba(80,80,100,0.48) 1px, transparent 1px)
         `
         : `
           radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.05) 0%, transparent 50%),
@@ -339,15 +339,15 @@ const DashboardLayout = () => {
     gold: {
       backgroundImage: isLight
         ? `
-          radial-gradient(ellipse at 15% 15%, rgba(180,130,0,0.07) 0%, transparent 45%),
-          radial-gradient(ellipse at 85% 85%, rgba(150,110,0,0.05) 0%, transparent 45%),
-          radial-gradient(circle at 25% 35%, rgba(160,120,0,0.55) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 75% 25%, rgba(180,140,0,0.50) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 45% 65%, rgba(160,120,0,0.52) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 80% 70%, rgba(180,140,0,0.45) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 10% 55%, rgba(160,120,0,0.48) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 60% 15%, rgba(180,140,0,0.55) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 35% 85%, rgba(160,120,0,0.42) 0.5px, transparent 0.5px)
+          radial-gradient(ellipse at 15% 15%, rgba(180,130,0,0.09) 0%, transparent 45%),
+          radial-gradient(ellipse at 85% 85%, rgba(150,110,0,0.07) 0%, transparent 45%),
+          radial-gradient(circle at 25% 35%, rgba(160,120,0,0.72) 1px, transparent 1px),
+          radial-gradient(circle at 75% 25%, rgba(180,140,0,0.68) 1px, transparent 1px),
+          radial-gradient(circle at 45% 65%, rgba(160,120,0,0.70) 1px, transparent 1px),
+          radial-gradient(circle at 80% 70%, rgba(180,140,0,0.62) 1px, transparent 1px),
+          radial-gradient(circle at 10% 55%, rgba(160,120,0,0.65) 1px, transparent 1px),
+          radial-gradient(circle at 60% 15%, rgba(180,140,0,0.72) 1px, transparent 1px),
+          radial-gradient(circle at 35% 85%, rgba(160,120,0,0.58) 1px, transparent 1px)
         `
         : `
           radial-gradient(ellipse at 15% 15%, rgba(212,175,55,0.12) 0%, transparent 45%),
@@ -365,15 +365,15 @@ const DashboardLayout = () => {
     purple: {
       backgroundImage: isLight
         ? `
-          radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.08) 0%, transparent 45%),
-          radial-gradient(ellipse at 80% 70%, rgba(79,70,229,0.06) 0%, transparent 45%),
-          radial-gradient(circle at 30% 40%, rgba(99,102,241,0.50) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 70% 20%, rgba(79,70,229,0.45) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 55% 70%, rgba(99,102,241,0.48) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 15% 60%, rgba(79,70,229,0.42) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 88% 50%, rgba(99,102,241,0.47) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 45% 15%, rgba(79,70,229,0.52) 0.5px, transparent 0.5px),
-          radial-gradient(circle at 75% 85%, rgba(99,102,241,0.38) 0.5px, transparent 0.5px)
+          radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.10) 0%, transparent 45%),
+          radial-gradient(ellipse at 80% 70%, rgba(79,70,229,0.08) 0%, transparent 45%),
+          radial-gradient(circle at 30% 40%, rgba(99,102,241,0.65) 1px, transparent 1px),
+          radial-gradient(circle at 70% 20%, rgba(79,70,229,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 55% 70%, rgba(99,102,241,0.62) 1px, transparent 1px),
+          radial-gradient(circle at 15% 60%, rgba(79,70,229,0.55) 1px, transparent 1px),
+          radial-gradient(circle at 88% 50%, rgba(99,102,241,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 45% 15%, rgba(79,70,229,0.65) 1px, transparent 1px),
+          radial-gradient(circle at 75% 85%, rgba(99,102,241,0.50) 1px, transparent 1px)
         `
         : `
           radial-gradient(ellipse at 20% 30%, rgba(139,92,246,0.12) 0%, transparent 45%),
