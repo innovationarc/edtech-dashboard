@@ -47,7 +47,7 @@ const CardMatte = ({
   useEffect(() => { injectStyles(); }, []);
   const pRgb = hexRgb(primaryColor);
 
-  const bg = isLight ? 'rgba(255,255,255,0.80)' : 'rgba(22,26,37,0.82)';
+  const bg = isLight ? 'rgba(255,255,255,0.80)' : 'color-mix(in srgb, var(--color-card) 82%, transparent)';
   const border = isLight ? '1px solid rgba(255,255,255,0.95)' : '1px solid rgba(255,255,255,0.09)';
   const baseShadow = isLight
     ? '0 4px 24px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,1)'
