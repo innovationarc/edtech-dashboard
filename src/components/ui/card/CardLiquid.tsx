@@ -1,7 +1,7 @@
 // CardLiquid.tsx — Clean neutral card. No glow. No color bleed. Pure polish.
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../../../contexts/DashboardContext';
 
 interface CardProps {
   children: ReactNode;
