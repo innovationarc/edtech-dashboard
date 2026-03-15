@@ -65,6 +65,11 @@ export function useCardAnimation({
     if (!el) return;
 
     switch (animation) {
+      case 'tilt':
+      case 'magnetic':
+        // Shadow lifts on enter; transform updates live via onMouseMove
+        el.style.boxShadow = hoverShadow;
+        break;
       case 'lift':
         el.style.transform = 'translateY(-8px) scale(1.01)';
         el.style.boxShadow = hoverShadow;
@@ -106,8 +111,8 @@ export function useCardAnimation({
     cardRef,
     transition,
     transformStyle,
-    onMouseMove:  (animation === 'tilt' || animation === 'magnetic') ? onMouseMove  : undefined,
-    onMouseEnter: (animation === 'lift' || animation === 'spring' || animation === 'glow') ? onMouseEnter : undefined,
+    onMouseMove:  (animation === 'tilt' || animation === 'magnetic') ? onMouseMove : undefined,
+    onMouseEnter,
     onMouseLeave,
   };
 }
