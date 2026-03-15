@@ -52,15 +52,6 @@ const CardNeon = ({
   const iconBg      = dark ? `rgba(${pRgb},0.12)` : `rgba(${pRgb},0.08)`;
   const iconBd      = `rgba(${pRgb},${dark?0.3:0.2})`;
 
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!tilt) return;
-    const el = cardRef.current; if (!el) return;
-    const r = el.getBoundingClientRect();
-    el.style.transform = `perspective(1200px) rotateX(${((e.clientY-r.top-r.height/2)/r.height)*-7}deg) rotateY(${((e.clientX-r.left-r.width/2)/r.width)*7}deg) translateZ(6px) scale(1.012)`;
-    el.style.boxShadow = hoverShadow;
-  };
-  const onEnter = () => { const sh=shimRef.current; if(!sh)return; sh.style.animation='none'; void sh.offsetWidth; sh.style.animation='shimPass 600ms ease forwards'; };
-  const onLeave = () => { const el=cardRef.current; if(el){el.style.transform='none';el.style.boxShadow=baseShadow;} };
 
 
   const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: pRgb, isLight: !dark });
