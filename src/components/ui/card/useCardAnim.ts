@@ -64,8 +64,10 @@ export interface UseCardAnimOptions {
 }
 
 export function useCardAnim({
-  cardAnimation, hoverShadow, baseShadow, primaryRgb, isLight,
+  cardAnimation: cardAnimationProp, hoverShadow, baseShadow, primaryRgb, isLight,
 }: UseCardAnimOptions) {
+  // Guard: always have a valid string, never undefined
+  const cardAnimation = cardAnimationProp || 'tilt';
   const cardRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const rafRef  = useRef<number>(0);
