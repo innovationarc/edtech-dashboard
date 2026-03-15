@@ -36,7 +36,7 @@ const CardGlassmorphism = ({
   children, className, title, subtitle, icon, footer,
   onClick, tilt=true, padding='md', enterDelay=0,
 }: CardProps) => {
-  const { theme, primaryColor = '#6366f1' } = useDashboard();
+  const { theme, primaryColor = '#6366f1', cardAnimation = 'tilt' } = useDashboard();
   const dark = theme !== 'light';
   const shimRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
