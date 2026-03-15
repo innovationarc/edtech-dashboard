@@ -44,6 +44,8 @@ interface DashboardContextType {
   setDashboardLayout: (layout: string) => void;
   glitterTheme: string;
   setGlitterTheme: (glitter: string) => void;
+  cardStyle: string;
+  setCardStyle: (style: string) => void;
   // NEW: forced logout message for single-device enforcement
   forcedLogoutMessage: string | null;
   setForcedLogoutMessage: (msg: string | null) => void;
@@ -134,6 +136,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
   const [dashboardLayout, setDashboardLayout] = useState(() => localStorage.getItem('dashboardLayout') || 'default');
   const [glitterTheme, setGlitterTheme] = useState(() => localStorage.getItem('glitterTheme') || 'none');
+  const [cardStyle, setCardStyle]       = useState(() => localStorage.getItem('cardStyle') || 'liquid');
   const [siteName, setSiteName] = useState('Learning Management Portal');
   const [siteTagline, setSiteTagline] = useState('Empowering educators, inspiring students');
   const [contactEmail, setContactEmail] = useState('admin@example.com');
@@ -327,6 +330,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                   if (a.accentColor)  { setAccentColor(a.accentColor);   localStorage.setItem('accentColor', a.accentColor); }
                   if (a.fontFamily)   { setFontFamily(a.fontFamily);     localStorage.setItem('fontFamily', a.fontFamily); }
                   if (a.glitterTheme) { setGlitterTheme(a.glitterTheme); localStorage.setItem('glitterTheme', a.glitterTheme); }
+                  if (a.cardStyle)    { setCardStyle(a.cardStyle);       localStorage.setItem('cardStyle',    a.cardStyle); }
                 }
                 if (globalSettings.general) {
                   const g = globalSettings.general;
@@ -433,6 +437,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     localStorage.setItem('accentColor',  accentColor);
     localStorage.setItem('fontFamily',   fontFamily);
     localStorage.setItem('glitterTheme', glitterTheme);
+    localStorage.setItem('cardStyle',    cardStyle);
 
     // Apply theme classes
     root.className = root.className.replace(/theme-\w+/g, '');
@@ -505,7 +510,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     // Update BOTH html and body so no dark bleed shows behind content
     document.documentElement.style.backgroundColor = colors.bg;
     document.body.style.backgroundColor = colors.bg;
-  }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, glitterTheme, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
+  }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, glitterTheme, cardStyle, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -654,6 +659,10 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     setGlitterTheme(glitter);
   };
 
+  const handleSetCardStyle = (style: string) => {
+    setCardStyle(style);
+  };
+
   return (
     <DashboardContext.Provider 
       value={{ 
@@ -692,6 +701,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setDashboardLayout,
         glitterTheme,
         setGlitterTheme: handleSetGlitterTheme,
+        cardStyle,
+        setCardStyle: handleSetCardStyle,
         forcedLogoutMessage,
         setForcedLogoutMessage,
         showLoginAnimation,
