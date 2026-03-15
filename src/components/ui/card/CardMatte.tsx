@@ -1,7 +1,7 @@
 // CardMatte.tsx — 3D tilt + matte sparkle crystal card
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../../../contexts/DashboardContext';
 
 interface CardProps {
   children: ReactNode;
