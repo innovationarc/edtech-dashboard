@@ -69,10 +69,10 @@ const CardMatte = ({
     const x = clientX - rect.left, y = clientY - rect.top;
     const cx = rect.width / 2, cy = rect.height / 2;
     if (cardAnimation === 'tilt') {
-      const rotX = ((y - cy) / cy) * -10;
-      const rotY = ((x - cx) / cx) * 10;
-      el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.02)`;
-      console.debug('[CardMatte] tilt', rotX.toFixed(1), rotY.toFixed(1));
+      const rotX = ((y - cy) / cy) * -15;
+      const rotY = ((x - cx) / cx) * 15;
+      el.style.transform = `perspective(600px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(12px) scale(1.03)`;
+      console.log('[CardMatte] tilt applied', rotX.toFixed(1), rotY.toFixed(1));
     } else if (cardAnimation === 'magnetic') {
       el.style.transform = `translate(${((x-cx)/cx)*10}px,${((y-cy)/cy)*10}px) scale(1.01)`;
     }
@@ -93,7 +93,7 @@ const CardMatte = ({
 
   const applyReset = () => {
     const el = cardRef.current; const glow = glowRef.current;
-    if (el) { el.style.transform='perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)'; el.style.boxShadow=baseShadow; }
+    if (el) { el.style.transform='perspective(600px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)'; el.style.boxShadow=baseShadow; }
     if (glow) glow.style.opacity='0';
     console.debug('[CardMatte] reset');
   };
@@ -101,10 +101,9 @@ const CardMatte = ({
   // ── Touch handlers as React synthetic events (most reliable on mobile) ────
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     console.log('[CardMatte] touchstart fired, animation:', cardAnimation);
+    // Apply tilt immediately from touch position — visible even without finger movement
+    applyTilt(e.touches[0].clientX, e.touches[0].clientY);
     applyEnter();
-    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
-      applyTilt(e.touches[0].clientX, e.touches[0].clientY);
-    }
   };
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     console.log('[CardMatte] touchmove fired');
@@ -129,7 +128,7 @@ const CardMatte = ({
 
   const transition = cardAnimation === 'spring'
     ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.26s ease'
-    : 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease';
+    : 'transform 0.2s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease';
   const transformStyle: React.CSSProperties['transformStyle'] =
     (cardAnimation === 'tilt' || cardAnimation === 'magnetic') ? 'preserve-3d' : 'flat';
 
