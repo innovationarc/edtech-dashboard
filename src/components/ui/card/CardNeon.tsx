@@ -42,7 +42,7 @@ const CardNeon = ({
   useEffect(() => { injectStyles(); }, []);
 
   const pRgb        = primaryColor.startsWith('#') ? hexRgb(primaryColor) : '99,102,241';
-  const bg          = dark ? 'rgba(8,8,20,0.88)' : 'rgba(240,240,255,0.92)';
+  const bg          = dark ? 'color-mix(in srgb, var(--color-card) 88%, rgba(0,0,0,1))' : 'rgba(240,240,255,0.92)';
   const border      = `1px solid rgba(${pRgb},${dark?0.7:0.5})`;
   const baseShadow  = `0 0 0 1px rgba(${pRgb},0.15),0 4px 24px rgba(${pRgb},0.25),inset 0 0 20px rgba(${pRgb},0.04)`;
   const hoverShadow = `0 0 0 1px rgba(${pRgb},0.4),0 8px 40px rgba(${pRgb},0.45),inset 0 0 30px rgba(${pRgb},0.08)`;
