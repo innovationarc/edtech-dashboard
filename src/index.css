@@ -240,8 +240,7 @@
     }
   }
 
-  /* Prevent horizontal scroll on mobile — clip does not create a stacking context
-     so preserve-3d card tilt animations work correctly on WebKit/mobile */
+  /* Prevent horizontal scroll — clip does NOT create stacking context, preserves 3D transforms */
   body {
     overflow-x: clip;
   }
@@ -902,6 +901,9 @@
 
 html, body, #root {
   font-family: 'Outfit', sans-serif !important;
+  /* Reset any CSS containment that flattens preserve-3d on mobile WebKit */
+  contain: none;
+  isolation: auto;
 }
 
 /* Specific overrides for inputs */
