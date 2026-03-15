@@ -1,6 +1,11 @@
-// src/services/novaChatHistoryService.ts
-// Persistent chat history for Nova UI display.
-
+// src/services/novaMemoryService.ts
+// Nova RAG — Conversation memory stored in Firestore subcollection.
+//
+// Schema: novaMessages/{userId}/messages/{msgId}
+//   text      : string
+//   sender    : 'user' | 'ai'
+//   timestamp : Timestamp
+//   sessionId : string
 
 import {
   collection,
@@ -10,14 +15,14 @@ import {
   where,
   orderBy,
   Timestamp,
+  deleteDoc,
   writeBatch,
-  limit,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Interfaces ───────────────────────────────────────────────────────────────
 
-export interface NovaChatMessage {
+export interface NovaMessage {
   id: string;
   text: string;
   sender: 'user' | 'ai';
@@ -34,56 +39,48 @@ function toDate(v: any): Date {
   return new Date(v);
 }
 
-function chatCol(userId: string) {
-  return collection(db, 'novaChats', userId, 'messages');
+function messagesCol(userId: string) {
+  return collection(db, 'novaMessages', userId, 'messages');
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
-export const novaChatHistoryService = {
+export const novaMemoryService = {
 
   /**
-   * Save a single message to persistent history.
-   * Fire-and-forget safe.
+   * Persist a single message to Firestore.
+   * Fire-and-forget safe — never throws so the UI is never blocked.
    */
   async saveMessage(
     userId: string,
     message: { text: string; sender: 'user' | 'ai'; sessionId: string }
-  ): Promise<NovaChatMessage | null> {
+  ): Promise<void> {
     try {
-      const ref = await addDoc(chatCol(userId), {
+      await addDoc(messagesCol(userId), {
         text:      message.text,
         sender:    message.sender,
         sessionId: message.sessionId,
         timestamp: Timestamp.now(),
       });
-      return {
-        id:        ref.id,
-        text:      message.text,
-        sender:    message.sender,
-        sessionId: message.sessionId,
-        timestamp: new Date(),
-      };
     } catch (e) {
-      console.warn('[novaChatHistory] saveMessage failed (non-fatal):', e);
-      return null;
+      console.warn('[novaMemory] saveMessage failed (non-fatal):', e);
     }
   },
 
   /**
-   * Fetch messages from the last 30 days for UI display, oldest first.
-   * Also prunes messages older than 30 days (fire-and-forget).
+   * Fetch messages from the last `hours` hours for a user, oldest first.
+   * Returns an empty array on any error so RAG still works without memory.
    */
-  async getHistory(userId: string): Promise<NovaChatMessage[]> {
+  async getRecentMessages(userId: string, hours = 48): Promise<NovaMessage[]> {
     try {
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
       const cutoffTs = Timestamp.fromDate(cutoff);
 
       let snap;
       try {
         snap = await getDocs(
           query(
-            chatCol(userId),
+            messagesCol(userId),
             where('timestamp', '>=', cutoffTs),
             orderBy('timestamp', 'asc')
           )
@@ -91,76 +88,61 @@ export const novaChatHistoryService = {
       } catch {
         // Composite index may not exist yet — fallback without orderBy
         snap = await getDocs(
-          query(chatCol(userId), where('timestamp', '>=', cutoffTs))
+          query(
+            messagesCol(userId),
+            where('timestamp', '>=', cutoffTs)
+          )
         );
       }
 
-      const messages: NovaChatMessage[] = snap.docs.map(d => ({
+      const messages: NovaMessage[] = snap.docs.map(d => ({
         id:        d.id,
-        text:      d.data().text      || '',
-        sender:    d.data().sender    || 'user',
+        text:      d.data().text    || '',
+        sender:    d.data().sender  || 'user',
         sessionId: d.data().sessionId || '',
         timestamp: toDate(d.data().timestamp),
       }));
 
-      // Chronological order regardless of query path
-      messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-      // Prune older messages opportunistically (fire-and-forget, don't await)
-      this.pruneOldMessages(userId, 30 * 24).catch(() => {});
-
-      return messages;
+      // Ensure chronological order regardless of which query path was used
+      return messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     } catch (e) {
-      console.warn('[novaChatHistory] getHistory failed (non-fatal):', e);
+      console.warn('[novaMemory] getRecentMessages failed (non-fatal):', e);
       return [];
     }
   },
 
   /**
-   * Get last N messages for AI context injection.
-   * Returns plain {sender, text} pairs suitable for prompt building.
+   * Delete all messages older than `hours` hours for a user.
+   * Intended to be called periodically to keep subcollection lean.
+   * Batches in chunks of 500 to respect Firestore limits.
    */
-  async getRecentForContext(
-    userId: string,
-    n = 6
-  ): Promise<Array<{ sender: 'user' | 'ai'; text: string }>> {
-    try {
-      // Fetch last N*2 docs (each exchange = 2 msgs) then slice
-      let snap;
-      try {
-        snap = await getDocs(
-          query(chatCol(userId), orderBy('timestamp', 'desc'), limit(n * 2))
-        );
-      } catch {
-        // Index fallback
-        snap = await getDocs(query(chatCol(userId), limit(n * 2)));
-      }
-
-      const msgs = snap.docs
-        .map(d => ({
-          sender:    (d.data().sender || 'user') as 'user' | 'ai',
-          text:      (d.data().text   || '') as string,
-          ts:        toDate(d.data().timestamp).getTime(),
-        }))
-        .sort((a, b) => a.ts - b.ts)  // oldest first for prompt
-        .slice(-n);                    // last N
-
-      return msgs.map(m => ({ sender: m.sender, text: m.text }));
-    } catch (e) {
-      console.warn('[novaChatHistory] getRecentForContext failed (non-fatal):', e);
-      return [];
-    }
-  },
-
-  /**
-   * Delete messages older than `hours` hours. Batched in 500-doc chunks.
-   */
-  async pruneOldMessages(userId: string, hours = 30 * 24): Promise<void> {
+  async pruneOldMessages(userId: string, hours = 72): Promise<void> {
     try {
       const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+      const cutoffTs = Timestamp.fromDate(cutoff);
+
       const snap = await getDocs(
-        query(chatCol(userId), where('timestamp', '<', Timestamp.fromDate(cutoff)))
+        query(messagesCol(userId), where('timestamp', '<', cutoffTs))
       );
+      if (snap.empty) return;
+
+      const CHUNK = 500;
+      for (let i = 0; i < snap.docs.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        snap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (e) {
+      console.warn('[novaMemory] pruneOldMessages failed (non-fatal):', e);
+    }
+  },
+
+  /**
+   * Delete all messages for a user (hard reset).
+   */
+  async clearAllMessages(userId: string): Promise<void> {
+    try {
+      const snap = await getDocs(messagesCol(userId));
       if (snap.empty) return;
       const CHUNK = 500;
       for (let i = 0; i < snap.docs.length; i += CHUNK) {
@@ -169,7 +151,7 @@ export const novaChatHistoryService = {
         await batch.commit();
       }
     } catch (e) {
-      console.warn('[novaChatHistory] pruneOldMessages failed (non-fatal):', e);
+      console.warn('[novaMemory] clearAllMessages failed (non-fatal):', e);
     }
   },
 };
