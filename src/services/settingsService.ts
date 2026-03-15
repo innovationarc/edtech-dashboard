@@ -26,6 +26,7 @@ export interface AppearanceSettings {
   fontFamily: string;
   glitterTheme: string;
   cardStyle: string;
+  cardAnimation: string;
 }
 
 export interface GeneralSettings {
