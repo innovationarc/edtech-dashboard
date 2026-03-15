@@ -86,9 +86,14 @@
      Cards: rgba(255,255,255,0.82) frosted crystal
   ════════════════════════════════════════════ */
   .theme-light,
-  .theme-light body,
-  .theme-light #root {
+  .theme-light body {
     background-color: var(--color-background, #ebe8e1) !important;
+    color: #111827 !important;
+  }
+  /* #root must stay transparent so the fixed-position glitter canvas
+     painted beneath it remains visible in light mode */
+  .theme-light #root {
+    background-color: transparent !important;
     color: #111827 !important;
   }
 
