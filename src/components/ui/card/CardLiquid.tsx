@@ -2,6 +2,7 @@
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
+import { useCardAnimation } from './useCardAnimation';
 
 interface CardProps {
   children: ReactNode;
@@ -44,9 +45,8 @@ const CardLiquid = ({
   children, className, title, subtitle, icon, footer,
   onClick, tilt=true, padding='md', enterDelay=0,
 }: CardProps) => {
-  const { theme } = useDashboard();
+  const { theme, cardAnimation = 'tilt' } = useDashboard();
   const dark = theme !== 'light';
-  const cardRef = useRef<HTMLDivElement>(null);
   const shimRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { injectStyles(); }, []);
@@ -88,50 +88,38 @@ const CardLiquid = ({
   const iconBg      = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.045)';
   const iconBd      = dark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.07)';
 
-  // ── Mouse ─────────────────────────────────────────────────────────────────
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!tilt) return;
-    const el = cardRef.current; if (!el) return;
-    const r = el.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    el.style.transform = `perspective(1200px) rotateX(${((y - r.height/2) / r.height) * -7}deg) rotateY(${((x - r.width/2) / r.width) * 7}deg) translateZ(6px) scale(1.012)`;
-    el.style.boxShadow = hoverShadow;
-  };
+  const anim = useCardAnimation({ animation: cardAnimation as any, baseShadow, hoverShadow });
 
   const onEnter = () => {
     const sh = shimRef.current; if (!sh) return;
     sh.style.animation = 'none';
     void sh.offsetWidth;
     sh.style.animation = 'shimPass 600ms ease forwards';
-  };
-
-  const onLeave = () => {
-    const el = cardRef.current;
-    if (el) { el.style.transform = 'none'; el.style.boxShadow = baseShadow; }
+    anim.onMouseEnter?.();
   };
 
   return (
     <div
-      ref={cardRef}
+      ref={anim.cardRef}
       className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
         backdropFilter: 'blur(28px) saturate(160%)',
         WebkitBackdropFilter: 'blur(28px) saturate(160%)',
         border,
-        borderRadius: 24,        // generous corners — key to the iDraft look
+        borderRadius: 24,
         boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
         cursor: onClick ? 'pointer' : 'default',
         isolation: 'isolate',
-        transformStyle: tilt ? 'preserve-3d' : 'flat',
-        transition: 'transform 0.26s cubic-bezier(0.23,1,0.32,1), box-shadow 0.26s ease',
+        transformStyle: anim.transformStyle,
+        transition: anim.transition,
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
-      onMouseMove={onMove}
+      onMouseMove={anim.onMouseMove}
       onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
+      onMouseLeave={anim.onMouseLeave}
     >
       {/* ② Hover shimmer sweep — white only */}
       <div ref={shimRef} style={{
