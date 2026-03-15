@@ -2,7 +2,7 @@
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
-import { useCardAnimation } from './useCardAnimation';
+import { useCardAnim } from './useCardAnim';
 
 interface CardProps {
   children: ReactNode;
@@ -51,12 +51,12 @@ const CardVintage = ({
   const iconBg      = dark ? 'rgba(180,140,60,0.12)' : 'rgba(180,140,60,0.10)';
   const iconBd      = dark ? 'rgba(180,140,60,0.22)' : 'rgba(180,140,60,0.28)';
 
-  const anim = useCardAnimation({ animation: cardAnimation as any, baseShadow, hoverShadow });
+  const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: '99,102,241', isLight: !dark });
 
   return (
     <div ref={anim.cardRef} className={clsx('relative overflow-hidden', className)}
-      style={{ background:bg, backdropFilter:'blur(4px)', WebkitBackdropFilter:'blur(4px)', border, borderRadius:12, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', isolation:'isolate', transformStyle:anim.transformStyle, transition:anim.transition, animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
-      onClick={onClick} onMouseMove={anim.onMouseMove} onMouseEnter={anim.onMouseEnter} onMouseLeave={anim.onMouseLeave}>
+      style={{ background:bg, backdropFilter:'blur(4px)', WebkitBackdropFilter:'blur(4px)', border, borderRadius:12, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
+      onClick={onClick} onMouseMove={anim.onMouseMove} onMouseEnter={anim.onMouseEnter} onMouseLeave={anim.onMouseLeave} onTouchStart={anim.onTouchStart} onTouchMove={anim.onTouchMove} onTouchEnd={anim.onTouchEnd} onTouchCancel={anim.onTouchCancel}>
       {/* Paper grain */}
       <div style={{position:'absolute',inset:0,borderRadius:12,pointerEvents:'none',zIndex:1,background:NOISE,opacity:0.06,mixBlendMode:'multiply'}}/>
       <div style={{position:'relative',zIndex:6}}>
