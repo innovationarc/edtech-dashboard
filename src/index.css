@@ -240,9 +240,10 @@
     }
   }
 
-  /* Prevent horizontal scroll on mobile */
+  /* Prevent horizontal scroll on mobile — clip does not create a stacking context
+     so preserve-3d card tilt animations work correctly on WebKit/mobile */
   body {
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   /* Improved focus states for accessibility */
