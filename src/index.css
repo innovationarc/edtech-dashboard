@@ -90,8 +90,6 @@
     background-color: var(--color-background, #ebe8e1) !important;
     color: #111827 !important;
   }
-  /* #root must stay transparent so the fixed-position glitter canvas
-     painted beneath it remains visible in light mode */
   .theme-light #root {
     background-color: transparent !important;
     color: #111827 !important;
@@ -99,10 +97,9 @@
 
   /* dl-main is transparent so glitter on the outer wrapper shows through */
 
-  /* Mobile nav bottom bar — needs light-mode surface color */
+  /* Mobile nav bottom bar — light mode: inline styles handle bg, just ensure no bleed */
   .theme-light .mobile-nav,
   .theme-light nav.mobile-nav {
-    background-color: rgba(255,255,255,0.95) !important;
     border-top-color: rgba(0,0,0,0.08) !important;
     backdrop-filter: blur(20px);
   }
