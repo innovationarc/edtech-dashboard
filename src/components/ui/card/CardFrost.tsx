@@ -1,6 +1,7 @@
 // CardFrost.tsx — Glassmorphism tint, no border, faded edges like liquid glass
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
+import { useCardAnim } from './useCardAnim';
 import { useDashboard } from '../../../contexts/DashboardContext';
 
 interface CardProps {
@@ -40,7 +41,6 @@ const CardFrost = ({
 }: CardProps) => {
   const { theme, primaryColor = '#6366f1' } = useDashboard();
   const dark = theme !== 'light';
-  const cardRef = useRef<HTMLDivElement>(null);
   const shimRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
 
@@ -77,8 +77,10 @@ const CardFrost = ({
     if (el) { el.style.transform = 'none'; el.style.boxShadow = baseShadow; }
   };
 
+
+  const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: pRgb, isLight: !dark });
   return (
-    <div ref={cardRef} className={clsx('relative overflow-hidden', className)}
+    <div ref={anim.cardRef} className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
         backdropFilter: 'blur(20px) saturate(180%)',
@@ -89,11 +91,9 @@ const CardFrost = ({
         fontFamily: "'Outfit', sans-serif",
         cursor: onClick ? 'pointer' : 'default',
         isolation: 'isolate',
-        transformStyle: tilt ? 'preserve-3d' : 'flat',
-        transition: 'transform 0.26s cubic-bezier(0.23,1,0.32,1), box-shadow 0.26s ease',
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
-      onClick={onClick} onMouseMove={onMove} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      onClick={onClick} onMouseMove={anim.onMouseMove} onMouseEnter={anim.onMouseEnter} onMouseLeave={anim.onMouseLeave} onTouchStart={anim.onTouchStart} onTouchMove={anim.onTouchMove} onTouchEnd={anim.onTouchEnd} onTouchCancel={anim.onTouchCancel}>
 
       {/* Shimmer sweep */}
       <div ref={shimRef} style={{
