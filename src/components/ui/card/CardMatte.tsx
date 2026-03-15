@@ -1,4 +1,5 @@
-// CardMatte.tsx — 3D tilt + matte sparkle crystal card
+// CardMatte.tsx — 3D tilt via CSS custom properties + !important
+// Uses the same CSS class approach that WORKED, but with smooth per-pixel tilt
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
@@ -32,7 +33,37 @@ let _inj = false;
 const injectStyles = () => {
   if (_inj || typeof document==='undefined') return; _inj = true;
   const s = document.createElement('style');
-  s.textContent = `@keyframes cardReveal{0%{opacity:0;transform:translateY(28px) scale(0.96)}100%{opacity:1;transform:translateY(0) scale(1)}}`;
+  s.textContent = `
+    @keyframes cardReveal{0%{opacity:0;transform:translateY(28px) scale(0.96)}100%{opacity:1;transform:translateY(0) scale(1)}}
+
+    /* cm-tilt: uses CSS vars set per-frame via JS — !important beats everything */
+    .cm-tilt {
+      transform: perspective(800px)
+        rotateX(var(--cm-rx, 0deg))
+        rotateY(var(--cm-ry, 0deg))
+        translateZ(var(--cm-tz, 0px))
+        scale(var(--cm-sc, 1)) !important;
+      transition: transform 0.18s cubic-bezier(0.23,1,0.32,1),
+                  box-shadow 0.18s ease !important;
+      transform-style: preserve-3d !important;
+    }
+    .cm-lift {
+      transform: translateY(-8px) scale(1.01) !important;
+      transition: transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease !important;
+    }
+    .cm-spring {
+      transform: scale(1.04) !important;
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.26s ease !important;
+    }
+    .cm-glow {
+      transform: translateY(-2px) !important;
+      transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+    }
+    .cm-magnetic {
+      transform: translate(var(--cm-dx,0px), var(--cm-dy,0px)) scale(1.01) !important;
+      transition: transform 0.18s cubic-bezier(0.23,1,0.32,1) !important;
+    }
+  `;
   document.head.appendChild(s);
 };
 
@@ -60,56 +91,84 @@ const CardMatte = ({
   const dividerColor  = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
   const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
 
+  const ALL_ANIM_CLASSES = ['cm-tilt','cm-lift','cm-spring','cm-glow','cm-magnetic'];
+
+  const setVar = (el: HTMLDivElement, vars: Record<string,string>) => {
+    Object.entries(vars).forEach(([k,v]) => el.style.setProperty(k, v));
+  };
+
   const doTilt = (clientX: number, clientY: number) => {
     const el = cardRef.current; if (!el) return;
     const r = el.getBoundingClientRect();
     const x = clientX - r.left, y = clientY - r.top;
     const cx = r.width / 2, cy = r.height / 2;
-    const rotX = ((y - cy) / cy) * -10;
-    const rotY = ((x - cx) / cx) * 10;
-    el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.02)`;
+    const rx = ((y - cy) / cy) * -10;
+    const ry = ((x - cx) / cx) * 10;
+    el.classList.remove(...ALL_ANIM_CLASSES);
+    el.classList.add('cm-tilt');
+    setVar(el, { '--cm-rx': `${rx}deg`, '--cm-ry': `${ry}deg`, '--cm-tz': '8px', '--cm-sc': '1.02' });
     el.style.boxShadow = hoverShadow;
     const glow = glowRef.current;
     if (glow) { glow.style.left=`${x}px`; glow.style.top=`${y}px`; glow.style.opacity=isLight?'0.6':'0.45'; }
   };
 
+  const doMagnetic = (clientX: number, clientY: number) => {
+    const el = cardRef.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = clientX - r.left, y = clientY - r.top;
+    const cx = r.width / 2, cy = r.height / 2;
+    const dx = ((x - cx) / cx) * 10;
+    const dy = ((y - cy) / cy) * 10;
+    el.classList.remove(...ALL_ANIM_CLASSES);
+    el.classList.add('cm-magnetic');
+    setVar(el, { '--cm-dx': `${dx}px`, '--cm-dy': `${dy}px` });
+    el.style.boxShadow = hoverShadow;
+  };
+
   const doEnter = () => {
     const el = cardRef.current; if (!el) return;
+    el.classList.remove(...ALL_ANIM_CLASSES);
     switch (cardAnimation) {
-      case 'lift':   el.style.transform='translateY(-8px) scale(1.01)'; el.style.boxShadow=hoverShadow; break;
-      case 'spring': el.style.transform='scale(1.04)';                  el.style.boxShadow=hoverShadow; break;
-      case 'glow':   el.style.transform='translateY(-2px)';             el.style.boxShadow=`${hoverShadow}, 0 0 28px 6px rgba(${pRgb},0.30)`; break;
-      default:       el.style.boxShadow=hoverShadow; break;
+      case 'lift':   el.classList.add('cm-lift');   el.style.boxShadow = hoverShadow; break;
+      case 'spring': el.classList.add('cm-spring'); el.style.boxShadow = hoverShadow; break;
+      case 'glow':   el.classList.add('cm-glow');   el.style.boxShadow = `${hoverShadow}, 0 0 28px 6px rgba(${pRgb},0.30)`; break;
+      default:       el.style.boxShadow = hoverShadow; break;
     }
   };
 
   const doReset = () => {
-    const el = cardRef.current; const glow = glowRef.current;
-    if (el) { el.style.transform='perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)'; el.style.boxShadow=baseShadow; }
-    if (glow) glow.style.opacity='0';
+    const el = cardRef.current; if (!el) return;
+    el.classList.remove(...ALL_ANIM_CLASSES);
+    // Reset CSS vars
+    setVar(el, { '--cm-rx':'0deg','--cm-ry':'0deg','--cm-tz':'0px','--cm-sc':'1','--cm-dx':'0px','--cm-dy':'0px' });
+    el.style.boxShadow = baseShadow;
+    const glow = glowRef.current;
+    if (glow) glow.style.opacity = '0';
   };
 
   const handleMouseMove  = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') doTilt(e.clientX, e.clientY);
+    if (cardAnimation === 'tilt')     doTilt(e.clientX, e.clientY);
+    if (cardAnimation === 'magnetic') doMagnetic(e.clientX, e.clientY);
   };
   const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
     doEnter();
-    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') doTilt(e.clientX, e.clientY);
+    if (cardAnimation === 'tilt')     doTilt(e.clientX, e.clientY);
+    if (cardAnimation === 'magnetic') doMagnetic(e.clientX, e.clientY);
   };
   const handleMouseLeave = () => doReset();
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    doTilt(e.touches[0].clientX, e.touches[0].clientY);
+    const t = e.touches[0];
+    if (cardAnimation === 'tilt')     doTilt(t.clientX, t.clientY);
+    if (cardAnimation === 'magnetic') doMagnetic(t.clientX, t.clientY);
     doEnter();
   };
-  const handleTouchMove  = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') doTilt(e.touches[0].clientX, e.touches[0].clientY);
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const t = e.touches[0];
+    if (cardAnimation === 'tilt')     doTilt(t.clientX, t.clientY);
+    if (cardAnimation === 'magnetic') doMagnetic(t.clientX, t.clientY);
   };
-  const handleTouchEnd   = () => setTimeout(doReset, 350);
-
-  const transition = cardAnimation === 'spring'
-    ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.26s ease'
-    : 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease';
+  const handleTouchEnd = () => setTimeout(doReset, 350);
 
   return (
     <div
@@ -123,9 +182,7 @@ const CardMatte = ({
         borderRadius: 20,
         boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
-        transition,
         cursor: onClick ? 'pointer' : 'default',
-        transformStyle: 'preserve-3d',
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
