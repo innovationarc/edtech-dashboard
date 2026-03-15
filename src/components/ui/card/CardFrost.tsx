@@ -46,16 +46,14 @@ const CardFrost = ({
 
   const pRgb = primaryColor.startsWith('#') ? hexRgb(primaryColor) : '99,102,241';
 
-  // Glassmorphism tint using theme's primary color — no border
-  const bg          = dark
-    ? `color-mix(in srgb, rgba(${pRgb},1) 12%, var(--color-card) 88%)`
-    : `rgba(${pRgb},0.06)`;
+  // Exact same as Glassmorphism bg — no border, soft inset fade instead
+  const bg          = dark ? `rgba(${pRgb},0.08)` : 'rgba(255,255,255,0.55)';
   const baseShadow  = dark
-    ? `0 4px 20px rgba(0,0,0,0.22),0 12px 36px rgba(0,0,0,0.18)`
-    : `0 1px 2px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.07),0 16px 40px rgba(0,0,0,0.09),inset 0 1px 0 rgba(255,255,255,1)`;
+    ? `0 8px 32px rgba(${pRgb},0.15),0 2px 8px rgba(0,0,0,0.3),inset 0 0 0 1px rgba(${pRgb},0.06)`
+    : `0 8px 32px rgba(0,0,0,0.08),inset 0 1px 0 rgba(255,255,255,0.9),inset 0 0 0 1px rgba(${pRgb},0.04)`;
   const hoverShadow = dark
-    ? `0 6px 28px rgba(0,0,0,0.30),0 20px 52px rgba(0,0,0,0.24)`
-    : `0 2px 6px rgba(0,0,0,0.06),0 8px 28px rgba(0,0,0,0.12),0 24px 60px rgba(0,0,0,0.14),inset 0 1px 0 rgba(255,255,255,1)`;
+    ? `0 16px 48px rgba(${pRgb},0.25),0 4px 16px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(${pRgb},0.10)`
+    : `0 16px 48px rgba(0,0,0,0.14),inset 0 1px 0 rgba(255,255,255,1),inset 0 0 0 1px rgba(${pRgb},0.07)`;
   const titleClr    = dark ? 'rgba(241,245,249,0.97)' : '#0f172a';
   const subtitleClr = dark ? 'rgba(148,163,184,0.50)' : '#64748b';
   const footBg      = dark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.022)';
@@ -83,8 +81,8 @@ const CardFrost = ({
     <div ref={cardRef} className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
-        backdropFilter: 'blur(28px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(160%)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         border: 'none',
         borderRadius: 24,
         boxShadow: baseShadow,
