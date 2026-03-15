@@ -10,9 +10,7 @@ import { novaChatHistoryService, NovaChatMessage } from '../services/novaChatHis
 interface ChatbotWidgetProps { eyeOffset?: { x: number; y: number }; }
 
 const TypingIndicator = () => (
-  <div className="nv-typing">
-    <span /><span /><span />
-  </div>
+  <div className="nv-typing"><span /><span /><span /></div>
 );
 
 const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
@@ -53,7 +51,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   const isNearBottom = () => {
     const el = messagesRef.current;
     if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
   };
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -93,8 +91,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
     setErrorDetails('');
     try {
       const res = await novaRAGService.sendMessage(text, user ?? null, sessionId.current, siteName);
-      const aiMsg: NovaChatMessage = { id: `tmp-a-${Date.now()}`, text: res.text, sender: 'ai', timestamp: new Date(), sessionId: sessionId.current };
-      setMessages(p => [...p, aiMsg]);
+      setMessages(p => [...p, { id: `tmp-a-${Date.now()}`, text: res.text, sender: 'ai', timestamp: new Date(), sessionId: sessionId.current }]);
       if (res.navigateTo) {
         setIsOpen(false); setIsVisible(false); isFlying.current = false;
         window.dispatchEvent(new CustomEvent('nova-navigate', { detail: { path: res.navigateTo } }));
@@ -119,7 +116,6 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   };
 
   const fmt = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
   const dateSep = (d: Date) => {
     const t = new Date(), y = new Date(t); y.setDate(y.getDate() - 1);
     if (d.toDateString() === t.toDateString()) return 'Today';
@@ -127,10 +123,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  type DisplayItem =
-    | { type: 'sep'; label: string; key: string }
-    | { type: 'msg'; msg: NovaChatMessage };
-
+  type DisplayItem = { type: 'sep'; label: string; key: string } | { type: 'msg'; msg: NovaChatMessage };
   const items: DisplayItem[] = [];
   let lastDate = '';
   for (const m of messages) {
@@ -140,21 +133,25 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
   }
 
   const accent = accentColor || '#6366f1';
-  const panelBottom = isMobile ? 160 : 104;
-
-  // Derive a slightly lighter/darker accent for gradient
   const accentRgb = (() => {
     const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(accent);
     return r ? `${parseInt(r[1],16)},${parseInt(r[2],16)},${parseInt(r[3],16)}` : '99,102,241';
   })();
+
+  // Panel bottom clearance: above ghost button
+  const panelBottom = isMobile ? 160 : 104;
+  // Panel height: viewport minus bottom clearance minus top margin (20px)
+  const panelMaxH = isMobile
+    ? 'min(560px, calc(100dvh - 230px))'
+    : 'min(600px, calc(100dvh - 140px))';
 
   const portal = (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-        /* ── Variables ── */
-        .nv-root {
+        /* ─── CSS variables scoped to panel ─── */
+        .nv-panel {
           --nv-accent: ${accent};
           --nv-accent-rgb: ${accentRgb};
           --nv-bg: #09090b;
@@ -165,17 +162,14 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           --nv-border2: rgba(255,255,255,0.10);
           --nv-text: #fafafa;
           --nv-text2: #a1a1aa;
-          --nv-text3: #71717a;
-          --nv-radius: 22px;
+          --nv-text3: #52525b;
           --nv-font: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
-          font-family: var(--nv-font);
         }
-        .nv-root * { box-sizing: border-box; font-family: var(--nv-font); }
 
-        /* ── Ghost btn ── */
+        /* ─── Ghost button (scoped to nv-ghost-btn) ─── */
         @keyframes nv-pulse {
-          0%,100% { filter: drop-shadow(0 0 8px rgba(var(--nv-accent-rgb),0.45)) drop-shadow(0 4px 18px rgba(0,0,0,0.5)); }
-          50%      { filter: drop-shadow(0 0 20px rgba(var(--nv-accent-rgb),0.75)) drop-shadow(0 8px 26px rgba(0,0,0,0.55)); }
+          0%,100% { filter: drop-shadow(0 0 8px rgba(${accentRgb},0.45)) drop-shadow(0 4px 18px rgba(0,0,0,0.5)); }
+          50%      { filter: drop-shadow(0 0 20px rgba(${accentRgb},0.75)) drop-shadow(0 8px 26px rgba(0,0,0,0.55)); }
         }
         .nv-ghost-btn {
           animation: nv-pulse 3.4s ease-in-out infinite;
@@ -183,322 +177,306 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
           background: none !important; border: none !important; padding: 0 !important;
           cursor: pointer; display: block; width: 72px; height: 72px; outline: none;
         }
-        .nv-ghost-btn:hover { animation: none; transform: scale(1.1); filter: drop-shadow(0 0 26px rgba(var(--nv-accent-rgb),0.85)); }
+        .nv-ghost-btn:hover { animation: none; transform: scale(1.1); }
 
-        /* ── Panel shell — FIXED height, flex column, never expands ── */
+        /* ─── Panel
+             THE LAYOUT CONTRACT:
+             - Panel has explicit height (never auto)
+             - display:flex flex-direction:column
+             - Header: flex:0 0 auto  (fixed, never shrinks)
+             - Messages: flex:1 1 0   (takes ALL remaining space)
+                         min-height:0  (allows shrink below content — the key)
+                         overflow-y:auto (scrolls)
+             - Input: flex:0 0 auto   (fixed, never shrinks)
+        ─── */
         .nv-panel {
-          position: fixed; z-index: 49;
+          position: fixed;
+          z-index: 49;
           right: 20px;
-          /* Width */
           width: min(400px, calc(100vw - 40px));
-          /* Height: capped at 600px, never overflows viewport */
-          height: min(600px, calc(100dvh - 140px));
-          /* Flex column: header + messages(flex:1,scroll) + input — each fixed */
-          display: flex; flex-direction: column;
+          height: ${panelMaxH};
+          display: flex;
+          flex-direction: column;
           background: var(--nv-bg);
           border: 1px solid var(--nv-border2);
-          border-radius: var(--nv-radius);
+          border-radius: 22px;
           box-shadow:
             0 0 0 1px rgba(255,255,255,0.04),
-            0 24px 60px rgba(0,0,0,0.7),
-            0 8px 24px rgba(0,0,0,0.5),
-            inset 0 1px 0 rgba(255,255,255,0.05);
+            0 24px 60px rgba(0,0,0,0.75),
+            0 8px 24px rgba(0,0,0,0.5);
           overflow: hidden;
           transform-origin: bottom right;
           transition: opacity 0.22s ease, transform 0.28s cubic-bezier(.34,1.3,.64,1);
-          /* Prevent ANY content from breaking out */
-          contain: layout;
+          font-family: var(--nv-font);
         }
-        .nv-panel.open  { opacity: 1; transform: scale(1) translateY(0); pointer-events: all; }
-        .nv-panel.close { opacity: 0; transform: scale(0.93) translateY(14px); pointer-events: none; }
+        .nv-panel * { box-sizing: border-box; font-family: var(--nv-font); }
+        .nv-panel.nv-open  { opacity: 1;  transform: scale(1)    translateY(0);    pointer-events: all; }
+        .nv-panel.nv-close { opacity: 0;  transform: scale(0.94) translateY(12px); pointer-events: none; }
 
-        /* Mobile */
         @media (max-width: 1023px) {
-          .nv-panel {
-            left: 10px; right: 10px; width: auto;
-            border-radius: 20px;
-            height: min(560px, calc(100dvh - 224px));
-          }
-        }
-        @media (max-height: 600px) {
-          .nv-panel { height: calc(100dvh - 160px); }
+          .nv-panel { left: 10px; right: 10px; width: auto; border-radius: 20px; }
         }
 
-        /* ── Header — flex-shrink:0, never squished ── */
+        /* ─── Header ─── */
         .nv-header {
           flex: 0 0 auto;
           display: flex; align-items: center; gap: 10px;
-          padding: 14px 16px;
+          padding: 13px 15px;
           background: var(--nv-surface);
           border-bottom: 1px solid var(--nv-border);
-          /* Subtle gradient band */
-          background-image: linear-gradient(135deg, rgba(var(--nv-accent-rgb),0.06) 0%, transparent 60%);
+          background-image: linear-gradient(135deg, rgba(${accentRgb},0.07) 0%, transparent 55%);
         }
         .nv-avatar {
           width: 36px; height: 36px; border-radius: 11px; flex-shrink: 0;
-          background: linear-gradient(135deg, var(--nv-accent), rgba(var(--nv-accent-rgb),0.6));
+          background: linear-gradient(135deg, var(--nv-accent), rgba(${accentRgb},0.55));
           display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 2px 12px rgba(var(--nv-accent-rgb),0.4), inset 0 1px 0 rgba(255,255,255,0.18);
+          box-shadow: 0 2px 12px rgba(${accentRgb},0.4), inset 0 1px 0 rgba(255,255,255,0.18);
         }
-        .nv-header-info { flex: 1; min-width: 0; }
-        .nv-header-name { font-size: 13.5px; font-weight: 700; color: var(--nv-text); letter-spacing: -0.01em; line-height: 1.2; }
-        .nv-header-status { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+        .nv-hinfo { flex: 1; min-width: 0; }
+        .nv-hname { font-size: 13.5px; font-weight: 700; color: var(--nv-text); letter-spacing: -0.01em; line-height: 1.2; }
+        .nv-hstatus { display: flex; align-items: center; gap: 5px; margin-top: 2px; }
         .nv-dot {
           width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
-          box-shadow: 0 0 6px #22c55eaa;
-          animation: nv-dot-pulse 2.2s ease-in-out infinite;
+          box-shadow: 0 0 6px rgba(34,197,94,0.7);
+          animation: nv-dot 2.2s ease-in-out infinite;
         }
-        @keyframes nv-dot-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.85)} }
-        .nv-header-sub { font-size: 10.5px; color: var(--nv-text3); font-weight: 500; }
-        .nv-header-actions { display: flex; gap: 2px; flex-shrink: 0; }
-        .nv-icon-btn {
+        @keyframes nv-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.55;transform:scale(0.82)} }
+        .nv-hsub { font-size: 10.5px; color: var(--nv-text3); font-weight: 500; }
+        .nv-hactions { display: flex; gap: 2px; flex-shrink: 0; }
+        .nv-ibtn {
           width: 30px; height: 30px; border-radius: 8px;
-          background: transparent; border: none; cursor: pointer;
+          background: transparent; border: none; cursor: pointer; outline: none;
           display: flex; align-items: center; justify-content: center;
           color: var(--nv-text3); transition: background 0.12s, color 0.12s;
-          outline: none;
         }
-        .nv-icon-btn:hover { background: rgba(255,255,255,0.07); color: var(--nv-text); }
+        .nv-ibtn:hover { background: rgba(255,255,255,0.07); color: var(--nv-text); }
 
-        /* ── Messages area — THE KEY: flex:1 + min-height:0 + overflow-y:auto ── */
-        .nv-messages-wrap {
-          flex: 1 1 0;       /* grow to fill, shrink, base 0 */
-          min-height: 0;     /* CRITICAL: allows shrinking below content */
-          position: relative;
-          overflow: hidden;  /* clip, actual scroll is on .nv-messages */
-        }
+        /* ─── Messages
+             flex:1 1 0 + min-height:0 = takes remaining space, scrolls inside it
+             This is the proven pattern — no absolute positioning needed
+        ─── */
         .nv-messages {
-          position: absolute; inset: 0; /* fill wrapper exactly */
+          flex: 1 1 0;
+          min-height: 0;
           overflow-y: auto;
           overflow-x: hidden;
-          padding: 16px 14px;
-          display: flex; flex-direction: column; gap: 4px;
-          scroll-behavior: smooth;
           -webkit-overflow-scrolling: touch;
           overscroll-behavior: contain;
+          padding: 14px 13px 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          position: relative;
         }
         .nv-messages::-webkit-scrollbar { width: 3px; }
         .nv-messages::-webkit-scrollbar-track { background: transparent; }
-        .nv-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
-        .nv-messages::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+        .nv-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 3px; }
+        .nv-messages::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 
-        /* Scroll to bottom FAB */
-        .nv-scroll-fab {
-          position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+        /* ─── Scroll FAB ─── */
+        .nv-fab {
+          position: sticky; bottom: 0; align-self: center;
+          margin-top: 4px;
           background: var(--nv-surface3); border: 1px solid var(--nv-border2);
-          color: var(--nv-text2); border-radius: 20px; padding: 5px 12px 5px 10px;
-          display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
-          cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-          animation: nv-fab-in 0.18s ease; z-index: 2; white-space: nowrap;
-          transition: background 0.12s, box-shadow 0.12s;
+          color: var(--nv-text2); border-radius: 20px; padding: 5px 11px 5px 9px;
+          display: flex; align-items: center; gap: 4px;
+          font-size: 11px; font-weight: 600; font-family: var(--nv-font);
+          cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.45);
+          animation: nv-fab-in 0.16s ease; white-space: nowrap;
+          border: none;
         }
-        .nv-scroll-fab:hover { background: var(--nv-surface3); box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
-        @keyframes nv-fab-in { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+        @keyframes nv-fab-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
 
-        /* ── Date separator ── */
+        /* ─── Date separator ─── */
         .nv-sep {
           display: flex; align-items: center; gap: 8px;
-          margin: 10px 0 6px;
+          margin: 10px 0 4px; flex-shrink: 0;
         }
         .nv-sep::before, .nv-sep::after { content:''; flex:1; height:1px; background: var(--nv-border); }
-        .nv-sep span { font-size: 10px; color: var(--nv-text3); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+        .nv-sep span { font-size: 9.5px; color: var(--nv-text3); font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
 
-        /* ── Message rows ── */
-        .nv-row { display: flex; align-items: flex-end; gap: 7px; margin-bottom: 2px; }
+        /* ─── Message rows ─── */
+        .nv-row { display: flex; align-items: flex-end; gap: 7px; flex-shrink: 0; }
         .nv-row.user { flex-direction: row-reverse; }
+        .nv-row.nv-fg { margin-top: 10px; }
 
-        /* Group consecutive messages from same sender */
-        .nv-row + .nv-row.ai   { margin-top: 1px; }
-        .nv-row + .nv-row.user { margin-top: 1px; }
-        .nv-row.first-in-group { margin-top: 10px; }
-
-        .nv-mini-av {
-          width: 24px; height: 24px; border-radius: 8px; flex-shrink: 0; align-self: flex-end;
-          background: linear-gradient(135deg, var(--nv-accent), rgba(var(--nv-accent-rgb),0.6));
+        .nv-mav {
+          width: 24px; height: 24px; border-radius: 8px; flex-shrink: 0;
+          background: linear-gradient(135deg, var(--nv-accent), rgba(${accentRgb},0.6));
           display: flex; align-items: center; justify-content: center;
-          box-shadow: 0 2px 8px rgba(var(--nv-accent-rgb),0.35);
+          box-shadow: 0 2px 8px rgba(${accentRgb},0.3); align-self: flex-end;
         }
-        .nv-mini-av.hidden { visibility: hidden; }
+        .nv-mav.nv-hide { visibility: hidden; }
 
-        .nv-bubble-wrap { display: flex; flex-direction: column; gap: 2px; max-width: min(72%, 280px); }
-        .nv-row.user .nv-bubble-wrap { align-items: flex-end; }
-        .nv-row.ai  .nv-bubble-wrap  { align-items: flex-start; }
+        .nv-bwrap { display: flex; flex-direction: column; gap: 2px; max-width: min(72%, 270px); }
+        .nv-row.user .nv-bwrap { align-items: flex-end; }
+        .nv-row.ai   .nv-bwrap { align-items: flex-start; }
 
         .nv-bubble {
           padding: 9px 13px; border-radius: 16px;
-          font-size: 13.5px; line-height: 1.55; word-break: break-word; white-space: pre-wrap;
-          position: relative;
+          font-size: 13.5px; line-height: 1.58; word-break: break-word; white-space: pre-wrap;
         }
         .nv-bubble.ai {
-          background: var(--nv-surface2);
-          border: 1px solid var(--nv-border);
-          color: var(--nv-text);
-          border-bottom-left-radius: 4px;
+          background: var(--nv-surface2); border: 1px solid var(--nv-border);
+          color: var(--nv-text); border-bottom-left-radius: 5px;
         }
         .nv-bubble.user {
-          background: var(--nv-accent);
-          color: #fff;
-          border-bottom-right-radius: 4px;
-          box-shadow: 0 2px 12px rgba(var(--nv-accent-rgb),0.35);
+          background: var(--nv-accent); color: #fff;
+          border-bottom-right-radius: 5px;
+          box-shadow: 0 2px 12px rgba(${accentRgb},0.32);
         }
-        /* Tail for first bubble in group */
-        .nv-row.first-in-group .nv-bubble.ai  { border-bottom-left-radius: 4px; }
-        .nv-row.first-in-group .nv-bubble.user{ border-bottom-right-radius: 4px; }
-
         .nv-ts { font-size: 9.5px; color: var(--nv-text3); padding: 0 3px; }
 
-        /* ── Typing ── */
-        .nv-typing {
-          display: flex; gap: 3px; align-items: center; padding: 10px 14px;
-        }
+        /* ─── Typing ─── */
+        .nv-typing { display: flex; gap: 4px; align-items: center; padding: 10px 13px; }
         .nv-typing span {
-          width: 5px; height: 5px; border-radius: 50%;
-          background: var(--nv-text3); display: block;
+          width: 5px; height: 5px; border-radius: 50%; background: var(--nv-text3); display: block;
           animation: nv-bounce 1.3s ease-in-out infinite;
         }
-        .nv-typing span:nth-child(2) { animation-delay: 0.16s; }
-        .nv-typing span:nth-child(3) { animation-delay: 0.32s; }
+        .nv-typing span:nth-child(2) { animation-delay: 0.17s; }
+        .nv-typing span:nth-child(3) { animation-delay: 0.34s; }
         @keyframes nv-bounce {
           0%,60%,100% { transform: translateY(0); opacity: 0.35; }
           30%          { transform: translateY(-5px); opacity: 1; }
         }
 
-        /* ── Empty / shimmer ── */
+        /* ─── Empty state ─── */
         .nv-empty {
           flex: 1; display: flex; flex-direction: column; align-items: center;
-          justify-content: center; padding: 24px 20px; text-align: center; gap: 14px;
+          justify-content: center; padding: 20px 16px; text-align: center; gap: 14px;
         }
         .nv-empty-icon {
-          width: 52px; height: 52px; border-radius: 16px;
-          background: rgba(var(--nv-accent-rgb),0.1);
-          border: 1px solid rgba(var(--nv-accent-rgb),0.25);
-          display: flex; align-items: center; justify-content: center;
-          color: var(--nv-accent);
-          box-shadow: 0 0 24px rgba(var(--nv-accent-rgb),0.12);
+          width: 50px; height: 50px; border-radius: 16px;
+          background: rgba(${accentRgb},0.1); border: 1px solid rgba(${accentRgb},0.22);
+          display: flex; align-items: center; justify-content: center; color: var(--nv-accent);
+          box-shadow: 0 0 24px rgba(${accentRgb},0.1);
         }
-        .nv-empty-title { font-size: 15px; font-weight: 700; color: var(--nv-text); margin-bottom: 4px; }
-        .nv-empty-sub   { font-size: 12.5px; color: var(--nv-text3); line-height: 1.5; max-width: 220px; }
-        .nv-chips { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; margin-top: 4px; }
+        .nv-etitle { font-size: 14.5px; font-weight: 700; color: var(--nv-text); margin-bottom: 4px; }
+        .nv-esub   { font-size: 12px; color: var(--nv-text3); line-height: 1.55; max-width: 210px; }
+        .nv-chips  { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 2px; }
         .nv-chip {
-          padding: 5px 11px; border-radius: 18px;
+          padding: 5px 10px; border-radius: 18px;
           background: var(--nv-surface2); border: 1px solid var(--nv-border2);
           color: var(--nv-text2); font-size: 11.5px; font-weight: 500; cursor: pointer;
-          transition: all 0.13s; white-space: nowrap;
+          transition: all 0.13s; white-space: nowrap; font-family: var(--nv-font);
         }
-        .nv-chip:hover { background: rgba(var(--nv-accent-rgb),0.12); border-color: rgba(var(--nv-accent-rgb),0.35); color: var(--nv-text); }
+        .nv-chip:hover { background: rgba(${accentRgb},0.12); border-color: rgba(${accentRgb},0.32); color: var(--nv-text); }
 
-        .nv-shimmer-wrap { display: flex; flex-direction: column; gap: 12px; padding: 8px 0; width: 100%; }
-        .nv-shimmer {
-          height: 38px; border-radius: 14px;
+        /* ─── Shimmer ─── */
+        .nv-shims { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; width: 100%; }
+        .nv-shim {
+          height: 38px; border-radius: 14px; flex-shrink: 0;
           background: linear-gradient(90deg, var(--nv-surface2) 0%, var(--nv-surface3) 50%, var(--nv-surface2) 100%);
-          background-size: 200% 100%;
-          animation: nv-shim 1.5s infinite;
+          background-size: 200% 100%; animation: nv-shim 1.5s infinite;
         }
-        .nv-shimmer.s { width: 52%; }
-        .nv-shimmer.l { width: 78%; align-self: flex-end; }
-        .nv-shimmer.m { width: 62%; }
+        .nv-shim.s { width: 50%; } .nv-shim.l { width: 76%; align-self: flex-end; } .nv-shim.m { width: 62%; }
         @keyframes nv-shim { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
-        /* ── Input area — flex-shrink:0, always visible ── */
+        /* ─── Input area ─── */
         .nv-input-area {
           flex: 0 0 auto;
           padding: 10px 12px 12px;
           background: var(--nv-surface);
           border-top: 1px solid var(--nv-border);
         }
-        .nv-input-row {
+        .nv-irow {
           display: flex; align-items: center; gap: 8px;
-          background: var(--nv-surface2);
-          border: 1px solid var(--nv-border2);
+          background: var(--nv-surface2); border: 1px solid var(--nv-border2);
           border-radius: 14px; padding: 5px 5px 5px 13px;
           transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .nv-input-row:focus-within {
-          border-color: rgba(var(--nv-accent-rgb),0.5);
-          box-shadow: 0 0 0 3px rgba(var(--nv-accent-rgb),0.1);
+        .nv-irow:focus-within {
+          border-color: rgba(${accentRgb},0.5);
+          box-shadow: 0 0 0 3px rgba(${accentRgb},0.1);
         }
         .nv-input {
-          flex: 1; background: transparent; border: none; outline: none;
-          color: var(--nv-text); font-size: 13.5px; font-family: var(--nv-font);
-          padding: 5px 0; line-height: 1.4; min-width: 0;
+          flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+          color: var(--nv-text); font-size: 13.5px; font-family: var(--nv-font); padding: 5px 0; line-height: 1.4;
         }
         .nv-input::placeholder { color: var(--nv-text3); }
         .nv-input:disabled { opacity: 0.4; }
         .nv-send {
-          width: 34px; height: 34px; border-radius: 10px; border: none; cursor: pointer;
+          width: 34px; height: 34px; border-radius: 10px; border: none; cursor: pointer; outline: none;
           background: var(--nv-accent); color: #fff; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
-          transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s, opacity 0.15s;
-          box-shadow: 0 2px 10px rgba(var(--nv-accent-rgb),0.45);
+          transition: transform 0.15s cubic-bezier(.34,1.56,.64,1), opacity 0.15s;
+          box-shadow: 0 2px 10px rgba(${accentRgb},0.4);
         }
-        .nv-send:hover:not(:disabled) { transform: scale(1.08); box-shadow: 0 4px 16px rgba(var(--nv-accent-rgb),0.6); }
-        .nv-send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
-        .nv-hint { font-size: 10px; color: var(--nv-text3); text-align: center; margin-top: 7px; letter-spacing: 0.01em; }
+        .nv-send:hover:not(:disabled) { transform: scale(1.08); }
+        .nv-send:disabled { opacity: 0.3; cursor: not-allowed; transform: none; box-shadow: none; }
+        .nv-hint { font-size: 10px; color: var(--nv-text3); text-align: center; margin-top: 7px; }
 
-        /* ── Modals ── */
+        /* ─── Modals ─── */
         .nv-overlay {
           position: fixed; inset: 0; z-index: 51;
           background: rgba(0,0,0,0.72); backdrop-filter: blur(6px);
           display: flex; align-items: center; justify-content: center; padding: 16px;
-          animation: nv-fade 0.14s ease;
+          animation: nv-fade 0.14s ease; font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
         }
         @keyframes nv-fade { from{opacity:0} to{opacity:1} }
         .nv-modal {
-          background: var(--nv-surface); border: 1px solid var(--nv-border2);
+          background: #111113; border: 1px solid rgba(255,255,255,0.1);
           border-radius: 20px; width: min(420px, 100%); overflow: hidden;
-          box-shadow: 0 24px 64px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04);
+          box-shadow: 0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04);
           animation: nv-modal-in 0.18s cubic-bezier(.34,1.3,.64,1);
         }
         @keyframes nv-modal-in { from{opacity:0;transform:scale(0.93) translateY(10px)} to{opacity:1;transform:none} }
-        .nv-modal-head {
-          padding: 16px 18px; border-bottom: 1px solid var(--nv-border);
+        .nv-modal * { box-sizing: border-box; font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif; }
+        .nv-mhead {
+          padding: 15px 17px; border-bottom: 1px solid rgba(255,255,255,0.06);
           display: flex; align-items: center; justify-content: space-between;
         }
-        .nv-modal-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+        .nv-mbody { padding: 17px; display: flex; flex-direction: column; gap: 11px; }
         .nv-card {
-          background: var(--nv-surface2); border: 1px solid var(--nv-border);
-          border-radius: 12px; padding: 12px 14px;
-          font-size: 12.5px; color: var(--nv-text2); line-height: 1.6;
+          background: #18181b; border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 12px; padding: 12px 13px;
+          font-size: 12.5px; color: #a1a1aa; line-height: 1.6;
         }
-        .nv-card strong { color: var(--nv-text); display: block; margin-bottom: 6px; }
-        .nv-primary-btn {
+        .nv-card strong { color: #fafafa; display: block; margin-bottom: 5px; }
+        .nv-pbtn {
           width: 100%; padding: 10px; border-radius: 11px; border: none; cursor: pointer;
-          background: var(--nv-accent); color: #fff; font-size: 13.5px; font-weight: 600;
-          font-family: var(--nv-font); transition: opacity 0.13s;
-          box-shadow: 0 2px 10px rgba(var(--nv-accent-rgb),0.35);
+          background: ${accent}; color: #fff; font-size: 13.5px; font-weight: 600;
+          font-family: inherit; transition: opacity 0.13s;
+          box-shadow: 0 2px 10px rgba(${accentRgb},0.35);
         }
-        .nv-primary-btn:hover { opacity: 0.87; }
+        .nv-pbtn:hover { opacity: 0.87; }
+        .nv-mibtn {
+          width: 30px; height: 30px; border-radius: 8px; background: transparent;
+          border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+          color: #52525b; transition: background 0.12s, color 0.12s;
+        }
+        .nv-mibtn:hover { background: rgba(255,255,255,0.07); color: #fafafa; }
       `}</style>
 
       {/* ── Info Modal ── */}
       {showInfo && (
-        <div className="nv-overlay nv-root" onClick={() => setShowInfo(false)}>
+        <div className="nv-overlay" onClick={() => setShowInfo(false)}>
           <div className="nv-modal" onClick={e => e.stopPropagation()}>
-            <div className="nv-modal-head">
+            <div className="nv-mhead">
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <Sparkles size={16} style={{ color: accent }} />
-                <span style={{ color:'var(--nv-text)', fontWeight:700, fontSize:14 }}>About Nova</span>
+                <span style={{ color:'#fafafa', fontWeight:700, fontSize:14 }}>About Nova</span>
               </div>
-              <button className="nv-icon-btn" onClick={() => setShowInfo(false)}><X size={16} /></button>
+              <button className="nv-mibtn" onClick={() => setShowInfo(false)}><X size={16} /></button>
             </div>
-            <div className="nv-modal-body">
-              <p style={{ fontSize:12.5, color:'var(--nv-text2)', lineHeight:1.6 }}>
+            <div className="nv-mbody">
+              <p style={{ fontSize:12.5, color:'#a1a1aa', lineHeight:1.6, margin:0 }}>
                 Nova is your AI assistant — here to help with platform questions, studies, scheduling, and anything else.
               </p>
               <div className="nv-card">
                 <strong>✦ Capabilities</strong>
-                <ul style={{ paddingLeft:14, display:'flex', flexDirection:'column', gap:3 }}>
+                <ul style={{ paddingLeft:14, margin:0, display:'flex', flexDirection:'column', gap:3 }}>
                   <li>Platform navigation & feature help</li>
                   <li>Study guidance & concept explanations</li>
                   <li>Assignment and schedule queries</li>
                   <li>Powered by Admin → AI Model Settings</li>
                 </ul>
               </div>
-              <div className="nv-card" style={{ borderColor:`rgba(${accentRgb},0.3)`, background:`rgba(${accentRgb},0.06)` }}>
+              <div className="nv-card" style={{ borderColor:`rgba(${accentRgb},0.28)`, background:`rgba(${accentRgb},0.07)` }}>
                 <strong style={{ color: accent }}>💡 Tip</strong>
-                Be specific in your questions for the most accurate answers.
+                Be specific for the most accurate answers.
               </div>
-              <button className="nv-primary-btn" onClick={() => setShowInfo(false)}>Got it</button>
+              <button className="nv-pbtn" onClick={() => setShowInfo(false)}>Got it</button>
             </div>
           </div>
         </div>
@@ -506,18 +484,18 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
       {/* ── Error Modal ── */}
       {errorDetails && (
-        <div className="nv-overlay nv-root" onClick={() => setErrorDetails('')}>
+        <div className="nv-overlay" onClick={() => setErrorDetails('')}>
           <div className="nv-modal" onClick={e => e.stopPropagation()}>
-            <div className="nv-modal-head">
+            <div className="nv-mhead">
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <AlertTriangle size={16} style={{ color:'#f87171' }} />
-                <span style={{ color:'var(--nv-text)', fontWeight:700, fontSize:14 }}>Error Details</span>
+                <span style={{ color:'#fafafa', fontWeight:700, fontSize:14 }}>Error Details</span>
               </div>
-              <button className="nv-icon-btn" onClick={() => setErrorDetails('')}><X size={16} /></button>
+              <button className="nv-mibtn" onClick={() => setErrorDetails('')}><X size={16} /></button>
             </div>
-            <div className="nv-modal-body">
-              <pre style={{ fontSize:11.5, color:'#f87171', background:'var(--nv-surface2)', padding:'12px', borderRadius:10, whiteSpace:'pre-wrap', overflowX:'auto', fontFamily:'ui-monospace,monospace', lineHeight:1.6, border:'1px solid var(--nv-border)' }}>{errorDetails}</pre>
-              <button className="nv-primary-btn" onClick={() => setErrorDetails('')}>Close</button>
+            <div className="nv-mbody">
+              <pre style={{ fontSize:11, color:'#f87171', background:'#18181b', padding:'12px', borderRadius:10, whiteSpace:'pre-wrap', overflowX:'auto', fontFamily:'ui-monospace,monospace', lineHeight:1.6, border:'1px solid rgba(255,255,255,0.06)', margin:0 }}>{errorDetails}</pre>
+              <button className="nv-pbtn" onClick={() => setErrorDetails('')}>Close</button>
             </div>
           </div>
         </div>
@@ -526,123 +504,117 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
       {/* ── Chat Panel ── */}
       {isOpen && (
         <div
-          className={`nv-panel nv-root ${isVisible ? 'open' : 'close'}`}
+          className={`nv-panel ${isVisible ? 'nv-open' : 'nv-close'}`}
           style={{ bottom: panelBottom }}
           role="dialog"
           aria-label="Nova AI assistant"
         >
-          {/* Header */}
+          {/* Header — flex:0 0 auto */}
           <div className="nv-header">
             <div className="nv-avatar">
               <Zap size={17} color="#fff" strokeWidth={2.5} />
             </div>
-            <div className="nv-header-info">
-              <div className="nv-header-name">Nova</div>
-              <div className="nv-header-status">
+            <div className="nv-hinfo">
+              <div className="nv-hname">Nova</div>
+              <div className="nv-hstatus">
                 <div className="nv-dot" />
-                <span className="nv-header-sub">AI Assistant · Online</span>
+                <span className="nv-hsub">AI Assistant · Online</span>
               </div>
             </div>
-            <div className="nv-header-actions">
-              <button className="nv-icon-btn" onClick={() => setShowInfo(true)} aria-label="About Nova"><Info size={15} /></button>
-              <button className="nv-icon-btn" onClick={() => setIsOpen(false)} aria-label="Close"><X size={15} /></button>
+            <div className="nv-hactions">
+              <button className="nv-ibtn" onClick={() => setShowInfo(true)} aria-label="About Nova"><Info size={15} /></button>
+              <button className="nv-ibtn" onClick={() => setIsOpen(false)} aria-label="Close"><X size={15} /></button>
             </div>
           </div>
 
-          {/* Messages wrapper — scroll container */}
-          <div className="nv-messages-wrap">
-            <div
-              className="nv-messages"
-              ref={messagesRef}
-              onScroll={() => {
-                const el = messagesRef.current;
-                if (!el) return;
-                const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-                setShowScrollBtn(!near);
-              }}
-            >
-              {/* Shimmer */}
-              {!historyLoaded && (
-                <div className="nv-shimmer-wrap">
-                  <div className="nv-shimmer s" />
-                  <div className="nv-shimmer l" />
-                  <div className="nv-shimmer m" />
-                  <div className="nv-shimmer s" />
-                </div>
-              )}
+          {/* Messages — flex:1 1 0, min-height:0, overflow-y:auto */}
+          <div
+            className="nv-messages"
+            ref={messagesRef}
+            onScroll={() => {
+              const el = messagesRef.current;
+              if (!el) return;
+              setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 100);
+            }}
+          >
+            {/* Shimmer while loading history */}
+            {!historyLoaded && (
+              <div className="nv-shims">
+                <div className="nv-shim s" />
+                <div className="nv-shim l" />
+                <div className="nv-shim m" />
+                <div className="nv-shim s" />
+              </div>
+            )}
 
-              {/* Empty state */}
-              {historyLoaded && messages.length === 0 && (
-                <div className="nv-empty">
-                  <div className="nv-empty-icon"><Sparkles size={24} /></div>
-                  <div>
-                    <div className="nv-empty-title">Hi, I'm Nova ✦</div>
-                    <div className="nv-empty-sub">Your AI assistant. Ask anything about the platform, your studies, or anything else.</div>
-                  </div>
-                  <div className="nv-chips">
-                    {['Submit an exam?', 'My schedule', 'Study help', 'Platform features'].map(q => (
-                      <button key={q} className="nv-chip" onClick={() => { setInputMessage(q); inputRef.current?.focus(); }}>{q}</button>
-                    ))}
-                  </div>
+            {/* Empty state */}
+            {historyLoaded && messages.length === 0 && (
+              <div className="nv-empty">
+                <div className="nv-empty-icon"><Sparkles size={22} /></div>
+                <div>
+                  <div className="nv-etitle">Hi, I'm Nova ✦</div>
+                  <div className="nv-esub">Your AI assistant. Ask anything about the platform, your studies, or anything else.</div>
                 </div>
-              )}
+                <div className="nv-chips">
+                  {['Submit an exam?', 'My schedule', 'Study help', 'Platform features'].map(q => (
+                    <button key={q} className="nv-chip" onClick={() => { setInputMessage(q); inputRef.current?.focus(); }}>{q}</button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-              {/* Messages */}
-              {historyLoaded && (() => {
-                let prevSender: string | null = null;
-                return items.map((item, idx) => {
-                  if (item.type === 'sep') {
-                    prevSender = null;
-                    return <div key={item.key} className="nv-sep"><span>{item.label}</span></div>;
-                  }
-                  const { msg } = item;
-                  const isFirst = msg.sender !== prevSender;
-                  prevSender = msg.sender;
-                  // peek at next item — hide avatar if same sender follows
-                  const nextItem = items[idx + 1];
-                  const nextIsSame = nextItem?.type === 'msg' && nextItem.msg.sender === msg.sender;
-                  return (
-                    <div key={msg.id} className={`nv-row ${msg.sender}${isFirst ? ' first-in-group' : ''}`}>
-                      {msg.sender === 'ai' && (
-                        <div className={`nv-mini-av${nextIsSame ? ' hidden' : ''}`}>
-                          <Zap size={11} color="#fff" strokeWidth={2.5} />
-                        </div>
-                      )}
-                      <div className="nv-bubble-wrap">
-                        <div className={`nv-bubble ${msg.sender}`}>{msg.text}</div>
-                        {/* Show timestamp only on last in group */}
-                        {!nextIsSame && <span className="nv-ts">{fmt(msg.timestamp)}</span>}
+            {/* Message list */}
+            {historyLoaded && (() => {
+              let prevSender: string | null = null;
+              return items.map((item, idx) => {
+                if (item.type === 'sep') {
+                  prevSender = null;
+                  return <div key={item.key} className="nv-sep"><span>{item.label}</span></div>;
+                }
+                const { msg } = item;
+                const isFirst = msg.sender !== prevSender;
+                prevSender = msg.sender;
+                const next = items[idx + 1];
+                const nextSame = next?.type === 'msg' && next.msg.sender === msg.sender;
+                return (
+                  <div key={msg.id} className={`nv-row ${msg.sender}${isFirst ? ' nv-fg' : ''}`}>
+                    {msg.sender === 'ai' && (
+                      <div className={`nv-mav${nextSame ? ' nv-hide' : ''}`}>
+                        <Zap size={11} color="#fff" strokeWidth={2.5} />
                       </div>
+                    )}
+                    <div className="nv-bwrap">
+                      <div className={`nv-bubble ${msg.sender}`}>{msg.text}</div>
+                      {!nextSame && <span className="nv-ts">{fmt(msg.timestamp)}</span>}
                     </div>
-                  );
-                });
-              })()}
-
-              {/* Typing */}
-              {isLoading && (
-                <div className="nv-row ai first-in-group">
-                  <div className="nv-mini-av"><Zap size={11} color="#fff" strokeWidth={2.5} /></div>
-                  <div className="nv-bubble-wrap">
-                    <div className="nv-bubble ai" style={{ padding:'6px 10px' }}><TypingIndicator /></div>
                   </div>
+                );
+              });
+            })()}
+
+            {/* Typing indicator */}
+            {isLoading && (
+              <div className="nv-row ai nv-fg">
+                <div className="nv-mav"><Zap size={11} color="#fff" strokeWidth={2.5} /></div>
+                <div className="nv-bwrap">
+                  <div className="nv-bubble ai" style={{ padding:'7px 12px' }}><TypingIndicator /></div>
                 </div>
-              )}
+              </div>
+            )}
 
-              <div ref={messagesEndRef} style={{ height: 1 }} />
-            </div>
-
-            {/* Scroll-to-bottom FAB */}
+            {/* Scroll FAB — sticky inside scroll container */}
             {showScrollBtn && (
-              <button className="nv-scroll-fab" onClick={() => scrollToBottom()}>
-                <ChevronDown size={13} />
-                New messages
+              <button className="nv-fab" onClick={() => scrollToBottom()}>
+                <ChevronDown size={13} /> New messages
               </button>
             )}
+
+            <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
+          {/* Input — flex:0 0 auto */}
           <div className="nv-input-area">
-            <div className="nv-input-row">
+            <div className="nv-irow">
               <input
                 ref={inputRef}
                 type="text"
@@ -654,7 +626,12 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
                 disabled={isLoading}
                 aria-label="Message input"
               />
-              <button className="nv-send" onClick={handleSendMessage} disabled={isLoading || !inputMessage.trim()} aria-label="Send">
+              <button
+                className="nv-send"
+                onClick={handleSendMessage}
+                disabled={isLoading || !inputMessage.trim()}
+                aria-label="Send"
+              >
                 <Send size={14} strokeWidth={2.2} />
               </button>
             </div>
@@ -669,8 +646,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
     <>
       <button
         onClick={handleGhostTap}
-        className="nv-ghost-btn nv-root"
-        style={{ ['--nv-accent' as any]: accent, ['--nv-accent-rgb' as any]: accentRgb }}
+        className="nv-ghost-btn"
         aria-label={isOpen ? 'Close Nova' : 'Open Nova'}
       >
         <GhostIcon size={72} isActive={isOpen} />
