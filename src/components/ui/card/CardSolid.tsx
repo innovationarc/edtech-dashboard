@@ -1,7 +1,7 @@
 // CardSolid.tsx — Fully opaque flat card, no blur
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
-import { useDashboard } from '../../contexts/DashboardContext';
+import { useDashboard } from '../../../contexts/DashboardContext';
 
 interface CardProps {
   children: ReactNode;
