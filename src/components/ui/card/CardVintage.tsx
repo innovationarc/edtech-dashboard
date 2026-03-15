@@ -2,6 +2,7 @@
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
+import { useCardAnimation } from './useCardAnimation';
 
 interface CardProps {
   children: ReactNode;
@@ -34,9 +35,8 @@ const CardVintage = ({
   children, className, title, subtitle, icon, footer,
   onClick, tilt=true, padding='md', enterDelay=0,
 }: CardProps) => {
-  const { theme } = useDashboard();
+  const { theme, cardAnimation = 'tilt' } = useDashboard();
   const dark = theme !== 'light';
-  const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
 
   const bg          = dark
@@ -51,19 +51,12 @@ const CardVintage = ({
   const iconBg      = dark ? 'rgba(180,140,60,0.12)' : 'rgba(180,140,60,0.10)';
   const iconBd      = dark ? 'rgba(180,140,60,0.22)' : 'rgba(180,140,60,0.28)';
 
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!tilt) return;
-    const el = cardRef.current; if (!el) return;
-    const r = el.getBoundingClientRect();
-    el.style.transform = `perspective(1200px) rotateX(${((e.clientY-r.top-r.height/2)/r.height)*-5}deg) rotateY(${((e.clientX-r.left-r.width/2)/r.width)*5}deg) translateZ(4px) scale(1.008)`;
-    el.style.boxShadow = hoverShadow;
-  };
-  const onLeave = () => { const el=cardRef.current; if(el){el.style.transform='none';el.style.boxShadow=baseShadow;} };
+  const anim = useCardAnimation({ animation: cardAnimation as any, baseShadow, hoverShadow });
 
   return (
-    <div ref={cardRef} className={clsx('relative overflow-hidden', className)}
-      style={{ background:bg, backdropFilter:'blur(4px)', WebkitBackdropFilter:'blur(4px)', border, borderRadius:12, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', isolation:'isolate', transformStyle:tilt?'preserve-3d':'flat', transition:'transform 0.26s cubic-bezier(0.23,1,0.32,1),box-shadow 0.26s ease', animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
-      onClick={onClick} onMouseMove={onMove} onMouseLeave={onLeave}>
+    <div ref={anim.cardRef} className={clsx('relative overflow-hidden', className)}
+      style={{ background:bg, backdropFilter:'blur(4px)', WebkitBackdropFilter:'blur(4px)', border, borderRadius:12, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', isolation:'isolate', transformStyle:anim.transformStyle, transition:anim.transition, animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
+      onClick={onClick} onMouseMove={anim.onMouseMove} onMouseEnter={anim.onMouseEnter} onMouseLeave={anim.onMouseLeave}>
       {/* Paper grain */}
       <div style={{position:'absolute',inset:0,borderRadius:12,pointerEvents:'none',zIndex:1,background:NOISE,opacity:0.06,mixBlendMode:'multiply'}}/>
       <div style={{position:'relative',zIndex:6}}>
