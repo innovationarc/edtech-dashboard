@@ -1,6 +1,4 @@
 // CardMatte.tsx — 3D tilt + matte sparkle crystal card
-// Wrapper handles transform (no overflow:hidden), inner div handles visual clipping.
-// This is the only pattern that works reliably on mobile WebKit.
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
 import { useDashboard } from '../../../contexts/DashboardContext';
@@ -42,18 +40,13 @@ const CardMatte = ({
   children, className, title, subtitle, icon, footer,
   onClick, hover = false, tilt = true, variant = 'default', padding = 'md', enterDelay = 0,
 }: CardProps) => {
-  const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6', cardAnimation = 'tilt' } = useDashboard();
+  const { theme, primaryColor = '#6366f1', accentColor = '#8b5cf6' } = useDashboard();
   const isLight = theme === 'light';
-
-  // wrapperRef gets the 3D transform — no overflow:hidden here
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  // glowRef sits inside the inner clipped div
+  const cardRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => { injectStyles(); }, []);
   const pRgb = hexRgb(primaryColor);
 
-  // ── Style values (all intact, unchanged) ─────────────────────────────────
   const bg = isLight ? 'rgba(255,255,255,0.80)' : 'color-mix(in srgb, var(--color-card) 82%, transparent)';
   const border = isLight ? '1px solid rgba(255,255,255,0.95)' : '1px solid rgba(255,255,255,0.09)';
   const baseShadow = isLight
@@ -67,170 +60,118 @@ const CardMatte = ({
   const dividerColor  = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
   const footerBg      = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
 
-  const transition = cardAnimation === 'spring'
-    ? 'transform 0.4s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.26s ease'
-    : 'transform 0.2s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease';
-
-  // ── Apply/reset — targets wrapperRef (no overflow:hidden) ────────────────
-  const applyTilt = (clientX: number, clientY: number) => {
-    const el = wrapperRef.current;
+  // ── HARDCODED TILT — works on mouse + touch ───────────────────────────────
+  const doTilt = (clientX: number, clientY: number) => {
+    const el = cardRef.current;
     const glow = glowRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = clientX - rect.left, y = clientY - rect.top;
-    const cx = rect.width / 2, cy = rect.height / 2;
-
-    if (cardAnimation === 'tilt') {
-      const rotX = ((y - cy) / cy) * -15;
-      const rotY = ((x - cx) / cx) * 15;
-      el.style.transform = `perspective(600px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(12px) scale(1.03)`;
-      console.log('[CardMatte] tilt', rotX.toFixed(1), rotY.toFixed(1));
-    } else if (cardAnimation === 'magnetic') {
-      el.style.transform = `translate(${((x-cx)/cx)*10}px,${((y-cy)/cy)*10}px) scale(1.01)`;
-    }
+    const r = el.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    const rotX = ((y - r.height / 2) / (r.height / 2)) * -10;
+    const rotY = ((x - r.width  / 2) / (r.width  / 2)) *  10;
+    el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px) scale(1.02)`;
     el.style.boxShadow = hoverShadow;
-    if (glow) { glow.style.left=`${x}px`; glow.style.top=`${y}px`; glow.style.opacity=isLight?'0.6':'0.45'; }
-  };
-
-  const applyEnter = () => {
-    const el = wrapperRef.current; if (!el) return;
-    switch (cardAnimation) {
-      case 'lift':   el.style.transform='translateY(-8px) scale(1.01)'; el.style.boxShadow=hoverShadow; break;
-      case 'spring': el.style.transform='scale(1.04)';                  el.style.boxShadow=hoverShadow; break;
-      case 'glow':   el.style.transform='translateY(-2px)';             el.style.boxShadow=`${hoverShadow}, 0 0 28px 6px rgba(${pRgb},0.30)`; break;
-      default:       el.style.boxShadow=hoverShadow; break;
+    if (glow) {
+      glow.style.left    = `${x}px`;
+      glow.style.top     = `${y}px`;
+      glow.style.opacity = isLight ? '0.6' : '0.45';
     }
   };
 
-  const applyReset = () => {
-    const el = wrapperRef.current; const glow = glowRef.current;
-    if (el) { el.style.transform='none'; el.style.boxShadow=baseShadow; }
-    if (glow) glow.style.opacity='0';
-  };
-
-  // ── Touch handlers (React synthetic — reliable on mobile) ────────────────
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    console.log('[CardMatte] touchstart, anim:', cardAnimation);
-    applyTilt(e.touches[0].clientX, e.touches[0].clientY);
-    applyEnter();
-  };
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
-      applyTilt(e.touches[0].clientX, e.touches[0].clientY);
+  const doReset = () => {
+    const el   = cardRef.current;
+    const glow = glowRef.current;
+    if (el) {
+      el.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)';
+      el.style.boxShadow = baseShadow;
     }
+    if (glow) glow.style.opacity = '0';
   };
-  const handleTouchEnd = () => { setTimeout(applyReset, 380); };
 
-  // ── Mouse handlers ────────────────────────────────────────────────────────
-  const handleMouseMove  = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') applyTilt(e.clientX, e.clientY);
-  };
-  const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-    applyEnter();
-    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') applyTilt(e.clientX, e.clientY);
-  };
-  const handleMouseLeave = () => applyReset();
+  const handleMouseMove  = (e: React.MouseEvent<HTMLDivElement>)  => doTilt(e.clientX, e.clientY);
+  const handleMouseLeave = ()                                       => doReset();
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>)  => doTilt(e.touches[0].clientX, e.touches[0].clientY);
+  const handleTouchMove  = (e: React.TouchEvent<HTMLDivElement>)  => doTilt(e.touches[0].clientX, e.touches[0].clientY);
+  const handleTouchEnd   = ()                                       => setTimeout(doReset, 350);
 
   return (
     <div
-      ref={wrapperRef}
-      className={clsx(className)}
+      ref={cardRef}
+      className={clsx('relative overflow-hidden', className)}
       style={{
+        background: bg,
+        backdropFilter: 'blur(28px) saturate(190%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+        border,
         borderRadius: 20,
         boxShadow: baseShadow,
-        transition,
-        willChange: 'transform',
+        fontFamily: "'Outfit', sans-serif",
+        transition: 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease',
+        cursor: onClick ? 'pointer' : 'default',
         transformStyle: 'preserve-3d',
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
-        cursor: onClick ? 'pointer' : 'default',
       }}
       onClick={onClick}
       onMouseMove={handleMouseMove}
-      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
     >
-      {/* ── Inner: visual styling + overflow:hidden for clipping decorations ── */}
+      {/* Noise sparkle texture */}
       <div style={{
-        background: bg,
-        backdropFilter: 'blur(28px) saturate(190%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(190%)',
-        border,
-        borderRadius: 20,
-        overflow: 'hidden',
-        position: 'relative',
-        fontFamily: "'Outfit', sans-serif",
-        isolation: 'isolate',
-      }}>
-        {/* Noise sparkle texture */}
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: 20, pointerEvents: 'none', zIndex: 1,
-          background: NOISE,
-          opacity: isLight ? 0.028 : 0.045,
-          mixBlendMode: 'overlay',
-        }}/>
+        position: 'absolute', inset: 0, borderRadius: 20, pointerEvents: 'none', zIndex: 1,
+        background: NOISE, opacity: isLight ? 0.028 : 0.045, mixBlendMode: 'overlay',
+      }}/>
 
-        {/* Top edge shimmer */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-          borderRadius: '20px 20px 0 0', pointerEvents: 'none', zIndex: 2,
-          background: isLight
-            ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.9) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 70%, transparent)'
-            : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18) 30%, rgba(255,255,255,0.30) 50%, rgba(255,255,255,0.18) 70%, transparent)',
-        }}/>
+      {/* Top edge shimmer */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+        borderRadius: '20px 20px 0 0', pointerEvents: 'none', zIndex: 2,
+        background: isLight
+          ? 'linear-gradient(90deg,transparent,rgba(255,255,255,0.9) 30%,rgba(255,255,255,1) 50%,rgba(255,255,255,0.9) 70%,transparent)'
+          : 'linear-gradient(90deg,transparent,rgba(255,255,255,0.18) 30%,rgba(255,255,255,0.30) 50%,rgba(255,255,255,0.18) 70%,transparent)',
+      }}/>
 
-        {/* Cursor glow spot */}
-        <div ref={glowRef} style={{
-          position: 'absolute', pointerEvents: 'none', zIndex: 1,
-          width: 220, height: 220, borderRadius: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: `radial-gradient(circle, rgba(${pRgb},${isLight ? 0.18 : 0.22}) 0%, transparent 65%)`,
-          opacity: 0,
-          transition: 'opacity 0.2s ease',
-          left: '50%', top: '50%',
-        }}/>
+      {/* Cursor / touch glow */}
+      <div ref={glowRef} style={{
+        position: 'absolute', pointerEvents: 'none', zIndex: 1,
+        width: 220, height: 220, borderRadius: '50%',
+        transform: 'translate(-50%,-50%)',
+        background: `radial-gradient(circle,rgba(${pRgb},${isLight?0.18:0.22}) 0%,transparent 65%)`,
+        opacity: 0, transition: 'opacity 0.2s ease', left: '50%', top: '50%',
+      }}/>
 
-        {/* Corner accent tint */}
-        <div style={{
-          position: 'absolute', top: -40, right: -40, width: 130, height: 130,
-          borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
-          background: `radial-gradient(circle, rgba(${pRgb},${isLight ? 0.07 : 0.10}) 0%, transparent 70%)`,
-          filter: 'blur(14px)',
-        }}/>
+      {/* Corner accent */}
+      <div style={{
+        position: 'absolute', top: -40, right: -40, width: 130, height: 130,
+        borderRadius: '50%', pointerEvents: 'none', zIndex: 0,
+        background: `radial-gradient(circle,rgba(${pRgb},${isLight?0.07:0.10}) 0%,transparent 70%)`,
+        filter: 'blur(14px)',
+      }}/>
 
-        {/* Content layer */}
-        <div style={{ position: 'relative', zIndex: 3 }}>
-          {(title || subtitle || icon) && (
-            <div style={{
-              padding: '16px 24px',
-              borderBottom: `1px solid ${dividerColor}`,
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <div className="min-w-0 flex-1">
-                {title && (
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: titleColor, letterSpacing: '-0.01em', lineHeight: 1.3, margin: 0 }}>
-                    {title}
-                  </h3>
-                )}
-                {subtitle && (
-                  <p style={{ fontSize: '0.73rem', color: subtitleColor, margin: '2px 0 0', lineHeight: 1.4 }}>
-                    {subtitle}
-                  </p>
-                )}
-              </div>
-              {icon && <div className="ml-3 flex-shrink-0">{icon}</div>}
+      {/* Content */}
+      <div style={{ position: 'relative', zIndex: 3 }}>
+        {(title || subtitle || icon) && (
+          <div style={{
+            padding: '16px 24px', borderBottom: `1px solid ${dividerColor}`,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <div className="min-w-0 flex-1">
+              {title && <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: titleColor, letterSpacing: '-0.01em', lineHeight: 1.3, margin: 0 }}>{title}</h3>}
+              {subtitle && <p style={{ fontSize: '0.73rem', color: subtitleColor, margin: '2px 0 0', lineHeight: 1.4 }}>{subtitle}</p>}
             </div>
-          )}
-          <div style={{ padding: PADDING[padding] }}>{children}</div>
-          {footer && (
-            <div style={{ padding: '12px 24px', borderTop: `1px solid ${dividerColor}`, background: footerBg }}>
-              {footer}
-            </div>
-          )}
-        </div>
+            {icon && <div className="ml-3 flex-shrink-0">{icon}</div>}
+          </div>
+        )}
+        <div style={{ padding: PADDING[padding] }}>{children}</div>
+        {footer && (
+          <div style={{ padding: '12px 24px', borderTop: `1px solid ${dividerColor}`, background: footerBg }}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );
