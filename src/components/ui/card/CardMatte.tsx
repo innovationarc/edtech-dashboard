@@ -98,38 +98,24 @@ const CardMatte = ({
     console.debug('[CardMatte] reset');
   };
 
-  // ── Touch listeners — attached natively so they fire on mobile ───────────
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) { console.debug('[CardMatte] mount: cardRef null'); return; }
-    console.debug('[CardMatte] attaching touch listeners, animation:', cardAnimation);
-
-    const onTouchStart = (e: TouchEvent) => {
-      console.debug('[CardMatte] touchstart');
-      applyEnter();
-      if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
-        applyTilt(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
-        applyTilt(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    };
-    const onTouchEnd = () => { console.debug('[CardMatte] touchend'); setTimeout(applyReset, 350); };
-
-    el.addEventListener('touchstart',  onTouchStart,  { passive: true });
-    el.addEventListener('touchmove',   onTouchMove,   { passive: true });
-    el.addEventListener('touchend',    onTouchEnd);
-    el.addEventListener('touchcancel', onTouchEnd);
-    return () => {
-      el.removeEventListener('touchstart',  onTouchStart);
-      el.removeEventListener('touchmove',   onTouchMove);
-      el.removeEventListener('touchend',    onTouchEnd);
-      el.removeEventListener('touchcancel', onTouchEnd);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardAnimation, baseShadow, hoverShadow, isLight, pRgb]);
+  // ── Touch handlers as React synthetic events (most reliable on mobile) ────
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    console.log('[CardMatte] touchstart fired, animation:', cardAnimation);
+    applyEnter();
+    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
+      applyTilt(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  };
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    console.log('[CardMatte] touchmove fired');
+    if (cardAnimation === 'tilt' || cardAnimation === 'magnetic') {
+      applyTilt(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  };
+  const handleTouchEnd = () => {
+    console.log('[CardMatte] touchend fired');
+    setTimeout(applyReset, 350);
+  };
 
   // ── Mouse handlers ────────────────────────────────────────────────────────
   const handleMouseMove  = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -169,6 +155,10 @@ const CardMatte = ({
       onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       {/* Noise sparkle texture */}
       <div style={{
