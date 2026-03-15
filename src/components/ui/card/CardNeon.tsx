@@ -1,6 +1,7 @@
 // CardNeon.tsx — Dark base with glowing primary-color border
 import { ReactNode, useRef, useEffect } from 'react';
 import clsx from 'clsx';
+import { useCardAnim } from './useCardAnim';
 import { useDashboard } from '../../../contexts/DashboardContext';
 
 interface CardProps {
@@ -37,7 +38,6 @@ const CardNeon = ({
 }: CardProps) => {
   const { theme, primaryColor = '#6366f1' } = useDashboard();
   const dark = theme !== 'light';
-  const cardRef = useRef<HTMLDivElement>(null);
   const shimRef = useRef<HTMLDivElement>(null);
   useEffect(() => { injectStyles(); }, []);
 
@@ -62,10 +62,12 @@ const CardNeon = ({
   const onEnter = () => { const sh=shimRef.current; if(!sh)return; sh.style.animation='none'; void sh.offsetWidth; sh.style.animation='shimPass 600ms ease forwards'; };
   const onLeave = () => { const el=cardRef.current; if(el){el.style.transform='none';el.style.boxShadow=baseShadow;} };
 
+
+  const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: pRgb, isLight: !dark });
   return (
-    <div ref={cardRef} className={clsx('relative overflow-hidden', className)}
-      style={{ background:bg, backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border, borderRadius:18, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', isolation:'isolate', transformStyle:tilt?'preserve-3d':'flat', transition:'transform 0.26s cubic-bezier(0.23,1,0.32,1),box-shadow 0.26s ease', animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
-      onClick={onClick} onMouseMove={onMove} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+    <div ref={anim.cardRef} className={clsx('relative overflow-hidden', className)}
+      style={{ background:bg, backdropFilter:'blur(16px)', WebkitBackdropFilter:'blur(16px)', border, borderRadius:18, boxShadow:baseShadow, fontFamily:"'Outfit',sans-serif", cursor:onClick?'pointer':'default', isolation:'isolate', animation:`cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both` }}
+      onClick={onClick} onMouseMove={anim.onMouseMove} onMouseEnter={anim.onMouseEnter} onMouseLeave={anim.onMouseLeave} onTouchStart={anim.onTouchStart} onTouchMove={anim.onTouchMove} onTouchEnd={anim.onTouchEnd} onTouchCancel={anim.onTouchCancel}>
       {/* Shimmer */}
       <div ref={shimRef} style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:5,background:`linear-gradient(108deg,transparent 15%,rgba(${pRgb},${dark?0.08:0.12}) 50%,transparent 85%)`,transform:'translateX(-120%) skewX(-12deg)'}}/>
       {/* Inner top glow */}
