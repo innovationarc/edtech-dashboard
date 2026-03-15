@@ -1,6 +1,7 @@
 // CardCrystal.tsx — 3D tilt + matte sparkle crystal card
 import { ReactNode, useRef } from 'react';
 import clsx from 'clsx';
+import { useCardAnim } from './useCardAnim';
 import { useDashboard } from '../../../contexts/DashboardContext';
 
 interface CardProps {
@@ -33,10 +34,8 @@ const CardCrystal = ({
   children, className, title, subtitle, icon, footer,
   onClick, tilt = true, padding = 'md', enterDelay = 0,
 }: CardProps) => {
-  const { theme, primaryColor = '#6366f1' } = useDashboard();
+  const { theme, primaryColor = '#6366f1', cardAnimation = 'tilt' } = useDashboard();
   const isLight = theme === 'light';
-  const cardRef = useRef<HTMLDivElement>(null);
-  const glowRef = useRef<HTMLDivElement>(null);
   const pRgb = hexRgb(primaryColor);
 
   const bg           = isLight ? 'rgba(255,255,255,0.80)' : 'color-mix(in srgb, var(--color-card) 82%, transparent)';
@@ -52,29 +51,11 @@ const CardCrystal = ({
   const dividerColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
   const footerBg     = isLight ? 'rgba(0,0,0,0.025)' : 'rgba(0,0,0,0.15)';
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!tilt) return;
-    const el = cardRef.current;
-    const glow = glowRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left, y = e.clientY - rect.top;
-    const cx = rect.width / 2, cy = rect.height / 2;
-    el.style.transform = `perspective(800px) rotateX(${((y-cy)/cy)*-10}deg) rotateY(${((x-cx)/cx)*10}deg) translateZ(8px) scale(1.02)`;
-    el.style.boxShadow = hoverShadow;
-    if (glow) { glow.style.left=`${x}px`; glow.style.top=`${y}px`; glow.style.opacity=isLight?'0.6':'0.45'; }
-  };
-
-  const handleMouseLeave = () => {
-    const el = cardRef.current;
-    const glow = glowRef.current;
-    if (el) { el.style.transform='perspective(800px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1)'; el.style.boxShadow=baseShadow; }
-    if (glow) glow.style.opacity='0';
-  };
+  const anim = useCardAnim({ cardAnimation, hoverShadow, baseShadow, primaryRgb: pRgb, isLight });
 
   return (
     <div
-      ref={cardRef}
+      ref={anim.cardRef}
       className={clsx('relative overflow-hidden', className)}
       style={{
         background: bg,
@@ -82,15 +63,17 @@ const CardCrystal = ({
         WebkitBackdropFilter: 'blur(28px) saturate(190%)',
         border, borderRadius: 20, boxShadow: baseShadow,
         fontFamily: "'Outfit', sans-serif",
-        transition: 'transform 0.18s cubic-bezier(0.23,1,0.32,1), box-shadow 0.18s ease',
         cursor: onClick ? 'pointer' : 'default',
-        isolation: 'isolate',
-        transformStyle: tilt ? 'preserve-3d' : 'flat',
         animation: `cardReveal 500ms cubic-bezier(0.22,1,0.36,1) ${enterDelay}ms both`,
       }}
       onClick={onClick}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      onMouseMove={anim.onMouseMove}
+      onMouseEnter={anim.onMouseEnter}
+      onMouseLeave={anim.onMouseLeave}
+      onTouchStart={anim.onTouchStart}
+      onTouchMove={anim.onTouchMove}
+      onTouchEnd={anim.onTouchEnd}
+      onTouchCancel={anim.onTouchCancel}
     >
       {/* Noise sparkle texture */}
       <div style={{position:'absolute',inset:0,borderRadius:20,pointerEvents:'none',zIndex:1,background:NOISE,opacity:isLight?0.028:0.045,mixBlendMode:'overlay'}}/>
@@ -101,7 +84,7 @@ const CardCrystal = ({
           :'linear-gradient(90deg,transparent,rgba(255,255,255,0.18) 30%,rgba(255,255,255,0.30) 50%,rgba(255,255,255,0.18) 70%,transparent)',
       }}/>
       {/* Cursor glow */}
-      <div ref={glowRef} style={{position:'absolute',pointerEvents:'none',zIndex:1,width:220,height:220,borderRadius:'50%',transform:'translate(-50%,-50%)',background:`radial-gradient(circle,rgba(${pRgb},${isLight?0.18:0.22}) 0%,transparent 65%)`,opacity:0,transition:'opacity 0.2s ease',left:'50%',top:'50%'}}/>
+      <div ref={anim.glowRef} style={{position:'absolute',pointerEvents:'none',zIndex:1,width:220,height:220,borderRadius:'50%',transform:'translate(-50%,-50%)',background:`radial-gradient(circle,rgba(${pRgb},${isLight?0.18:0.22}) 0%,transparent 65%)`,opacity:0,transition:'opacity 0.2s ease',left:'50%',top:'50%'}}/>
       {/* Corner accent */}
       <div style={{position:'absolute',top:-40,right:-40,width:130,height:130,borderRadius:'50%',pointerEvents:'none',zIndex:0,background:`radial-gradient(circle,rgba(${pRgb},${isLight?0.07:0.10}) 0%,transparent 70%)`,filter:'blur(14px)'}}/>
       {/* Content */}
