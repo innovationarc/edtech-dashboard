@@ -1,7 +1,7 @@
 // src/components/ChatbotWidget.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { Send, X, AlertTriangle, Info, ChevronDown, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Send, X, AlertTriangle, Info, ChevronDown, ChevronLeft, Mic, MicOff, Volume2 } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
 import { useDashboard } from '../contexts/DashboardContext';
 import { novaRAGService } from '../services/novaRAGService';
@@ -399,7 +399,6 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
   const mS2   = dark ? 'rgba(255,255,255,0.05)': 'rgba(0,0,0,0.04)';
   const mS3   = dark ? 'rgba(255,255,255,0.08)': 'rgba(0,0,0,0.06)';
 
-  const HDR_H = 64;
 
   // ── Portal ────────────────────────────────────────────────────────────────
   const portal = (
@@ -454,7 +453,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
         .aura-stop-btn { transition:transform .15s,box-shadow .15s; }
         .aura-stop-btn:hover { transform:scale(1.05)!important; box-shadow:0 0 0 4px rgba(239,68,68,0.2)!important; }
 
-        .aura-fullscreen { animation:aura-fs-in 0.35s cubic-bezier(0.22,1,0.36,1) forwards; }
+        .aura-fullscreen { will-change:opacity,transform; }
 
         .aura-msg-enter { animation:aura-in 0.28s cubic-bezier(0.22,1,0.36,1) forwards; }
       `}</style>
@@ -517,14 +516,28 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
         <div
           className="aura-fullscreen"
           style={{
-            position:'fixed', inset:0, zIndex:9999,
+            position:'fixed',
+            top:0, left:0, right:0, bottom:0,
+            // Safe area insets for notch / home-bar on mobile
+            paddingTop:'env(safe-area-inset-top,0px)',
+            paddingBottom:'env(safe-area-inset-bottom,0px)',
+            paddingLeft:'env(safe-area-inset-left,0px)',
+            paddingRight:'env(safe-area-inset-right,0px)',
+            zIndex:9999,
             background:panelBg,
             opacity: isVisible ? 1 : 0,
+            transform: isVisible ? 'translateY(0)' : 'translateY(24px)',
             pointerEvents: isVisible ? 'all' : 'none',
-            transition:'opacity 0.3s ease',
+            transition:'opacity 0.32s cubic-bezier(0.22,1,0.36,1), transform 0.32s cubic-bezier(0.22,1,0.36,1)',
             fontFamily:"'Outfit',sans-serif",
-            display:'flex', flexDirection:'column',
+            display:'flex',
+            flexDirection:'column',
             overflow:'hidden',
+            // Force fill the entire viewport including browser chrome areas
+            width:'100%',
+            height:'100%',
+            maxWidth:'100vw',
+            maxHeight:'100vh',
           }}
           role="dialog"
           aria-label="Aura AI assistant"
@@ -547,47 +560,78 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
 
           {/* ── HEADER ── */}
           <div style={{
-            position:'relative', zIndex:3, flexShrink:0, height:HDR_H,
-            display:'flex', alignItems:'center', gap:12, padding:'0 20px',
+            position:'relative', zIndex:3, flexShrink:0,
+            height:64,
+            display:'flex', alignItems:'center',
+            padding:'0 8px 0 4px',
             background:hdrBg,
-            backgroundImage:`linear-gradient(135deg,rgba(${pr},0.16) 0%,transparent 55%)`,
+            backgroundImage:`linear-gradient(135deg,rgba(${pr},0.18) 0%,transparent 60%)`,
             borderBottom:`1px solid ${bdr}`,
             backdropFilter:'blur(24px)',
+            WebkitBackdropFilter:'blur(24px)',
           }}>
+            {/* ← BACK BUTTON — large touch target, left-aligned, always visible */}
+            <button
+              onClick={()=>setIsOpen(false)}
+              aria-label="Go back"
+              style={{
+                width:52, height:52, borderRadius:14, flexShrink:0,
+                background:'transparent', border:'none', cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                color:txtPri,
+                WebkitTapHighlightColor:'transparent',
+              }}
+              onTouchStart={e=>{(e.currentTarget as HTMLElement).style.background='rgba(255,255,255,0.1)';}}
+              onTouchEnd={e=>{(e.currentTarget as HTMLElement).style.background='transparent';}}
+              onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='rgba(255,255,255,0.08)';}}
+              onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background='transparent';}}
+            >
+              <ChevronLeft size={28} strokeWidth={2.5}/>
+            </button>
+
+            {/* Ghost avatar */}
             <div style={{
-              width:42,height:42,borderRadius:15,flexShrink:0,overflow:'hidden',
+              width:40, height:40, borderRadius:13, flexShrink:0, overflow:'hidden',
               background:`linear-gradient(135deg,rgba(${pr},0.38),rgba(${ar},0.24))`,
               border:`1px solid rgba(${pr},0.5)`,
-              display:'flex',alignItems:'center',justifyContent:'center',
-              boxShadow:`0 0 18px rgba(${pr},0.38),inset 0 1px 0 rgba(255,255,255,0.1)`
+              display:'flex', alignItems:'center', justifyContent:'center',
+              boxShadow:`0 0 16px rgba(${pr},0.38), inset 0 1px 0 rgba(255,255,255,0.1)`,
+              marginRight:10,
             }}>
-              <MiniGhost size={32} primary={primary} accent={accent}/>
+              <MiniGhost size={30} primary={primary} accent={accent}/>
             </div>
-            <div style={{ flex:1,minWidth:0 }}>
-              <div style={{ fontSize:16,fontWeight:700,color:txtPri,fontFamily:"'Sora',sans-serif",letterSpacing:'-0.02em',lineHeight:1.2 }}>Aura</div>
-              <div style={{ display:'flex',alignItems:'center',gap:5,marginTop:2 }}>
-                <span style={{ width:6,height:6,borderRadius:'50%',background:'#4ade80',
-                  boxShadow:'0 0 8px rgba(74,222,128,.8)',flexShrink:0,display:'inline-block',
+
+            {/* Name + status */}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:17, fontWeight:700, color:txtPri, fontFamily:"'Sora',sans-serif", letterSpacing:'-0.02em', lineHeight:1.2 }}>
+                Aura
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
+                <span style={{ width:6, height:6, borderRadius:'50%', background:'#4ade80',
+                  boxShadow:'0 0 8px rgba(74,222,128,.8)', flexShrink:0, display:'inline-block',
                   animation:'aura-dot 2.2s ease-in-out infinite' }}/>
-                <span style={{ fontSize:11,color:txtDim,fontWeight:500,letterSpacing:'0.03em' }}>
+                <span style={{ fontSize:11.5, color:txtDim, fontWeight:500, letterSpacing:'0.02em' }}>
                   {isSpeaking ? 'Speaking…' : isListening ? 'Listening…' : 'AI Assistant · Online'}
                 </span>
               </div>
             </div>
-            <div style={{ display:'flex',gap:4,flexShrink:0,alignItems:'center' }}>
+
+            {/* Right actions */}
+            <div style={{ display:'flex', gap:2, flexShrink:0, alignItems:'center', paddingRight:4 }}>
               {isSpeaking && (
-                <button onClick={stopSpeaking} className="aura-btn aura-stop-btn" title="Stop speaking"
-                  style={{ width:32,height:32,borderRadius:10,background:`rgba(${ar},0.15)`,border:`1px solid rgba(${ar},0.35)`,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:accent }}>
-                  <Volume2 size={13}/>
+                <button onClick={stopSpeaking} title="Stop speaking"
+                  style={{ width:42, height:42, borderRadius:12,
+                    background:`rgba(${ar},0.15)`, border:`1px solid rgba(${ar},0.35)`,
+                    cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                    color:accent, WebkitTapHighlightColor:'transparent' }}>
+                  <Volume2 size={16}/>
                 </button>
               )}
-              <button onClick={()=>setShowInfo(true)} className="aura-btn"
-                style={{ width:32,height:32,borderRadius:10,background:'transparent',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:txtDim }}>
-                <Info size={14}/>
-              </button>
-              <button onClick={()=>setIsOpen(false)} className="aura-btn aura-btn-close"
-                style={{ width:32,height:32,borderRadius:10,background:'transparent',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:txtDim }}>
-                <X size={15}/>
+              <button onClick={()=>setShowInfo(true)}
+                style={{ width:42, height:42, borderRadius:12, background:'transparent', border:'none',
+                  cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                  color:txtDim, WebkitTapHighlightColor:'transparent' }}>
+                <Info size={17}/>
               </button>
             </div>
           </div>
@@ -668,7 +712,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
           <div
             className="nvchat-msgs"
             ref={messagesRef}
-            style={{ flex:1,position:'relative',zIndex:1,padding:'16px 20px 8px',minHeight:0 }}
+            style={{ flex:1,position:'relative',zIndex:1,padding:'12px 16px 8px',minHeight:0,WebkitOverflowScrolling:'touch' }}
             onScroll={()=>{ const el=messagesRef.current; if(!el) return; setShowScrollBtn(el.scrollHeight-el.scrollTop-el.clientHeight>120); }}
           >
             {/* shimmer */}
@@ -754,7 +798,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
                         <MiniGhost size={22} primary={primary} accent={accent}/>
                       </div>
                     )}
-                    <div style={{ display:'flex',flexDirection:'column',gap:3,maxWidth:'min(68%,520px)',alignItems:isUser?'flex-end':'flex-start' }}>
+                    <div style={{ display:'flex',flexDirection:'column',gap:3,maxWidth:'min(78%,520px)',alignItems:isUser?'flex-end':'flex-start' }}>
                       <div style={{
                         padding:'10px 14px',borderRadius:18,fontSize:14,lineHeight:1.6,
                         wordBreak:'break-word',whiteSpace:'pre-wrap',
@@ -805,10 +849,11 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
           {/* ── INPUT BAR ── */}
           <div style={{
             position:'relative',zIndex:3,flexShrink:0,
-            padding:'12px 20px 16px',
+            padding:'12px 16px 14px',
             background:inpBg,
             borderTop:`1px solid ${bdr}`,
             backdropFilter:'blur(24px)',
+            WebkitBackdropFilter:'blur(24px)',
           }}>
             <div style={{ display:'flex',alignItems:'center',gap:10,
               background:surf2,border:`1px solid rgba(${pr},0.28)`,
@@ -857,7 +902,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
                 <Send size={15} strokeWidth={2.2}/>
               </button>
             </div>
-            <p style={{ fontSize:10,color:txtDim,textAlign:'center',margin:'8px 0 0',fontFamily:"'Outfit',sans-serif",letterSpacing:'0.04em' }}>
+            <p style={{ fontSize:10,color:txtDim,textAlign:'center',margin:'6px 0 0',fontFamily:"'Outfit',sans-serif",letterSpacing:'0.04em' }}>
               Aura · AI-Powered Assistant
             </p>
           </div>
