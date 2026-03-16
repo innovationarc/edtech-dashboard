@@ -215,7 +215,7 @@ const LeaderboardRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to={getRoleDashboard(user?.role)} replace />;
   }
   return <>{children}</>;
-};
+}; 
 
 // Smart index redirect: waits for user profile before deciding which dashboard to show
 const DefaultRedirect = () => {
