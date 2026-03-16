@@ -52,8 +52,8 @@ const CardLiquid = ({
   useEffect(() => { injectStyles(); }, []);
 
   const bg = dark
-    ? 'color-mix(in srgb, var(--color-card) 28%, transparent)'
-    : 'rgba(255,255,255,0.30)';
+    ? 'color-mix(in srgb, var(--color-card) 38%, transparent)'
+    : 'rgba(255,255,255,0.44)';
 
   const border = 'none';
 
