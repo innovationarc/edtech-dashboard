@@ -36,7 +36,10 @@ const PageTransition = ({ children }: Props) => {
   }, [location.pathname]);
 
   const style: React.CSSProperties = {
-    willChange: 'transform, opacity',
+    // will-change ONLY set during animation — never at idle.
+    // A permanent will-change:transform creates a new containing block,
+    // which breaks position:fixed for every modal/overlay in the app.
+    ...(phase !== 'idle' && { willChange: 'transform, opacity' }),
     ...(phase === 'exit' ? {
       opacity: 0,
       transform: 'translateY(-6px)',
@@ -47,7 +50,7 @@ const PageTransition = ({ children }: Props) => {
       // No transition on enter start — we add it after one frame
     } : {
       opacity: 1,
-      transform: 'translateY(0)',
+      transform: 'none',
       transition: 'opacity 0.38s cubic-bezier(0.25,0.46,0.45,0.94), transform 0.42s cubic-bezier(0.25,0.46,0.45,0.94)',
     }),
   };
