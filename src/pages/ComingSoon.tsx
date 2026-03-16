@@ -109,44 +109,120 @@ const REQUEST_STATUS_LABELS: Record<string, string> = {
   declined:  'Declined',
 };
 
-// ─── Shared bottom-sheet modal wrapper — sidebar-matched style ────────────────
+// ─── Shared modal wrapper — exact same background as sidebar ─────────────────
 const ModalShell = ({ children, onClose, wide }: { children: React.ReactNode; onClose: () => void; wide?: boolean }) => {
-  const { theme, primaryColor } = useDashboard();
+  const { theme, primaryColor, accentColor, glitterTheme } = useDashboard();
   const darkMode = theme !== 'light';
+  const isLight = theme === 'light';
   const pRgb = hexRgb(primaryColor);
   const baseBg = THEME_BG[theme] ?? '#0d1117';
 
-  const sbSparkle = `radial-gradient(ellipse at 20% 20%, rgba(${pRgb},0.18) 0%, transparent 60%),
-     radial-gradient(ellipse at 80% 80%, rgba(${pRgb},0.12) 0%, transparent 50%),
-     radial-gradient(ellipse at 50% 50%, ${darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.55)'} 0%, transparent 70%)`;
-  const sbBorder = darkMode ? `1px solid rgba(${pRgb},0.22)` : `1px solid rgba(255,255,255,0.95)`;
-  const sbShadow = darkMode
-    ? `0 8px 40px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(${pRgb},0.12), 0 0 60px rgba(${pRgb},0.06)`
-    : `0 8px 32px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.8), 0 0 40px rgba(${pRgb},0.07)`;
+  // ── Exact copy of Navigation.tsx glitterImageMap ──
+  const glitterImageMap: Record<string, string> = {
+    silver: isLight ? `
+      radial-gradient(ellipse at 20% 20%, rgba(0,0,0,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.03) 0%, transparent 50%),
+      radial-gradient(circle at 30% 40%, rgba(80,80,100,0.60) 1px, transparent 1px),
+      radial-gradient(circle at 70% 20%, rgba(80,80,100,0.52) 1px, transparent 1px),
+      radial-gradient(circle at 50% 70%, rgba(80,80,100,0.56) 1px, transparent 1px),
+      radial-gradient(circle at 15% 80%, rgba(80,80,100,0.48) 1px, transparent 1px),
+      radial-gradient(circle at 85% 60%, rgba(80,80,100,0.60) 1px, transparent 1px),
+      radial-gradient(circle at 60% 45%, rgba(80,80,100,0.52) 1px, transparent 1px),
+      radial-gradient(circle at 40% 15%, rgba(80,80,100,0.55) 1px, transparent 1px),
+      radial-gradient(circle at 90% 35%, rgba(80,80,100,0.48) 1px, transparent 1px)
+    ` : `
+      radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(255,255,255,0.03) 0%, transparent 50%),
+      radial-gradient(circle at 30% 40%, rgba(220,220,240,0.55) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 70% 20%, rgba(200,200,220,0.45) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 50% 70%, rgba(220,220,240,0.50) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 15% 80%, rgba(200,200,220,0.40) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 85% 60%, rgba(220,220,240,0.55) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 60% 45%, rgba(200,200,220,0.45) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 40% 15%, rgba(220,220,240,0.50) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 90% 35%, rgba(200,200,220,0.40) 0.5px, transparent 0.5px)
+    `,
+    gold: isLight ? `
+      radial-gradient(ellipse at 15% 15%, rgba(180,130,0,0.09) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 85%, rgba(150,110,0,0.07) 0%, transparent 45%),
+      radial-gradient(circle at 25% 35%, rgba(160,120,0,0.72) 1px, transparent 1px),
+      radial-gradient(circle at 75% 25%, rgba(180,140,0,0.68) 1px, transparent 1px),
+      radial-gradient(circle at 45% 65%, rgba(160,120,0,0.70) 1px, transparent 1px),
+      radial-gradient(circle at 80% 70%, rgba(180,140,0,0.62) 1px, transparent 1px),
+      radial-gradient(circle at 10% 55%, rgba(160,120,0,0.65) 1px, transparent 1px),
+      radial-gradient(circle at 60% 15%, rgba(180,140,0,0.72) 1px, transparent 1px),
+      radial-gradient(circle at 35% 85%, rgba(160,120,0,0.58) 1px, transparent 1px)
+    ` : `
+      radial-gradient(ellipse at 15% 15%, rgba(212,175,55,0.12) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 85%, rgba(180,140,30,0.08) 0%, transparent 45%),
+      radial-gradient(circle at 25% 35%, rgba(212,175,55,0.60) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 75% 25%, rgba(255,215,0,0.55) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 45% 65%, rgba(212,175,55,0.58) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 80% 70%, rgba(255,215,0,0.48) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 10% 55%, rgba(212,175,55,0.52) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 60% 15%, rgba(255,215,0,0.62) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 35% 85%, rgba(212,175,55,0.42) 0.5px, transparent 0.5px)
+    `,
+    purple: isLight ? `
+      radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.10) 0%, transparent 45%),
+      radial-gradient(ellipse at 80% 70%, rgba(79,70,229,0.08) 0%, transparent 45%),
+      radial-gradient(circle at 30% 40%, rgba(99,102,241,0.65) 1px, transparent 1px),
+      radial-gradient(circle at 70% 20%, rgba(79,70,229,0.60) 1px, transparent 1px),
+      radial-gradient(circle at 55% 70%, rgba(99,102,241,0.62) 1px, transparent 1px),
+      radial-gradient(circle at 15% 60%, rgba(79,70,229,0.55) 1px, transparent 1px),
+      radial-gradient(circle at 88% 50%, rgba(99,102,241,0.60) 1px, transparent 1px),
+      radial-gradient(circle at 45% 15%, rgba(79,70,229,0.65) 1px, transparent 1px),
+      radial-gradient(circle at 75% 85%, rgba(99,102,241,0.50) 1px, transparent 1px)
+    ` : `
+      radial-gradient(ellipse at 20% 30%, rgba(139,92,246,0.12) 0%, transparent 45%),
+      radial-gradient(ellipse at 80% 70%, rgba(99,102,241,0.10) 0%, transparent 45%),
+      radial-gradient(circle at 30% 40%, rgba(200,180,255,0.70) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 70% 20%, rgba(180,160,240,0.62) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 55% 70%, rgba(220,200,255,0.68) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 15% 60%, rgba(200,180,255,0.58) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 88% 50%, rgba(180,160,240,0.64) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 45% 15%, rgba(220,200,255,0.72) 0.5px, transparent 0.5px),
+      radial-gradient(circle at 75% 85%, rgba(200,180,255,0.50) 0.5px, transparent 0.5px)
+    `,
+  };
+  const glitterBgImage = glitterImageMap[glitterTheme] ?? '';
+  const glitterBgSize = glitterTheme === 'silver'
+    ? 'auto, auto, 80px 80px, 120px 120px, 90px 90px, 110px 110px, 70px 70px, 100px 100px, 85px 85px, 95px 95px'
+    : glitterTheme === 'gold'
+    ? 'auto, auto, 60px 60px, 90px 90px, 75px 75px, 110px 110px, 50px 50px, 80px 80px, 95px 95px'
+    : glitterTheme === 'purple'
+    ? 'auto, auto, 55px 55px, 85px 85px, 70px 70px, 100px 100px, 65px 65px, 90px 90px, 78px 78px'
+    : 'auto';
 
-  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 640px)').matches);
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 640px)');
-    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
+  // ── Exact copy of Navigation.tsx sidebar style vars ──
+  const sbSparkle = glitterBgImage
+    ? glitterBgImage
+    : `radial-gradient(ellipse at 20% 20%, rgba(${pRgb},0.18) 0%, transparent 60%),
+       radial-gradient(ellipse at 80% 80%, rgba(${pRgb},0.12) 0%, transparent 50%),
+       radial-gradient(ellipse at 50% 50%, ${darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.55)'} 0%, transparent 70%)`;
+  const sbBorder = darkMode
+    ? `1px solid rgba(${pRgb},0.22)`
+    : `1px solid rgba(255,255,255,0.95)`;
+  const sbShadow = darkMode
+    ? `0 8px 40px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(${pRgb},0.12), 0 0 60px rgba(${pRgb},0.06)`
+    : `0 8px 32px rgba(0,0,0,0.10), inset 0 0 0 1px rgba(255,255,255,0.8), 0 0 40px rgba(${pRgb},0.07)`;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`w-full ${wide ? 'sm:max-w-lg' : 'sm:max-w-md'} overflow-hidden`}
+        className={`w-full ${wide ? 'max-w-lg' : 'max-w-md'} overflow-hidden`}
         style={{
           backgroundColor: baseBg,
           backgroundImage: sbSparkle,
+          backgroundSize: glitterBgSize,
           backdropFilter: 'blur(32px) saturate(200%)',
           WebkitBackdropFilter: 'blur(32px) saturate(200%)',
           border: sbBorder,
-          borderRadius: isDesktop ? 24 : '24px 24px 0 0',
+          borderRadius: 24,
           boxShadow: sbShadow,
           fontFamily: "'Outfit', sans-serif",
           position: 'relative',
@@ -164,21 +240,13 @@ const ModalShell = ({ children, onClose, wide }: { children: React.ReactNode; on
         <div style={{
           position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)',
           width: 120, height: 120, borderRadius: '50%',
-          background: `radial-gradient(circle, rgba(${pRgb},${darkMode ? 0.28 : 0.18}) 0%, transparent 70%)`,
+          background: `radial-gradient(circle, rgba(${pRgb},${darkMode ? 0.20 : 0.12}) 0%, transparent 70%)`,
           pointerEvents: 'none', zIndex: 0, filter: 'blur(20px)',
         }} />
-        {/* Handle bar — mobile only */}
-        {!isDesktop && (
-          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 4, position: 'relative', zIndex: 1 }}>
-            <div style={{ width: 40, height: 4, borderRadius: 999, background: darkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)' }} />
-          </div>
-        )}
         {/* Content */}
         <div style={{ position: 'relative', zIndex: 1 }}>
           {children}
         </div>
-        {/* Safe area spacer mobile */}
-        {!isDesktop && <div style={{ height: 8 }} />}
       </div>
     </div>
   );
