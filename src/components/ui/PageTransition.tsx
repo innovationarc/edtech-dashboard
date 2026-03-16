@@ -36,13 +36,7 @@ const PageTransition = ({ children }: Props) => {
   }, [location.pathname]);
 
   const style: React.CSSProperties = {
-    // isolation:isolate preserves backdrop-filter stacking context for child cards.
-    // Without this, any transform on this wrapper breaks backdrop-filter in children.
-    isolation: 'isolate',
-    // will-change ONLY set during animation — never at idle.
-    // A permanent will-change:transform creates a new containing block,
-    // which breaks position:fixed for every modal/overlay in the app.
-    ...(phase !== 'idle' && { willChange: 'transform, opacity' }),
+    willChange: 'transform, opacity',
     ...(phase === 'exit' ? {
       opacity: 0,
       transform: 'translateY(-6px)',
@@ -53,7 +47,8 @@ const PageTransition = ({ children }: Props) => {
       // No transition on enter start — we add it after one frame
     } : {
       opacity: 1,
-      transform: 'none',
+      // No transform at idle — translateY(0) still creates a containing block
+      // which breaks position:fixed modals (black background).
       transition: 'opacity 0.38s cubic-bezier(0.25,0.46,0.45,0.94), transform 0.42s cubic-bezier(0.25,0.46,0.45,0.94)',
     }),
   };
@@ -81,3 +76,4 @@ const PageTransition = ({ children }: Props) => {
 };
 
 export default PageTransition;
+
