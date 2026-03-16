@@ -36,6 +36,9 @@ const PageTransition = ({ children }: Props) => {
   }, [location.pathname]);
 
   const style: React.CSSProperties = {
+    // isolation:isolate preserves backdrop-filter stacking context for child cards.
+    // Without this, any transform on this wrapper breaks backdrop-filter in children.
+    isolation: 'isolate',
     // will-change ONLY set during animation — never at idle.
     // A permanent will-change:transform creates a new containing block,
     // which breaks position:fixed for every modal/overlay in the app.
