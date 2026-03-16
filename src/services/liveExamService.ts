@@ -22,6 +22,7 @@ import { db } from '../config/firebase';
 
 export type LiveExamStatus = 'draft' | 'active' | 'ended';
 export type LiveExamAudience = 'all' | 'course_based';
+export type LiveWindowType = 'anytime' | 'scheduled';
 
 export interface LiveExamCourseTarget {
   courseId: string;
@@ -43,19 +44,24 @@ export interface LiveExam {
   audience: LiveExamAudience;
   courseTargets: LiveExamCourseTarget[]; // only used when audience === 'course_based'
 
-  // Timeline — copied from content but can be overridden
+  // Content's own exam timeline — read-only, copied from content for reference
   examTimelineType: 'anytime' | 'scheduled';
-  examStartDateTime?: string; // ISO string
-  examEndDateTime?: string;   // ISO string
+  examStartDateTime?: string;
+  examEndDateTime?: string;
 
-  // Attempt cap — copied from content but can be overridden
+  // Live window — independently controls when this exam is visible on the student live page
+  liveWindowType: LiveWindowType;
+  liveWindowStart?: string; // ISO string — only used when liveWindowType === 'scheduled'
+  liveWindowEnd?: string;   // ISO string
+
+  // Attempt cap — copied from content
   maxAttempts: number | 'unlimited';
 
   status: LiveExamStatus;
 
   // Aggregate counters (updated atomically)
-  totalParticipants: number;  // distinct students who attempted ≥1 time
-  totalAttempts: number;      // sum of all attempts across all students
+  totalParticipants: number;
+  totalAttempts: number;
 
   // Authorship
   createdBy: string;
@@ -118,6 +124,9 @@ const deserializeLiveExam = (id: string, data: any): LiveExam => ({
   examTimelineType: data.examTimelineType ?? 'anytime',
   examStartDateTime: data.examStartDateTime,
   examEndDateTime: data.examEndDateTime,
+  liveWindowType: data.liveWindowType ?? 'anytime',
+  liveWindowStart: data.liveWindowStart,
+  liveWindowEnd: data.liveWindowEnd,
   maxAttempts: data.maxAttempts === 'unlimited' ? 'unlimited' : Number(data.maxAttempts ?? 1),
   status: data.status ?? 'active',
   totalParticipants: data.totalParticipants ?? 0,
@@ -157,6 +166,9 @@ export const liveExamService = {
     examTimelineType: 'anytime' | 'scheduled';
     examStartDateTime?: string;
     examEndDateTime?: string;
+    liveWindowType: LiveWindowType;
+    liveWindowStart?: string;
+    liveWindowEnd?: string;
     maxAttempts: number | 'unlimited';
     createdBy: string;
     createdByName: string;
@@ -173,6 +185,9 @@ export const liveExamService = {
         examTimelineType: payload.examTimelineType,
         examStartDateTime: payload.examStartDateTime,
         examEndDateTime: payload.examEndDateTime,
+        liveWindowType: payload.liveWindowType,
+        liveWindowStart: payload.liveWindowStart,
+        liveWindowEnd: payload.liveWindowEnd,
         maxAttempts: payload.maxAttempts,
         status: 'active',
         totalParticipants: 0,
@@ -245,16 +260,23 @@ export const liveExamService = {
         )
       );
       const all = snap.docs.map((d) => deserializeLiveExam(d.id, d.data()));
+      const now = new Date();
 
-      // Filter by audience
       return all.filter((exam) => {
-        if (exam.audience === 'all') return true;
+        // Check audience eligibility
         if (exam.audience === 'course_based') {
-          return exam.courseTargets.some((ct) =>
-            enrolledCourseIds.includes(ct.courseId)
-          );
+          if (!exam.courseTargets.some((ct) => enrolledCourseIds.includes(ct.courseId))) {
+            return false;
+          }
         }
-        return false;
+        // Check live window — this determines visibility on the student page
+        if (exam.liveWindowType === 'scheduled') {
+          const start = exam.liveWindowStart ? new Date(exam.liveWindowStart) : null;
+          const end   = exam.liveWindowEnd   ? new Date(exam.liveWindowEnd)   : null;
+          if (start && now < start) return false; // window hasn't opened yet
+          if (end   && now > end)   return false; // window has closed
+        }
+        return true;
       });
     } catch (e: any) {
       console.error('liveExamService.getLiveExamsForStudent:', e);
@@ -411,14 +433,14 @@ export const liveExamService = {
       if (!exam) return { canAttempt: false, attemptCount: 0, maxAttempts: 1, reason: 'Exam not found' };
       if (exam.status !== 'active') return { canAttempt: false, attemptCount: 0, maxAttempts: exam.maxAttempts, reason: 'Exam is not active' };
 
-      // Check timeline
-      if (exam.examTimelineType === 'scheduled') {
+      // Check live window (not the content's own exam timeline)
+      if (exam.liveWindowType === 'scheduled') {
         const now = new Date();
-        if (exam.examStartDateTime && new Date(exam.examStartDateTime) > now) {
-          return { canAttempt: false, attemptCount: 0, maxAttempts: exam.maxAttempts, reason: 'Exam has not started yet' };
+        if (exam.liveWindowStart && new Date(exam.liveWindowStart) > now) {
+          return { canAttempt: false, attemptCount: 0, maxAttempts: exam.maxAttempts, reason: 'Live window has not opened yet' };
         }
-        if (exam.examEndDateTime && new Date(exam.examEndDateTime) < now) {
-          return { canAttempt: false, attemptCount: 0, maxAttempts: exam.maxAttempts, reason: 'Exam has ended' };
+        if (exam.liveWindowEnd && new Date(exam.liveWindowEnd) < now) {
+          return { canAttempt: false, attemptCount: 0, maxAttempts: exam.maxAttempts, reason: 'Live window has closed' };
         }
       }
 
