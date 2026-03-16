@@ -98,6 +98,25 @@ const REQUEST_STATUS_LABELS: Record<string, string> = {
   declined:  'Declined',
 };
 
+// ─── Shared bottom-sheet modal wrapper ───────────────────────────────────────
+// On mobile: slides up from bottom. On sm+: centred dialog.
+const ModalShell = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
+  <div
+    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
+    onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+  >
+    {/* Drag handle — mobile only */}
+    <div className="w-full sm:hidden absolute bottom-0 left-0 right-0 pointer-events-none flex justify-center" style={{ bottom: 'calc(var(--sheet-height, 0px))' }} />
+    <div className="bg-background-800 border border-background-700/80 rounded-t-2xl sm:rounded-xl w-full sm:max-w-md shadow-2xl">
+      {/* Handle bar — visible on mobile only */}
+      <div className="flex justify-center pt-3 pb-1 sm:hidden">
+        <div className="w-10 h-1 rounded-full bg-background-600" />
+      </div>
+      {children}
+    </div>
+  </div>
+);
+
 // ─── Early Access Modal ───────────────────────────────────────────────────────
 interface EarlyAccessModalProps {
   request: EarlyAccessRequest;
@@ -106,36 +125,35 @@ interface EarlyAccessModalProps {
 }
 
 const EarlyAccessModal = ({ request, onClose, onNavigate }: EarlyAccessModalProps) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div className="bg-background-800 border border-background-700 rounded-xl w-full max-w-md shadow-2xl animate-fade-in">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-white font-semibold text-lg">Early Access Granted 🎉</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        <p className="text-gray-400 text-sm mb-4">
-          You've been approved for early access to <span className="text-white font-medium">{request.featureTitle}</span>.
-        </p>
-
-        {request.guidelines && (
-          <div className="bg-background-900 rounded-lg p-4 mb-6">
-            <p className="text-xs font-medium text-primary-400 mb-2 uppercase tracking-wider">Guidelines</p>
-            <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">{request.guidelines}</p>
-          </div>
-        )}
-
-        <button
-          onClick={() => request.accessLink && onNavigate(request.accessLink)}
-          className="flex items-center justify-center gap-2 w-full bg-primary-600 hover:bg-primary-500 text-white py-2.5 rounded-lg transition-colors font-medium"
-        >
-          Try Early Access <ExternalLink size={16} />
+  <ModalShell onClose={onClose}>
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-white font-semibold text-lg">Early Access Granted 🎉</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-background-700">
+          <X size={20} />
         </button>
       </div>
+
+      <p className="text-gray-400 text-sm mb-4">
+        You've been approved for early access to <span className="text-white font-medium">{request.featureTitle}</span>.
+      </p>
+
+      {request.guidelines && (
+        <div className="bg-background-900 rounded-lg p-4 mb-6 border border-background-700/50">
+          <p className="text-xs font-medium text-primary-400 mb-2 uppercase tracking-wider">Guidelines</p>
+          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">{request.guidelines}</p>
+        </div>
+      )}
+
+      <button
+        onClick={() => request.accessLink && onNavigate(request.accessLink)}
+        className="flex items-center justify-center gap-2 w-full bg-primary-600 hover:bg-primary-500 text-white py-3 rounded-lg transition-colors font-medium"
+      >
+        Try Early Access <ExternalLink size={16} />
+      </button>
+      <div className="pb-safe h-2 sm:h-0" />
     </div>
-  </div>
+  </ModalShell>
 );
 
 // ─── Feature Request Form Modal ───────────────────────────────────────────────
@@ -165,68 +183,67 @@ const FeatureRequestModal = ({ studentId, studentName, studentUserId, onClose }:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-background-800 border border-background-700 rounded-xl w-full max-w-md shadow-2xl">
-        <div className="p-6">
-          {submitted ? (
-            <div className="text-center py-6">
-              <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle size={32} className="text-green-400" />
-              </div>
-              <h3 className="text-white font-semibold text-lg mb-2">Request Submitted!</h3>
-              <p className="text-gray-400 text-sm mb-6">
-                Thank you! We've received your feature request and will review it shortly.
-              </p>
-              <button
-                onClick={onClose}
-                className="bg-primary-600 hover:bg-primary-500 text-white py-2 px-6 rounded-lg transition-colors"
-              >
-                Done
+    <ModalShell onClose={onClose}>
+      <div className="p-6">
+        {submitted ? (
+          <div className="text-center py-6">
+            <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle size={32} className="text-green-400" />
+            </div>
+            <h3 className="text-white font-semibold text-lg mb-2">Request Submitted!</h3>
+            <p className="text-gray-400 text-sm mb-6">
+              Thank you! We've received your feature request and will review it shortly.
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-primary-600 hover:bg-primary-500 text-white py-2.5 px-8 rounded-lg transition-colors font-medium"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-white font-semibold text-lg">Submit Feature Request</h3>
+              <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-background-700">
+                <X size={20} />
               </button>
             </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-white font-semibold text-lg">Submit Feature Request</h3>
-                <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-                  <X size={20} />
-                </button>
-              </div>
-              <p className="text-gray-400 text-sm mb-4">
-                Describe the feature you'd like to see. We review all requests carefully.
-              </p>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="E.g. I'd love a dark mode for the mobile app..."
-                rows={4}
-                className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors"
-              />
-              <div className="flex gap-3 mt-4">
-                <button
-                  onClick={onClose}
-                  className="flex-1 bg-background-700 hover:bg-background-600 text-white py-2 rounded-lg transition-colors text-sm"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={!description.trim() || loading}
-                  className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Send size={14} />
-                  )}
-                  Submit
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+            <p className="text-gray-400 text-sm mb-4">
+              Describe the feature you'd like to see. We review all requests carefully.
+            </p>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="E.g. I'd love a dark mode for the mobile app..."
+              rows={4}
+              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors"
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={onClose}
+                className="flex-1 bg-background-700 hover:bg-background-600 text-white py-2.5 rounded-lg transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!description.trim() || loading}
+                className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Send size={14} />
+                )}
+                Submit
+              </button>
+            </div>
+          </>
+        )}
+        <div className="pb-safe h-2 sm:h-0" />
       </div>
-    </div>
+    </ModalShell>
   );
 };
 
@@ -238,20 +255,27 @@ interface MyRequestsModalProps {
 }
 
 const MyRequestsModal = ({ requests, onDelete, onClose }: MyRequestsModalProps) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-    <div className="bg-background-800 border border-background-700 rounded-xl w-full max-w-lg shadow-2xl">
-      <div className="flex items-center justify-between p-6 border-b border-background-700">
+  <div
+    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
+    onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+  >
+    <div className="bg-background-800 border border-background-700/80 rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg shadow-2xl">
+      {/* Handle bar — mobile only */}
+      <div className="flex justify-center pt-3 pb-1 sm:hidden">
+        <div className="w-10 h-1 rounded-full bg-background-600" />
+      </div>
+      <div className="flex items-center justify-between px-6 py-4 border-b border-background-700">
         <h3 className="text-white font-semibold text-lg">My Feature Requests</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-background-700">
           <X size={20} />
         </button>
       </div>
-      <div className="p-6 max-h-[60vh] overflow-y-auto space-y-3">
+      <div className="p-6 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto space-y-3">
         {requests.length === 0 ? (
           <p className="text-gray-400 text-sm text-center py-8">You haven't submitted any feature requests yet.</p>
         ) : (
           requests.map(r => (
-            <div key={r.id} className="bg-background-900 rounded-lg p-4 border border-background-700">
+            <div key={r.id} className="bg-background-900 rounded-lg p-4 border border-background-700/50">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <p className="text-white text-sm leading-relaxed">{r.description}</p>
                 <span className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${REQUEST_STATUS_STYLES[r.status]}`}>
@@ -280,6 +304,7 @@ const MyRequestsModal = ({ requests, onDelete, onClose }: MyRequestsModalProps) 
           ))
         )}
       </div>
+      <div className="pb-safe h-2 sm:h-0" />
     </div>
   </div>
 );
