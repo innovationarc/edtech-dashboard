@@ -56,7 +56,7 @@ interface DashboardContextType {
   setShowLoginAnimation: (v: boolean) => void;
 }
 
-const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
+export const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
 export const useDashboard = () => {
   const context = useContext(DashboardContext);
