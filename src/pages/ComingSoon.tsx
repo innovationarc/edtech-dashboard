@@ -21,13 +21,24 @@ const isInternalLink = (url?: string) => {
   return url.startsWith('/') || url.startsWith(window.location.origin);
 };
 
-// ─── Icon map (matches management picker) ────────────────────────────────────
+// ─── Sidebar theme helpers (mirrors Navigation.tsx exactly) ──────────────────
+const hexRgb = (hex: string) => {
+  if (!hex || hex.length < 7) return '99,102,241';
+  return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
+};
+
+const THEME_BG: Record<string, string> = {
+  dark:'#0d1117', light:'#ebe8e1', slate:'#0f172a',
+  ocean:'#0c1a2e', forest:'#0a1f14', purple:'#1e1b4b',
+  pink:'#831843', sunset:'#1c0a00',
+};
+
+// ─── Icon map ────────────────────────────────────────────────────────────────
 const ICON_COLORS = [
   'text-primary-400', 'text-secondary-400', 'text-accent-400',
   'text-warning-DEFAULT', 'text-error-DEFAULT', 'text-green-400',
   'text-purple-400', 'text-pink-400', 'text-orange-400',
 ];
-// Deterministic colour per icon name
 const iconColor = (name: string) => ICON_COLORS[name.charCodeAt(0) % ICON_COLORS.length];
 
 const ICON_MAP: Record<string, (size?: number) => React.ReactNode> = {
@@ -98,24 +109,80 @@ const REQUEST_STATUS_LABELS: Record<string, string> = {
   declined:  'Declined',
 };
 
-// ─── Shared bottom-sheet modal wrapper ───────────────────────────────────────
-// On mobile: slides up from bottom. On sm+: centred dialog.
-const ModalShell = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
-  <div
-    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
-    onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-  >
-    {/* Drag handle — mobile only */}
-    <div className="w-full sm:hidden absolute bottom-0 left-0 right-0 pointer-events-none flex justify-center" style={{ bottom: 'calc(var(--sheet-height, 0px))' }} />
-    <div className="bg-background-800 border border-background-700/80 rounded-t-2xl sm:rounded-xl w-full sm:max-w-md shadow-2xl">
-      {/* Handle bar — visible on mobile only */}
-      <div className="flex justify-center pt-3 pb-1 sm:hidden">
-        <div className="w-10 h-1 rounded-full bg-background-600" />
+// ─── Shared bottom-sheet modal wrapper — sidebar-matched style ────────────────
+const ModalShell = ({ children, onClose, wide }: { children: React.ReactNode; onClose: () => void; wide?: boolean }) => {
+  const { theme, primaryColor } = useDashboard();
+  const darkMode = theme !== 'light';
+  const pRgb = hexRgb(primaryColor);
+  const baseBg = THEME_BG[theme] ?? '#0d1117';
+
+  const sbSparkle = `radial-gradient(ellipse at 20% 20%, rgba(${pRgb},0.18) 0%, transparent 60%),
+     radial-gradient(ellipse at 80% 80%, rgba(${pRgb},0.12) 0%, transparent 50%),
+     radial-gradient(ellipse at 50% 50%, ${darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.55)'} 0%, transparent 70%)`;
+  const sbBorder = darkMode ? `1px solid rgba(${pRgb},0.22)` : `1px solid rgba(255,255,255,0.95)`;
+  const sbShadow = darkMode
+    ? `0 8px 40px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(${pRgb},0.12), 0 0 60px rgba(${pRgb},0.06)`
+    : `0 8px 32px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(255,255,255,0.8), 0 0 40px rgba(${pRgb},0.07)`;
+
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 640px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 640px)');
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
+      style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className={`w-full ${wide ? 'sm:max-w-lg' : 'sm:max-w-md'} overflow-hidden`}
+        style={{
+          backgroundColor: baseBg,
+          backgroundImage: sbSparkle,
+          backdropFilter: 'blur(32px) saturate(200%)',
+          WebkitBackdropFilter: 'blur(32px) saturate(200%)',
+          border: sbBorder,
+          borderRadius: isDesktop ? 24 : '24px 24px 0 0',
+          boxShadow: sbShadow,
+          fontFamily: "'Outfit', sans-serif",
+          position: 'relative',
+          isolation: 'isolate',
+        }}
+      >
+        {/* Noise sparkle overlay */}
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: 'inherit', pointerEvents: 'none', zIndex: 0,
+          background: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
+          opacity: darkMode ? 0.04 : 0.025,
+          mixBlendMode: 'overlay',
+        }} />
+        {/* Color accent glow top */}
+        <div style={{
+          position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)',
+          width: 120, height: 120, borderRadius: '50%',
+          background: `radial-gradient(circle, rgba(${pRgb},${darkMode ? 0.28 : 0.18}) 0%, transparent 70%)`,
+          pointerEvents: 'none', zIndex: 0, filter: 'blur(20px)',
+        }} />
+        {/* Handle bar — mobile only */}
+        {!isDesktop && (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 4, position: 'relative', zIndex: 1 }}>
+            <div style={{ width: 40, height: 4, borderRadius: 999, background: darkMode ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)' }} />
+          </div>
+        )}
+        {/* Content */}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {children}
+        </div>
+        {/* Safe area spacer mobile */}
+        {!isDesktop && <div style={{ height: 8 }} />}
       </div>
-      {children}
     </div>
-  </div>
-);
+  );
+};
 
 // ─── Early Access Modal ───────────────────────────────────────────────────────
 interface EarlyAccessModalProps {
@@ -124,37 +191,47 @@ interface EarlyAccessModalProps {
   onNavigate: (url: string) => void;
 }
 
-const EarlyAccessModal = ({ request, onClose, onNavigate }: EarlyAccessModalProps) => (
-  <ModalShell onClose={onClose}>
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-white font-semibold text-lg">Early Access Granted 🎉</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-background-700">
-          <X size={20} />
+const EarlyAccessModal = ({ request, onClose, onNavigate }: EarlyAccessModalProps) => {
+  const { theme, primaryColor, accentColor } = useDashboard();
+  const darkMode = theme !== 'light';
+  const pRgb = hexRgb(primaryColor);
+  const textPrimary = darkMode ? '#f1f5f9' : '#111827';
+  const textSecondary = darkMode ? '#94a3b8' : '#6b7280';
+  const insetBg = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
+  const insetBorder = darkMode ? `rgba(${pRgb},0.18)` : 'rgba(0,0,0,0.08)';
+  const gradient = `linear-gradient(135deg,${primaryColor} 0%,${accentColor} 100%)`;
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div style={{ padding: '20px 24px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: textPrimary, margin: 0 }}>Early Access Granted 🎉</h3>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: textSecondary, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <p style={{ fontSize: 13, color: textSecondary, marginBottom: 16, lineHeight: 1.6 }}>
+          You've been approved for early access to <span style={{ color: textPrimary, fontWeight: 600 }}>{request.featureTitle}</span>.
+        </p>
+
+        {request.guidelines && (
+          <div style={{ background: insetBg, border: `1px solid ${insetBorder}`, borderRadius: 12, padding: '12px 16px', marginBottom: 20 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: `rgb(${pRgb})`, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 6px' }}>Guidelines</p>
+            <p style={{ fontSize: 13, color: darkMode ? '#cbd5e1' : '#374151', lineHeight: 1.6, whiteSpace: 'pre-line', margin: 0 }}>{request.guidelines}</p>
+          </div>
+        )}
+
+        <button
+          onClick={() => request.accessLink && onNavigate(request.accessLink)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: gradient, border: 'none', borderRadius: 12, color: '#fff', fontSize: 14, fontWeight: 600, padding: '11px 0', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}
+        >
+          Try Early Access <ExternalLink size={15} />
         </button>
       </div>
-
-      <p className="text-gray-400 text-sm mb-4">
-        You've been approved for early access to <span className="text-white font-medium">{request.featureTitle}</span>.
-      </p>
-
-      {request.guidelines && (
-        <div className="bg-background-900 rounded-lg p-4 mb-6 border border-background-700/50">
-          <p className="text-xs font-medium text-primary-400 mb-2 uppercase tracking-wider">Guidelines</p>
-          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">{request.guidelines}</p>
-        </div>
-      )}
-
-      <button
-        onClick={() => request.accessLink && onNavigate(request.accessLink)}
-        className="flex items-center justify-center gap-2 w-full bg-primary-600 hover:bg-primary-500 text-white py-3 rounded-lg transition-colors font-medium"
-      >
-        Try Early Access <ExternalLink size={16} />
-      </button>
-      <div className="pb-safe h-2 sm:h-0" />
-    </div>
-  </ModalShell>
-);
+    </ModalShell>
+  );
+};
 
 // ─── Feature Request Form Modal ───────────────────────────────────────────────
 interface FeatureRequestModalProps {
@@ -168,6 +245,16 @@ const FeatureRequestModal = ({ studentId, studentName, studentUserId, onClose }:
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const { theme, primaryColor, accentColor } = useDashboard();
+  const darkMode = theme !== 'light';
+  const pRgb = hexRgb(primaryColor);
+  const textPrimary = darkMode ? '#f1f5f9' : '#111827';
+  const textSecondary = darkMode ? '#94a3b8' : '#6b7280';
+  const inputBg = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  const inputBorder = darkMode ? `rgba(${pRgb},0.22)` : 'rgba(0,0,0,0.10)';
+  const btnSecBg = darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+  const btnSecBorder = darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.09)';
+  const gradient = `linear-gradient(135deg,${primaryColor} 0%,${accentColor} 100%)`;
 
   const handleSubmit = async () => {
     if (!description.trim()) return;
@@ -184,32 +271,32 @@ const FeatureRequestModal = ({ studentId, studentName, studentUserId, onClose }:
 
   return (
     <ModalShell onClose={onClose}>
-      <div className="p-6">
+      <div style={{ padding: '20px 24px 24px' }}>
         {submitted ? (
-          <div className="text-center py-6">
-            <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle size={32} className="text-green-400" />
+          <div style={{ textAlign: 'center', padding: '16px 0' }}>
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <CheckCircle size={28} color="#22c55e" />
             </div>
-            <h3 className="text-white font-semibold text-lg mb-2">Request Submitted!</h3>
-            <p className="text-gray-400 text-sm mb-6">
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: textPrimary, margin: '0 0 8px' }}>Request Submitted!</h3>
+            <p style={{ fontSize: 13, color: textSecondary, lineHeight: 1.6, marginBottom: 20 }}>
               Thank you! We've received your feature request and will review it shortly.
             </p>
             <button
               onClick={onClose}
-              className="bg-primary-600 hover:bg-primary-500 text-white py-2.5 px-8 rounded-lg transition-colors font-medium"
+              style={{ background: gradient, border: 'none', borderRadius: 12, color: '#fff', fontSize: 14, fontWeight: 600, padding: '10px 32px', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}
             >
               Done
             </button>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white font-semibold text-lg">Submit Feature Request</h3>
-              <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-background-700">
-                <X size={20} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: textPrimary, margin: 0 }}>Submit Feature Request</h3>
+              <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: textSecondary, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
+                <X size={18} />
               </button>
             </div>
-            <p className="text-gray-400 text-sm mb-4">
+            <p style={{ fontSize: 13, color: textSecondary, marginBottom: 14, lineHeight: 1.6 }}>
               Describe the feature you'd like to see. We review all requests carefully.
             </p>
             <textarea
@@ -217,31 +304,40 @@ const FeatureRequestModal = ({ studentId, studentName, studentUserId, onClose }:
               onChange={e => setDescription(e.target.value)}
               placeholder="E.g. I'd love a dark mode for the mobile app..."
               rows={4}
-              className="w-full bg-background-900 border border-background-700 rounded-lg px-4 py-3 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-colors"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: inputBg, border: `1px solid ${inputBorder}`,
+                borderRadius: 12, padding: '12px 14px',
+                color: textPrimary, fontSize: 13,
+                fontFamily: "'Outfit', sans-serif",
+                resize: 'none', outline: 'none',
+                lineHeight: 1.6, transition: 'border-color 0.2s, box-shadow 0.2s',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = `rgba(${pRgb},0.5)`; e.currentTarget.style.boxShadow = `0 0 0 3px rgba(${pRgb},0.10)`; }}
+              onBlur={e => { e.currentTarget.style.borderColor = inputBorder; e.currentTarget.style.boxShadow = 'none'; }}
             />
-            <div className="flex gap-3 mt-4">
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button
                 onClick={onClose}
-                className="flex-1 bg-background-700 hover:bg-background-600 text-white py-2.5 rounded-lg transition-colors text-sm font-medium"
+                style={{ flex: 1, background: btnSecBg, border: `1px solid ${btnSecBorder}`, borderRadius: 12, color: textSecondary, fontSize: 13, fontWeight: 600, padding: '10px 0', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={!description.trim() || loading}
-                className="flex-1 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                style={{ flex: 1, background: gradient, border: 'none', borderRadius: 12, color: '#fff', fontSize: 13, fontWeight: 600, padding: '10px 0', cursor: !description.trim() || loading ? 'not-allowed' : 'pointer', opacity: !description.trim() || loading ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: "'Outfit', sans-serif" }}
               >
                 {loading ? (
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block', animation: 'cs-spin 0.7s linear infinite' }} />
                 ) : (
-                  <Send size={14} />
+                  <Send size={13} />
                 )}
                 Submit
               </button>
             </div>
           </>
         )}
-        <div className="pb-safe h-2 sm:h-0" />
       </div>
     </ModalShell>
   );
@@ -254,60 +350,63 @@ interface MyRequestsModalProps {
   onClose: () => void;
 }
 
-const MyRequestsModal = ({ requests, onDelete, onClose }: MyRequestsModalProps) => (
-  <div
-    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
-    onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-  >
-    <div className="bg-background-800 border border-background-700/80 rounded-t-2xl sm:rounded-xl w-full sm:max-w-lg shadow-2xl">
-      {/* Handle bar — mobile only */}
-      <div className="flex justify-center pt-3 pb-1 sm:hidden">
-        <div className="w-10 h-1 rounded-full bg-background-600" />
-      </div>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-background-700">
-        <h3 className="text-white font-semibold text-lg">My Feature Requests</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-background-700">
-          <X size={20} />
-        </button>
-      </div>
-      <div className="p-6 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto space-y-3">
-        {requests.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-8">You haven't submitted any feature requests yet.</p>
-        ) : (
-          requests.map(r => (
-            <div key={r.id} className="bg-background-900 rounded-lg p-4 border border-background-700/50">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <p className="text-white text-sm leading-relaxed">{r.description}</p>
-                <span className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${REQUEST_STATUS_STYLES[r.status]}`}>
-                  {REQUEST_STATUS_LABELS[r.status]}
-                </span>
-              </div>
-              {r.adminNote && (
-                <p className="text-gray-400 text-xs mt-2 pt-2 border-t border-background-700">
-                  <span className="text-primary-400">Admin note: </span>{r.adminNote}
+const MyRequestsModal = ({ requests, onDelete, onClose }: MyRequestsModalProps) => {
+  const { theme, primaryColor } = useDashboard();
+  const darkMode = theme !== 'light';
+  const pRgb = hexRgb(primaryColor);
+  const textPrimary = darkMode ? '#f1f5f9' : '#111827';
+  const textSecondary = darkMode ? '#94a3b8' : '#6b7280';
+  const divider = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)';
+  const cardBg = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
+  const cardBorder = darkMode ? `rgba(${pRgb},0.15)` : 'rgba(0,0,0,0.07)';
+
+  return (
+    <ModalShell onClose={onClose} wide>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px 16px', borderBottom: `1px solid ${divider}` }}>
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: textPrimary, margin: 0 }}>My Feature Requests</h3>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: textSecondary, display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: '16px 24px 24px', maxHeight: '55vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {requests.length === 0 ? (
+            <p style={{ fontSize: 13, color: textSecondary, textAlign: 'center', padding: '32px 0', margin: 0 }}>You haven't submitted any feature requests yet.</p>
+          ) : (
+            requests.map(r => (
+              <div key={r.id} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 12, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+                  <p style={{ fontSize: 13, color: textPrimary, lineHeight: 1.6, margin: 0 }}>{r.description}</p>
+                  <span className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${REQUEST_STATUS_STYLES[r.status]}`}>
+                    {REQUEST_STATUS_LABELS[r.status]}
+                  </span>
+                </div>
+                {r.adminNote && (
+                  <p style={{ fontSize: 11, color: textSecondary, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${divider}`, margin: '8px 0 0' }}>
+                    <span style={{ color: `rgb(${pRgb})` }}>Admin note: </span>{r.adminNote}
+                  </p>
+                )}
+                <p style={{ fontSize: 11, color: darkMode ? '#475569' : '#9ca3af', marginTop: 6, marginBottom: 0 }}>
+                  {new Date(r.requestedAt).toLocaleDateString()}
                 </p>
-              )}
-              <p className="text-gray-500 text-xs mt-2">
-                {new Date(r.requestedAt).toLocaleDateString()}
-              </p>
-              <div className="mt-3 flex justify-end">
                 {r.status === 'pending' && (
-                  <button
-                    onClick={() => onDelete(r.id)}
-                    className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    <Trash2 size={11} /> Delete Request
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+                    <button
+                      onClick={() => onDelete(r.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: '#f87171', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}
+                    >
+                      <Trash2 size={11} /> Delete Request
+                    </button>
+                  </div>
                 )}
               </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
-      <div className="pb-safe h-2 sm:h-0" />
-    </div>
-  </div>
-);
+    </ModalShell>
+  );
+};
 
 // ─── Feature Card ─────────────────────────────────────────────────────────────
 interface FeatureCardProps {
@@ -371,7 +470,6 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
       </div>
 
       <div className="p-4 border-t border-background-800 bg-card-dark">
-        {/* If tryLink exists (beta/released or early access approved), always show Try It */}
         {feature.tryLink ? (
           <button
             onClick={() => onNavigate(feature.tryLink!)}
@@ -380,7 +478,6 @@ const FeatureCard = ({ feature, earlyAccess, onRequestAccess, onTryAccess, onCan
             <ExternalLink size={14} /> Try It
           </button>
         ) : feature.progress >= 100 ? (
-          /* 100% done but no link yet — show Completed */
           <div className="flex items-center justify-center gap-2 bg-green-500/10 border border-green-500/20 text-green-400 py-2 rounded text-sm">
             <CheckCircle size={14} /> Completed
           </div>
@@ -480,14 +577,12 @@ const ComingSoon = () => {
   const [showMyRequestsModal, setShowMyRequestsModal] = useState(false);
   const [activeEarlyAccess, setActiveEarlyAccess] = useState<EarlyAccessRequest | null>(null);
 
-  // Load features
   useEffect(() => {
     comingSoonService.getFeatures()
       .then(setFeatures)
       .finally(() => setLoadingFeatures(false));
   }, []);
 
-  // Realtime listener for student's early access requests — stays in sync with admin changes
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = comingSoonService.subscribeEarlyAccessByStudent(user.uid, requests => {
@@ -498,21 +593,18 @@ const ComingSoon = () => {
     return () => unsub();
   }, [user?.uid]);
 
-  // Load student's feature requests
   useEffect(() => {
     if (!user?.uid) return;
     comingSoonService.getFeatureRequestsByStudent(user.uid).then(setMyFeatureRequests);
   }, [user?.uid]);
 
-  const refreshEarlyAccessMap = (uid: string) => {
+  const refreshEarlyAccessMap = (_uid: string) => {
     // No-op — map is now kept live by the onSnapshot listener above
-    // Kept for compatibility with cancel error rollback
   };
 
   const handleRequestAccess = async (feature: ComingSoonFeature) => {
     if (!user) return;
     setRequestingId(feature.id);
-    // Optimistic update so button changes instantly
     setEarlyAccessMap(prev => ({
       ...prev,
       [feature.id]: {
@@ -534,10 +626,8 @@ const ComingSoon = () => {
         user.userId,
         user.email,
       );
-      // Refresh with real Firestore data (gets real doc ID)
       refreshEarlyAccessMap(user.uid);
     } catch {
-      // Roll back optimistic update on failure
       setEarlyAccessMap(prev => {
         const next = { ...prev };
         delete next[feature.id];
@@ -550,20 +640,16 @@ const ComingSoon = () => {
 
   const handleReRequestAccess = async (feature: ComingSoonFeature, oldRequestId: string) => {
     if (!user) return;
-    // Guard — prevent double-tap while in flight
     if (requestingId === feature.id) return;
     setRequestingId(feature.id);
-    // Carry over the current rejectionCount from the existing doc
     const existing = earlyAccessMap[feature.id];
     const rejectionCount = existing?.rejectionCount ?? 0;
-    // Optimistically remove old entry so button shows spinner
     setEarlyAccessMap(prev => {
       const next = { ...prev };
       delete next[feature.id];
       return next;
     });
     try {
-      // Delete old rejected doc first, then create new one
       await comingSoonService.cancelEarlyAccess(oldRequestId);
       await comingSoonService.requestEarlyAccess(
         feature.id,
@@ -574,9 +660,7 @@ const ComingSoon = () => {
         user.email,
         rejectionCount,
       );
-      // onSnapshot will update map automatically
     } catch {
-      // Revert — put old entry back
       if (existing) {
         setEarlyAccessMap(prev => ({ ...prev, [feature.id]: existing }));
       }
@@ -586,7 +670,6 @@ const ComingSoon = () => {
   };
 
   const handleCancelEarlyAccess = async (featureId: string, requestId: string) => {
-    // Optimistic update — remove from map immediately so button resets
     setEarlyAccessMap(prev => {
       const next = { ...prev };
       delete next[featureId];
@@ -595,7 +678,6 @@ const ComingSoon = () => {
     try {
       await comingSoonService.cancelEarlyAccess(requestId);
     } catch {
-      // Revert on failure
       refreshEarlyAccessMap(user!.uid);
     }
   };
@@ -708,6 +790,8 @@ const ComingSoon = () => {
           onClose={() => setActiveEarlyAccess(null)}
         />
       )}
+
+      <style>{`@keyframes cs-spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 };
