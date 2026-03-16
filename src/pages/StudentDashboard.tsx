@@ -19,6 +19,7 @@ import { liveClassService } from '../services/liveClassService';
 import { LiveClass } from '../types/liveClassTypes';
 import { streamService } from '../services/streamService';
 import { LiveStream } from '../types/streamTypes';
+import { liveExamService, LiveExam } from '../services/liveExamService';
 
 interface Objective { id:string; title:string; completed:boolean; priority:'high'|'medium'|'low'; }
 interface Goal { id:string; title:string; description:string; progress:number; target:number; category:string; deadline:Date; }
@@ -64,6 +65,7 @@ const StudentDashboard = () => {
   const [calendarError, setCalendarError]           = useState('');
   const [liveClasses, setLiveClasses]               = useState<LiveClass[]>([]);
   const [liveStreams, setLiveStreams]                = useState<LiveStream[]>([]);
+  const [liveExams, setLiveExams]                   = useState<LiveExam[]>([]);
   const [showObjModal, setShowObjModal]             = useState(false);
   const [showGoalModal, setShowGoalModal]           = useState(false);
   const [showEventModal, setShowEventModal]         = useState(false);
@@ -118,8 +120,8 @@ const StudentDashboard = () => {
   useEffect(() => {
     setDailyQuote(getRandomQuote());
     if (!user) return;
-    loadAnnouncements(); loadCalendarEvents(); loadLiveClasses(); loadLiveStreams();
-    const iv = setInterval(()=>{loadAnnouncements();loadCalendarEvents();loadLiveClasses();loadLiveStreams();},30000);
+    loadAnnouncements(); loadCalendarEvents(); loadLiveClasses(); loadLiveStreams(); loadLiveExams();
+    const iv = setInterval(()=>{loadAnnouncements();loadCalendarEvents();loadLiveClasses();loadLiveStreams();loadLiveExams();},30000);
     return ()=>clearInterval(iv);
   },[user]);
 
@@ -190,6 +192,43 @@ const StudentDashboard = () => {
         }
         return false;
       }));
+    } catch { /* silent — non-critical */ }
+  };
+
+  const loadLiveExams = async () => {
+    if (!user) return;
+    try {
+      const now      = new Date();
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+      // Get enrolled course IDs (same pattern as loadAnnouncements)
+      let enrolledCourseIds: string[] = [];
+      try { enrolledCourseIds = (await courseService.getStudentEnrollments(user.uid)).map(e => e.courseId); } catch {}
+
+      const allEligible = await liveExamService.getLiveExamsForStudent(user.uid, enrolledCourseIds);
+
+      // Keep only exams that: are active, fall within today, and still have attempts remaining
+      const todayExams = allEligible.filter(e => {
+        if (e.status !== 'active') return false;
+        if (e.examTimelineType === 'anytime') return true;
+        const start = e.examStartDateTime ? new Date(e.examStartDateTime) : null;
+        const end   = e.examEndDateTime   ? new Date(e.examEndDateTime)   : null;
+        if (end && now > end) return false;           // already ended
+        if (start && start > todayEnd) return false;  // starts after today
+        return true;
+      });
+
+      // Filter out exams where student has exhausted their attempt limit
+      const withAttempts = await Promise.all(
+        todayExams.map(async e => {
+          if (e.maxAttempts === 'unlimited') return e;
+          const record = await liveExamService.getStudentAttemptRecord(e.id, user.uid);
+          const used = record?.attemptCount ?? 0;
+          return used < (e.maxAttempts as number) ? e : null;
+        })
+      );
+
+      setLiveExams(withAttempts.filter((e): e is LiveExam => e !== null));
     } catch { /* silent — non-critical */ }
   };
 
@@ -363,6 +402,57 @@ const StudentDashboard = () => {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Live Exams Card — only shown when student has remaining-attempt exams today */}
+      {liveExams.length > 0 && (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <Radio size={15} color="#f59e0b"/>
+            <span style={{fontSize:12,fontWeight:700,color:T.text3,textTransform:'uppercase',letterSpacing:'0.08em'}}>Live Exams Today</span>
+          </div>
+          <div style={{
+            padding:'14px 16px',borderRadius:13,
+            background:'rgba(245,158,11,0.07)',
+            border:'1px solid rgba(245,158,11,0.22)',
+            display:'flex',flexDirection:'column',gap:10,
+          }}>
+            {/* Header row */}
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              <div style={{width:36,height:36,borderRadius:10,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(245,158,11,0.15)'}}>
+                <span style={{width:10,height:10,borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 0 3px rgba(245,158,11,0.28)',display:'block',animation:'pulse 1.5s ease-in-out infinite'}}/>
+              </div>
+              <div>
+                <p style={{fontSize:'clamp(0.75rem,1.1vw,0.82rem)',fontWeight:700,color:T.text,margin:0}}>
+                  You've <span style={{color:'#f59e0b'}}>{liveExams.length}</span> live exam{liveExams.length !== 1 ? 's' : ''} scheduled today
+                </p>
+                <p style={{fontSize:10,color:T.text3,margin:'1px 0 0'}}>Tap an exam to open it</p>
+              </div>
+            </div>
+            {/* Exam list */}
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {liveExams.map(exam => (
+                <button
+                  key={exam.id}
+                  onClick={() => navigate(`/student-live-exams?highlight=${exam.id}`)}
+                  style={{
+                    display:'flex',alignItems:'center',gap:10,
+                    padding:'9px 12px',borderRadius:10,
+                    background:T.surface,border:`1px solid ${T.border}`,
+                    cursor:'pointer',textAlign:'left',width:'100%',
+                    fontFamily:"'Outfit',sans-serif",transition:'all 0.15s',
+                  }}
+                  onMouseEnter={e=>{e.currentTarget.style.background=dark?'rgba(245,158,11,0.10)':'rgba(245,158,11,0.08)';e.currentTarget.style.borderColor='rgba(245,158,11,0.30)';}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=T.surface;e.currentTarget.style.borderColor=T.border;}}
+                >
+                  <Radio size={13} color="#f59e0b" style={{flexShrink:0}}/>
+                  <span style={{flex:1,fontSize:'clamp(0.72rem,1.05vw,0.8rem)',fontWeight:600,color:T.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{exam.name}</span>
+                  <span style={{fontSize:9,fontWeight:800,background:'rgba(245,158,11,0.18)',color:'#f59e0b',borderRadius:4,padding:'2px 6px',letterSpacing:'0.05em',flexShrink:0}}>OPEN</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
