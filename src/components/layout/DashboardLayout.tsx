@@ -42,6 +42,18 @@ const DashboardLayout = () => {
   const eyeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flyRafId = useRef(0);
   const isFlying = useRef(false);
+  const chatOpen = useRef(false); // blocks ghost drag while Nova panel is open
+
+  useEffect(() => {
+    const onOpen  = () => { chatOpen.current = true; };
+    const onClose = () => { chatOpen.current = false; };
+    window.addEventListener('nova-chat-open',  onOpen);
+    window.addEventListener('nova-chat-close', onClose);
+    return () => {
+      window.removeEventListener('nova-chat-open',  onOpen);
+      window.removeEventListener('nova-chat-close', onClose);
+    };
+  }, []);
 
   // Nova navigation — ChatbotWidget dispatches 'nova-navigate' with { path }
   const navigate = useNavigate();
@@ -164,8 +176,8 @@ const DashboardLayout = () => {
   }, [savePosition]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    // Block drag during fly animation to prevent position state conflicts
-    if (isFlying.current) return;
+    // Block drag during fly animation or while chat panel is open
+    if (isFlying.current || chatOpen.current) return;
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
     prevDragPos.current = { ...positionRef.current };
@@ -221,8 +233,8 @@ const DashboardLayout = () => {
   }, [savePosition]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    // Block drag during fly animation to prevent position state conflicts
-    if (isFlying.current) return;
+    // Block drag during fly animation or while chat panel is open
+    if (isFlying.current || chatOpen.current) return;
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
     const t = e.touches[0];
