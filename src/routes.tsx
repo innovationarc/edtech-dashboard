@@ -78,6 +78,9 @@ import TeacherStream from './pages/TeacherStream';
 import StudentStream from './pages/StudentStream';
 import StreamSettings from './components/admin/StreamSettings';
 
+// NEW: Live Exam Page
+import LiveExam from './pages/LiveExam';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Returns the correct home dashboard path for any role
@@ -512,6 +515,20 @@ const AppRoutes = () => {
           <AdminRoute>
             <StreamSettings />
           </AdminRoute>
+        } />
+
+        {/* ── Live Exam Routes ── */}
+        {/* Teacher + Admin: create and manage live exams */}
+        <Route path="live-exams" element={
+          <TeacherAdminRoute>
+            <LiveExam />
+          </TeacherAdminRoute>
+        } />
+        {/* Student: view and attempt live exams assigned to them */}
+        <Route path="student-live-exams" element={
+          <StudentRoute>
+            <LiveExam />
+          </StudentRoute>
         } />
 
       </Route>
