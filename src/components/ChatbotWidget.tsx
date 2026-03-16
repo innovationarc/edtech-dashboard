@@ -1,7 +1,7 @@
 // src/components/ChatbotWidget.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { Send, X, AlertTriangle, Info, Sparkles, Zap, ChevronDown } from 'lucide-react';
+import { Send, X, AlertTriangle, Info, Sparkles, ChevronDown } from 'lucide-react';
 import GhostIcon from './ui/GhostIcon';
 import { useDashboard } from '../contexts/DashboardContext';
 import { novaRAGService } from '../services/novaRAGService';
@@ -12,6 +12,75 @@ interface ChatbotWidgetProps { eyeOffset?: { x: number; y: number }; }
 // Fixed pixel heights — MUST match .nvchat-hdr and .nvchat-inp heights in CSS
 const HDR_H = 58;
 const INP_H = 60;
+
+// ── Ghost Avatar ── renders the ghost head scaled for header/bubble use
+// dark=true  → deep purple body (for dark mode panel)
+// dark=false → lavender-to-white body (for light mode panel)
+const GhostAvatar: React.FC<{ size: number; dark: boolean; primary: string; accent: string }> = ({ size, dark, primary, accent }) => {
+  // Derive body gradient stops from primaryColor
+  function lighten(hex: string, f: number) {
+    const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!r) return hex;
+    const blend=(c:number)=>Math.round(c+(255-c)*f);
+    return `#${[parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)].map(c=>`0${blend(c).toString(16)}`.slice(-2)).join('')}`;
+  }
+  function darken(hex: string, f: number) {
+    const r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!r) return hex;
+    const blend=(c:number)=>Math.round(c*(1-f));
+    return `#${[parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)].map(c=>`0${blend(c).toString(16)}`.slice(-2)).join('')}`;
+  }
+
+  // Light mode: white/lavender feel  |  Dark mode: rich primary-toned ghost
+  const bodyTop    = dark ? lighten(primary, 0.30) : '#ffffff';
+  const bodyMid    = dark ? lighten(primary, 0.10) : lighten(primary, 0.55);
+  const bodyBottom = dark ? darken(primary, 0.18)  : lighten(primary, 0.30);
+  const eyeColor   = dark ? '#0f0a1e'              : '#1a1a2e';
+  const glowColor  = dark ? accent                 : primary;
+  const uid = `ga-${size}-${dark?'d':'l'}`;
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 60 65" style={{ overflow:'visible', display:'block', flexShrink:0 }}>
+      <defs>
+        <radialGradient id={`${uid}-body`} cx="38%" cy="22%" r="78%">
+          <stop offset="0%"   stopColor={bodyTop}    />
+          <stop offset="48%"  stopColor={bodyMid}    />
+          <stop offset="100%" stopColor={bodyBottom} />
+        </radialGradient>
+        <radialGradient id={`${uid}-aura`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor={glowColor} stopOpacity="0.45"/>
+          <stop offset="100%" stopColor={glowColor} stopOpacity="0"  />
+        </radialGradient>
+        <filter id={`${uid}-glow`} x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="2.5" result="blur"/>
+          <feFlood floodColor={glowColor} floodOpacity={dark ? '0.4' : '0.25'} result="color"/>
+          <feComposite in="color" in2="blur" operator="in" result="cb"/>
+          <feMerge><feMergeNode in="cb"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      {/* subtle aura disk behind the ghost */}
+      <ellipse cx="30" cy="61" rx="16" ry="4" fill={`url(#${uid}-aura)`}/>
+      <g filter={`url(#${uid}-glow)`}>
+        {/* Ghost body — same path family as GhostIcon.tsx */}
+        <path fill={`url(#${uid}-body)`}
+          d="M30,3 C42,3 52,12 52,26 C52,36 52,43 52,48 C52,52 48,52 46,52 C44,52 43,47 41,47 C39,47 38.5,57 30,57 C21.5,57 21,47 19,47 C17,47 16,52 14,52 C12,52 8,52 8,48 C8,43 8,36 8,26 C8,12 18,3 30,3 Z"/>
+        {/* Light inner highlight on body — adds depth in both modes */}
+        <ellipse cx="22" cy="18" rx="6" ry="8"
+          fill="white" opacity={dark ? 0.07 : 0.45}/>
+        {/* Eyes */}
+        <ellipse cx="22" cy="27" rx="4.5" ry="4.8" fill={eyeColor}/>
+        <ellipse cx="24.5" cy="24.8" rx="1.5" ry="1.8" fill="white" opacity="0.7"/>
+        <ellipse cx="38" cy="27" rx="4.5" ry="4.8" fill={eyeColor}/>
+        <ellipse cx="40.5" cy="24.8" rx="1.5" ry="1.8" fill="white" opacity="0.7"/>
+        {/* Smile */}
+        <path d="M24,38 Q30,44 36,38" stroke={eyeColor} strokeWidth="2.2" strokeLinecap="round" fill="none" opacity="0.8"/>
+        {/* Blush — soft cheek tint */}
+        <ellipse cx="17" cy="33" rx="4" ry="2.5" fill={dark ? '#f472b6' : primary} opacity="0.15"/>
+        <ellipse cx="43" cy="33" rx="4" ry="2.5" fill={dark ? '#f472b6' : primary} opacity="0.15"/>
+      </g>
+    </svg>
+  );
+};
 
 const TypingDots = () => (
   <div style={{ display:'flex', gap:4, alignItems:'center', padding:'9px 12px' }}>
@@ -294,8 +363,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
             backgroundImage:`linear-gradient(135deg,rgba(${pr},${dark?0.08:0.05}) 0%,transparent 55%)`,
             borderBottom:`1px solid ${border}`,
           }}>
-            <div style={{ width:32,height:32,borderRadius:10,flexShrink:0,background:gradient,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:`0 2px 10px rgba(${pr},.4),inset 0 1px 0 rgba(255,255,255,.18)` }}>
-              <Zap size={15} color="#fff" strokeWidth={2.5}/>
+            <div style={{ width:36,height:36,borderRadius:12,flexShrink:0,background:dark?`rgba(${pr},.18)`:`rgba(${pr},.1)`,border:`1px solid rgba(${pr},.22)`,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden' }}>
+              <GhostAvatar size={28} dark={dark} primary={primary} accent={accent}/>
             </div>
             <div style={{ flex:1,minWidth:0 }}>
               <div style={{ fontSize:13,fontWeight:700,color:txtPri,letterSpacing:'-0.01em',lineHeight:1.2 }}>Nova</div>
@@ -337,7 +406,9 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
             {/* Empty state */}
             {historyLoaded && messages.length === 0 && (
               <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px 16px',textAlign:'center',gap:12 }}>
-                <div style={{ width:46,height:46,borderRadius:15,background:`rgba(${pr},.1)`,border:`1px solid rgba(${pr},.22)`,display:'flex',alignItems:'center',justifyContent:'center',color:primary }}><Sparkles size={20}/></div>
+                <div style={{ width:56,height:56,borderRadius:18,background:dark?`rgba(${pr},.16)`:`rgba(${pr},.09)`,border:`1px solid rgba(${pr},.22)`,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden' }}>
+                  <GhostAvatar size={40} dark={dark} primary={primary} accent={accent}/>
+                </div>
                 <div>
                   <div style={{ fontSize:14,fontWeight:800,color:txtPri,marginBottom:4 }}>Hi, I'm Nova ✦</div>
                   <div style={{ fontSize:11.5,color:txtDim,lineHeight:1.55,maxWidth:195 }}>Your AI assistant. Ask anything about the platform, your studies, or anything else.</div>
@@ -372,8 +443,8 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
                 return (
                   <div key={msg.id} style={{ display:'flex',alignItems:'flex-end',gap:6,flexDirection:msg.sender==='user'?'row-reverse':'row',marginBottom:3,marginTop:isFirst?8:0 }}>
                     {msg.sender==='ai' && (
-                      <div style={{ width:21,height:21,borderRadius:7,flexShrink:0,alignSelf:'flex-end',background:gradient,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:`0 2px 6px rgba(${pr},.3)`,visibility:nextSame?'hidden':'visible' }}>
-                        <Zap size={9} color="#fff" strokeWidth={2.5}/>
+                      <div style={{ width:24,height:24,borderRadius:8,flexShrink:0,alignSelf:'flex-end',background:dark?`rgba(${pr},.18)`:`rgba(${pr},.1)`,border:`1px solid rgba(${pr},.2)`,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',visibility:nextSame?'hidden':'visible' }}>
+                        <GhostAvatar size={18} dark={dark} primary={primary} accent={accent}/>
                       </div>
                     )}
                     <div style={{ display:'flex',flexDirection:'column',gap:2,maxWidth:'min(72%,255px)',alignItems:msg.sender==='user'?'flex-end':'flex-start' }}>
@@ -394,7 +465,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
             {/* Typing indicator */}
             {isLoading && (
               <div style={{ display:'flex',alignItems:'flex-end',gap:6,marginTop:8 }}>
-                <div style={{ width:21,height:21,borderRadius:7,flexShrink:0,background:gradient,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:`0 2px 6px rgba(${pr},.3)` }}><Zap size={9} color="#fff" strokeWidth={2.5}/></div>
+                <div style={{ width:24,height:24,borderRadius:8,flexShrink:0,background:dark?`rgba(${pr},.18)`:`rgba(${pr},.1)`,border:`1px solid rgba(${pr},.2)`,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden' }}><GhostAvatar size={18} dark={dark} primary={primary} accent={accent}/></div>
                 <div style={{ background:bbAi,border:`1px solid ${bbAiBdr}`,borderRadius:14,borderBottomLeftRadius:4 }}><TypingDots/></div>
               </div>
             )}
