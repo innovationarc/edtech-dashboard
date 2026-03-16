@@ -449,6 +449,8 @@ const DashboardLayout = () => {
       <style>{`
         .dl-main::-webkit-scrollbar { display: none !important; }
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+        .dl-inner::-webkit-scrollbar { display: none !important; }
+        .dl-inner { scrollbar-width: none !important; -ms-overflow-style: none !important; }
 
         /* ── Login stagger: GPU-only (transform + opacity only) ── */
         @keyframes loginFadeUp {
@@ -480,8 +482,8 @@ const DashboardLayout = () => {
       {isAuthenticated && <Navigation />}
 
       <div className={`flex-1 flex flex-col ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`} style={{ background: 'transparent' }}>
-        <main className="dl-main flex-1 overflow-auto" style={{ paddingTop: isMobile ? 60 : 64, background: 'transparent' }}>
-          <div className={`p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`}>
+        <main className="dl-main flex-1 overflow-hidden" style={{ paddingTop: isMobile ? 60 : 64, background: 'transparent' }}>
+          <div className={`dl-inner h-full overflow-y-auto p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`}>
             <PageTransition>
               <Outlet />
             </PageTransition>
