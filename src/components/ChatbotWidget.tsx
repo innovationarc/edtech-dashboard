@@ -279,11 +279,11 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
         <div onClick={()=>setShowInfo(false)} style={{ position:'fixed',inset:0,zIndex:10001,background:'rgba(0,0,0,0.72)',backdropFilter:'blur(8px)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,animation:'nvchat-fade .14s ease',fontFamily:"'Outfit',sans-serif" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:bg,backdropFilter:'blur(32px)',border:`1px solid ${border}`,borderRadius:20,width:'min(400px,100%)',overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,.75)',animation:'nvchat-min .18s cubic-bezier(.34,1.3,.64,1)',fontFamily:"'Outfit',sans-serif" }}>
             <div style={{ padding:'13px 15px',borderBottom:`1px solid ${border}`,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
-              <div style={{ display:'flex',alignItems:'center',gap:8 }}><Sparkles size={15} style={{ color:accent }}/><span style={{ color:txtPri,fontWeight:700,fontSize:13.5 }}>About Nova</span></div>
+              <div style={{ display:'flex',alignItems:'center',gap:8 }}><Sparkles size={15} style={{ color:accent }}/><span style={{ color:txtPri,fontWeight:700,fontSize:13.5 }}>About Aura</span></div>
               <button onClick={()=>setShowInfo(false)} className="nvchat-ibtn" style={{ width:28,height:28,borderRadius:8,background:surf3,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:txtDim }}><X size={14}/></button>
             </div>
             <div style={{ padding:15,display:'flex',flexDirection:'column',gap:10 }}>
-              <p style={{ fontSize:12.5,color:txtMut,lineHeight:1.6,margin:0 }}>Nova is your AI assistant — here to help with platform questions, studies, scheduling, and anything else.</p>
+              <p style={{ fontSize:12.5,color:txtMut,lineHeight:1.6,margin:0 }}>Aura is your AI assistant — here to help with platform questions, studies, scheduling, and anything else.</p>
               <div style={{ background:surf2,border:`1px solid ${border}`,borderRadius:12,padding:'11px 13px',fontSize:12.5,color:txtMut,lineHeight:1.6 }}>
                 <strong style={{ color:txtPri,display:'block',marginBottom:5 }}>✦ Capabilities</strong>
                 <ul style={{ paddingLeft:14,margin:0,display:'flex',flexDirection:'column',gap:3 }}><li>Platform navigation & feature help</li><li>Study guidance & concept explanations</li><li>Assignment and schedule queries</li><li>Powered by Admin → AI Model Settings</li></ul>
@@ -342,7 +342,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
             fontFamily:"'Outfit',sans-serif",
           }}
           role="dialog"
-          aria-label="Nova AI assistant"
+          aria-label="Aura AI assistant"
           // Stop touch events from reaching window listeners (blocks ghost drag while scrolling)
           onTouchStart={e => e.stopPropagation()}
         >
@@ -367,7 +367,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
               <GhostAvatar size={28} dark={dark} primary={primary} accent={accent}/>
             </div>
             <div style={{ flex:1,minWidth:0 }}>
-              <div style={{ fontSize:13,fontWeight:700,color:txtPri,letterSpacing:'-0.01em',lineHeight:1.2 }}>Nova</div>
+              <div style={{ fontSize:13,fontWeight:700,color:txtPri,letterSpacing:'-0.01em',lineHeight:1.2 }}>Aura</div>
               <div style={{ display:'flex',alignItems:'center',gap:5,marginTop:1 }}>
                 <span style={{ width:6,height:6,borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 6px rgba(34,197,94,.7)',flexShrink:0,animation:'nvchat-dot 2.2s ease-in-out infinite',display:'inline-block' }}/>
                 <span style={{ fontSize:10,color:txtDim,fontWeight:500 }}>AI Assistant · Online</span>
@@ -410,7 +410,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
                   <GhostAvatar size={40} dark={dark} primary={primary} accent={accent}/>
                 </div>
                 <div>
-                  <div style={{ fontSize:14,fontWeight:800,color:txtPri,marginBottom:4 }}>Hi, I'm Nova ✦</div>
+                  <div style={{ fontSize:14,fontWeight:800,color:txtPri,marginBottom:4 }}>Hi, I'm Aura ✦</div>
                   <div style={{ fontSize:11.5,color:txtDim,lineHeight:1.55,maxWidth:195 }}>Your AI assistant. Ask anything about the platform, your studies, or anything else.</div>
                 </div>
                 <div style={{ display:'flex',flexWrap:'wrap',gap:6,justifyContent:'center',marginTop:2 }}>
@@ -496,7 +496,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
                 value={inputMessage}
                 onChange={e=>setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask Nova anything…"
+                placeholder="Ask Aura anything…"
                 disabled={isLoading}
                 aria-label="Message input"
                 style={{ flex:1,minWidth:0,background:'transparent',border:'none',color:txtPri,fontSize:13,fontFamily:"'Outfit',sans-serif",padding:'4px 0',lineHeight:1.4,outline:'none',WebkitTapHighlightColor:'transparent' }}
@@ -517,7 +517,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
                 <Send size={12} strokeWidth={2.2}/>
               </button>
             </div>
-            <p style={{ fontSize:9.5,color:txtDim,textAlign:'center',margin:0,fontFamily:"'Outfit',sans-serif" }}>Nova · AI-Powered Assistant</p>
+            <p style={{ fontSize:9.5,color:txtDim,textAlign:'center',margin:0,fontFamily:"'Outfit',sans-serif" }}>Aura · AI-Powered Assistant</p>
           </div>
 
         </div>
@@ -527,7 +527,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset }) => {
 
   return (
     <>
-      <button onClick={handleGhostTap} className="nvchat-ghost" aria-label={isOpen?'Close Nova':'Open Nova'}>
+      <button onClick={handleGhostTap} className="nvchat-ghost" aria-label={isOpen?'Close Aura':'Open Aura'}>
         <GhostIcon size={72} isActive={isOpen}/>
       </button>
       {ReactDOM.createPortal(portal, document.body)}
