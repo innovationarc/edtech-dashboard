@@ -456,6 +456,8 @@ const AppRoutes = () => {
         <Route path="content-library/note/:courseId/:contentId" element={<NoteViewer />} />
         {/* Exam viewer — accessible to all authenticated users (student takes exam here) */}
         <Route path="content-library/exam/:courseId/:contentId" element={<ExamViewer />} />
+        {/* Live exam direct route — no courseId, used by live exam page */}
+        <Route path="exam/:contentId" element={<ExamViewer />} />
 
         {/* ── Exam Evaluation Routes ── */}
         {/* Hub page — shows all exams with written parts */}
