@@ -14,46 +14,42 @@ const PageTransition = ({ children }: Props) => {
   const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Same path — don't re-animate (handles strict mode double-mount)
     pendingRef.current = children;
-
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    // Step 1: exit current page
     setPhase('exit');
 
     timerRef.current = setTimeout(() => {
-      // Step 2: swap content while invisible
       setDisplayChildren(pendingRef.current);
       setPhase('enter');
 
       timerRef.current = setTimeout(() => {
         setPhase('idle');
-      }, 420); // match enter duration
-    }, 160); // exit duration
+      }, 420);
+    }, 160);
 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [location.pathname]);
 
   const style: React.CSSProperties = {
-    willChange: 'transform, opacity',
+    // willChange + transform only during animation, never at idle.
+    // At idle: no transform, no willChange → no containing block
+    // → position:fixed modals escape correctly, backdrop-filter works on cards.
     ...(phase === 'exit' ? {
+      willChange: 'transform, opacity',
       opacity: 0,
       transform: 'translateY(-6px)',
       transition: 'opacity 0.16s cubic-bezier(0.25,0.46,0.45,0.94), transform 0.16s cubic-bezier(0.25,0.46,0.45,0.94)',
     } : phase === 'enter' ? {
+      willChange: 'transform, opacity',
       opacity: 0,
       transform: 'translateY(10px)',
-      // No transition on enter start — we add it after one frame
     } : {
+      // idle — clean slate, no transform, no willChange
       opacity: 1,
-      // No transform at idle — translateY(0) still creates a containing block
-      // which breaks position:fixed modals (black background).
-      transition: 'opacity 0.38s cubic-bezier(0.25,0.46,0.45,0.94), transform 0.42s cubic-bezier(0.25,0.46,0.45,0.94)',
     }),
   };
 
-  // After swapping to 'enter' phase, trigger the spring-in on next frame
   const divRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (phase === 'enter' && divRef.current) {
@@ -76,4 +72,3 @@ const PageTransition = ({ children }: Props) => {
 };
 
 export default PageTransition;
-
