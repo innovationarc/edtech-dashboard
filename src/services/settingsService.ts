@@ -37,6 +37,7 @@ export interface GeneralSettings {
 }
 
 export interface NotificationSettings {
+  // ── Legacy admin fields (kept for backwards-compat) ──────────────────────
   newUserRegistrations: boolean;
   newContentUploads: boolean;
   studyPlanUpdates: boolean;
@@ -45,6 +46,17 @@ export interface NotificationSettings {
   contentEngagementMetrics: boolean;
   weeklySummaryReports: boolean;
   notificationFrequency: 'immediate' | 'hourly' | 'daily' | 'weekly';
+
+  // ── Per-category in-app notification toggles ─────────────────────────────
+  // When false, that category is hidden in NotificationsPage for this user.
+  notifyAnnouncements: boolean;      // type: announcement
+  notifyCourseEnrollment: boolean;   // relatedType: courseEnrollment
+  notifyQaAnswers: boolean;          // relatedType: qa  (answered only)
+  notifyTaskAssigned: boolean;       // relatedType: taskGroup
+  notifyTaskEvaluation: boolean;     // relatedType: task (grade)
+  notifyExamResults: boolean;        // relatedType: exam
+  notifyStudyPlan: boolean;          // relatedType: studyGoal | studySchedule | streakFreeze
+  notifyEarlyAccess: boolean;        // relatedType: earlyAccess | featureRequest
 }
 
 export interface SecuritySettings {
@@ -207,6 +219,14 @@ export const getUserGeneralSettings = async (
   const snap = await getDoc(userSettingsRef(uid));
   if (!snap.exists()) return null;
   return (snap.data() as UserSettings).general ?? null;
+};
+
+export const getUserNotificationSettings = async (
+  uid: string
+): Promise<NotificationSettings | null> => {
+  const snap = await getDoc(userSettingsRef(uid));
+  if (!snap.exists()) return null;
+  return (snap.data() as UserSettings).notifications ?? null;
 };
 
 // ─── Login logs ───────────────────────────────────────────────────────────────
