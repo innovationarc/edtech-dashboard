@@ -1,4 +1,4 @@
-// src/components/ui/GhostIcon.tsx
+// src/components/ui/GhostIcon.tsx 
 import React, { useEffect, useRef } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
 
