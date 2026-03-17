@@ -56,7 +56,8 @@ export interface NotificationSettings {
   notifyTaskEvaluation: boolean;     // relatedType: task (grade)
   notifyExamResults: boolean;        // relatedType: exam
   notifyStudyPlan: boolean;          // relatedType: studyGoal | studySchedule | streakFreeze
-  notifyEarlyAccess: boolean;        // relatedType: earlyAccess | featureRequest
+  notifyEarlyAccess: boolean;        // relatedType: earlyAccess | featureRequest (approve/reject/status)
+  notifyNewComingSoonFeatures: boolean; // relatedType: comingSoon (new feature announced)
 }
 
 export interface SecuritySettings {
