@@ -52,6 +52,13 @@ export interface AppNotification {
   relatedType?: string;
   /** Extra data (teacherName, courseName, grade, etc.) */
   metadata?: Record<string, unknown>;
+  /**
+   * Permanent notifications (announcements, enrollment, QA answers,
+   * exam results, task evaluation) stay until the student manually deletes
+   * them.  Transient notifications (casual in-app confirmations) are
+   * auto-purged after 24 hours.
+   */
+  isPermanent?: boolean;
 }
 
 // ─────────────────────────────────────────
@@ -300,4 +307,27 @@ export const notificationService = {
       console.warn('notificationService.syncAnnouncementsAsNotifications:', err.message);
     }
   },
+  /**
+   * Delete all non-permanent notifications older than 24 hours for a user.
+   * Call this once on mount of NotificationsPage so the inbox stays clean.
+   */
+  async purgeTransient(userId: string): Promise<void> {
+    try {
+      const cutoff = new Date(Date.now() - 10 * 1000); // 10 seconds
+      const q = query(
+        collection(db, NOTIF_COLLECTION),
+        where('userId', '==', userId),
+        where('isPermanent', '==', false),
+        where('createdAt', '<', Timestamp.fromDate(cutoff))
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) return;
+      const batch = writeBatch(db);
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    } catch {
+      // Non-fatal — surface nothing, page still loads
+    }
+  },
+
 };
