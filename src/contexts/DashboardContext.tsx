@@ -51,9 +51,6 @@ interface DashboardContextType {
   // NEW: forced logout message for single-device enforcement
   forcedLogoutMessage: string | null;
   setForcedLogoutMessage: (msg: string | null) => void;
-  // Login animation trigger
-  showLoginAnimation: boolean;
-  setShowLoginAnimation: (v: boolean) => void;
 }
 
 export const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -151,7 +148,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
 
   // NEW: Forced logout message state (persists across sign-out so SignInModal can display it)
   const [forcedLogoutMessage, setForcedLogoutMessage] = useState<string | null>(null);
-  const [showLoginAnimation, setShowLoginAnimation] = useState(false);
+
 
   // NEW: Ref to hold the Firestore session listener unsubscribe function
   const sessionListenerRef = React.useRef<(() => void) | null>(null);
@@ -568,7 +565,6 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       // Set user state immediately after successful sign-in
       setUser(userProfile);
       setIsAuthenticated(true);
-      setShowLoginAnimation(true);
       
       // Only auto-open sidebar on desktop
       if (isDesktop) {
@@ -716,8 +712,6 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setCardAnimation: handleSetCardAnimation,
         forcedLogoutMessage,
         setForcedLogoutMessage,
-        showLoginAnimation,
-        setShowLoginAnimation,
       }}
     >
       {children}
