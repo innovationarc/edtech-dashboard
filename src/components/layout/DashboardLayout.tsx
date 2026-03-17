@@ -15,12 +15,25 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
-// Clamp ghost position so it can never be saved/loaded in a permanently off-screen state.
-// The ghost is anchored bottom-right; tx/ty are offsets from that base corner.
-const clampPosition = (pos: { x: number; y: number }): { x: number; y: number } => ({
-  x: Math.max(-(window.innerWidth  - 80), Math.min(window.innerWidth  - 80, pos.x)),
-  y: Math.max(-(window.innerHeight - 80), Math.min(window.innerHeight - 80, pos.y)),
-});
+// Ghost is anchored bottom-right at (R, B) px from the viewport edges.
+// tx/ty are translate offsets applied on top of that anchor.
+// This clamp ensures the ghost stays fully within the viewport at all times.
+const clampPosition = (
+  pos: { x: number; y: number },
+  widgetEl: HTMLDivElement | null,
+  isMobile: boolean,
+): { x: number; y: number } => {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const R = isMobile ? 16 : 20; // right anchor
+  const B = isMobile ? 76 : 20; // bottom anchor
+  const ghostW = widgetEl ? widgetEl.offsetWidth  : 56;
+  const ghostH = widgetEl ? widgetEl.offsetHeight : 56;
+  return {
+    x: Math.max(ghostW - W + R, Math.min(R, pos.x)),
+    y: Math.max(ghostH - H + B, Math.min(B, pos.y)),
+  };
+};
 
 const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated, theme, glitterTheme, showLoginAnimation } = useDashboard();
@@ -38,11 +51,15 @@ const DashboardLayout = () => {
   const positionRef = useRef({ x: 0, y: 0 });
   const prevDragPos = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
+  const isMobileRef = useRef(false); // mirror of isMobile state for use inside event handlers
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eyeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flyRafId = useRef(0);
   const isFlying = useRef(false);
   const chatOpen = useRef(false); // blocks ghost drag while Nova panel is open
+
+  // Keep isMobileRef in sync with isMobile state
+  useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
 
   useEffect(() => {
     const onOpen  = () => { chatOpen.current = true; };
@@ -93,7 +110,7 @@ const DashboardLayout = () => {
           const saved = snap.data()?.preferences?.chatbotWidgetPosition;
           if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
             // Clamp loaded position — recovers any previously-saved off-screen coordinates
-            const clamped = clampPosition(saved);
+            const clamped = clampPosition(saved, widgetRef.current, isMobileRef.current);
             positionRef.current = clamped;
             setPosition(clamped);
           }
@@ -139,11 +156,8 @@ const DashboardLayout = () => {
       dragging.current = true;
       hasMoved.current = true;
 
-      // Clamp during drag to prevent ghost going permanently off-screen
-      const rawX = dragStart.current.posX + dx;
-      const rawY = dragStart.current.posY + dy;
-      const newX = Math.max(-(window.innerWidth - 80), Math.min(window.innerWidth - 80, rawX));
-      const newY = Math.max(-(window.innerHeight - 80), Math.min(window.innerHeight - 80, rawY));
+      const raw = { x: dragStart.current.posX + dx, y: dragStart.current.posY + dy };
+      const { x: newX, y: newY } = clampPosition(raw, widgetRef.current, isMobileRef.current);
 
       // Eye offset from frame delta
       const fdx = newX - prevDragPos.current.x;
@@ -161,7 +175,7 @@ const DashboardLayout = () => {
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
       // Clamp final position before saving to Firestore
-      const finalPos = clampPosition({ ...positionRef.current });
+      const finalPos = clampPosition({ ...positionRef.current }, widgetRef.current, isMobileRef.current);
       positionRef.current = finalPos;
       setPosition(finalPos);
       savePosition(finalPos);
@@ -197,11 +211,8 @@ const DashboardLayout = () => {
       hasMoved.current = true;
       e.preventDefault();
 
-      // Clamp during drag to prevent ghost going permanently off-screen
-      const rawX = dragStart.current.posX + dx;
-      const rawY = dragStart.current.posY + dy;
-      const newX = Math.max(-(window.innerWidth - 80), Math.min(window.innerWidth - 80, rawX));
-      const newY = Math.max(-(window.innerHeight - 80), Math.min(window.innerHeight - 80, rawY));
+      const raw = { x: dragStart.current.posX + dx, y: dragStart.current.posY + dy };
+      const { x: newX, y: newY } = clampPosition(raw, widgetRef.current, isMobileRef.current);
 
       const fdx = newX - prevDragPos.current.x;
       const fdy = newY - prevDragPos.current.y;
@@ -218,7 +229,7 @@ const DashboardLayout = () => {
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
       // Clamp final position before saving to Firestore
-      const finalPos = clampPosition({ ...positionRef.current });
+      const finalPos = clampPosition({ ...positionRef.current }, widgetRef.current, isMobileRef.current);
       positionRef.current = finalPos;
       setPosition(finalPos);
       savePosition(finalPos);
