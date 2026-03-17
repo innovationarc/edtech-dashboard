@@ -6,7 +6,7 @@ import { useDashboard } from '../../contexts/DashboardContext';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
 import AuthenticationModal from '../auth/AuthenticationModal';
-import LoginAnimation from '../ui/LoginAnimation';
+
 import PageTransition from '../ui/PageTransition';
 import TopProgressBar from '../ui/TopProgressBar';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -36,7 +36,7 @@ const clampPosition = (
 };
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated, theme, glitterTheme, showLoginAnimation } = useDashboard();
+  const { sidebarOpen, isAuthenticated, theme, glitterTheme } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
@@ -342,19 +342,7 @@ const DashboardLayout = () => {
     };
   }, []);
 
-  // Trigger card stagger at 2700ms — just as the overlay finishes dissolving (phase 6 = 2600ms + 100ms buffer)
-  useEffect(() => {
-    if (!showLoginAnimation) return;
-    const t = setTimeout(() => {
-      setStaggerActive(true);
-      document.body.classList.add('login-stagger-active');
-      setTimeout(() => {
-        setStaggerActive(false);
-        document.body.classList.remove('login-stagger-active');
-      }, 1200);
-    }, 2700);
-    return () => clearTimeout(t);
-  }, [showLoginAnimation]);
+
 
   const isLight = theme === 'light';
 
@@ -533,7 +521,7 @@ const DashboardLayout = () => {
       )}
 
       <TopProgressBar />
-      <LoginAnimation />
+
     </div>
   );
 };
