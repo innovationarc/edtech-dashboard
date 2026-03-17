@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { X, Megaphone, AlertCircle, Bell, BookOpen, Loader } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { announcementService } from '../../services/announcementService';
+import { notificationService } from '../../services/notificationService';
 
 interface CreateAnnouncementModalProps {
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (announcement: { id: string; title: string; message: string; type: string; priority: string; subject: string; targetAudience: string; targetStudents: string[] }) => void;
 }
 
 const CreateAnnouncementModal = ({ onClose, onSuccess }: CreateAnnouncementModalProps) => {
@@ -94,6 +95,25 @@ const CreateAnnouncementModal = ({ onClose, onSuccess }: CreateAnnouncementModal
       const announcementId = await announcementService.createAnnouncement(announcementData);
       
       console.log('Announcement created successfully with ID:', announcementId);
+
+      // Fan out notifications to specifically targeted students immediately.
+      // For 'all' and 'course' audiences, syncAnnouncementsAsNotifications handles
+      // delivery on the student's next visit to the notifications page.
+      if (formData.targetAudience === 'specific' && formData.targetStudents.length > 0) {
+        formData.targetStudents.forEach(userId => {
+          notificationService.createNotification({
+            userId,
+            title: formData.title.trim(),
+            message: formData.message.trim(),
+            type: formData.type as any,
+            priority: formData.priority as any,
+            isPermanent: true,
+            relatedId: announcementId,
+            relatedType: 'announcement',
+            metadata: { subject: formData.subject },
+          });
+        });
+      }
       
       // Add success notification
       if ((window as any).addNotification) {
@@ -108,7 +128,16 @@ const CreateAnnouncementModal = ({ onClose, onSuccess }: CreateAnnouncementModal
       // Show success message briefly, then close
       setTimeout(() => {
         if (onSuccess) {
-          onSuccess();
+          onSuccess({
+            id: announcementId,
+            title: formData.title.trim(),
+            message: formData.message.trim(),
+            type: formData.type,
+            priority: formData.priority,
+            subject: formData.subject,
+            targetAudience: formData.targetAudience,
+            targetStudents: formData.targetStudents,
+          });
         }
         onClose();
       }, 2000);
