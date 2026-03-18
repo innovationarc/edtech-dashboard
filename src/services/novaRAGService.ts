@@ -25,7 +25,7 @@ const MAX_MSG_CHARS = 220;
 // Max memory messages to include (short-term RAG memory)
 const MAX_MEMORY_MSGS = 12;
 // Max persistent history messages to include as context
-const MAX_HISTORY_CONTEXT = 6;
+const MAX_HISTORY_CONTEXT = 10;
 // Max tokens for chatbot response
 const CHAT_MAX_TOKENS = 1200;
 const CHAT_TEMPERATURE = 0.7;
