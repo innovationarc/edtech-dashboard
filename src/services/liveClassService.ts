@@ -89,7 +89,8 @@ export const liveClassService = {
     provider: 'jitsi' | '100ms',
     activeKeyId: string,
     jitsiRoomId: string,
-    hmsRoomId?: string
+    hmsRoomId?: string,
+    contentId?: string
   ): Promise<string> {
     const ref = await addDoc(collection(db, 'live_classes'), {
       title: form.title,
@@ -98,6 +99,7 @@ export const liveClassService = {
       teacherName,
       courseId: form.courseId || null,
       courseName: form.courseName || null,
+      contentId: contentId || null,
       scheduledAt: Timestamp.fromDate(new Date(form.scheduledAt)),
       durationMins: form.durationMins,
       status: 'scheduled',
