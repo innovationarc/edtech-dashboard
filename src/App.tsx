@@ -4,23 +4,45 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes';
 import { DashboardProvider } from './contexts/DashboardContext';
 
+// Module-level promise — resolves once grecaptcha is ready, shared across all components
+let recaptchaReadyPromise: Promise<void> | null = null;
+
+export const waitForRecaptcha = (): Promise<void> => {
+  if (recaptchaReadyPromise) return recaptchaReadyPromise;
+
+  recaptchaReadyPromise = new Promise((resolve) => {
+    if (window.grecaptcha) { resolve(); return; }
+    const interval = setInterval(() => {
+      if (window.grecaptcha) { clearInterval(interval); resolve(); }
+    }, 100);
+  });
+
+  return recaptchaReadyPromise;
+};
+
 function App() {
   useEffect(() => {
     const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
-    if (!siteKey || document.getElementById('recaptcha-script')) return;
+    if (!siteKey || document.getElementById('recaptcha-script')) {
+      // Script already exists, resolve immediately
+      waitForRecaptcha();
+      return;
+    }
 
-    // Inject reCAPTCHA v3 script once, globally
     const script = document.createElement('script');
     script.id = 'recaptcha-script';
     script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
     script.async = true;
     document.head.appendChild(script);
 
-    // Hide the floating badge (Google ToS: must show disclosure text instead)
+    // Hide the floating badge
     const style = document.createElement('style');
     style.id = 'recaptcha-badge-hide';
     style.textContent = `.grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }`;
     document.head.appendChild(style);
+
+    // Start resolving the promise early
+    waitForRecaptcha();
   }, []);
 
   return (
