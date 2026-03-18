@@ -218,22 +218,23 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
 
         {/* Title + time */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, width: '100%' }}>
           <p style={{
             fontSize: 13, fontWeight: notif.isRead ? 500 : 700, margin: 0,
             color: darkMode ? (notif.isRead ? '#94a3b8' : '#f1f5f9') : (notif.isRead ? '#6b7280' : '#111827'),
             lineHeight: 1.3,
             overflow: 'hidden', textOverflow: 'ellipsis',
-            display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
+            whiteSpace: 'nowrap', flex: 1, minWidth: 0,
           }}>
             {notif.title}
           </p>
           <span style={{
             fontSize: 11, color: '#94a3b8', flexShrink: 0,
             marginTop: 1, fontWeight: 500, letterSpacing: '-0.01em',
+            whiteSpace: 'nowrap',
           }}>
             {relativeTime(notif.createdAt)}
           </span>
@@ -244,7 +245,7 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
           fontSize: 13, color: darkMode ? '#64748b' : '#6b7280',
           margin: '5px 0 0', lineHeight: 1.55,
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
+          overflow: 'hidden', wordBreak: 'break-word',
         }}>
           {notif.message}
         </p>
