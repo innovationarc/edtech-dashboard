@@ -83,7 +83,7 @@ const PageTransition = ({ children }: Props) => {
   }, [phase]);
 
   return (
-    <div ref={divRef} style={{ ...style, width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+    <div ref={divRef} style={{ ...style, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       {displayChildren}
     </div>
   );
