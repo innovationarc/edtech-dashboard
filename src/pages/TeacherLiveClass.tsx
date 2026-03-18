@@ -11,6 +11,7 @@ import { liveClassService, attendanceService, liveClassSettingsService } from '.
 import { prepareClassRoom } from '../services/liveClassProviderService';
 import { generateHMSAuthToken } from '../services/liveClassProviderService';
 import { LiveClass, ScheduleClassForm, JoinInfo } from '../types/liveClassTypes';
+import { contentService, Content } from '../services/contentService';
 import JitsiRoom from '../components/liveClass/JitsiRoom';
 import HMSRoom from '../components/liveClass/HMSRoom';
 
@@ -170,7 +171,7 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({
   );
 };
 
-// ─── Recording Upload Modal ───────────────────────────────────────────────────
+// ─── Recording Modal (content picker) ────────────────────────────────────────
 
 interface RecordingModalProps {
   classItem: LiveClass;
@@ -179,70 +180,118 @@ interface RecordingModalProps {
 }
 
 const RecordingModal: React.FC<RecordingModalProps> = ({ classItem, onClose, onSaved }) => {
-  const [url, setUrl] = useState(classItem.recordingUrl ?? '');
-  const [videoId, setVideoId] = useState(classItem.bunnyVideoId ?? '');
-  const [loading, setLoading] = useState(false);
+  const [contents, setContents] = useState<Content[]>([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Content | null>(null);
+  const [loadingContents, setLoadingContents] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    contentService.getAllContent().then((all) => {
+      setContents(all.filter((c) => c.type === 'lesson' || c.type === 'trick'));
+      setLoadingContents(false);
+    }).catch(() => setLoadingContents(false));
+  }, []);
+
+  const filtered = contents.filter((c) =>
+    c.title.toLowerCase().includes(search.toLowerCase()) ||
+    (c.subject && c.subject.toLowerCase().includes(search.toLowerCase()))
+  );
 
   const handleSave = async () => {
-    if (!url.trim()) return;
-    setLoading(true);
+    if (!selected?.videoUrl) return;
+    setSaving(true);
     try {
-      await liveClassService.setRecording(classItem.id, url, videoId);
-      (window as any).addNotification?.('Recording URL saved!', 'success');
+      await liveClassService.setRecording(classItem.id, selected.videoUrl, '');
+      (window as any).addNotification?.('Recording linked successfully!', 'success');
       onSaved();
       onClose();
     } catch {
       (window as any).addNotification?.('Failed to save recording.', 'error');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-700 shrink-0">
           <h3 className="font-semibold text-white flex items-center gap-2">
-            <Upload size={18} className="text-primary-400" /> Add Recording
+            <Upload size={18} className="text-primary-400" />
+            {classItem.recordingUrl ? 'Update Recording' : 'Add Recording'}
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
         </div>
-        <div>
-          <label className="block text-sm text-gray-300 mb-1.5">Recording URL *</label>
+
+        {/* Search */}
+        <div className="p-4 border-b border-gray-700 shrink-0">
+          <p className="text-xs text-gray-400 mb-3">Select a lesson or tricks &amp; hacks content to use as the class recording.</p>
           <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://iframe.mediadelivery.net/embed/..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by title or subject…"
             className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
           />
         </div>
-        <div>
-          <label className="block text-sm text-gray-300 mb-1.5">Bunny Video ID (optional)</label>
-          <input
-            value={videoId}
-            onChange={(e) => setVideoId(e.target.value)}
-            placeholder="Bunny.net video ID"
-            className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-          />
+
+        {/* Content list */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {loadingContents ? (
+            <div className="flex justify-center py-8">
+              <Loader size={24} className="animate-spin text-primary-500" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-gray-500 py-8 text-sm">No matching lessons or tricks &amp; hacks found.</p>
+          ) : (
+            filtered.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelected(c)}
+                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                  selected?.id === c.id
+                    ? 'bg-primary-600/20 border-primary-500 text-white'
+                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{c.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{c.subject}{c.topic ? ` · ${c.topic}` : ''}</p>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                    c.type === 'lesson'
+                      ? 'bg-blue-500/20 text-blue-300'
+                      : 'bg-purple-500/20 text-purple-300'
+                  }`}>
+                    {c.type === 'lesson' ? 'Lesson' : 'Tricks & Hacks'}
+                  </span>
+                </div>
+                {!c.videoUrl && (
+                  <p className="text-xs text-yellow-500 mt-1">⚠ No video URL on this content</p>
+                )}
+              </button>
+            ))
+          )}
         </div>
-        <div className="flex gap-3">
+
+        {/* Footer */}
+        <div className="flex gap-3 p-4 border-t border-gray-700 shrink-0">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium">Cancel</button>
           <button
             onClick={handleSave}
-            disabled={loading || !url.trim()}
+            disabled={saving || !selected?.videoUrl}
             className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-sm font-medium flex items-center justify-center gap-2"
           >
-            {loading ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
-            Save
+            {saving ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}
+            {saving ? 'Saving…' : 'Set as Recording'}
           </button>
         </div>
       </div>
     </div>
   );
 };
-
-// Dummy save icon re-use
-const Save = ({ size }: { size: number }) => <Upload size={size} />;
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
