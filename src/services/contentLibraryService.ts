@@ -29,6 +29,7 @@ export interface LibraryContent {
   id: string;
   title: string;
   subject: string;
+  topic?: string; // Topic/Chapter field
   type: 'lesson' | 'note' | 'trick' | 'exam';
   description?: string;
   duration?: number;
@@ -197,6 +198,7 @@ export const contentLibraryService = {
         id: contentDoc.id,
         title: d.title || 'Untitled',
         subject: d.subject || '',
+        topic: d.topic || '', // Add topic field
         type: d.type || 'lesson',
         description: d.description,
         duration: d.duration,
