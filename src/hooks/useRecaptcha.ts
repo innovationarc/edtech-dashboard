@@ -1,10 +1,11 @@
 // src/hooks/useRecaptcha.ts
 import { useCallback, useEffect, useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import { waitForRecaptcha } from '../App';
 
 const SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string;
-const functionsInstance = getFunctions(undefined, 'us-central1');
+
+// Your deployed Cloud Function URL
+const VERIFY_URL = 'https://us-central1-smart-study-ffa8e.cloudfunctions.net/verifyRecaptcha';
 
 export const useRecaptcha = () => {
   const [captchaReady, setCaptchaReady] = useState(!!window.grecaptcha);
@@ -30,9 +31,17 @@ export const useRecaptcha = () => {
       });
     });
 
-    // Step 2: Verify token on backend — throws if score too low
-    const verify = httpsCallable(functionsInstance, 'verifyRecaptcha');
-    await verify({ token, action });
+    // Step 2: Verify token via plain POST (onRequest with explicit CORS)
+    const response = await fetch(VERIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, action }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Security verification failed. Please try again.');
+    }
   }, []);
 
   return { executeRecaptcha, captchaReady };
