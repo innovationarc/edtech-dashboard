@@ -1,534 +1,542 @@
-// src/services/dashboardStatsService.ts
-// New service: KPI stats, heatmaps, course progress, pending tasks, exam performance, continue learning
-// All reads only — no writes to existing collections except appUsageLogs (new collection)
+// src/components/layout/DashboardLayout.tsx
+import { Outlet, useNavigate } from 'react-router-dom';
+import Navigation from './Navigation';
+import MobileNavigation from './MobileNavigation';
+import { useDashboard } from '../../contexts/DashboardContext';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import ChatbotWidget from '../ChatbotWidget';
+import AuthenticationModal from '../auth/AuthenticationModal';
 
-import {
-  collection, doc, getDocs, getDoc, setDoc, query,
-  where, orderBy, Timestamp, limit as fsLimit,
-} from 'firebase/firestore';
-import { db } from '../config/firebase';
+import PageTransition from '../ui/PageTransition';
+import TopProgressBar from '../ui/TopProgressBar';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../config/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { dashboardStatsService } from '../../services/dashboardStatsService';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
-export interface KPIStats {
-  todayStudyMinutes: number;   // pomodoro sessions + completed calendar events today
-  weekStudyMinutes: number;    // same sources, last 7 days
-  tasksCompleted: number;      // objectives completed today
-  streakDays: number;
-}
-
-export interface HeatmapDay {
-  date: string;        // YYYY-MM-DD
-  value: number;       // minutes for study heatmap / seconds for app heatmap
-  level: 0 | 1 | 2 | 3 | 4;  // intensity level
-}
-
-export interface CourseProgressItem {
-  courseId: string;
-  title: string;
-  instructor: string;
-  progress: number;        // 0-100
-  completedLessons: number;
-  totalLessons: number;
-  lastAccessedAt: Date;
-  thumbnail?: string;
-}
-
-export interface PendingTaskItem {
-  id: string;
-  title: string;
-  type: 'task' | 'goal' | 'event';
-  dueDate: Date;
-  urgency: 'overdue' | 'today' | 'tomorrow' | 'upcoming';
-  course?: string;
-  points?: number;
-}
-
-export interface ExamPerformancePoint {
-  date: string;        // YYYY-MM-DD
-  examTitle: string;
-  percentage: number;
-  courseId: string;
-}
-
-export interface ContinueLearningItem {
-  courseId: string;
-  title: string;
-  instructor: string;
-  progress: number;
-  lastAccessedAt: Date;
-  thumbnail?: string;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const toDate = (v: any): Date => {
-  if (!v) return new Date();
-  if (v instanceof Date) return v;
-  if (v?.toDate) return v.toDate();
-  return new Date(v);
+// Ghost is anchored bottom-right at (R, B) px from the viewport edges.
+// tx/ty are translate offsets applied on top of that anchor.
+// This clamp ensures the ghost stays fully within the viewport at all times.
+const clampPosition = (
+  pos: { x: number; y: number },
+  widgetEl: HTMLDivElement | null,
+  isMobile: boolean,
+): { x: number; y: number } => {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const R = isMobile ? 16 : 20; // right anchor
+  const B = isMobile ? 76 : 20; // bottom anchor
+  const ghostW = widgetEl ? widgetEl.offsetWidth  : 56;
+  const ghostH = widgetEl ? widgetEl.offsetHeight : 56;
+  return {
+    x: Math.max(ghostW - W + R, Math.min(R, pos.x)),
+    y: Math.max(ghostH - H + B, Math.min(B, pos.y)),
+  };
 };
 
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+const DashboardLayout = () => {
+  const { sidebarOpen, isAuthenticated, theme, glitterTheme, user } = useDashboard();
+  const [isMobile, setIsMobile] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [uid, setUid] = useState<string | null>(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
+  // Stagger state — true while cards should be animating in
+  const [staggerActive, setStaggerActive] = useState(false);
 
-function intensityLevel(value: number, maxValue: number): 0 | 1 | 2 | 3 | 4 {
-  if (value === 0 || maxValue === 0) return 0;
-  const pct = value / maxValue;
-  if (pct < 0.15) return 1;
-  if (pct < 0.40) return 2;
-  if (pct < 0.70) return 3;
-  return 4;
-}
+  const dragging = useRef(false);
+  const hasMoved = useRef(false);
+  const dragStart = useRef<{ mouseX: number; mouseY: number; posX: number; posY: number } | null>(null);
+  const positionRef = useRef({ x: 0, y: 0 });
+  const prevDragPos = useRef({ x: 0, y: 0 });
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const isMobileRef = useRef(false); // mirror of isMobile state for use inside event handlers
+  const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const eyeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flyRafId = useRef(0);
+  const isFlying = useRef(false);
+  const chatOpen = useRef(false); // blocks ghost drag while Nova panel is open
 
-function buildHeatmapGrid(dayMap: Map<string, number>, weeksBack: number): HeatmapDay[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const totalDays = weeksBack * 7;
-  const maxVal = Math.max(...Array.from(dayMap.values()), 1);
+  // ── App usage session tracking ───────────────────────────────────────────
+  const sessionStartRef = useRef<number>(Date.now());
 
-  const days: HeatmapDay[] = [];
-  for (let i = totalDays - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const key = ymd(d);
-    const val = dayMap.get(key) ?? 0;
-    days.push({ date: key, value: val, level: intensityLevel(val, maxVal) });
-  }
-  return days;
-}
-
-// ─── Service ──────────────────────────────────────────────────────────────────
-
-export const dashboardStatsService = {
-
-  // ── KPI Stats ─────────────────────────────────────────────────────────────
-
-  async getKPIStats(studentId: string): Promise<KPIStats> {
-    const now = new Date();
-    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
-    const weekStart = new Date(now); weekStart.setDate(now.getDate() - 6); weekStart.setHours(0, 0, 0, 0);
-
-    const [pomodoroSnap, eventsSnap, objectivesSnap, streakSnap] = await Promise.allSettled([
-      // Pomodoro sessions (last 7 days)
-      getDocs(query(
-        collection(db, 'pomodoroSessions'),
-        where('studentId', '==', studentId),
-        where('startTime', '>=', Timestamp.fromDate(weekStart)),
-        orderBy('startTime', 'desc'),
-      )),
-      // Completed calendar events (last 7 days)
-      getDocs(query(
-        collection(db, 'studyPlanEvents'),
-        where('studentId', '==', studentId),
-        where('isPersonal', '==', true),
-        where('completed', '==', true),
-      )),
-      // Today's objectives
-      getDocs(query(
-        collection(db, 'dashboardObjectives'),
-        where('studentId', '==', studentId),
-        where('completed', '==', true),
-      )),
-      // Streak
-      getDoc(doc(db, 'studyStreaks', studentId)),
-    ]);
-
-    // Pomodoro minutes
-    let todayPomodoro = 0, weekPomodoro = 0;
-    if (pomodoroSnap.status === 'fulfilled') {
-      pomodoroSnap.value.docs.forEach(d => {
-        const start = toDate(d.data().startTime);
-        const mins = d.data().duration ?? 0;
-        if (d.data().completed !== false) {
-          weekPomodoro += mins;
-          if (start >= todayStart) todayPomodoro += mins;
-        }
-      });
-    }
-
-    // Completed event minutes
-    let todayEvents = 0, weekEvents = 0;
-    if (eventsSnap.status === 'fulfilled') {
-      eventsSnap.value.docs.forEach(d => {
-        const data = d.data();
-        const completedAt = data.completedAt ? toDate(data.completedAt) : toDate(data.date);
-        if (completedAt < weekStart) return;
-        // Estimate duration from startTime/endTime
-        try {
-          const [sh, sm] = (data.startTime || '00:00').split(':').map(Number);
-          const [eh, em] = (data.endTime   || '00:00').split(':').map(Number);
-          const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
-          weekEvents += mins;
-          if (completedAt >= todayStart) todayEvents += mins;
-        } catch { /* skip */ }
-      });
-    }
-
-    // Objectives completed today
-    let tasksCompleted = 0;
-    if (objectivesSnap.status === 'fulfilled') {
-      tasksCompleted = objectivesSnap.value.size;
-    }
-
-    // Streak
-    let streakDays = 0;
-    if (streakSnap.status === 'fulfilled' && streakSnap.value.exists()) {
-      streakDays = streakSnap.value.data().currentStreak ?? 0;
-    }
-
-    return {
-      todayStudyMinutes: todayPomodoro + todayEvents,
-      weekStudyMinutes: weekPomodoro + weekEvents,
-      tasksCompleted,
-      streakDays,
+  useEffect(() => {
+    if (!user?.uid || user?.role !== 'student') return;
+    sessionStartRef.current = Date.now();
+    return () => {
+      const durationSeconds = (Date.now() - sessionStartRef.current) / 1000;
+      dashboardStatsService.logAppUsageSession(user.uid, durationSeconds).catch(() => {});
     };
-  },
+  }, [user?.uid, user?.role]);
 
-  // ── Study Activity Heatmap ────────────────────────────────────────────────
+  // Keep isMobileRef in sync with isMobile state
+  useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
 
-  async getStudyHeatmap(studentId: string, weeksBack = 10): Promise<HeatmapDay[]> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - (weeksBack * 7));
-    cutoff.setHours(0, 0, 0, 0);
+  useEffect(() => {
+    const onOpen  = () => { chatOpen.current = true; };
+    const onClose = () => { chatOpen.current = false; };
+    window.addEventListener('nova-chat-open',  onOpen);
+    window.addEventListener('nova-chat-close', onClose);
+    return () => {
+      window.removeEventListener('nova-chat-open',  onOpen);
+      window.removeEventListener('nova-chat-close', onClose);
+    };
+  }, []);
 
-    const dayMap = new Map<string, number>();
+  // Nova navigation — ChatbotWidget dispatches 'nova-navigate' with { path }
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handleNovaNavigate = (e: Event) => {
+      const path = (e as CustomEvent<{ path: string }>).detail?.path;
+      if (path && typeof path === 'string' && path.startsWith('/')) {
+        navigate(path);
+      }
+    };
+    window.addEventListener('nova-navigate', handleNovaNavigate);
+    return () => {
+      window.removeEventListener('nova-navigate', handleNovaNavigate);
+    };
+  }, [navigate]);
 
-    const [pomSnap, evSnap] = await Promise.allSettled([
-      getDocs(query(
-        collection(db, 'pomodoroSessions'),
-        where('studentId', '==', studentId),
-        where('startTime', '>=', Timestamp.fromDate(cutoff)),
-        orderBy('startTime', 'desc'),
-      )),
-      getDocs(query(
-        collection(db, 'studyPlanEvents'),
-        where('studentId', '==', studentId),
-        where('isPersonal', '==', true),
-        where('completed', '==', true),
-      )),
-    ]);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-    if (pomSnap.status === 'fulfilled') {
-      pomSnap.value.docs.forEach(d => {
-        if (d.data().completed === false) return;
-        const key = ymd(toDate(d.data().startTime));
-        dayMap.set(key, (dayMap.get(key) ?? 0) + (d.data().duration ?? 0));
-      });
-    }
+  useEffect(() => { setShowAuthModal(!isAuthenticated); }, [isAuthenticated]);
 
-    if (evSnap.status === 'fulfilled') {
-      evSnap.value.docs.forEach(d => {
-        const data = d.data();
-        const at = data.completedAt ? toDate(data.completedAt) : toDate(data.date);
-        if (at < cutoff) return;
-        try {
-          const [sh, sm] = (data.startTime || '00:00').split(':').map(Number);
-          const [eh, em] = (data.endTime   || '00:00').split(':').map(Number);
-          const mins = Math.max(0, (eh * 60 + em) - (sh * 60 + sm));
-          const key = ymd(at);
-          dayMap.set(key, (dayMap.get(key) ?? 0) + mins);
-        } catch { /* skip */ }
-      });
-    }
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => setUid(user?.uid ?? null));
+    return unsub;
+  }, []);
 
-    return buildHeatmapGrid(dayMap, weeksBack);
-  },
-
-  // ── App Usage Heatmap ─────────────────────────────────────────────────────
-
-  async getAppUsageHeatmap(studentId: string, weeksBack = 10): Promise<HeatmapDay[]> {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - (weeksBack * 7));
-
-    try {
-      const snap = await getDocs(query(
-        collection(db, 'appUsageLogs'),
-        where('studentId', '==', studentId),
-        where('date', '>=', ymd(cutoff)),
-        orderBy('date', 'asc'),
-      ));
-
-      const dayMap = new Map<string, number>();
-      snap.docs.forEach(d => {
-        const key = d.data().date as string;
-        dayMap.set(key, (dayMap.get(key) ?? 0) + (d.data().durationSeconds ?? 0));
-      });
-
-      return buildHeatmapGrid(dayMap, weeksBack);
-    } catch {
-      return buildHeatmapGrid(new Map(), weeksBack);
-    }
-  },
-
-  // Log a session — called from DashboardLayout on unmount
-  async logAppUsageSession(studentId: string, durationSeconds: number): Promise<void> {
-    if (durationSeconds < 30) return; // ignore < 30s micro-visits
-    const dateKey = ymd(new Date());
-    try {
-      const ref = doc(db, 'appUsageLogs', `${studentId}_${dateKey}_${Date.now()}`);
-      await setDoc(ref, {
-        studentId,
-        date: dateKey,
-        durationSeconds: Math.round(durationSeconds),
-        recordedAt: Timestamp.now(),
-      });
-    } catch { /* non-fatal */ }
-  },
-
-  // ── Course Progress ───────────────────────────────────────────────────────
-
-  async getCourseProgress(studentId: string): Promise<CourseProgressItem[]> {
-    try {
-      const enrollSnap = await getDocs(query(
-        collection(db, 'enrollments'),
-        where('studentId', '==', studentId),
-      ));
-
-      const enrollments = enrollSnap.docs
-        .map(d => ({ id: d.id, ...d.data(), lastAccessedAt: toDate(d.data().lastAccessedAt) }))
-        .filter((e: any) => e.paymentStatus === 'completed') as any[];
-
-      if (!enrollments.length) return [];
-
-      const courseIds = [...new Set(enrollments.map((e: any) => e.courseId))] as string[];
-      const courseSnaps = await Promise.allSettled(
-        courseIds.map(id => getDoc(doc(db, 'courses', id)))
-      );
-
-      const courseMap = new Map<string, any>();
-      courseSnaps.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value.exists()) {
-          courseMap.set(courseIds[i], { id: courseIds[i], ...r.value.data() });
+  useEffect(() => {
+    if (!uid) return;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists()) {
+          const saved = snap.data()?.preferences?.chatbotWidgetPosition;
+          if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+            // Clamp loaded position — recovers any previously-saved off-screen coordinates
+            const clamped = clampPosition(saved, widgetRef.current, isMobileRef.current);
+            positionRef.current = clamped;
+            setPosition(clamped);
+          }
         }
-      });
+      } catch { /* fail silently */ }
+    })();
+  }, [uid]);
 
-      return enrollments
-        .filter((e: any) => courseMap.has(e.courseId))
-        .map((e: any) => {
-          const c = courseMap.get(e.courseId);
-          const total = c.lessons?.length ?? 0;
-          const completed = e.completedLessons?.length ?? 0;
-          return {
-            courseId: e.courseId,
-            title: c.title ?? 'Untitled',
-            instructor: c.instructor ?? '',
-            progress: e.progress ?? (total > 0 ? Math.round((completed / total) * 100) : 0),
-            completedLessons: completed,
-            totalLessons: total,
-            lastAccessedAt: e.lastAccessedAt,
-            thumbnail: c.thumbnailUrl ?? c.thumbnail,
-          };
-        })
-        .sort((a: CourseProgressItem, b: CourseProgressItem) =>
-          b.lastAccessedAt.getTime() - a.lastAccessedAt.getTime()
-        );
-    } catch (e) {
-      console.warn('[dashboardStatsService] getCourseProgress:', e);
-      return [];
-    }
-  },
-
-  // ── Pending Tasks / Deadlines ─────────────────────────────────────────────
-
-  async getPendingTasks(studentId: string): Promise<PendingTaskItem[]> {
-    const now = new Date();
-    const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
-    const tomorrowEnd = new Date(now); tomorrowEnd.setDate(now.getDate() + 1); tomorrowEnd.setHours(23, 59, 59, 999);
-    const futureEnd = new Date(now); futureEnd.setDate(now.getDate() + 14);
-
-    function urgency(due: Date): 'overdue' | 'today' | 'tomorrow' | 'upcoming' | null {
-      if (due < now) return 'overdue';
-      if (due <= todayEnd) return 'today';
-      if (due <= tomorrowEnd) return 'tomorrow';
-      if (due <= futureEnd) return 'upcoming';
-      return null; // too far out
-    }
-
-    const items: PendingTaskItem[] = [];
-
-    const [taskSnap, goalSnap, eventSnap] = await Promise.allSettled([
-      // Published task groups assigned to this student
-      getDocs(query(
-        collection(db, 'taskGroups'),
-        where('status', '==', 'published'),
-      )),
-      // Active goals nearing deadline
-      getDocs(query(
-        collection(db, 'studyGoals'),
-        where('studentId', '==', studentId),
-        where('isActive', '==', true),
-      )),
-      // Upcoming calendar events (not completed)
-      getDocs(query(
-        collection(db, 'studyPlanEvents'),
-        where('studentId', '==', studentId),
-        where('isPersonal', '==', true),
-        where('completed', '==', false),
-      )),
-    ]);
-
-    // Task groups
-    if (taskSnap.status === 'fulfilled') {
-      taskSnap.value.docs.forEach(d => {
-        const data = d.data();
-        const scope = data.assignedTo;
-        // Only include if targeted to all or includes this student
-        const targeted =
-          !scope || scope.type === 'all' ||
-          (scope.type === 'students' && scope.studentIds?.includes(studentId)) ||
-          scope.type === 'course' || scope.type === 'class';
-        if (!targeted) return;
-
-        const due = toDate(data.dueDate);
-        const u = urgency(due);
-        if (!u) return;
-        items.push({
-          id: d.id,
-          title: data.title ?? 'Task',
-          type: 'task',
-          dueDate: due,
-          urgency: u,
-          points: data.totalPoints,
+  const savePosition = useCallback((pos: { x: number; y: number }) => {
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(async () => {
+      const currentUid = auth.currentUser?.uid;
+      if (!currentUid) return;
+      try {
+        await updateDoc(doc(db, 'users', currentUid), {
+          'preferences.chatbotWidgetPosition': { x: pos.x, y: pos.y },
         });
-      });
-    }
+      } catch { /* fail silently */ }
+    }, 500);
+  }, []);
 
-    // Goals
-    if (goalSnap.status === 'fulfilled') {
-      goalSnap.value.docs.forEach(d => {
-        const data = d.data();
-        const due = toDate(data.targetDate);
-        const u = urgency(due);
-        if (!u) return;
-        const progress = data.hoursCompleted > 0
-          ? Math.round((data.hoursCompleted / (data.hoursNeeded || 1)) * 100)
-          : (data.currentProgress ?? 0);
-        if (progress >= 100) return; // already done
-        items.push({
-          id: d.id,
-          title: `Goal: ${data.subject}`,
-          type: 'goal',
-          dueDate: due,
-          urgency: u,
-          course: data.subject,
-        });
-      });
-    }
+  // Separated from useCallback so setEyeOffset always has fresh closure
+  const applyEyeOffset = (dx: number, dy: number) => {
+    setEyeOffset({
+      x: CLAMP(dx * 0.3, 4),
+      y: CLAMP(dy * 0.3, 3),
+    });
+    if (eyeTimeout.current) clearTimeout(eyeTimeout.current);
+    eyeTimeout.current = setTimeout(() => setEyeOffset({ x: 0, y: 0 }), 150);
+  };
 
-    // Calendar events (upcoming, not completed)
-    if (eventSnap.status === 'fulfilled') {
-      eventSnap.value.docs.forEach(d => {
-        const data = d.data();
-        const due = toDate(data.date);
-        const u = urgency(due);
-        if (!u) return;
-        if (['exam', 'assignment', 'deadline'].includes(data.eventType ?? '')) {
-          items.push({
-            id: d.id,
-            title: data.title ?? 'Event',
-            type: 'event',
-            dueDate: due,
-            urgency: u,
-            course: data.course,
-          });
-        }
-      });
-    }
+  const resetEyes = () => {
+    if (eyeTimeout.current) clearTimeout(eyeTimeout.current);
+    setEyeOffset({ x: 0, y: 0 });
+  };
 
-    // Sort: overdue first, then by date asc
-    const order = { overdue: 0, today: 1, tomorrow: 2, upcoming: 3 };
-    return items.sort((a, b) =>
-      order[a.urgency] - order[b.urgency] ||
-      a.dueDate.getTime() - b.dueDate.getTime()
-    ).slice(0, 10);
-  },
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStart.current) return;
+      const dx = e.clientX - dragStart.current.mouseX;
+      const dy = e.clientY - dragStart.current.mouseY;
+      if (!dragging.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      dragging.current = true;
+      hasMoved.current = true;
 
-  // ── Exam Performance (per enrolled course) ────────────────────────────────
+      const raw = { x: dragStart.current.posX + dx, y: dragStart.current.posY + dy };
+      const { x: newX, y: newY } = clampPosition(raw, widgetRef.current, isMobileRef.current);
 
-  async getExamPerformance(studentId: string): Promise<{
-    courseId: string;
-    courseTitle: string;
-    points: ExamPerformancePoint[];
-  }[]> {
-    try {
-      // Get student exam sessions that are submitted and result visible
-      const snap = await getDocs(query(
-        collection(db, 'examSessions'),
-        where('studentId', '==', studentId),
-        where('resultVisibility', '==', 'visible'),
-        orderBy('submittedAt', 'asc'),
-        fsLimit(100),
-      ));
+      // Eye offset from frame delta
+      const fdx = newX - prevDragPos.current.x;
+      const fdy = newY - prevDragPos.current.y;
+      prevDragPos.current = { x: newX, y: newY };
+      applyEyeOffset(fdx, fdy);
 
-      if (snap.empty) return [];
+      positionRef.current = { x: newX, y: newY };
+      if (widgetRef.current) {
+        widgetRef.current.style.transform = `translate(${newX}px, ${newY}px)`;
+      }
+    };
+    const handleMouseUp = () => {
+      if (!dragStart.current) return;
+      dragStart.current = null;
+      setTimeout(() => { dragging.current = false; }, 0);
+      // Clamp final position before saving to Firestore
+      const finalPos = clampPosition({ ...positionRef.current }, widgetRef.current, isMobileRef.current);
+      positionRef.current = finalPos;
+      setPosition(finalPos);
+      savePosition(finalPos);
+      resetEyes();
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [savePosition]);
 
-      // Group by courseId
-      const byCourse = new Map<string, ExamPerformancePoint[]>();
-      snap.docs.forEach(d => {
-        const data = d.data();
-        if (!['submitted', 'auto_submitted'].includes(data.status ?? '')) return;
-        const courseId = data.courseId ?? '_no_course';
-        const pt: ExamPerformancePoint = {
-          date: ymd(toDate(data.submittedAt ?? data.startedAt)),
-          examTitle: data.contentTitle ?? data.examTitle ?? 'Exam',
-          percentage: data.percentage ?? 0,
-          courseId,
-        };
-        if (!byCourse.has(courseId)) byCourse.set(courseId, []);
-        byCourse.get(courseId)!.push(pt);
-      });
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    // Block drag during fly animation or while chat panel is open
+    if (isFlying.current || chatOpen.current) return;
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
+    prevDragPos.current = { ...positionRef.current };
+    dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
+    dragging.current = false;
+    hasMoved.current = false;
+  }, []);
 
-      // Get course titles
-      const courseIds = [...byCourse.keys()].filter(id => id !== '_no_course');
-      const courseTitles = new Map<string, string>();
-      await Promise.allSettled(
-        courseIds.map(async id => {
-          try {
-            const s = await getDoc(doc(db, 'courses', id));
-            if (s.exists()) courseTitles.set(id, s.data().title ?? id);
-          } catch { /* skip */ }
-        })
-      );
+  useEffect(() => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!dragStart.current) return;
+      const t = e.touches[0];
+      const dx = t.clientX - dragStart.current.mouseX;
+      const dy = t.clientY - dragStart.current.mouseY;
+      if (!dragging.current && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      dragging.current = true;
+      hasMoved.current = true;
+      e.preventDefault();
 
-      return Array.from(byCourse.entries()).map(([courseId, points]) => ({
-        courseId,
-        courseTitle: courseTitles.get(courseId) ?? (courseId === '_no_course' ? 'General' : courseId),
-        points: points.sort((a, b) => a.date.localeCompare(b.date)),
-      }));
-    } catch (e) {
-      console.warn('[dashboardStatsService] getExamPerformance:', e);
-      return [];
-    }
-  },
+      const raw = { x: dragStart.current.posX + dx, y: dragStart.current.posY + dy };
+      const { x: newX, y: newY } = clampPosition(raw, widgetRef.current, isMobileRef.current);
 
-  // ── Continue Learning ─────────────────────────────────────────────────────
+      const fdx = newX - prevDragPos.current.x;
+      const fdy = newY - prevDragPos.current.y;
+      prevDragPos.current = { x: newX, y: newY };
+      applyEyeOffset(fdx, fdy);
 
-  async getContinueLearning(studentId: string): Promise<ContinueLearningItem | null> {
-    try {
-      const snap = await getDocs(query(
-        collection(db, 'enrollments'),
-        where('studentId', '==', studentId),
-        orderBy('lastAccessedAt', 'desc'),
-        fsLimit(1),
-      ));
-      if (snap.empty) return null;
-      const e = snap.docs[0].data();
-      if (e.paymentStatus !== 'completed') return null;
-      const course = await getDoc(doc(db, 'courses', e.courseId));
-      if (!course.exists()) return null;
-      const c = course.data();
-      return {
-        courseId: e.courseId,
-        title: c.title ?? 'Untitled',
-        instructor: c.instructor ?? '',
-        progress: e.progress ?? 0,
-        lastAccessedAt: toDate(e.lastAccessedAt),
-        thumbnail: c.thumbnailUrl ?? c.thumbnail,
+      positionRef.current = { x: newX, y: newY };
+      if (widgetRef.current) {
+        widgetRef.current.style.transform = `translate(${newX}px, ${newY}px)`;
+      }
+    };
+    const handleTouchEnd = () => {
+      if (!dragStart.current) return;
+      dragStart.current = null;
+      setTimeout(() => { dragging.current = false; }, 0);
+      // Clamp final position before saving to Firestore
+      const finalPos = clampPosition({ ...positionRef.current }, widgetRef.current, isMobileRef.current);
+      positionRef.current = finalPos;
+      setPosition(finalPos);
+      savePosition(finalPos);
+      resetEyes();
+    };
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [savePosition]);
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    // Block drag during fly animation or while chat panel is open
+    if (isFlying.current || chatOpen.current) return;
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
+    const t = e.touches[0];
+    prevDragPos.current = { ...positionRef.current };
+    dragStart.current = { mouseX: t.clientX, mouseY: t.clientY, posX: positionRef.current.x, posY: positionRef.current.y };
+    dragging.current = false;
+    hasMoved.current = false;
+  }, []);
+
+
+  // Ghost fly animation — pure rAF, zero React state updates during flight
+  useEffect(() => {
+    const handleFly = () => {
+      if (isFlying.current || !widgetRef.current) return;
+      // Close chatbot if open before flying
+      window.dispatchEvent(new CustomEvent('ghost-close-chat'));
+      isFlying.current = true;
+
+      const startX = positionRef.current.x;
+      const startY = positionRef.current.y;
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const duration = 3800;
+
+      // Path waypoints — offsets relative to startX/startY
+      // Widget is anchored bottom-right, so negative y = up, negative x = left
+      const path = [
+        { x: startX,            y: startY           },
+        { x: startX - 80,       y: startY - 280     },
+        { x: startX - W * 0.55, y: startY - H * 0.55},
+        { x: startX - W * 0.8,  y: startY - H * 0.3 },
+        { x: startX - W * 0.75, y: startY + H * 0.15},
+        { x: startX - W * 0.35, y: startY + H * 0.1 },
+        { x: startX - 100,      y: startY - 120     },
+        { x: startX,            y: startY           },
+      ];
+
+      // Catmull-Rom interpolation for smooth looping path
+      const getPoint = (t: number) => {
+        const segments = path.length - 1;
+        const seg = Math.min(Math.floor(t * segments), segments - 1);
+        const lt = (t * segments) - seg;
+        const p0 = path[Math.max(seg - 1, 0)];
+        const p1 = path[seg];
+        const p2 = path[Math.min(seg + 1, segments)];
+        const p3 = path[Math.min(seg + 2, segments)];
+        const cx = 0.5 * (2*p1.x + (-p0.x + p2.x)*lt + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*lt*lt + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*lt*lt*lt);
+        const cy = 0.5 * (2*p1.y + (-p0.y + p2.y)*lt + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*lt*lt + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*lt*lt*lt);
+        return { x: cx, y: cy };
       };
-    } catch {
-      return null;
-    }
-  },
+
+      const start = performance.now();
+      const prevPt = { x: startX, y: startY };
+      const tick = (now: number) => {
+        const t = Math.min((now - start) / duration, 1);
+        // Ease in-out
+        const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+        const pt = getPoint(ease);
+        if (widgetRef.current) {
+          widgetRef.current.style.transform = `translate(${pt.x}px, ${pt.y}px)`;
+        }
+        // Tell GhostIcon to tilt/move eyes in flight direction
+        window.dispatchEvent(new CustomEvent('ghost-move', { detail: { dx: pt.x - prevPt.x, dy: pt.y - prevPt.y } }));
+        prevPt.x = pt.x; prevPt.y = pt.y;
+        if (t < 1) {
+          flyRafId.current = requestAnimationFrame(tick);
+        } else {
+          positionRef.current = { x: startX, y: startY };
+          if (widgetRef.current) {
+            widgetRef.current.style.transform = `translate(${startX}px, ${startY}px)`;
+          }
+          isFlying.current = false;
+          window.dispatchEvent(new CustomEvent('ghost-land'));
+        }
+      };
+      flyRafId.current = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener('ghost-fly', handleFly);
+    return () => {
+      window.removeEventListener('ghost-fly', handleFly);
+      // If fly animation was in progress when this effect cleans up, reset all state
+      // so the ghost is never left stuck off-screen with isFlying permanently true.
+      if (isFlying.current) {
+        cancelAnimationFrame(flyRafId.current);
+        isFlying.current = false;
+        if (widgetRef.current) {
+          widgetRef.current.style.transform = `translate(${positionRef.current.x}px, ${positionRef.current.y}px)`;
+        }
+        window.dispatchEvent(new CustomEvent('ghost-land'));
+      } else {
+        cancelAnimationFrame(flyRafId.current);
+      }
+    };
+  }, []);
+
+
+
+  const isLight = theme === 'light';
+
+  // ── Glitter background definitions ──────────────────────────────────────────
+  // Each glitter option has a dark variant and a light variant so they always
+  // harmonise with the active dark / light mode.
+  const glitterStyles: Record<string, React.CSSProperties> = {
+    none: {},
+    silver: {
+      backgroundImage: isLight
+        ? `
+          radial-gradient(ellipse at 20% 20%, rgba(0,0,0,0.04) 0%, transparent 50%),
+          radial-gradient(ellipse at 80% 80%, rgba(0,0,0,0.03) 0%, transparent 50%),
+          radial-gradient(circle at 30% 40%, rgba(80,80,100,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 70% 20%, rgba(80,80,100,0.52) 1px, transparent 1px),
+          radial-gradient(circle at 50% 70%, rgba(80,80,100,0.56) 1px, transparent 1px),
+          radial-gradient(circle at 15% 80%, rgba(80,80,100,0.48) 1px, transparent 1px),
+          radial-gradient(circle at 85% 60%, rgba(80,80,100,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 60% 45%, rgba(80,80,100,0.52) 1px, transparent 1px),
+          radial-gradient(circle at 40% 15%, rgba(80,80,100,0.55) 1px, transparent 1px),
+          radial-gradient(circle at 90% 35%, rgba(80,80,100,0.48) 1px, transparent 1px)
+        `
+        : `
+          radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.05) 0%, transparent 50%),
+          radial-gradient(ellipse at 80% 80%, rgba(255,255,255,0.03) 0%, transparent 50%),
+          radial-gradient(circle at 30% 40%, rgba(220,220,240,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 70% 20%, rgba(200,200,220,0.45) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 50% 70%, rgba(220,220,240,0.50) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 15% 80%, rgba(200,200,220,0.40) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 85% 60%, rgba(220,220,240,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 60% 45%, rgba(200,200,220,0.45) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 40% 15%, rgba(220,220,240,0.50) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 90% 35%, rgba(200,200,220,0.40) 0.5px, transparent 0.5px)
+        `,
+      backgroundSize: isLight
+        ? 'auto, auto, 80px 80px, 120px 120px, 90px 90px, 110px 110px, 70px 70px, 100px 100px, 85px 85px, 95px 95px'
+        : 'auto, auto, 80px 80px, 120px 120px, 90px 90px, 110px 110px, 70px 70px, 100px 100px, 85px 85px, 95px 95px',
+    },
+    gold: {
+      backgroundImage: isLight
+        ? `
+          radial-gradient(ellipse at 15% 15%, rgba(180,130,0,0.09) 0%, transparent 45%),
+          radial-gradient(ellipse at 85% 85%, rgba(150,110,0,0.07) 0%, transparent 45%),
+          radial-gradient(circle at 25% 35%, rgba(160,120,0,0.72) 1px, transparent 1px),
+          radial-gradient(circle at 75% 25%, rgba(180,140,0,0.68) 1px, transparent 1px),
+          radial-gradient(circle at 45% 65%, rgba(160,120,0,0.70) 1px, transparent 1px),
+          radial-gradient(circle at 80% 70%, rgba(180,140,0,0.62) 1px, transparent 1px),
+          radial-gradient(circle at 10% 55%, rgba(160,120,0,0.65) 1px, transparent 1px),
+          radial-gradient(circle at 60% 15%, rgba(180,140,0,0.72) 1px, transparent 1px),
+          radial-gradient(circle at 35% 85%, rgba(160,120,0,0.58) 1px, transparent 1px)
+        `
+        : `
+          radial-gradient(ellipse at 15% 15%, rgba(212,175,55,0.12) 0%, transparent 45%),
+          radial-gradient(ellipse at 85% 85%, rgba(180,140,30,0.08) 0%, transparent 45%),
+          radial-gradient(circle at 25% 35%, rgba(212,175,55,0.60) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 75% 25%, rgba(255,215,0,0.55) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 45% 65%, rgba(212,175,55,0.58) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 80% 70%, rgba(255,215,0,0.48) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 10% 55%, rgba(212,175,55,0.52) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 60% 15%, rgba(255,215,0,0.62) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 35% 85%, rgba(212,175,55,0.42) 0.5px, transparent 0.5px)
+        `,
+      backgroundSize: 'auto, auto, 60px 60px, 90px 90px, 75px 75px, 110px 110px, 50px 50px, 80px 80px, 95px 95px',
+    },
+    purple: {
+      backgroundImage: isLight
+        ? `
+          radial-gradient(ellipse at 20% 30%, rgba(99,102,241,0.10) 0%, transparent 45%),
+          radial-gradient(ellipse at 80% 70%, rgba(79,70,229,0.08) 0%, transparent 45%),
+          radial-gradient(circle at 30% 40%, rgba(99,102,241,0.65) 1px, transparent 1px),
+          radial-gradient(circle at 70% 20%, rgba(79,70,229,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 55% 70%, rgba(99,102,241,0.62) 1px, transparent 1px),
+          radial-gradient(circle at 15% 60%, rgba(79,70,229,0.55) 1px, transparent 1px),
+          radial-gradient(circle at 88% 50%, rgba(99,102,241,0.60) 1px, transparent 1px),
+          radial-gradient(circle at 45% 15%, rgba(79,70,229,0.65) 1px, transparent 1px),
+          radial-gradient(circle at 75% 85%, rgba(99,102,241,0.50) 1px, transparent 1px)
+        `
+        : `
+          radial-gradient(ellipse at 20% 30%, rgba(139,92,246,0.12) 0%, transparent 45%),
+          radial-gradient(ellipse at 80% 70%, rgba(99,102,241,0.10) 0%, transparent 45%),
+          radial-gradient(circle at 30% 40%, rgba(200,180,255,0.70) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 70% 20%, rgba(180,160,240,0.62) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 55% 70%, rgba(220,200,255,0.68) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 15% 60%, rgba(200,180,255,0.58) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 88% 50%, rgba(180,160,240,0.64) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 45% 15%, rgba(220,200,255,0.72) 0.5px, transparent 0.5px),
+          radial-gradient(circle at 75% 85%, rgba(200,180,255,0.50) 0.5px, transparent 0.5px)
+        `,
+      backgroundSize: 'auto, auto, 55px 55px, 85px 85px, 70px 70px, 100px 100px, 65px 65px, 90px 90px, 78px 78px',
+    },
+  };
+
+  const activeGlitter = glitterStyles[glitterTheme] ?? {};
+
+  return (
+    <div
+      className="flex h-screen overflow-hidden"
+      style={{
+        backgroundColor: 'var(--color-background, #0d1117)',
+        ...activeGlitter,
+      }}
+    >
+      <style>{`
+        .dl-main::-webkit-scrollbar { display: none !important; }
+        .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+        .dl-inner::-webkit-scrollbar { display: none !important; }
+        .dl-inner { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+
+        /* ── Login stagger: GPU-only (transform + opacity only) ── */
+        @keyframes loginFadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes loginSidebarIn {
+          from { opacity: 0; transform: translateX(-18px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        .login-stagger > * {
+          animation: loginFadeUp 0.55s cubic-bezier(0.25,0.46,0.45,0.94) both;
+          will-change: transform, opacity;
+        }
+        .login-stagger > *:nth-child(1)   { animation-delay: 0.00s; }
+        .login-stagger > *:nth-child(2)   { animation-delay: 0.08s; }
+        .login-stagger > *:nth-child(3)   { animation-delay: 0.16s; }
+        .login-stagger > *:nth-child(4)   { animation-delay: 0.24s; }
+        .login-stagger > *:nth-child(5)   { animation-delay: 0.32s; }
+        .login-stagger > *:nth-child(6)   { animation-delay: 0.40s; }
+        .login-stagger > *:nth-child(n+7) { animation-delay: 0.46s; }
+        body.login-stagger-active aside,
+        body.login-stagger-active header {
+          animation: loginSidebarIn 0.55s cubic-bezier(0.25,0.46,0.45,0.94) both;
+          will-change: transform, opacity;
+        }
+      `}</style>
+
+      {isAuthenticated && <Navigation />}
+
+      <div className={`flex-1 flex flex-col ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`} style={{ background: 'transparent' }}>
+        <main className="dl-main flex-1 overflow-hidden" style={{ paddingTop: isMobile ? 60 : 64, background: 'transparent' }}>
+          <div className={`dl-inner h-full overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`}>
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
+          </div>
+        </main>
+      </div>
+
+      {isMobile && isAuthenticated && <MobileNavigation />}
+
+      {isAuthenticated && (
+        <div
+          ref={widgetRef}
+          onMouseDown={onMouseDown}
+          onTouchStart={onTouchStart}
+          style={{
+            position: 'fixed',
+            transform: `translate(${position.x}px, ${position.y}px)`,
+            zIndex: 1000,
+            // On mobile, lift above the bottom nav (~64px). On desktop, sit at edge.
+            bottom: isMobile ? 76 : 20,
+            right: isMobile ? 16 : 20,
+            userSelect: 'none',
+            touchAction: 'none',
+            cursor: 'grab',
+            // Must be visible so the chat panel (position:fixed inside a transformed
+            // parent would break, but modals use portal — ghost btn is relative here)
+            overflow: 'visible',
+          }}
+        >
+          <ChatbotWidget eyeOffset={eyeOffset} />
+        </div>
+      )}
+
+      {showAuthModal && !isAuthenticated && (
+        <AuthenticationModal onClose={() => setShowAuthModal(false)} />
+      )}
+
+      <TopProgressBar />
+
+    </div>
+  );
 };
+
+export default DashboardLayout;
