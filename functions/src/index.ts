@@ -1,50 +1,40 @@
 // functions/src/index.ts
 import * as admin from 'firebase-admin';
-import * as functions from 'firebase-functions';
+import { onRequest } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import fetch from 'node-fetch';
 
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const RECAPTCHA_SECRET = functions.config().recaptcha?.secret;
+// Define secret via Firebase Secret Manager (more secure than config)
+const recaptchaSecret = defineSecret('RECAPTCHA_SECRET');
+
 const MIN_SCORE = 0.5;
 
-const ALLOWED_ORIGINS = [
-  'https://edtech-dashboard-alpha.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000',
-];
-
-export const verifyRecaptcha = functions
-  .runWith({ timeoutSeconds: 10, memory: '128MB' })
-  .https.onRequest(async (req, res) => {
-
-    // ── Manual CORS ──────────────────────────────────────────────
-    const origin = req.headers.origin || '';
-    if (ALLOWED_ORIGINS.includes(origin)) {
-      res.set('Access-Control-Allow-Origin', origin);
-    }
-    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.set('Access-Control-Max-Age', '3600');
-
-    // Handle preflight OPTIONS request — must return 204 immediately
-    if (req.method === 'OPTIONS') {
-      res.status(204).send('');
-      return;
-    }
-
-    // Only allow POST beyond this point
+// ✅ v2 onRequest with built-in cors option — no packages, no manual headers
+export const verifyRecaptcha = onRequest(
+  {
+    cors: [
+      'https://edtech-dashboard-alpha.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ],
+    secrets: [recaptchaSecret],
+    timeoutSeconds: 10,
+    memory: '128MiB',
+  },
+  async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).json({ error: 'Method not allowed' });
       return;
     }
-    // ─────────────────────────────────────────────────────────────
 
     const { token, action } = req.body;
+    const secret = recaptchaSecret.value();
 
-    if (!RECAPTCHA_SECRET) {
+    if (!secret) {
       res.status(500).json({ error: 'reCAPTCHA secret not configured' });
       return;
     }
@@ -57,10 +47,7 @@ export const verifyRecaptcha = functions
     try {
       const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
         method: 'POST',
-        body: new URLSearchParams({
-          secret: RECAPTCHA_SECRET,
-          response: token,
-        }),
+        body: new URLSearchParams({ secret, response: token }),
       });
 
       const result = await response.json() as {
@@ -90,4 +77,5 @@ export const verifyRecaptcha = functions
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Internal server error' });
     }
-  });
+  }
+);
