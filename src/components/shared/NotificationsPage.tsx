@@ -192,7 +192,8 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
         opacity: deleting ? 0 : 1,
         animation: `nslide 0.3s cubic-bezier(0.34,1.25,0.64,1) ${index * 35}ms both`,
         position: 'relative',
-        width: '100%', boxSizing: 'border-box', overflow: 'hidden',
+        /* Key fix: constrain card to parent width, never grow wider */
+        minWidth: 0, maxWidth: '100%', boxSizing: 'border-box',
       }}
     >
       {/* Unread left bar */}
@@ -522,9 +523,9 @@ const NotificationsPage: React.FC = () => {
   return (
     <div style={{
       fontFamily: "'Outfit', sans-serif",
-      padding: isMobile ? '0 0 80px' : '0 0 24px',
+      paddingBottom: isMobile ? 80 : 24,
       display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 16,
-      width: '100%', boxSizing: 'border-box', overflow: 'hidden',
+      width: '100%', boxSizing: 'border-box',
     }}>
 
       {/* ── Header row ── */}
@@ -597,12 +598,24 @@ const NotificationsPage: React.FC = () => {
       </div>
 
       {/* ── Filter tabs ── */}
-      <div className="np-hide-scrollbar" style={{
-        display: 'flex', gap: isMobile ? 5 : 6,
-        overflowX: 'auto',
-        paddingBottom: 2,
-        width: '100%',
-      }}>
+      <div
+        className="np-hide-scrollbar"
+        style={{
+          display: 'flex', gap: isMobile ? 5 : 6,
+          overflowX: 'auto',
+          overflowY: 'visible',
+          paddingBottom: 4,
+          /* On mobile: break out of parent padding so tabs reach screen edges */
+          ...(isMobile ? {
+            marginLeft: -12,
+            marginRight: -12,
+            paddingLeft: 12,
+            paddingRight: 12,
+          } : {}),
+          WebkitOverflowScrolling: 'touch',
+          scrollSnapType: 'x proximity',
+        }}
+      >
         {TABS.map(tab => {
           const isActive = activeTab === tab.id;
           const count =
@@ -652,7 +665,7 @@ const NotificationsPage: React.FC = () => {
         ) : filtered.length === 0 ? (
           <EmptyState darkMode={darkMode} pRgb={pRgb} filter={activeTab} />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 6, width: '100%', minWidth: 0 }}>
             {filtered.map((notif, i) => (
               <NotifCard
                 key={notif.id}
