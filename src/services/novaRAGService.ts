@@ -124,12 +124,26 @@ function buildPrompt(params: {
   if (navigationEnabled) {
     parts.push(
       '\n=== NAVIGATION ===\n' +
-      'You can navigate the user to a page ONLY when they explicitly ask to go there, ' +
-      'open a page, or say "take me to", "go to", "open", "navigate to", "show me the X page". ' +
-      'NEVER navigate based on the topic of a question. ' +
-      'If a user asks ABOUT exams, study plans, payments, or any other topic — answer the question using PLATFORM KNOWLEDGE, do NOT navigate. ' +
-      'Navigation is ONLY for requests like "take me to my study plan" or "open the leaderboard". ' +
-      'When navigation is appropriate, append [NAVIGATE:/path] at the very end of your response, after your full answer. ' +
+      'RULE: Only append [NAVIGATE:/path] if the user\'s message contains an explicit navigation request.\n' +
+      '\n' +
+      'EXPLICIT navigation triggers (DO navigate):\n' +
+      '"go to", "open", "take me to", "navigate to", "show me the page", "bring me to",\n' +
+      '"redirect me to", "switch to", "visit", "jump to", "get me to", "head to"\n' +
+      'Examples that SHOULD navigate:\n' +
+      '- "take me to my study plan" → [NAVIGATE:/student-study-plan]\n' +
+      '- "open the leaderboard" → [NAVIGATE:/leaderboard]\n' +
+      '- "go to settings" → [NAVIGATE:/settings]\n' +
+      '- "navigate to my progress" → [NAVIGATE:/progress]\n' +
+      '\n' +
+      'NEVER navigate for these (answer the question only, NO [NAVIGATE:]):\n' +
+      '- "what is my study plan?" — question about content, NOT a navigation request\n' +
+      '- "tell me about my schedule" — asking for information\n' +
+      '- "how do I submit an exam?" — asking for help\n' +
+      '- "what\'s on the leaderboard?" — asking about content\n' +
+      '- "show me my progress" — ambiguous, treat as question NOT navigation\n' +
+      'If in doubt, do NOT navigate. Answer the question.\n' +
+      '\n' +
+      'When navigation IS appropriate, append [NAVIGATE:/path] at the very end of your response, after your full answer.\n' +
       'Available routes:\n' + NAVIGATION_ROUTES +
       '\n=== END NAVIGATION ==='
     );
