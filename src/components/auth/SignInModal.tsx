@@ -7,6 +7,7 @@ import RegisterModal from './RegisterModal';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import ForgotUserIdModal from './ForgotUserIdModal';
 import AccountStatusModal from './AccountStatusModal';
+import { useRecaptcha } from '../../hooks/useRecaptcha';
 
 // ─── Self-contained color tokens (no external config needed) ───────────────
 const C = {
@@ -125,7 +126,8 @@ interface SignInModalProps {
 
 const SignInModal = ({ onClose }: SignInModalProps) => {
   const { handleSignIn, forcedLogoutMessage, setForcedLogoutMessage } = useDashboard();
-  
+  const { executeRecaptcha } = useRecaptcha();
+
   // State management
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -136,29 +138,25 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
   const [showForgotUserId, setShowForgotUserId] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [captchaLoaded, setCaptchaLoaded] = useState(false);
+  const [captchaReady, setCaptchaReady] = useState(false);
   const [displayUserId, setDisplayUserId] = useState('');
   const [showAccountStatusModal, setShowAccountStatusModal] = useState(false);
   const [accountStatus, setAccountStatus] = useState<'inactive' | 'pending' | null>(null);
   const [accountUserId, setAccountUserId] = useState<string | undefined>(undefined);
 
-  // Load reCAPTCHA v3
+  // Poll until grecaptcha is ready (script loaded globally in App.tsx)
   useEffect(() => {
-    const loadRecaptcha = () => {
+    if (window.grecaptcha) {
+      setCaptchaReady(true);
+      return;
+    }
+    const interval = setInterval(() => {
       if (window.grecaptcha) {
-        setCaptchaLoaded(true);
-        return;
+        setCaptchaReady(true);
+        clearInterval(interval);
       }
-
-      const script = document.createElement('script');
-      script.src = `https://www.google.com/recaptcha/api.js?render=${import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'}`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setCaptchaLoaded(true);
-      document.head.appendChild(script);
-    };
-
-    loadRecaptcha();
+    }, 200);
+    return () => clearInterval(interval);
   }, []);
 
   // Load remember me preference on mount
@@ -176,23 +174,6 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
       // Fail silently if localStorage not available
     }
   }, []);
-
-  // Get reCAPTCHA v3 token
-  const getCaptchaToken = async (): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      if (!window.grecaptcha || !captchaLoaded) {
-        reject(new Error('reCAPTCHA not loaded'));
-        return;
-      }
-
-      window.grecaptcha.ready(() => {
-        window.grecaptcha
-          .execute(import.meta.env.VITE_RECAPTCHA_SITE_KEY || '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI', { action: 'login' })
-          .then(resolve)
-          .catch(reject);
-      });
-    });
-  };
 
   // Format User ID input with auto-formatting: XX-YYMM-XXXXX
   const formatUserIdInput = (input: string): { display: string; value: string } => {
@@ -252,7 +233,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
     }
 
     try {
-      await getCaptchaToken();
+      await executeRecaptcha('sign_in');
     } catch (err) {
       setError('Please wait for security verification to load');
       setLoading(false);
@@ -352,7 +333,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
           {/* Content */}
           <div className="p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4">
 
-            {/* NEW: Forced Logout Banner */}
+            {/* Forced Logout Banner */}
             {forcedLogoutMessage && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 sm:p-3 flex items-start gap-2">
                 <LogOut size={16} className="sm:w-[18px] sm:h-[18px] flex-shrink-0 mt-0.5" style={{color: '#f59e0b'}} />
@@ -514,15 +495,15 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               {/* Sign In Button */}
               <button
                 type="submit"
-                disabled={loading || !captchaLoaded}
+                disabled={loading || !captchaReady}
                 className="sin-btn-primary w-full py-2.5 md:py-3.5 rounded-xl flex items-center justify-center gap-2 md:gap-2.5 font-bold text-xs md:text-base shadow-2xl group relative overflow-hidden"
                 style={{color: C.white}}
               >
                 <div className="sin-shimmer"></div>
                 <span className="relative flex items-center gap-2 md:gap-2.5">
                   {loading && <Loader size={15} className="md:w-[18px] md:h-[18px] animate-spin" />}
-                  <span>{loading ? 'Signing In...' : !captchaLoaded ? 'Loading Security...' : 'Sign In'}</span>
-                  {!loading && captchaLoaded && <ArrowRight size={15} className="md:w-[18px] md:h-[18px] group-hover:translate-x-1 transition-transform" />}
+                  <span>{loading ? 'Signing In...' : !captchaReady ? 'Loading Security...' : 'Sign In'}</span>
+                  {!loading && captchaReady && <ArrowRight size={15} className="md:w-[18px] md:h-[18px] group-hover:translate-x-1 transition-transform" />}
                 </span>
               </button>
             </form>
@@ -570,7 +551,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
             </div>
 
             {/* Security Badge */}
-            {captchaLoaded && (
+            {captchaReady && (
               <div className="mt-2.5 md:mt-3.5 flex items-center justify-center gap-1 md:gap-1.5 text-xs">
                 <Shield size={11} className="md:w-3.5 md:h-3.5" style={{color: C.green500}} />
                 <span className="text-[9px] md:text-xs" style={{color: C.gray500}}>Protected by reCAPTCHA</span>
