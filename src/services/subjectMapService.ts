@@ -196,12 +196,14 @@ export const subjectMapService = {
     let subjectIndex = 0;
     
     for (const [subject, contentList] of subjectMap.entries()) {
-      // Group content by topic/chapter
+      // Group content by topic/chapter field
+      // Multiple content items can have the same topic
       const topicMap = new Map<string, LibraryContent[]>();
       
       for (const content of contentList) {
-        const topic = content.title; // Using title as topic since topic field might be empty
-        // You can also use content.topic if it's populated in your data
+        // IMPORTANT: Use topic field, fall back to title if topic is empty
+        const topic = content.topic || content.title || 'Untitled Topic';
+        
         if (!topicMap.has(topic)) {
           topicMap.set(topic, []);
         }
@@ -212,49 +214,65 @@ export const subjectMapService = {
       const starCount = topicMap.size;
       const positions = generateStarPositions(starCount);
       
-      // Create stars
+      // Create stars - one star per topic
       const stars: TopicStar[] = [];
       let starIndex = 0;
       let totalProgress = 0;
       let completedCount = 0;
       
-      for (const [topic, topicContent] of topicMap.entries()) {
-        // Calculate progress for this topic (average of all content in topic)
-        let topicProgress = 0;
-        let topicCompleted = false;
+      for (const [topicName, topicContents] of topicMap.entries()) {
+        // CRITICAL: Calculate topic completion based on ALL content in this topic
+        let completedContentCount = 0;
+        let totalContentCount = topicContents.length;
+        let totalTopicProgress = 0;
         
-        // Use first content item for the star (you can aggregate if needed)
-        const primaryContent = topicContent[0];
-        const progress = progressMap.get(primaryContent.id);
-        
-        if (progress) {
-          topicProgress = progress.watchPercentage || 0;
-          topicCompleted = progress.isCompleted;
+        for (const content of topicContents) {
+          const progress = progressMap.get(content.id);
+          
+          if (progress) {
+            const contentProgress = progress.watchPercentage || 0;
+            totalTopicProgress += contentProgress;
+            
+            if (progress.isCompleted) {
+              completedContentCount++;
+            }
+          }
+          
+          // Check if completed from live class attendance
+          const liveClassCompleted = await isContentCompletedFromLiveClass(
+            content.id,
+            studentId
+          );
+          
+          if (liveClassCompleted && !progress?.isCompleted) {
+            completedContentCount++;
+            totalTopicProgress += 100;
+          }
         }
         
-        // Check if completed from live class attendance
-        const liveClassCompleted = await isContentCompletedFromLiveClass(
-          primaryContent.id,
-          studentId
-        );
+        // IMPORTANT: Topic progress = average of all content progress
+        const topicProgress = totalContentCount > 0 
+          ? Math.round(totalTopicProgress / totalContentCount)
+          : 0;
         
-        if (liveClassCompleted && !topicCompleted) {
-          topicCompleted = true;
-          topicProgress = 100;
-        }
+        // IMPORTANT: Topic is mastered ONLY when ALL content in topic is completed
+        const topicMastered = completedContentCount === totalContentCount && totalContentCount > 0;
+        
+        // Use first content item's ID as representative (for navigation)
+        const primaryContent = topicContents[0];
         
         stars.push({
           id: primaryContent.id,
-          name: topic,
+          name: topicName,
           contentId: primaryContent.id,
-          mastered: topicCompleted,
+          mastered: topicMastered,
           progress: topicProgress,
           position: positions[starIndex],
           contentType: primaryContent.type,
         });
         
         totalProgress += topicProgress;
-        if (topicCompleted) completedCount++;
+        if (topicMastered) completedCount++;
         
         starIndex++;
       }
