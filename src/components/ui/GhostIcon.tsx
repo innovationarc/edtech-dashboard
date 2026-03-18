@@ -5,6 +5,7 @@ import { useDashboard } from '../../contexts/DashboardContext';
 interface GhostIconProps {
   size?: number;
   isActive?: boolean;
+  isTalking?: boolean;
   eyeOffset?: { x: number; y: number };
 }
 
@@ -29,18 +30,16 @@ function darkenColor(hex: string, factor: number) {
   return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
 
-const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) => {
+const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false, isTalking = false }) => {
   const { primaryColor, accentColor } = useDashboard();
 
   // Body gradient colors — light/mid/dark shades of primary
-  const bodyLight  = lightenColor(primaryColor, 0.35); // lighter primary
-  const bodyMid    = lightenColor(primaryColor, 0.25); // mid tone
-  const bodyDark   = darkenColor(primaryColor, 0.2);   // subtle shadow at base
-  // Aura glow uses accent
-  // Eyes/mouth always dark — NOT theme colored, so they're always visible
+  const bodyLight  = lightenColor(primaryColor, 0.35);
+  const bodyMid    = lightenColor(primaryColor, 0.25);
+  const bodyDark   = darkenColor(primaryColor, 0.2);
   const eyeColor   = '#1a1a2e';
   const mouthColor = '#1a1a2e';
-  const innerMouth = darkenColor(primaryColor, 0.5);   // subtle inner mouth tint
+  const innerMouth = darkenColor(primaryColor, 0.5);
 
   const wrapRef       = useRef<HTMLDivElement>(null);
   const leftPupilRef  = useRef<SVGEllipseElement>(null);
@@ -51,6 +50,8 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
   const rightClipEllRef = useRef<SVGEllipseElement>(null);
   const mouthSmileRef = useRef<SVGPathElement>(null);
   const mouthORef     = useRef<SVGEllipseElement>(null);
+  const talkMouthRef  = useRef<SVGEllipseElement>(null);
+  const talkRafRef    = useRef<number>(0);
 
   const isDragging  = useRef(false);
   const prev        = useRef({ x: 0, y: 0 });
@@ -60,6 +61,27 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
   const rafId       = useRef(0);
   const resetTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blinkTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Talking mouth animation ───────────────────────────────────────────
+  useEffect(() => {
+    if (!talkMouthRef.current) return;
+    if (!isTalking) {
+      cancelAnimationFrame(talkRafRef.current);
+      talkMouthRef.current.setAttribute('ry', '0');
+      return;
+    }
+    const startTime = performance.now();
+    const animate = (now: number) => {
+      if (!talkMouthRef.current) return;
+      const t = (now - startTime) / 1000;
+      // Combine two sine waves for natural speech rhythm
+      const ry = Math.max(0, 6 + Math.sin(t * 14) * 4 + Math.sin(t * 9.3) * 2.5);
+      talkMouthRef.current.setAttribute('ry', String(ry.toFixed(2)));
+      talkRafRef.current = requestAnimationFrame(animate);
+    };
+    talkRafRef.current = requestAnimationFrame(animate);
+    return () => { cancelAnimationFrame(talkRafRef.current); };
+  }, [isTalking]);
 
   useEffect(() => {
     const clamp = (v: number, max: number) => Math.max(-max, Math.min(max, v));
@@ -263,16 +285,25 @@ const GhostIcon: React.FC<GhostIconProps> = ({ size = 72, isActive = false }) =>
           <ellipse ref={rightEyeRef}   cx="100" cy="72" rx="11.5" ry="12" fill={eyeColor} filter="url(#g-eye)" />
           <g clipPath="url(#clip-right-eye)"><ellipse ref={rightPupilRef} cx="104" cy="66" rx="3" ry="4" fill="white" opacity="0.6" style={{ willChange: 'transform' }} /></g>
 
-          {/* Smile — always dark */}
+          {/* Smile — hidden when active or talking */}
           <path ref={mouthSmileRef} d="M67,102 Q80,116 93,102"
             stroke={mouthColor} strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.85"
-            style={{ display: isActive ? 'none' : '' }} />
+            style={{ display: isActive || isTalking ? 'none' : '' }} />
 
-          {/* Open mouth (chat active) */}
-          {isActive && (
+          {/* Open mouth (chat active, not talking) */}
+          {isActive && !isTalking && (
             <>
               <ellipse cx="80" cy="104" rx="9"   ry="11"  fill={mouthColor} opacity="0.92" />
               <ellipse cx="80" cy="106" rx="6.5" ry="7.5" fill={innerMouth} opacity="0.5"  />
+            </>
+          )}
+
+          {/* Talking mouth — animated open/close when isTalking */}
+          {isTalking && (
+            <>
+              <ellipse cx="80" cy="104" rx="9" ry="11" fill={mouthColor} opacity="0.92" />
+              <ellipse ref={talkMouthRef} cx="80" cy="106" rx="6.5" ry="0"
+                fill={innerMouth} opacity="0.7" />
             </>
           )}
 
