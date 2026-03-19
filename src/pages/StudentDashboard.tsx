@@ -1440,7 +1440,7 @@ const HeatmapCard = ({
               </div>
             )}
           </div>
-        </div>
+        
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:4 }}>
             <span style={{ fontSize:9, color:T.text3 }}>Less</span>
