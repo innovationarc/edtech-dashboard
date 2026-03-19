@@ -192,8 +192,9 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
         opacity: deleting ? 0 : 1,
         animation: `nslide 0.3s cubic-bezier(0.34,1.25,0.64,1) ${index * 35}ms both`,
         position: 'relative',
-        /* Key fix: constrain card to parent width, never grow wider */
-        minWidth: 0, maxWidth: '100%', boxSizing: 'border-box',
+        /* Bulletproof card containment */
+        width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box',
+        overflow: 'hidden',
       }}
     >
       {/* Unread left bar */}
@@ -219,10 +220,10 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', width: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
 
         {/* Title + time */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, width: '100%', minWidth: 0 }}>
           <p style={{
             fontSize: isMobile ? 13.5 : 13,
             fontWeight: notif.isRead ? 500 : 700, margin: 0,
@@ -255,7 +256,7 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
         </p>
 
         {/* Chips row */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 8, minWidth: 0, overflow: 'hidden' }}>
           <span style={{
             fontSize: 11, fontWeight: 600, color: cfg.color,
             background: cfg.bg, padding: '3px 9px', borderRadius: 99,
@@ -264,7 +265,7 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
             {cfg.label}
           </span>
           {notif.metadata?.teacherName && (
-            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
               {notif.metadata.teacherName as string}
             </span>
           )}
@@ -558,7 +559,9 @@ const NotificationsPage: React.FC = () => {
       paddingLeft: isMobile ? 16 : 0,
       paddingRight: isMobile ? 16 : 0,
       display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 16,
-      width: '100%', boxSizing: 'border-box',
+      /* Bulletproof width containment: width+maxWidth+minWidth+boxSizing together
+         ensure this div can NEVER be wider than its parent, regardless of children */
+      width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box',
       overflowX: 'hidden',
     }}>
 
@@ -568,6 +571,7 @@ const NotificationsPage: React.FC = () => {
         justifyContent: 'space-between',
         gap: 8,
         flexWrap: 'nowrap',
+        width: '100%', minWidth: 0, boxSizing: 'border-box',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div style={{
@@ -639,17 +643,12 @@ const NotificationsPage: React.FC = () => {
         onTouchMove={handleTabTouchMove}
         onTouchEnd={handleTabTouchEnd}
         style={{
-          display: 'flex', gap: isMobile ? 6 : 6,
+          display: 'flex', gap: 6,
           overflowX: 'auto',
           overflowY: 'visible',
           paddingBottom: 4,
-          /* Always break out of parent so tabs reach screen edges on mobile */
-          ...(isMobile ? {
-            marginLeft: -16,
-            marginRight: -16,
-            paddingLeft: 16,
-            paddingRight: 16,
-          } : {}),
+          paddingLeft: 2,
+          paddingRight: 2,
           WebkitOverflowScrolling: 'touch',
           scrollSnapType: 'x mandatory',
           scrollBehavior: 'smooth',
@@ -707,7 +706,7 @@ const NotificationsPage: React.FC = () => {
         ) : filtered.length === 0 ? (
           <EmptyState darkMode={darkMode} pRgb={pRgb} filter={activeTab} />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 6, width: '100%', minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 6, width: '100%', minWidth: 0, overflow: 'hidden' }}>
             {filtered.map((notif, i) => (
               <NotifCard
                 key={notif.id}
