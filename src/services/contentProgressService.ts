@@ -158,15 +158,20 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
     // Pass the full Set of course contentIds — avoids relying on courseId field on live class doc
     await autoCompleteFromLiveAttendance(studentId, courseId, new Set(allContentIds));
 
-    // 4. Count how many are completed for this student+course
+    // 4. Count how many course content items are completed for this student
+    // Query by studentId + isCompleted only — then filter against allContentIds set
+    // This handles content_progress docs that were written before courseId was correctly set
     const completedQ = query(
       collection(db, 'content_progress'),
       where('studentId', '==', studentId),
-      where('courseId', '==', courseId),
       where('isCompleted', '==', true),
     );
     const completedSnap = await getDocs(completedQ);
-    const completedCount = completedSnap.size;
+    const courseContentIdSet = new Set(allContentIds);
+    const completedInCourse = completedSnap.docs.filter(d =>
+      courseContentIdSet.has(d.data().contentId)
+    );
+    const completedCount = completedInCourse.length;
 
     // 5. Calculate progress and update enrollment
     const progress = Math.min(100, Math.round((completedCount / totalCount) * 100));
@@ -174,12 +179,9 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
     await runTransaction(db, async (t) => {
       const freshEnroll = await t.get(enrollDoc.ref);
       if (!freshEnroll.exists()) return;
-      // Only update if progress increased (never go backwards)
-      const currentProgress = freshEnroll.data().progress || 0;
-      if (progress <= currentProgress) return;
       t.update(enrollDoc.ref, {
         progress,
-        completedLessons: completedSnap.docs.map(d => d.data().contentId),
+        completedLessons: completedInCourse.map(d => d.data().contentId),
         lastAccessedAt: Timestamp.now(),
       });
     });
