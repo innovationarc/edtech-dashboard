@@ -20,7 +20,7 @@ export interface KPIStats {
 export interface HeatmapDay {
   date: string;        // YYYY-MM-DD
   value: number;       // minutes for study heatmap / seconds for app heatmap
-  level: 0 | 1 | 2 | 3 | 4;  // intensity level
+  level: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;  // intensity level
 }
 
 export interface CourseProgressItem {
@@ -73,20 +73,22 @@ function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function intensityLevel(value: number, maxValue: number): 0 | 1 | 2 | 3 | 4 {
-  if (value === 0 || maxValue === 0) return 0;
-  const pct = value / maxValue;
-  if (pct < 0.15) return 1;
-  if (pct < 0.40) return 2;
-  if (pct < 0.70) return 3;
-  return 4;
+function intensityLevel(value: number, _maxValue: number): 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 {
+  // Fixed thresholds in minutes — 30-min intervals, same for all students
+  if (!value) return 0;
+  if (value < 30)  return 1;
+  if (value < 60)  return 2;
+  if (value < 90)  return 3;
+  if (value < 120) return 4;
+  if (value < 150) return 5;
+  if (value < 180) return 6;
+  return 7;
 }
 
 function buildHeatmapGrid(dayMap: Map<string, number>, weeksBack: number): HeatmapDay[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const totalDays = weeksBack * 7;
-  const maxVal = Math.max(...Array.from(dayMap.values()), 1);
 
   const days: HeatmapDay[] = [];
   for (let i = totalDays - 1; i >= 0; i--) {
@@ -94,7 +96,7 @@ function buildHeatmapGrid(dayMap: Map<string, number>, weeksBack: number): Heatm
     d.setDate(today.getDate() - i);
     const key = ymd(d);
     const val = dayMap.get(key) ?? 0;
-    days.push({ date: key, value: val, level: intensityLevel(val, maxVal) });
+    days.push({ date: key, value: val, level: intensityLevel(val, 0) });
   }
   return days;
 }
@@ -253,7 +255,9 @@ export const dashboardStatsService = {
       const dayMap = new Map<string, number>();
       snap.docs.forEach(d => {
         const key = d.data().date as string;
-        dayMap.set(key, (dayMap.get(key) ?? 0) + (d.data().durationSeconds ?? 0));
+        // Convert seconds → minutes for threshold comparison
+        const mins = Math.round((d.data().durationSeconds ?? 0) / 60);
+        dayMap.set(key, (dayMap.get(key) ?? 0) + mins);
       });
 
       return buildHeatmapGrid(dayMap, weeksBack);
