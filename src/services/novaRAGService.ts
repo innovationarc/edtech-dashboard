@@ -158,6 +158,14 @@ function buildPrompt(params: {
   return parts.join('\n');
 }
 
+// Helper: resolves with value or fallback if promise takes longer than ms
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 // Max tokens for voice response — short and snappy
 const VOICE_MAX_TOKENS = 120;
 const VOICE_TEMPERATURE = 0.7;
@@ -184,31 +192,102 @@ export const novaRAGService = {
   ): Promise<NovaResponse> {
     const userId = user?.uid || '';
 
-    // ── VOICE FAST PATH ────────────────────────────────────────────────────
-    // Skip RAG, skip history, skip memory — just answer quickly in 1-2 sentences.
-    // This cuts response time from 4-7s down to 1-2s for voice conversations.
+    // ── VOICE PATH ─────────────────────────────────────────────────────────
+    // Identical data pipeline as text chat — same RAG, memory, history, user
+    // data, config, navigation. Only differences:
+    //   1. Aggressive parallel timeouts so slow services never block the reply
+    //   2. VOICE_MAX_TOKENS (120) instead of CHAT_MAX_TOKENS (1200)
+    //   3. Voice suffix injected into prompt — 1-2 sentences, no markdown
     if (voiceMode) {
-      const voicePrompt = [
-        `You are Aura, a helpful AI assistant on ${siteName || 'an educational platform'}.`,
-        `Answer in 1-2 short spoken sentences only. No lists, no markdown, no bullet points.`,
-        `Be warm, direct and natural — like a real conversation.`,
-        `\nUser: ${userMessage}`,
-        `Aura:`,
-      ].join('\n');
+      const FAST_TIMEOUT = 600;  // Firestore reads — history, config, memory
+      const SLOW_TIMEOUT = 800;  // Vector API — RAG embed + cosine search
+
+      const [contextResult, userContext, memory, chatHistory, config] = await Promise.all([
+        // RAG — same as text, capped at 800ms
+        withTimeout(
+          novaContextService.getTopRelevantDocs(userMessage, 3, 0.35).catch((e) => {
+            console.warn('[novaRAG/voice] RAG failed (non-fatal):', e);
+            return [] as Array<{ title: string; content: string; similarity: number }>;
+          }),
+          SLOW_TIMEOUT,
+          [] as Array<{ title: string; content: string; similarity: number }>
+        ),
+        // User profile — same as text, capped at 800ms
+        withTimeout(
+          novaUserDataService.getUserContext(userId, user).catch(() => ({
+            formatted: '',
+            raw: { profile: user, enrolledCourses: [], activeGoals: [], upcomingEvents: [] },
+          })),
+          SLOW_TIMEOUT,
+          { formatted: '', raw: { profile: user, enrolledCourses: [], activeGoals: [], upcomingEvents: [] } }
+        ),
+        // Short-term memory — same as text, capped at 600ms
+        withTimeout(
+          userId
+            ? novaMemoryService.getRecentMessages(userId, 48).then(msgs => msgs.slice(-MAX_MEMORY_MSGS))
+            : Promise.resolve([]),
+          FAST_TIMEOUT,
+          []
+        ),
+        // Chat history — same count as text, capped at 600ms
+        withTimeout(
+          userId
+            ? novaChatHistoryService.getRecentForContext(userId, MAX_HISTORY_CONTEXT)
+            : Promise.resolve([]),
+          FAST_TIMEOUT,
+          [] as Array<{ sender: 'user' | 'ai'; text: string }>
+        ),
+        // Config — same as text, capped at 600ms
+        withTimeout(
+          novaContextService.getConfig().catch(() => ({
+            systemPrompt: '', navigationEnabled: true, maxContextDocs: 3, memoryHours: 48,
+          })),
+          FAST_TIMEOUT,
+          { systemPrompt: '', navigationEnabled: true, maxContextDocs: 3, memoryHours: 48 }
+        ),
+      ]);
+
+      // Exact same prompt builder as text chat — full context, navigation, user data
+      const prompt = buildPrompt({
+        userMessage,
+        siteName,
+        userFormatted:     userContext.formatted,
+        contextDocs:       contextResult,
+        memory:            memory.map(m => ({ sender: m.sender, text: m.text })),
+        chatHistory,
+        systemPrompt:      config.systemPrompt,
+        navigationEnabled: config.navigationEnabled,
+      });
+
+      // Append voice instruction — keeps answer short for TTS without changing context
+      const voicePrompt = prompt.replace(
+        /\nAura:$/,
+        '\n[VOICE MODE: Reply in 1-2 natural spoken sentences. No bullet points, no markdown, no lists.]\nAura:'
+      );
 
       const rawResponse = await callWithFailover(voicePrompt, 'chatbot', VOICE_MAX_TOKENS, VOICE_TEMPERATURE);
+
+      // Navigation parsing — identical to text path
+      let navigateTo: string | undefined;
+      const navMatch = rawResponse.match(NAV_REGEX);
+      if (navMatch?.[0]) {
+        const pathMatch = navMatch[0].match(/\[NAVIGATE:([^\]]+)\]/);
+        if (pathMatch?.[1]) navigateTo = pathMatch[1].trim();
+      }
       const cleanText = rawResponse.replace(NAV_REGEX, '').trim();
 
-      // Still persist to history (fire-and-forget)
+      // Persist — identical to text path
       if (userId) {
         novaMemoryService.saveMessage(userId, { text: userMessage, sender: 'user', sessionId }).catch(() => {});
         novaMemoryService.saveMessage(userId, { text: cleanText, sender: 'ai', sessionId }).catch(() => {});
+        novaMemoryService.pruneOldMessages(userId, 72).catch(() => {});
         novaChatHistoryService.saveMessage(userId, { text: userMessage, sender: 'user', sessionId }).catch(() => {});
         novaChatHistoryService.saveMessage(userId, { text: cleanText, sender: 'ai', sessionId }).catch(() => {});
       }
 
       return {
         text: cleanText || "Sorry, I couldn't generate a response.",
+        navigateTo,
       };
     }
 
