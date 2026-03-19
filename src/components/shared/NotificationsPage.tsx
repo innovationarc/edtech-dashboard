@@ -2,16 +2,17 @@
  * NotificationsPage.tsx
  * – Real-time Firestore subscription
  * – Announcement sync on mount
- * – Filter tabs: All · Unread · Announcements · Assignments · Reminders · Urgent · Grades
+ * – Filter tabs: All · Unread · Announcements · Assignments · Reminders · Urgent · Grades · System
  * – Mark all read, clear all (with confirmation)
  * – Per-notification read toggle + delete (always visible on mobile, hover on desktop)
- * – Fully responsive, dark-mode aware, matches Navigation.tsx design system
+ * – Expand/collapse long messages on tap
+ * – Fully responsive, dark-mode aware
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Bell, BellOff, Megaphone, BookOpen, Clock, AlertTriangle,
-  Star, Cpu, Check, CheckCheck, Trash2, RefreshCw, Inbox,
+  Star, Cpu, Check, CheckCheck, Trash2, RefreshCw, Inbox, ChevronDown,
 } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import {
@@ -112,26 +113,25 @@ const SkeletonCard: React.FC<{ darkMode: boolean }> = ({ darkMode }) => (
 const EmptyState: React.FC<{ darkMode: boolean; pRgb: string; filter: FilterTab }> = ({ darkMode, pRgb, filter }) => (
   <div style={{
     display: 'flex', flexDirection: 'column', alignItems: 'center',
-    justifyContent: 'center', gap: 16, padding: '72px 32px',
+    justifyContent: 'center', gap: 16, padding: '60px 24px',
     textAlign: 'center',
   }}>
     <div style={{
-      width: 88, height: 88, borderRadius: 28,
+      width: 80, height: 80, borderRadius: 24,
       background: darkMode ? `rgba(${pRgb},0.10)` : `rgba(${pRgb},0.08)`,
       border: `1.5px solid rgba(${pRgb},0.2)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      marginBottom: 4,
     }}>
       {filter === 'unread'
-        ? <BellOff size={36} color={`rgba(${pRgb},0.55)`} strokeWidth={1.5} />
-        : <Inbox   size={36} color={`rgba(${pRgb},0.55)`} strokeWidth={1.5} />
+        ? <BellOff size={32} color={`rgba(${pRgb},0.55)`} strokeWidth={1.5} />
+        : <Inbox   size={32} color={`rgba(${pRgb},0.55)`} strokeWidth={1.5} />
       }
     </div>
     <div>
-      <p style={{ fontSize: 17, fontWeight: 700, color: darkMode ? '#e2e8f0' : '#111827', margin: 0 }}>
+      <p style={{ fontSize: 16, fontWeight: 700, color: darkMode ? '#e2e8f0' : '#111827', margin: 0 }}>
         {filter === 'unread' ? "You're all caught up!" : 'No notifications yet'}
       </p>
-      <p style={{ fontSize: 14, color: '#64748b', margin: '8px 0 0', lineHeight: 1.6, maxWidth: 260 }}>
+      <p style={{ fontSize: 13, color: '#64748b', margin: '8px 0 0', lineHeight: 1.6, maxWidth: 240 }}>
         {filter === 'unread'
           ? 'All your notifications have been read.'
           : 'Notifications from your courses and teachers will show up here.'}
@@ -154,11 +154,15 @@ interface NotifCardProps {
   index: number;
 }
 
+const COLLAPSE_THRESHOLD = 120;
+
 const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, onRead, onDelete, index }) => {
-  const [hovered, setHovered] = useState(false);
+  const [hovered, setHovered]   = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const cfg = TYPE_CONFIG[notif.type] ?? TYPE_CONFIG.system;
-  const { Icon } = cfg;
+  const [expanded, setExpanded] = useState(false);
+
+  const cfg    = TYPE_CONFIG[notif.type] ?? TYPE_CONFIG.system;
+  const isLong = (notif.message ?? '').length > COLLAPSE_THRESHOLD;
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -166,199 +170,210 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
     setTimeout(() => onDelete(notif.id), 280);
   };
 
-  const showActions = isMobile || hovered;
-
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => { if (!notif.isRead) onRead(notif.id); }}
       style={{
-        display: 'flex', gap: 12, alignItems: 'flex-start',
-        padding: isMobile ? '14px 14px' : '14px 16px',
-        borderRadius: 16,
-        cursor: notif.isRead ? 'default' : 'pointer',
+        width: '100%', boxSizing: 'border-box',
+        borderRadius: 16, overflow: 'hidden', position: 'relative',
         background: darkMode
-          ? (notif.isRead ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)')
+          ? (notif.isRead ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)')
           : (notif.isRead ? '#ffffff' : '#fafbff'),
         border: `1px solid ${
           !notif.isRead
-            ? darkMode ? `rgba(${pRgb},0.18)` : `rgba(${pRgb},0.14)`
+            ? darkMode ? `rgba(${pRgb},0.22)` : `rgba(${pRgb},0.16)`
             : darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'
         }`,
-        boxShadow: !notif.isRead && !darkMode ? `0 2px 12px rgba(${pRgb},0.06)` : 'none',
+        boxShadow: !notif.isRead && !darkMode ? `0 2px 14px rgba(${pRgb},0.07)` : 'none',
         transition: 'all 0.2s ease',
-        transform: deleting ? 'translateX(48px)' : 'none',
+        transform: deleting ? 'translateX(56px)' : 'none',
         opacity: deleting ? 0 : 1,
         animation: `nslide 0.3s cubic-bezier(0.34,1.25,0.64,1) ${index * 35}ms both`,
-        position: 'relative',
-        /* Bulletproof card containment */
-        width: '100%', minWidth: 0, maxWidth: '100%', boxSizing: 'border-box',
-        overflow: 'hidden',
       }}
     >
-      {/* Unread left bar */}
+      {/* Unread accent bar */}
       {!notif.isRead && (
         <span style={{
-          position: 'absolute', left: 0, top: 14, bottom: 14,
-          width: 3, borderRadius: '0 3px 3px 0',
+          position: 'absolute', left: 0, top: 0, bottom: 0,
+          width: 3,
           background: cfg.color,
-          boxShadow: `0 0 8px ${cfg.color}55`,
+          boxShadow: `0 0 10px ${cfg.color}44`,
         }} />
       )}
 
-      {/* Icon */}
+      {/* Main row */}
       <div style={{
-        width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-        background: cfg.bg,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        border: `1.5px solid ${cfg.color}28`,
-        marginLeft: !notif.isRead ? 4 : 0,
-        transition: 'margin 0.2s ease',
+        display: 'flex', gap: 12, alignItems: 'flex-start',
+        padding: '14px 14px 10px 16px',
       }}>
-        <Icon size={20} color={cfg.color} strokeWidth={2} />
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-
-        {/* Title + time */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, width: '100%', minWidth: 0 }}>
-          <p style={{
-            fontSize: isMobile ? 13.5 : 13,
-            fontWeight: notif.isRead ? 500 : 700, margin: 0,
-            color: darkMode ? (notif.isRead ? '#94a3b8' : '#f1f5f9') : (notif.isRead ? '#6b7280' : '#111827'),
-            lineHeight: 1.4,
-            /* On mobile: wrap text so nothing is clipped */
-            wordBreak: 'break-word',
-            overflowWrap: 'break-word',
-            flex: 1, minWidth: 0,
-          }}>
-            {notif.title}
-          </p>
-          <span style={{
-            fontSize: 11, color: '#94a3b8', flexShrink: 0,
-            marginTop: 2, fontWeight: 500, letterSpacing: '-0.01em',
-            whiteSpace: 'nowrap',
-          }}>
-            {relativeTime(notif.createdAt)}
-          </span>
-        </div>
-
-        {/* Message */}
-        <p style={{
-          fontSize: isMobile ? 13 : 13, color: darkMode ? '#64748b' : '#6b7280',
-          margin: '5px 0 0', lineHeight: 1.6,
-          display: '-webkit-box', WebkitLineClamp: isMobile ? 3 : 2, WebkitBoxOrient: 'vertical',
-          overflow: 'hidden', wordBreak: 'break-word', overflowWrap: 'break-word',
+        {/* Icon */}
+        <div style={{
+          width: 42, height: 42, borderRadius: 13, flexShrink: 0,
+          background: cfg.bg,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: `1.5px solid ${cfg.color}28`, marginTop: 1,
         }}>
-          {notif.message}
-        </p>
-
-        {/* Chips row */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 8, minWidth: 0, overflow: 'hidden' }}>
-          <span style={{
-            fontSize: 11, fontWeight: 600, color: cfg.color,
-            background: cfg.bg, padding: '3px 9px', borderRadius: 99,
-            border: `1px solid ${cfg.color}28`,
-          }}>
-            {cfg.label}
-          </span>
-          {notif.metadata?.teacherName && (
-            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
-              {notif.metadata.teacherName as string}
-            </span>
-          )}
-          {notif.metadata?.courseName && (
-            <span style={{
-              fontSize: 11, color: '#94a3b8', fontWeight: 500,
-              overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140, whiteSpace: 'nowrap',
-            }}>
-              · {notif.metadata.courseName as string}
-            </span>
-          )}
-          {notif.priority === 'high' && (
-            <span style={{
-              fontSize: 11, fontWeight: 700, color: '#ef4444',
-              background: 'rgba(239,68,68,0.1)', padding: '3px 9px', borderRadius: 99,
-              border: '1px solid rgba(239,68,68,0.2)',
-            }}>
-              High priority
-            </span>
-          )}
+          <cfg.Icon size={19} color={cfg.color} strokeWidth={2} />
         </div>
 
-        {/* Mobile action row — always visible */}
-        {isMobile && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        {/* Text — flex:1 + minWidth:0 ensures shrinking, NOT width:0 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+
+          {/* Title + timestamp */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <p style={{
+              fontSize: 13.5, fontWeight: notif.isRead ? 500 : 700,
+              margin: 0, lineHeight: 1.45,
+              color: darkMode ? (notif.isRead ? '#94a3b8' : '#f1f5f9') : (notif.isRead ? '#6b7280' : '#111827'),
+              flex: 1, minWidth: 0,
+              /* Wrap properly — no clipping */
+              wordBreak: 'break-word', overflowWrap: 'anywhere',
+            }}>
+              {notif.title}
+            </p>
+            <span style={{
+              fontSize: 11, color: '#94a3b8', flexShrink: 0,
+              marginTop: 2, fontWeight: 500, whiteSpace: 'nowrap',
+            }}>
+              {relativeTime(notif.createdAt)}
+            </span>
+          </div>
+
+          {/* Message — expandable */}
+          {notif.message && (
+            <>
+              <p style={{
+                fontSize: 13, color: darkMode ? '#64748b' : '#6b7280',
+                margin: '5px 0 0', lineHeight: 1.65,
+                wordBreak: 'break-word', overflowWrap: 'anywhere',
+                /* Only clamp when long & collapsed */
+                ...(isLong && !expanded ? {
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as any,
+                  overflow: 'hidden',
+                } : {}),
+              }}>
+                {notif.message}
+              </p>
+              {isLong && (
+                <button
+                  onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    marginTop: 4, background: 'none', border: 'none', padding: 0,
+                    color: `rgb(${pRgb})`, fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: "'Outfit',sans-serif",
+                  }}
+                >
+                  {expanded ? 'Show less' : 'Show more'}
+                  <ChevronDown size={13} style={{
+                    transition: 'transform 0.2s',
+                    transform: expanded ? 'rotate(180deg)' : 'none',
+                  }} />
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Chips */}
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: cfg.color,
+              background: cfg.bg, padding: '3px 9px', borderRadius: 99,
+              border: `1px solid ${cfg.color}28`, whiteSpace: 'nowrap',
+            }}>
+              {cfg.label}
+            </span>
+            {notif.metadata?.teacherName && (
+              <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                {notif.metadata.teacherName as string}
+              </span>
+            )}
+            {notif.metadata?.courseName && (
+              <span style={{
+                fontSize: 11, color: '#94a3b8', fontWeight: 500,
+                maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                · {notif.metadata.courseName as string}
+              </span>
+            )}
+            {notif.priority === 'high' && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: '#ef4444',
+                background: 'rgba(239,68,68,0.1)', padding: '3px 9px', borderRadius: 99,
+                border: '1px solid rgba(239,68,68,0.2)', whiteSpace: 'nowrap',
+              }}>
+                High priority
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop hover actions */}
+        {!isMobile && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0,
+            opacity: hovered ? 1 : 0, transition: 'opacity 0.15s ease',
+          }}>
             {!notif.isRead && (
               <button
                 onClick={e => { e.stopPropagation(); onRead(notif.id); }}
+                title="Mark as read"
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  height: 32, padding: '0 12px', borderRadius: 99,
+                  width: 32, height: 32, borderRadius: 10,
                   background: darkMode ? `rgba(${pRgb},0.12)` : `rgba(${pRgb},0.08)`,
                   border: `1px solid rgba(${pRgb},0.2)`,
-                  color: `rgb(${pRgb})`,
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  fontFamily: "'Outfit',sans-serif",
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                 }}
               >
-                <Check size={13} /> Mark read
+                <Check size={14} color={`rgb(${pRgb})`} />
               </button>
             )}
-            <button
-              onClick={handleDelete}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                height: 32, padding: '0 12px', borderRadius: 99,
-                background: 'rgba(239,68,68,0.08)',
-                border: '1px solid rgba(239,68,68,0.18)',
-                color: '#ef4444',
-                fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                fontFamily: "'Outfit',sans-serif",
-              }}
-            >
-              <Trash2 size={13} /> Delete
+            <button onClick={handleDelete} title="Delete" style={{
+              width: 32, height: 32, borderRadius: 10,
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}>
+              <Trash2 size={14} color="#ef4444" />
             </button>
           </div>
         )}
       </div>
 
-      {/* Desktop hover actions */}
-      {!isMobile && (
+      {/* Mobile action bar — always visible, separated by a thin divider */}
+      {isMobile && (
         <div style={{
-          display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0,
-          opacity: showActions ? 1 : 0,
-          transition: 'opacity 0.15s ease',
+          display: 'flex', gap: 8,
+          padding: '8px 14px 12px',
+          borderTop: `1px solid ${darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
         }}>
           {!notif.isRead && (
             <button
               onClick={e => { e.stopPropagation(); onRead(notif.id); }}
-              title="Mark as read"
               style={{
-                width: 32, height: 32, borderRadius: 10,
+                display: 'flex', alignItems: 'center', gap: 5,
+                height: 34, padding: '0 14px', borderRadius: 10,
                 background: darkMode ? `rgba(${pRgb},0.12)` : `rgba(${pRgb},0.08)`,
                 border: `1px solid rgba(${pRgb},0.2)`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer',
+                color: `rgb(${pRgb})`,
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                fontFamily: "'Outfit',sans-serif", whiteSpace: 'nowrap',
               }}
             >
-              <Check size={14} color={`rgb(${pRgb})`} />
+              <Check size={13} /> Mark read
             </button>
           )}
-          <button
-            onClick={handleDelete}
-            title="Delete"
-            style={{
-              width: 32, height: 32, borderRadius: 10,
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.18)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <Trash2 size={14} color="#ef4444" />
+          <button onClick={handleDelete} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            height: 34, padding: '0 14px', borderRadius: 10,
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)',
+            color: '#ef4444',
+            fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            fontFamily: "'Outfit',sans-serif", whiteSpace: 'nowrap',
+          }}>
+            <Trash2 size={13} /> Delete
           </button>
         </div>
       )}
@@ -367,7 +382,7 @@ const NotifCard: React.FC<NotifCardProps> = ({ notif, darkMode, pRgb, isMobile, 
 };
 
 // ─────────────────────────────────────────
-// Confirm dialog — bottom sheet on all sizes
+// Confirm dialog — bottom sheet
 // ─────────────────────────────────────────
 
 const ConfirmDialog: React.FC<{
@@ -382,21 +397,21 @@ const ConfirmDialog: React.FC<{
       background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)',
     }}
   >
-    <div
-      onClick={e => e.stopPropagation()}
-      style={{
-        background: darkMode ? '#13161f' : '#ffffff',
-        border: `1px solid ${darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`,
-        borderRadius: '24px 24px 0 0',
-        padding: '24px 24px 40px',
-        width: '100%', maxWidth: 480,
-        boxShadow: '0 -16px 48px rgba(0,0,0,0.25)',
-        animation: 'nsheet 0.28s cubic-bezier(0.34,1.15,0.64,1)',
-      }}
-    >
-      <div style={{ width: 36, height: 4, borderRadius: 2,
+    <div onClick={e => e.stopPropagation()} style={{
+      background: darkMode ? '#13161f' : '#ffffff',
+      border: `1px solid ${darkMode ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.08)'}`,
+      borderRadius: '24px 24px 0 0',
+      padding: '24px 24px 40px',
+      width: '100%', maxWidth: 480,
+      boxShadow: '0 -16px 48px rgba(0,0,0,0.25)',
+      animation: 'nsheet 0.28s cubic-bezier(0.34,1.15,0.64,1)',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{
+        width: 36, height: 4, borderRadius: 2,
         background: darkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)',
-        margin: '-8px auto 20px' }} />
+        margin: '-8px auto 20px',
+      }} />
       <div style={{
         width: 52, height: 52, borderRadius: 16,
         background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)',
@@ -441,52 +456,48 @@ const NotificationsPage: React.FC = () => {
   const { user, isAuthenticated, theme, primaryColor, accentColor } = useDashboard();
 
   const darkMode = theme !== 'light';
-  const pRgb = hexRgb(primaryColor);
+  const pRgb     = hexRgb(primaryColor);
   const gradient = `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor ?? primaryColor} 100%)`;
 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [loading, setLoading]             = useState(true);
+  const [syncing, setSyncing]             = useState(false);
+  const [activeTab, setActiveTab]         = useState<FilterTab>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
+  const [isMobile, setIsMobile]           = useState(window.innerWidth < 640);
+  const [notifPrefs, setNotifPrefs]       = useState<Record<string, boolean>>({});
 
   // ── Swipeable tabs ──
-  const tabsRef = useRef<HTMLDivElement>(null);
-  const tabDragRef = useRef<{ startX: number; scrollLeft: number; dragging: boolean }>({
-    startX: 0, scrollLeft: 0, dragging: false,
+  const tabsRef    = useRef<HTMLDivElement>(null);
+  const tabDragRef = useRef<{ startX: number; scrollLeft: number; active: boolean }>({
+    startX: 0, scrollLeft: 0, active: false,
   });
 
-  const handleTabTouchStart = (e: React.TouchEvent) => {
+  const onTabTouchStart = (e: React.TouchEvent) => {
     const el = tabsRef.current;
     if (!el) return;
-    tabDragRef.current = { startX: e.touches[0].pageX, scrollLeft: el.scrollLeft, dragging: true };
+    tabDragRef.current = { startX: e.touches[0].pageX, scrollLeft: el.scrollLeft, active: true };
   };
-  const handleTabTouchMove = (e: React.TouchEvent) => {
-    if (!tabDragRef.current.dragging || !tabsRef.current) return;
-    const dx = tabDragRef.current.startX - e.touches[0].pageX;
-    tabsRef.current.scrollLeft = tabDragRef.current.scrollLeft + dx;
+  const onTabTouchMove = (e: React.TouchEvent) => {
+    if (!tabDragRef.current.active || !tabsRef.current) return;
+    tabsRef.current.scrollLeft = tabDragRef.current.scrollLeft + (tabDragRef.current.startX - e.touches[0].pageX);
   };
-  const handleTabTouchEnd = () => { tabDragRef.current.dragging = false; };
+  const onTabTouchEnd = () => { tabDragRef.current.active = false; };
 
   // Auto-scroll active tab into view
   useEffect(() => {
     const container = tabsRef.current;
     if (!container) return;
-    const activeBtn = container.querySelector('[data-active="true"]') as HTMLElement;
-    if (activeBtn) {
-      activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
+    const btn = container.querySelector('[data-active="true"]') as HTMLElement | null;
+    btn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [activeTab]);
 
   useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 640);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
+    const h = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
   }, []);
 
-  // Real-time subscription — with 3s timeout so loading never hangs forever
   useEffect(() => {
     if (!isAuthenticated || !user?.uid) return;
     setLoading(true);
@@ -499,7 +510,6 @@ const NotificationsPage: React.FC = () => {
     return () => { clearTimeout(timeout); unsub(); };
   }, [isAuthenticated, user?.uid]);
 
-  // Sync announcements on mount + purge transient notifications older than 24h
   useEffect(() => {
     if (!isAuthenticated || !user?.uid) return;
     const sync = async () => {
@@ -511,7 +521,6 @@ const NotificationsPage: React.FC = () => {
       setSyncing(false);
     };
     sync();
-    // Load notification preferences
     getUserNotificationSettings(user.uid).then(prefs => {
       if (prefs) setNotifPrefs(prefs as unknown as Record<string, boolean>);
     }).catch(() => {});
@@ -528,17 +537,16 @@ const NotificationsPage: React.FC = () => {
     await notificationService.clearAllNotifications(user.uid);
   }, [user?.uid]);
 
-  // Map relatedType → notifPrefs key
   const isMutedByPrefs = (n: AppNotification): boolean => {
-    const rt = n.metadata?.relatedType as string ?? n.relatedType ?? '';
-    if (rt === 'announcement'  && notifPrefs.notifyAnnouncements    === false) return true;
-    if (rt === 'courseEnrollment' && notifPrefs.notifyCourseEnrollment === false) return true;
-    if (rt === 'qa'            && notifPrefs.notifyQaAnswers         === false) return true;
-    if (rt === 'taskGroup'     && notifPrefs.notifyTaskAssigned      === false) return true;
-    if (rt === 'task'          && notifPrefs.notifyTaskEvaluation    === false) return true;
-    if (rt === 'exam'          && notifPrefs.notifyExamResults       === false) return true;
-    if ((rt === 'studyGoal' || rt === 'studySchedule' || rt === 'streakFreeze') && notifPrefs.notifyStudyPlan === false) return true;
-    if ((rt === 'earlyAccess' || rt === 'featureRequest') && notifPrefs.notifyEarlyAccess === false) return true;
+    const rt = (n.metadata?.relatedType as string) ?? n.relatedType ?? '';
+    if (rt === 'announcement'     && notifPrefs.notifyAnnouncements        === false) return true;
+    if (rt === 'courseEnrollment' && notifPrefs.notifyCourseEnrollment     === false) return true;
+    if (rt === 'qa'               && notifPrefs.notifyQaAnswers            === false) return true;
+    if (rt === 'taskGroup'        && notifPrefs.notifyTaskAssigned         === false) return true;
+    if (rt === 'task'             && notifPrefs.notifyTaskEvaluation       === false) return true;
+    if (rt === 'exam'             && notifPrefs.notifyExamResults          === false) return true;
+    if (['studyGoal','studySchedule','streakFreeze'].includes(rt) && notifPrefs.notifyStudyPlan === false) return true;
+    if (['earlyAccess','featureRequest'].includes(rt) && notifPrefs.notifyEarlyAccess === false) return true;
     if (rt === 'comingSoon' && notifPrefs.notifyNewComingSoonFeatures === false) return true;
     return false;
   };
@@ -555,46 +563,36 @@ const NotificationsPage: React.FC = () => {
   return (
     <div style={{
       fontFamily: "'Outfit', sans-serif",
-      paddingBottom: isMobile ? 80 : 24,
-      paddingLeft: isMobile ? 16 : 0,
-      paddingRight: isMobile ? 16 : 0,
-      display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 16,
-      /* Bulletproof width containment: width+maxWidth+minWidth+boxSizing together
-         ensure this div can NEVER be wider than its parent, regardless of children */
-      width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box',
+      /* Side padding on mobile — tabs will break out via negative margin */
+      padding: isMobile ? '0 16px 88px' : '0 0 32px',
+      display: 'flex', flexDirection: 'column', gap: 14,
+      width: '100%', boxSizing: 'border-box',
       overflowX: 'hidden',
     }}>
 
-      {/* ── Header row ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8,
-        flexWrap: 'nowrap',
-        width: '100%', minWidth: 0, boxSizing: 'border-box',
-      }}>
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+
+        {/* Title + subtitle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div style={{
-            width: isMobile ? 34 : 36,
-            height: isMobile ? 34 : 36,
-            borderRadius: 11, background: gradient, flexShrink: 0,
+            width: isMobile ? 36 : 40, height: isMobile ? 36 : 40,
+            borderRadius: 12, background: gradient, flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: `0 4px 12px rgba(${pRgb},0.35)`,
+            boxShadow: `0 4px 14px rgba(${pRgb},0.35)`,
           }}>
-            <Bell size={isMobile ? 15 : 17} color="#fff" strokeWidth={2.5} />
+            <Bell size={isMobile ? 16 : 18} color="#fff" strokeWidth={2.5} />
           </div>
           <div style={{ minWidth: 0 }}>
             <h1 style={{
-              fontSize: isMobile ? 17 : 20,
-              fontWeight: 700,
+              fontSize: isMobile ? 18 : 21, fontWeight: 800,
               color: darkMode ? '#f1f5f9' : '#111827',
               margin: 0, lineHeight: 1.2,
             }}>
               Notifications
             </h1>
             <p style={{
-              color: '#64748b', margin: 0,
-              fontSize: 11,
+              color: '#64748b', margin: 0, fontSize: 11.5,
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
               {syncing
@@ -604,18 +602,17 @@ const NotificationsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Action buttons — always visible */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {unreadCount > 0 && (
             <button onClick={handleMarkAllRead} style={{
-              height: isMobile ? 32 : 34,
-              padding: isMobile ? '0 10px' : '0 12px',
-              borderRadius: 10,
-              background: darkMode ? `rgba(${pRgb},0.13)` : `rgba(${pRgb},0.08)`,
-              border: `1px solid rgba(${pRgb},0.22)`,
+              height: 34, padding: '0 10px', borderRadius: 10,
+              background: darkMode ? `rgba(${pRgb},0.14)` : `rgba(${pRgb},0.09)`,
+              border: `1px solid rgba(${pRgb},0.25)`,
               display: 'flex', alignItems: 'center', gap: 5,
               cursor: 'pointer', color: `rgb(${pRgb})`,
-              fontSize: isMobile ? 11 : 12,
-              fontWeight: 700, fontFamily: "'Outfit',sans-serif", whiteSpace: 'nowrap',
+              fontSize: 12, fontWeight: 700,
+              fontFamily: "'Outfit',sans-serif", whiteSpace: 'nowrap',
             }}>
               <CheckCheck size={13} />
               {isMobile ? 'Read all' : 'Mark all read'}
@@ -623,81 +620,85 @@ const NotificationsPage: React.FC = () => {
           )}
           {notifications.length > 0 && (
             <button onClick={() => setShowClearConfirm(true)} title="Clear all" style={{
-              width: isMobile ? 32 : 34,
-              height: isMobile ? 32 : 34,
-              borderRadius: 10, flexShrink: 0,
-              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)',
+              width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+              background: 'rgba(239,68,68,0.09)', border: '1px solid rgba(239,68,68,0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
             }}>
-              <Trash2 size={13} color="#ef4444" />
+              <Trash2 size={14} color="#ef4444" />
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Filter tabs ── */}
-      <div
-        ref={tabsRef}
-        className="np-hide-scrollbar np-tabs"
-        onTouchStart={handleTabTouchStart}
-        onTouchMove={handleTabTouchMove}
-        onTouchEnd={handleTabTouchEnd}
-        style={{
-          display: 'flex', gap: 6,
-          overflowX: 'auto',
-          overflowY: 'visible',
-          paddingBottom: 4,
-          paddingLeft: 2,
-          paddingRight: 2,
-          WebkitOverflowScrolling: 'touch',
-          scrollSnapType: 'x mandatory',
-          scrollBehavior: 'smooth',
-          cursor: isMobile ? 'grab' : 'default',
-          userSelect: 'none',
-        }}
-      >
-        {TABS.map(tab => {
-          const isActive = activeTab === tab.id;
-          const count =
-            tab.id === 'unread' ? unreadCount
-            : tab.id === 'all'  ? notifications.filter(n => !isMutedByPrefs(n)).length
-            : notifications.filter(n => !isMutedByPrefs(n) && n.type === tab.id).length;
-          return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} data-active={isActive ? 'true' : 'false'} style={{
-              height: isMobile ? 32 : 32,
-              padding: isMobile ? '0 12px' : '0 12px',
-              borderRadius: 99, flexShrink: 0,
-              scrollSnapAlign: 'start',
-              background: isActive
-                ? darkMode ? `rgba(${pRgb},0.18)` : `rgba(${pRgb},0.1)`
-                : darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-              border: isActive
-                ? `1px solid rgba(${pRgb},0.3)`
-                : darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.08)',
-              color: isActive ? `rgb(${pRgb})` : darkMode ? '#64748b' : '#6b7280',
-              fontSize: isMobile ? 11 : 12,
-              fontWeight: isActive ? 700 : 500,
-              fontFamily: "'Outfit',sans-serif",
-              cursor: 'pointer', transition: 'all 0.18s ease',
-              display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-            }}>
-              {tab.label}
-              {count > 0 && (
-                <span style={{
-                  fontSize: 10, fontWeight: 700,
-                  background: isActive ? `rgb(${pRgb})` : darkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)',
-                  color: isActive ? '#fff' : darkMode ? '#94a3b8' : '#6b7280',
-                  padding: '1px 6px', borderRadius: 99, lineHeight: '16px',
-                }}>
-                  {count > 99 ? '99+' : count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* ── Filter tabs inside a pill box ── */}
+      <div style={{
+        borderRadius: isMobile ? 0 : 14,
+        background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+        border: `1px solid ${darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
+        padding: '8px 10px',
+        /* On mobile break out to full screen width */
+        ...(isMobile ? { marginLeft: -16, marginRight: -16 } : {}),
+      }}>
+        <div
+          ref={tabsRef}
+          className="np-hide-scrollbar np-tabs"
+          onTouchStart={onTabTouchStart}
+          onTouchMove={onTabTouchMove}
+          onTouchEnd={onTabTouchEnd}
+          style={{
+            display: 'flex', gap: 6,
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            scrollBehavior: 'smooth',
+            userSelect: 'none',
+          }}
+        >
+          {TABS.map(tab => {
+            const isActive = activeTab === tab.id;
+            const count =
+              tab.id === 'unread' ? unreadCount
+              : tab.id === 'all'  ? notifications.filter(n => !isMutedByPrefs(n)).length
+              : notifications.filter(n => !isMutedByPrefs(n) && n.type === tab.id).length;
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                data-active={isActive ? 'true' : 'false'}
+                style={{
+                  height: 32, padding: '0 12px',
+                  borderRadius: 99, flexShrink: 0,
+                  background: isActive
+                    ? darkMode ? `rgba(${pRgb},0.22)` : `rgba(${pRgb},0.12)`
+                    : 'transparent',
+                  border: isActive
+                    ? `1px solid rgba(${pRgb},0.35)`
+                    : '1px solid transparent',
+                  color: isActive ? `rgb(${pRgb})` : darkMode ? '#64748b' : '#6b7280',
+                  fontSize: 12, fontWeight: isActive ? 700 : 500,
+                  fontFamily: "'Outfit',sans-serif",
+                  cursor: 'pointer', transition: 'all 0.18s ease',
+                  display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+                }}
+              >
+                {tab.label}
+                {count > 0 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700,
+                    background: isActive ? `rgb(${pRgb})` : darkMode ? 'rgba(255,255,255,0.13)' : 'rgba(0,0,0,0.1)',
+                    color: isActive ? '#fff' : darkMode ? '#94a3b8' : '#6b7280',
+                    padding: '1px 6px', borderRadius: 99, lineHeight: '16px',
+                  }}>
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ── Content ── */}
+      {/* ── Notification list ── */}
       <div>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -706,7 +707,7 @@ const NotificationsPage: React.FC = () => {
         ) : filtered.length === 0 ? (
           <EmptyState darkMode={darkMode} pRgb={pRgb} filter={activeTab} />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 8 : 6, width: '100%', minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
             {filtered.map((notif, i) => (
               <NotifCard
                 key={notif.id}
@@ -720,7 +721,7 @@ const NotificationsPage: React.FC = () => {
               />
             ))}
             {filtered.length >= 10 && (
-              <p style={{ textAlign: 'center', padding: '16px 0 0', fontSize: 12, color: '#64748b', fontWeight: 500 }}>
+              <p style={{ textAlign: 'center', padding: '12px 0 0', fontSize: 12, color: '#64748b', fontWeight: 500 }}>
                 — {filtered.length} notifications —
               </p>
             )}
@@ -728,7 +729,7 @@ const NotificationsPage: React.FC = () => {
         )}
       </div>
 
-      {/* ── Confirm Dialog ── */}
+      {/* ── Confirm dialog ── */}
       {showClearConfirm && (
         <ConfirmDialog
           darkMode={darkMode} pRgb={pRgb}
@@ -740,19 +741,19 @@ const NotificationsPage: React.FC = () => {
       <style>{`
         @keyframes nslide {
           from { opacity: 0; transform: translateY(10px) scale(0.98); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
+          to   { opacity: 1; transform: translateY(0)    scale(1);    }
         }
         @keyframes npulse {
-          0%, 100% { opacity: 1; }
+          0%, 100% { opacity: 1;    }
           50%       { opacity: 0.45; }
         }
         @keyframes nspin {
-          from { transform: rotate(0deg); }
+          from { transform: rotate(0deg);   }
           to   { transform: rotate(360deg); }
         }
         @keyframes nsheet {
           from { transform: translateY(100%); }
-          to   { transform: translateY(0); }
+          to   { transform: translateY(0);    }
         }
         .np-hide-scrollbar::-webkit-scrollbar { display: none; }
         .np-hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
