@@ -61,15 +61,70 @@ const DashboardLayout = () => {
 
   // ── App usage session tracking ───────────────────────────────────────────
   const sessionStartRef = useRef<number>(Date.now());
+  const savedUpToRef = useRef<number>(Date.now()); // tracks what's already been saved
 
   useEffect(() => {
     if (!user?.uid || user?.role !== 'student') return;
     sessionStartRef.current = Date.now();
-    return () => {
-      const durationSeconds = (Date.now() - sessionStartRef.current) / 1000;
-      dashboardStatsService.logAppUsageSession(user.uid, durationSeconds).catch(() => {});
+    savedUpToRef.current = Date.now();
+
+    // Flush any unsaved seconds buffered in localStorage from a previous refresh
+    const bufferKey = `appUsageBuffer_${user.uid}`;
+    const buffered = localStorage.getItem(bufferKey);
+    if (buffered) {
+      try {
+        const { date, seconds } = JSON.parse(buffered);
+        if (seconds > 0) {
+          dashboardStatsService.logAppUsageSession(user.uid, seconds, date).catch(() => {});
+        }
+      } catch {}
+      localStorage.removeItem(bufferKey);
+    }
+
+    const getUnsavedSeconds = () =>
+      Math.round((Date.now() - savedUpToRef.current) / 1000);
+
+    const save = async () => {
+      const seconds = getUnsavedSeconds();
+      if (seconds < 1) return;
+      savedUpToRef.current = Date.now(); // mark as saved immediately to prevent double-count
+      await dashboardStatsService.logAppUsageSession(user.uid, seconds).catch(() => {});
     };
-  }, [user?.uid, user?.role]);
+
+    // Synchronous localStorage buffer for beforeunload — guaranteed even if async fails
+    const bufferToLocalStorage = () => {
+      const seconds = getUnsavedSeconds();
+      if (seconds < 1) return;
+      const dateKey = new Date().toISOString().slice(0, 10);
+      localStorage.setItem(bufferKey, JSON.stringify({ date: dateKey, seconds }));
+    };
+
+    // Save every 60s so at most 60s is ever at risk
+    const iv = setInterval(save, 60 * 1000);
+
+    // visibilitychange — most reliable trigger (fires before page dies on refresh/close)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        bufferToLocalStorage(); // sync — guaranteed
+        save();                 // async — best effort
+      } else {
+        // Coming back to the tab — clear any buffer since we're still alive
+        localStorage.removeItem(bufferKey);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // beforeunload — sync buffer as final safety net
+    const onBeforeUnload = () => bufferToLocalStorage();
+    window.addEventListener('beforeunload', onBeforeUnload);
+
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      save(); // SPA navigation unmount
+    };
+  }, [user?.uid, user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep isMobileRef in sync with isMobile state
   useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
