@@ -45,9 +45,68 @@ const progressId = (contentId: string, studentId: string) =>
   `${contentId}__${studentId}`;
 
 /**
+ * For a given course, find any linked live class recordings where the student
+ * attended the live class. If attended but content_progress not yet marked
+ * complete, auto-mark as completed so it counts toward enrollment progress.
+ * Fire-and-forget — never throws.
+ */
+async function autoCompleteFromLiveAttendance(studentId: string, courseId: string): Promise<void> {
+  try {
+    // 1. Find all ended live classes for this course that have a contentId linked
+    const liveClassQ = query(
+      collection(db, 'live_classes'),
+      where('courseId', '==', courseId),
+      where('status', '==', 'ended'),
+    );
+    const liveClassSnap = await getDocs(liveClassQ);
+    if (liveClassSnap.empty) return;
+
+    const now = Timestamp.now();
+
+    await Promise.all(liveClassSnap.docs.map(async (liveClassDoc) => {
+      const cls = liveClassDoc.data();
+      const contentId: string | null = cls.contentId || null;
+      if (!contentId) return; // no recording linked to this class
+
+      // 2. Check if student attended this live class
+      const attendanceId = `${liveClassDoc.id}__${studentId}`;
+      const attendanceSnap = await getDoc(doc(db, 'live_class_attendance', attendanceId));
+      if (!attendanceSnap.exists()) return; // student didn't attend
+
+      // 3. Check if content_progress already marks this as completed
+      const progressDocId = `${contentId}__${studentId}`;
+      const progressSnap = await getDoc(doc(db, 'content_progress', progressDocId));
+      if (progressSnap.exists() && progressSnap.data().isCompleted === true) return; // already done
+
+      // 4. Fetch content metadata for subject/topic/type
+      const contentSnap = await getDoc(doc(db, 'content', contentId));
+      const contentData = contentSnap.exists() ? contentSnap.data() : {};
+
+      // 5. Auto-mark as completed via live class attendance
+      await setDoc(doc(db, 'content_progress', progressDocId), {
+        id: progressDocId,
+        contentId,
+        studentId,
+        contentType: contentData.type || 'lesson',
+        subject: contentData.subject || '',
+        topic: contentData.topic || '',
+        courseId,
+        isCompleted: true,
+        completedViaLiveClass: true,     // flag for attribution
+        liveClassId: liveClassDoc.id,
+        lastWatchedAt: now,
+        firstWatchedAt: progressSnap.exists() ? progressSnap.data().firstWatchedAt : now,
+        completedAt: now,
+      }, { merge: true });
+    }));
+  } catch (e) {
+    console.warn('[contentProgressService] autoCompleteFromLiveAttendance failed (non-fatal):', e);
+  }
+}
+
+/**
  * Recalculate and sync enrollment.progress after a content item is completed.
- * Counts all completed content_progress docs for this student+course,
- * divides by total content items in the course, updates enrollments.progress.
+ * Also auto-completes any content the student attended live but hasn't watched.
  * Fire-and-forget — never throws, never blocks the caller.
  */
 async function syncEnrollmentProgress(studentId: string, courseId: string): Promise<void> {
@@ -63,7 +122,10 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
 
     const enrollDoc = enrollSnap.docs[0];
 
-    // 2. Count total content items in the course's contentStructure
+    // 2. Auto-complete any content the student attended live but hasn't watched
+    await autoCompleteFromLiveAttendance(studentId, courseId);
+
+    // 3. Count total content items in the course's contentStructure
     const courseSnap = await getDoc(doc(db, 'courses', courseId));
     if (!courseSnap.exists()) return;
 
@@ -266,5 +328,15 @@ export const contentProgressService = {
         completedAt: data.completedAt?.toDate() || undefined,
       } as ContentProgress;
     });
+  },
+
+  /**
+   * Publicly trigger a full sync for a course:
+   * - Auto-completes content from live class attendance
+   * - Recalculates and updates enrollment.progress
+   * Call this when the student opens their library or dashboard.
+   */
+  async syncProgressForCourse(studentId: string, courseId: string): Promise<void> {
+    await syncEnrollmentProgress(studentId, courseId);
   },
 };
