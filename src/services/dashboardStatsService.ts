@@ -245,11 +245,12 @@ export const dashboardStatsService = {
     cutoff.setDate(cutoff.getDate() - (weeksBack * 7));
 
     try {
+      // No orderBy — avoids composite index requirement.
+      // We build our own sorted grid in buildHeatmapGrid anyway.
       const snap = await getDocs(query(
         collection(db, 'appUsageLogs'),
         where('studentId', '==', studentId),
         where('date', '>=', ymd(cutoff)),
-        orderBy('date', 'asc'),
       ));
 
       const dayMap = new Map<string, number>();
@@ -261,7 +262,9 @@ export const dashboardStatsService = {
       });
 
       return buildHeatmapGrid(dayMap, weeksBack);
-    } catch {
+    } catch (e) {
+      // Log so browser console shows the Firestore index creation link if needed
+      console.error('[getAppUsageHeatmap] query failed:', e);
       return buildHeatmapGrid(new Map(), weeksBack);
     }
   },
