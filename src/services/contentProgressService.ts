@@ -48,14 +48,22 @@ const progressId = (contentId: string, studentId: string) =>
  * For a given course, find any linked live class recordings where the student
  * attended the live class. If attended but content_progress not yet marked
  * complete, auto-mark as completed so it counts toward enrollment progress.
+ *
+ * Handles live classes where courseId is null — instead queries ALL ended
+ * classes with a contentId, checks attendance, then verifies the content
+ * belongs to this course via the course's contentStructure.
  * Fire-and-forget — never throws.
  */
-async function autoCompleteFromLiveAttendance(studentId: string, courseId: string): Promise<void> {
+async function autoCompleteFromLiveAttendance(
+  studentId: string,
+  courseId: string,
+  courseContentIds: Set<string>  // all contentIds in this course, pre-computed
+): Promise<void> {
   try {
-    // 1. Find all ended live classes for this course that have a contentId linked
+    // 1. Query all ended live classes that have a contentId linked
+    // Don't filter by courseId — teacher may have left it null
     const liveClassQ = query(
       collection(db, 'live_classes'),
-      where('courseId', '==', courseId),
       where('status', '==', 'ended'),
     );
     const liveClassSnap = await getDocs(liveClassQ);
@@ -66,23 +74,26 @@ async function autoCompleteFromLiveAttendance(studentId: string, courseId: strin
     await Promise.all(liveClassSnap.docs.map(async (liveClassDoc) => {
       const cls = liveClassDoc.data();
       const contentId: string | null = cls.contentId || null;
-      if (!contentId) return; // no recording linked to this class
+      if (!contentId) return; // no recording linked
 
-      // 2. Check if student attended this live class
-      const attendanceId = `${liveClassDoc.id}__${studentId}`;
-      const attendanceSnap = await getDoc(doc(db, 'live_class_attendance', attendanceId));
+      // 2. Verify this content belongs to the current course
+      if (!courseContentIds.has(contentId)) return;
+
+      // 3. Check if student attended this live class
+      const attendanceDocId = `${liveClassDoc.id}__${studentId}`;
+      const attendanceSnap = await getDoc(doc(db, 'live_class_attendance', attendanceDocId));
       if (!attendanceSnap.exists()) return; // student didn't attend
 
-      // 3. Check if content_progress already marks this as completed
+      // 4. Check if content_progress already marks this as completed
       const progressDocId = `${contentId}__${studentId}`;
       const progressSnap = await getDoc(doc(db, 'content_progress', progressDocId));
       if (progressSnap.exists() && progressSnap.data().isCompleted === true) return; // already done
 
-      // 4. Fetch content metadata for subject/topic/type
+      // 5. Fetch content metadata for subject/topic/type
       const contentSnap = await getDoc(doc(db, 'content', contentId));
       const contentData = contentSnap.exists() ? contentSnap.data() : {};
 
-      // 5. Auto-mark as completed via live class attendance
+      // 6. Auto-mark as completed via live class attendance
       await setDoc(doc(db, 'content_progress', progressDocId), {
         id: progressDocId,
         contentId,
@@ -92,12 +103,14 @@ async function autoCompleteFromLiveAttendance(studentId: string, courseId: strin
         topic: contentData.topic || '',
         courseId,
         isCompleted: true,
-        completedViaLiveClass: true,     // flag for attribution
+        completedViaLiveClass: true,
         liveClassId: liveClassDoc.id,
         lastWatchedAt: now,
         firstWatchedAt: progressSnap.exists() ? progressSnap.data().firstWatchedAt : now,
         completedAt: now,
       }, { merge: true });
+
+      console.log(`[contentProgressService] Auto-completed "${contentData.title || contentId}" via live class attendance`);
     }));
   } catch (e) {
     console.warn('[contentProgressService] autoCompleteFromLiveAttendance failed (non-fatal):', e);
@@ -122,10 +135,7 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
 
     const enrollDoc = enrollSnap.docs[0];
 
-    // 2. Auto-complete any content the student attended live but hasn't watched
-    await autoCompleteFromLiveAttendance(studentId, courseId);
-
-    // 3. Count total content items in the course's contentStructure
+    // 2. Get course contentStructure to know which contentIds belong to this course
     const courseSnap = await getDoc(doc(db, 'courses', courseId));
     if (!courseSnap.exists()) return;
 
@@ -144,7 +154,11 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
     const totalCount = allContentIds.length;
     if (totalCount === 0) return;
 
-    // 3. Count how many are completed for this student+course
+    // 3. Auto-complete any content the student attended live but hasn't watched
+    // Pass the full Set of course contentIds — avoids relying on courseId field on live class doc
+    await autoCompleteFromLiveAttendance(studentId, courseId, new Set(allContentIds));
+
+    // 4. Count how many are completed for this student+course
     const completedQ = query(
       collection(db, 'content_progress'),
       where('studentId', '==', studentId),
@@ -154,7 +168,7 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
     const completedSnap = await getDocs(completedQ);
     const completedCount = completedSnap.size;
 
-    // 4. Calculate progress and update enrollment
+    // 5. Calculate progress and update enrollment
     const progress = Math.min(100, Math.round((completedCount / totalCount) * 100));
 
     await runTransaction(db, async (t) => {
