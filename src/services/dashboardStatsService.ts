@@ -266,10 +266,11 @@ export const dashboardStatsService = {
     }
   },
 
-  // Log a session — called from DashboardLayout on unmount
-  async logAppUsageSession(studentId: string, durationSeconds: number): Promise<void> {
-    if (durationSeconds < 30) return; // ignore < 30s micro-visits
-    const dateKey = ymd(new Date());
+  // Log a session — called from DashboardLayout
+  // date param allows flushing a buffered session from a previous day (localStorage fallback)
+  async logAppUsageSession(studentId: string, durationSeconds: number, date?: string): Promise<void> {
+    if (durationSeconds < 1) return; // ignore sub-second noise only
+    const dateKey = date ?? ymd(new Date());
     try {
       const ref = doc(db, 'appUsageLogs', `${studentId}_${dateKey}_${Date.now()}`);
       await setDoc(ref, {
