@@ -1214,7 +1214,6 @@ const StudentDashboard = () => {
             </div>
           )}
         </Card>
-      )}
 
       {/* ── Heatmaps ─────────────────────────────────────────────────────────── */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap:'clamp(14px,1.8vw,22px)' }}>
