@@ -75,8 +75,10 @@ function buildPrompt(params: {
 
   // ── Personality ────────────────────────────────────────────────────────────
   const basePersonality =
-    systemPrompt?.trim() ||
-    `You are Nova, an intelligent AI assistant built into ${siteName || 'an educational platform'}. ` +
+    (systemPrompt?.trim()
+      ? systemPrompt.trim().replace(/\bNova\b/g, 'Aura').replace(/\bnova\b/g, 'aura')
+      : null) ||
+    `You are Aura, an intelligent AI assistant built into ${siteName || 'an educational platform'}. ` +
     `You help students, teachers, and admins with any question — platform features, studies, exams, ` +
     `schedules, assignments, or general academic topics. ` +
     `Be concise, warm, direct, and genuinely helpful. Never add unnecessary filler phrases. ` +
@@ -111,7 +113,7 @@ function buildPrompt(params: {
   if (conversationContext.length > 0) {
     parts.push('\n=== RECENT CONVERSATION ===');
     conversationContext.forEach(m => {
-      const label = m.sender === 'user' ? 'User' : 'Nova';
+      const label = m.sender === 'user' ? 'User' : 'Aura';
       const text = m.text.length > MAX_MSG_CHARS
         ? m.text.slice(0, MAX_MSG_CHARS) + '…'
         : m.text;
@@ -151,10 +153,14 @@ function buildPrompt(params: {
 
   // ── User message ───────────────────────────────────────────────────────────
   parts.push(`\nUser: ${userMessage}`);
-  parts.push('Nova:');
+  parts.push('Aura:');
 
   return parts.join('\n');
 }
+
+// Max tokens for voice response — short and snappy
+const VOICE_MAX_TOKENS = 120;
+const VOICE_TEMPERATURE = 0.7;
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
@@ -163,18 +169,48 @@ export const novaRAGService = {
   /**
    * Full RAG pipeline. Called once per user message.
    *
-   * @param userMessage  Raw text the user typed
+   * @param userMessage  Raw text the user typed/spoken
    * @param user         Current UserProfile from DashboardContext (may be null)
    * @param sessionId    Unique ID for this chat session (generated once per widget open)
    * @param siteName     From DashboardContext for personalised greeting
+   * @param voiceMode    When true, uses a fast low-token path optimised for TTS speed
    */
   async sendMessage(
     userMessage: string,
     user: UserProfile | null,
     sessionId: string,
-    siteName = 'the platform'
+    siteName = 'the platform',
+    voiceMode = false
   ): Promise<NovaResponse> {
     const userId = user?.uid || '';
+
+    // ── VOICE FAST PATH ────────────────────────────────────────────────────
+    // Skip RAG, skip history, skip memory — just answer quickly in 1-2 sentences.
+    // This cuts response time from 4-7s down to 1-2s for voice conversations.
+    if (voiceMode) {
+      const voicePrompt = [
+        `You are Aura, a helpful AI assistant on ${siteName || 'an educational platform'}.`,
+        `Answer in 1-2 short spoken sentences only. No lists, no markdown, no bullet points.`,
+        `Be warm, direct and natural — like a real conversation.`,
+        `\nUser: ${userMessage}`,
+        `Aura:`,
+      ].join('\n');
+
+      const rawResponse = await callWithFailover(voicePrompt, 'chatbot', VOICE_MAX_TOKENS, VOICE_TEMPERATURE);
+      const cleanText = rawResponse.replace(NAV_REGEX, '').trim();
+
+      // Still persist to history (fire-and-forget)
+      if (userId) {
+        novaMemoryService.saveMessage(userId, { text: userMessage, sender: 'user', sessionId }).catch(() => {});
+        novaMemoryService.saveMessage(userId, { text: cleanText, sender: 'ai', sessionId }).catch(() => {});
+        novaChatHistoryService.saveMessage(userId, { text: userMessage, sender: 'user', sessionId }).catch(() => {});
+        novaChatHistoryService.saveMessage(userId, { text: cleanText, sender: 'ai', sessionId }).catch(() => {});
+      }
+
+      return {
+        text: cleanText || "Sorry, I couldn't generate a response.",
+      };
+    }
 
     // ── 1+2+3+4+5+6: fetch everything in parallel ──────────────────────────
     const [contextResult, userContext, memory, chatHistory, config] = await Promise.all([
