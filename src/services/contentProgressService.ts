@@ -131,13 +131,19 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
       where('courseId', '==', courseId),
     );
     const enrollSnap = await getDocs(enrollQ);
-    if (enrollSnap.empty) return;
+    if (enrollSnap.empty) {
+      console.log(`[syncEnrollmentProgress] No enrollment found for student=${studentId} course=${courseId}`);
+      return;
+    }
 
     const enrollDoc = enrollSnap.docs[0];
 
     // 2. Get course contentStructure to know which contentIds belong to this course
     const courseSnap = await getDoc(doc(db, 'courses', courseId));
-    if (!courseSnap.exists()) return;
+    if (!courseSnap.exists()) {
+      console.log(`[syncEnrollmentProgress] Course not found: ${courseId}`);
+      return;
+    }
 
     const contentStructure = courseSnap.data().contentStructure || [];
 
@@ -152,26 +158,31 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
     }
     const allContentIds = collectContentIds(contentStructure);
     const totalCount = allContentIds.length;
+    console.log(`[syncEnrollmentProgress] Course=${courseId} totalContent=${totalCount}`, allContentIds);
     if (totalCount === 0) return;
 
     // 3. Auto-complete any content the student attended live but hasn't watched
-    // Pass the full Set of course contentIds — avoids relying on courseId field on live class doc
     await autoCompleteFromLiveAttendance(studentId, courseId, new Set(allContentIds));
 
     // 4. Count how many course content items are completed for this student
-    // Query by studentId + isCompleted only — then filter against allContentIds set
-    // This handles content_progress docs that were written before courseId was correctly set
     const completedQ = query(
       collection(db, 'content_progress'),
       where('studentId', '==', studentId),
       where('isCompleted', '==', true),
     );
     const completedSnap = await getDocs(completedQ);
+    console.log(`[syncEnrollmentProgress] Total completed content_progress docs for student: ${completedSnap.size}`);
+    completedSnap.docs.forEach(d => {
+      const data = d.data();
+      console.log(`  - contentId=${data.contentId} courseId=${data.courseId} isCompleted=${data.isCompleted}`);
+    });
+
     const courseContentIdSet = new Set(allContentIds);
     const completedInCourse = completedSnap.docs.filter(d =>
       courseContentIdSet.has(d.data().contentId)
     );
     const completedCount = completedInCourse.length;
+    console.log(`[syncEnrollmentProgress] completedInCourse=${completedCount}/${totalCount} → ${Math.round(completedCount/totalCount*100)}%`);
 
     // 5. Calculate progress and update enrollment
     const progress = Math.min(100, Math.round((completedCount / totalCount) * 100));
@@ -185,6 +196,7 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
         lastAccessedAt: Timestamp.now(),
       });
     });
+    console.log(`[syncEnrollmentProgress] Updated enrollment progress to ${progress}%`);
   } catch (e) {
     console.warn('[contentProgressService] syncEnrollmentProgress failed (non-fatal):', e);
   }
