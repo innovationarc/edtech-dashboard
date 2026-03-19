@@ -173,11 +173,13 @@ export const liveClassService = {
   async setRecording(
     classId: string,
     recordingUrl: string,
-    bunnyVideoId?: string
+    bunnyVideoId?: string,
+    contentId?: string,
   ): Promise<void> {
     await updateDoc(doc(db, 'live_classes', classId), {
       recordingUrl,
       bunnyVideoId: bunnyVideoId || null,
+      ...(contentId ? { contentId } : {}),
     });
   },
 
