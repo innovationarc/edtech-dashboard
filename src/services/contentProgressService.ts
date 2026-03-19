@@ -57,60 +57,84 @@ const progressId = (contentId: string, studentId: string) =>
 async function autoCompleteFromLiveAttendance(
   studentId: string,
   courseId: string,
-  courseContentIds: Set<string>  // all contentIds in this course, pre-computed
+  courseContentIds: Set<string>
 ): Promise<void> {
   try {
-    // 1. Query all ended live classes that have a contentId linked
-    // Don't filter by courseId — teacher may have left it null
-    const liveClassQ = query(
-      collection(db, 'live_classes'),
-      where('status', '==', 'ended'),
-    );
-    const liveClassSnap = await getDocs(liveClassQ);
+    // 1. Query all ended live classes
+    let liveClassSnap: any;
+    try {
+      const liveClassQ = query(
+        collection(db, 'live_classes'),
+        where('status', '==', 'ended'),
+      );
+      liveClassSnap = await getDocs(liveClassQ);
+      console.log(`[autoComplete] live_classes query OK, found ${liveClassSnap.size} ended classes`);
+    } catch (e: any) {
+      console.warn('[autoComplete] FAILED at live_classes query:', e.message); return;
+    }
     if (liveClassSnap.empty) return;
 
     const now = Timestamp.now();
 
-    await Promise.all(liveClassSnap.docs.map(async (liveClassDoc) => {
+    await Promise.all(liveClassSnap.docs.map(async (liveClassDoc: any) => {
       const cls = liveClassDoc.data();
       const contentId: string | null = cls.contentId || null;
-      if (!contentId) return; // no recording linked
-
-      // 2. Verify this content belongs to the current course
+      if (!contentId) return;
       if (!courseContentIds.has(contentId)) return;
 
-      // 3. Check if student attended this live class
+      // 2. Check attendance
       const attendanceDocId = `${liveClassDoc.id}__${studentId}`;
-      const attendanceSnap = await getDoc(doc(db, 'live_class_attendance', attendanceDocId));
-      if (!attendanceSnap.exists()) return; // student didn't attend
+      let attendanceSnap: any;
+      try {
+        attendanceSnap = await getDoc(doc(db, 'live_class_attendance', attendanceDocId));
+        console.log(`[autoComplete] live_class_attendance getDoc OK, exists=${attendanceSnap.exists()}`);
+      } catch (e: any) {
+        console.warn('[autoComplete] FAILED at live_class_attendance getDoc:', e.message); return;
+      }
+      if (!attendanceSnap.exists()) return;
 
-      // 4. Check if content_progress already marks this as completed
+      // 3. Check existing progress
       const progressDocId = `${contentId}__${studentId}`;
-      const progressSnap = await getDoc(doc(db, 'content_progress', progressDocId));
-      if (progressSnap.exists() && progressSnap.data().isCompleted === true) return; // already done
+      let progressSnap: any;
+      try {
+        progressSnap = await getDoc(doc(db, 'content_progress', progressDocId));
+        console.log(`[autoComplete] content_progress getDoc OK, exists=${progressSnap.exists()}`);
+      } catch (e: any) {
+        console.warn('[autoComplete] FAILED at content_progress getDoc:', e.message); return;
+      }
+      if (progressSnap.exists() && progressSnap.data().isCompleted === true) return;
 
-      // 5. Fetch content metadata for subject/topic/type
-      const contentSnap = await getDoc(doc(db, 'content', contentId));
-      const contentData = contentSnap.exists() ? contentSnap.data() : {};
+      // 4. Fetch content metadata
+      let contentData: any = {};
+      try {
+        const contentSnap = await getDoc(doc(db, 'content', contentId));
+        contentData = contentSnap.exists() ? contentSnap.data() : {};
+        console.log(`[autoComplete] content getDoc OK`);
+      } catch (e: any) {
+        console.warn('[autoComplete] FAILED at content getDoc:', e.message);
+      }
 
-      // 6. Auto-mark as completed via live class attendance
-      await setDoc(doc(db, 'content_progress', progressDocId), {
-        id: progressDocId,
-        contentId,
-        studentId,
-        contentType: contentData.type || 'lesson',
-        subject: contentData.subject || '',
-        topic: contentData.topic || '',
-        courseId,
-        isCompleted: true,
-        completedViaLiveClass: true,
-        liveClassId: liveClassDoc.id,
-        lastWatchedAt: now,
-        firstWatchedAt: progressSnap.exists() ? progressSnap.data().firstWatchedAt : now,
-        completedAt: now,
-      }, { merge: true });
-
-      console.log(`[contentProgressService] Auto-completed "${contentData.title || contentId}" via live class attendance`);
+      // 5. Write content_progress
+      try {
+        await setDoc(doc(db, 'content_progress', progressDocId), {
+          id: progressDocId,
+          contentId,
+          studentId,
+          contentType: contentData.type || 'lesson',
+          subject: contentData.subject || '',
+          topic: contentData.topic || '',
+          courseId,
+          isCompleted: true,
+          completedViaLiveClass: true,
+          liveClassId: liveClassDoc.id,
+          lastWatchedAt: now,
+          firstWatchedAt: progressSnap.exists() ? progressSnap.data().firstWatchedAt : now,
+          completedAt: now,
+        }, { merge: true });
+        console.log(`[autoComplete] content_progress setDoc OK — auto-completed "${contentData.title || contentId}"`);
+      } catch (e: any) {
+        console.warn('[autoComplete] FAILED at content_progress setDoc:', e.message);
+      }
     }));
   } catch (e) {
     console.warn('[contentProgressService] autoCompleteFromLiveAttendance failed (non-fatal):', e);
