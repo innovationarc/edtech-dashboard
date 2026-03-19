@@ -44,6 +44,74 @@ export interface ContentProgress {
 const progressId = (contentId: string, studentId: string) => 
   `${contentId}__${studentId}`;
 
+/**
+ * Recalculate and sync enrollment.progress after a content item is completed.
+ * Counts all completed content_progress docs for this student+course,
+ * divides by total content items in the course, updates enrollments.progress.
+ * Fire-and-forget — never throws, never blocks the caller.
+ */
+async function syncEnrollmentProgress(studentId: string, courseId: string): Promise<void> {
+  try {
+    // 1. Find the enrollment doc
+    const enrollQ = query(
+      collection(db, 'enrollments'),
+      where('studentId', '==', studentId),
+      where('courseId', '==', courseId),
+    );
+    const enrollSnap = await getDocs(enrollQ);
+    if (enrollSnap.empty) return;
+
+    const enrollDoc = enrollSnap.docs[0];
+
+    // 2. Count total content items in the course's contentStructure
+    const courseSnap = await getDoc(doc(db, 'courses', courseId));
+    if (!courseSnap.exists()) return;
+
+    const contentStructure = courseSnap.data().contentStructure || [];
+
+    // Recursively collect all content node IDs
+    function collectContentIds(nodes: any[]): string[] {
+      const ids: string[] = [];
+      for (const node of nodes) {
+        if (node.type === 'content' && node.contentId) ids.push(node.contentId);
+        if (node.children?.length) ids.push(...collectContentIds(node.children));
+      }
+      return ids;
+    }
+    const allContentIds = collectContentIds(contentStructure);
+    const totalCount = allContentIds.length;
+    if (totalCount === 0) return;
+
+    // 3. Count how many are completed for this student+course
+    const completedQ = query(
+      collection(db, 'content_progress'),
+      where('studentId', '==', studentId),
+      where('courseId', '==', courseId),
+      where('isCompleted', '==', true),
+    );
+    const completedSnap = await getDocs(completedQ);
+    const completedCount = completedSnap.size;
+
+    // 4. Calculate progress and update enrollment
+    const progress = Math.min(100, Math.round((completedCount / totalCount) * 100));
+
+    await runTransaction(db, async (t) => {
+      const freshEnroll = await t.get(enrollDoc.ref);
+      if (!freshEnroll.exists()) return;
+      // Only update if progress increased (never go backwards)
+      const currentProgress = freshEnroll.data().progress || 0;
+      if (progress <= currentProgress) return;
+      t.update(enrollDoc.ref, {
+        progress,
+        completedLessons: completedSnap.docs.map(d => d.data().contentId),
+        lastAccessedAt: Timestamp.now(),
+      });
+    });
+  } catch (e) {
+    console.warn('[contentProgressService] syncEnrollmentProgress failed (non-fatal):', e);
+  }
+}
+
 export const contentProgressService = {
   /**
    * Update video/lesson progress
@@ -84,6 +152,12 @@ export const contentProgressService = {
       firstWatchedAt: existingData?.firstWatchedAt || now,
       completedAt: isCompleted && !existingData?.completedAt ? now : existingData?.completedAt || null,
     }, { merge: true });
+
+    // Sync enrollment progress whenever this content becomes newly completed
+    const wasAlreadyCompleted = existingData?.isCompleted === true;
+    if (isCompleted && !wasAlreadyCompleted && courseId) {
+      syncEnrollmentProgress(studentId, courseId); // fire-and-forget
+    }
   },
 
   /**
@@ -120,6 +194,11 @@ export const contentProgressService = {
       firstWatchedAt: existingData?.firstWatchedAt || now,
       completedAt: now,
     }, { merge: true });
+
+    // Sync enrollment progress — exams always count as newly completed
+    if (courseId) {
+      syncEnrollmentProgress(studentId, courseId); // fire-and-forget
+    }
   },
 
   /**
