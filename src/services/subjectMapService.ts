@@ -202,19 +202,19 @@ export const subjectMapService = {
     
     for (const [subject, contentList] of subjectMap.entries()) {
       // Group content by topic field only.
+      // Content with no topic is skipped — it has no meaningful constellation placement.
       // Key is lowercased+trimmed for grouping (handles case/whitespace mismatches).
-      // Display name uses the first non-empty topic value encountered for that key.
+      // Display name uses the first original casing encountered for that key.
       const topicMap = new Map<string, LibraryContent[]>();
       const topicDisplayName = new Map<string, string>(); // key → original display name
 
       for (const content of contentList) {
         const rawTopic = (content.topic || '').trim();
-        const key = rawTopic.toLowerCase() || 'general';
-        const display = rawTopic || 'General';
-
+        if (!rawTopic) continue; // skip content with no topic set
+        const key = rawTopic.toLowerCase();
         if (!topicMap.has(key)) {
           topicMap.set(key, []);
-          topicDisplayName.set(key, display);
+          topicDisplayName.set(key, rawTopic);
         }
         topicMap.get(key)!.push(content);
       }
@@ -240,23 +240,30 @@ export const subjectMapService = {
           const progress = progressMap.get(content.id);
           
           if (progress) {
-            const contentProgress = progress.watchPercentage || 0;
-            totalTopicProgress += contentProgress;
-            
-            if (progress.isCompleted) {
+            // Use actual watchPercentage for the average.
+            // Live-class auto-complete docs have isCompleted:true but no watchPercentage —
+            // default to 100 only in that case.
+            const pct = (progress.watchPercentage != null && progress.watchPercentage > 0)
+              ? progress.watchPercentage
+              : progress.isCompleted ? 100 : 0;
+            totalTopicProgress += pct;
+            if (progress.isCompleted || pct >= 70) {
               completedContentCount++;
             }
-          }
-          
-          // Check if completed from live class attendance
-          const liveClassCompleted = await isContentCompletedFromLiveClass(
-            content.id,
-            studentId
-          );
-          
-          if (liveClassCompleted && !progress?.isCompleted) {
-            completedContentCount++;
-            totalTopicProgress += 100;
+          } else {
+            // No content_progress doc — check live class attendance directly
+            try {
+              const liveClassCompleted = await isContentCompletedFromLiveClass(
+                content.id,
+                studentId
+              );
+              if (liveClassCompleted) {
+                completedContentCount++;
+                totalTopicProgress += 100;
+              }
+            } catch (e) {
+              console.error('[subjectMapService] live class check failed for', content.id, e);
+            }
           }
         }
         
