@@ -201,18 +201,22 @@ export const subjectMapService = {
     let subjectIndex = 0;
     
     for (const [subject, contentList] of subjectMap.entries()) {
-      // Group content by topic/chapter field
-      // Multiple content items can have the same topic
+      // Group content by topic field only.
+      // Key is lowercased+trimmed for grouping (handles case/whitespace mismatches).
+      // Display name uses the first non-empty topic value encountered for that key.
       const topicMap = new Map<string, LibraryContent[]>();
-      
+      const topicDisplayName = new Map<string, string>(); // key → original display name
+
       for (const content of contentList) {
-        // IMPORTANT: Use topic field, fall back to title if topic is empty
-        const topic = content.topic || content.title || 'Untitled Topic';
-        
-        if (!topicMap.has(topic)) {
-          topicMap.set(topic, []);
+        const rawTopic = (content.topic || '').trim();
+        const key = rawTopic.toLowerCase() || 'general';
+        const display = rawTopic || 'General';
+
+        if (!topicMap.has(key)) {
+          topicMap.set(key, []);
+          topicDisplayName.set(key, display);
         }
-        topicMap.get(topic)!.push(content);
+        topicMap.get(key)!.push(content);
       }
       
       // Generate star positions
@@ -225,7 +229,8 @@ export const subjectMapService = {
       let totalProgress = 0;
       let completedCount = 0;
       
-      for (const [topicName, topicContents] of topicMap.entries()) {
+      for (const [topicKey, topicContents] of topicMap.entries()) {
+        const topicName = topicDisplayName.get(topicKey) ?? topicKey;
         // CRITICAL: Calculate topic completion based on ALL content in this topic
         let completedContentCount = 0;
         let totalContentCount = topicContents.length;
