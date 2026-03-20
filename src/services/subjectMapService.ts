@@ -96,13 +96,18 @@ function generateStarPositions(count: number): { x: number; y: number }[] {
 }
 
 /**
- * Recursively extract all content from content nodes
+ * Recursively extract all content from content nodes.
+ * Excludes notes and exams — constellation stars represent learning progress
+ * (lessons and tricks only).
  */
 function extractAllContent(nodes: ContentNode[]): LibraryContent[] {
   const content: LibraryContent[] = [];
   
   for (const node of nodes) {
     if (node.type === 'content' && node.contentData) {
+      // Skip notes and exams — they don't represent study progress for constellation
+      const t = node.contentData.type;
+      if (t === 'note' || t === 'exam') continue;
       content.push(node.contentData);
     } else if (node.type === 'folder' && node.children) {
       content.push(...extractAllContent(node.children));
