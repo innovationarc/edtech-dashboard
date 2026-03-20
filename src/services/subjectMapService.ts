@@ -201,20 +201,21 @@ export const subjectMapService = {
     let subjectIndex = 0;
     
     for (const [subject, contentList] of subjectMap.entries()) {
-      // Group content by topic field only.
-      // Content with no topic is skipped — it has no meaningful constellation placement.
-      // Key is lowercased+trimmed for grouping (handles case/whitespace mismatches).
-      // Display name uses the first original casing encountered for that key.
+      // Group content by topic field.
+      // - topic set     → normalize (trim + lowercase) as key, lessons with same topic group into one star
+      // - topic blank   → fall back to title as key so each lesson gets its own star
+      // Display name preserves original casing.
       const topicMap = new Map<string, LibraryContent[]>();
-      const topicDisplayName = new Map<string, string>(); // key → original display name
+      const topicDisplayName = new Map<string, string>();
 
       for (const content of contentList) {
         const rawTopic = (content.topic || '').trim();
-        if (!rawTopic) continue; // skip content with no topic set
-        const key = rawTopic.toLowerCase();
+        const key     = rawTopic ? rawTopic.toLowerCase() : (content.title || content.id);
+        const display = rawTopic || content.title || 'Untitled';
+
         if (!topicMap.has(key)) {
           topicMap.set(key, []);
-          topicDisplayName.set(key, rawTopic);
+          topicDisplayName.set(key, display);
         }
         topicMap.get(key)!.push(content);
       }
