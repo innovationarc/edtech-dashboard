@@ -60,18 +60,11 @@ async function autoCompleteFromLiveAttendance(
   courseContentIds: Set<string>
 ): Promise<void> {
   try {
-    // 1. Query all ended live classes
-    let liveClassSnap: any;
-    try {
-      const liveClassQ = query(
-        collection(db, 'live_classes'),
-        where('status', '==', 'ended'),
-      );
-      liveClassSnap = await getDocs(liveClassQ);
-      console.log(`[autoComplete] live_classes query OK, found ${liveClassSnap.size} ended classes`);
-    } catch (e: any) {
-      console.warn('[autoComplete] FAILED at live_classes query:', e.message); return;
-    }
+    const liveClassQ = query(
+      collection(db, 'live_classes'),
+      where('status', '==', 'ended'),
+    );
+    const liveClassSnap = await getDocs(liveClassQ);
     if (liveClassSnap.empty) return;
 
     const now = Timestamp.now();
@@ -82,39 +75,30 @@ async function autoCompleteFromLiveAttendance(
       if (!contentId) return;
       if (!courseContentIds.has(contentId)) return;
 
-      // 2. Check attendance
+      // Check if student attended this live class
       const attendanceDocId = `${liveClassDoc.id}__${studentId}`;
       let attendanceSnap: any;
       try {
         attendanceSnap = await getDoc(doc(db, 'live_class_attendance', attendanceDocId));
-        console.log(`[autoComplete] live_class_attendance getDoc OK, exists=${attendanceSnap.exists()}`);
-      } catch (e: any) {
-        console.warn('[autoComplete] FAILED at live_class_attendance getDoc:', e.message); return;
-      }
+      } catch { return; }
       if (!attendanceSnap.exists()) return;
 
-      // 3. Check existing progress
+      // Check if already completed
       const progressDocId = `${contentId}__${studentId}`;
       let progressSnap: any;
       try {
         progressSnap = await getDoc(doc(db, 'content_progress', progressDocId));
-        console.log(`[autoComplete] content_progress getDoc OK, exists=${progressSnap.exists()}`);
-      } catch (e: any) {
-        console.warn('[autoComplete] FAILED at content_progress getDoc:', e.message); return;
-      }
+      } catch { return; }
       if (progressSnap.exists() && progressSnap.data().isCompleted === true) return;
 
-      // 4. Fetch content metadata
+      // Fetch content metadata
       let contentData: any = {};
       try {
         const contentSnap = await getDoc(doc(db, 'content', contentId));
         contentData = contentSnap.exists() ? contentSnap.data() : {};
-        console.log(`[autoComplete] content getDoc OK`);
-      } catch (e: any) {
-        console.warn('[autoComplete] FAILED at content getDoc:', e.message);
-      }
+      } catch {}
 
-      // 5. Write content_progress
+      // Auto-mark as completed via live class attendance
       try {
         await setDoc(doc(db, 'content_progress', progressDocId), {
           id: progressDocId,
@@ -131,9 +115,8 @@ async function autoCompleteFromLiveAttendance(
           firstWatchedAt: progressSnap.exists() ? progressSnap.data().firstWatchedAt : now,
           completedAt: now,
         }, { merge: true });
-        console.log(`[autoComplete] content_progress setDoc OK — auto-completed "${contentData.title || contentId}"`);
       } catch (e: any) {
-        console.warn('[autoComplete] FAILED at content_progress setDoc:', e.message);
+        console.warn('[contentProgressService] Failed to auto-complete content via live class:', e.message);
       }
     }));
   } catch (e) {
@@ -155,23 +138,16 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
       where('courseId', '==', courseId),
     );
     const enrollSnap = await getDocs(enrollQ);
-    if (enrollSnap.empty) {
-      console.log(`[syncEnrollmentProgress] No enrollment found for student=${studentId} course=${courseId}`);
-      return;
-    }
+    if (enrollSnap.empty) return;
 
     const enrollDoc = enrollSnap.docs[0];
 
-    // 2. Get course contentStructure to know which contentIds belong to this course
+    // 2. Get course contentStructure
     const courseSnap = await getDoc(doc(db, 'courses', courseId));
-    if (!courseSnap.exists()) {
-      console.log(`[syncEnrollmentProgress] Course not found: ${courseId}`);
-      return;
-    }
+    if (!courseSnap.exists()) return;
 
     const contentStructure = courseSnap.data().contentStructure || [];
 
-    // Recursively collect all content node IDs
     function collectContentIds(nodes: any[]): string[] {
       const ids: string[] = [];
       for (const node of nodes) {
@@ -182,33 +158,25 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
     }
     const allContentIds = collectContentIds(contentStructure);
     const totalCount = allContentIds.length;
-    console.log(`[syncEnrollmentProgress] Course=${courseId} totalContent=${totalCount}`, allContentIds);
     if (totalCount === 0) return;
 
-    // 3. Auto-complete any content the student attended live but hasn't watched
+    // 3. Auto-complete any content attended live but not yet watched
     await autoCompleteFromLiveAttendance(studentId, courseId, new Set(allContentIds));
 
-    // 4. Count how many course content items are completed for this student
-    const completedQ = query(
+    // 4. Count completed items by matching against course content IDs
+    // Query without courseId filter — handles docs written before courseId was set correctly
+    const completedSnap = await getDocs(query(
       collection(db, 'content_progress'),
       where('studentId', '==', studentId),
       where('isCompleted', '==', true),
-    );
-    const completedSnap = await getDocs(completedQ);
-    console.log(`[syncEnrollmentProgress] Total completed content_progress docs for student: ${completedSnap.size}`);
-    completedSnap.docs.forEach(d => {
-      const data = d.data();
-      console.log(`  - contentId=${data.contentId} courseId=${data.courseId} isCompleted=${data.isCompleted}`);
-    });
-
+    ));
     const courseContentIdSet = new Set(allContentIds);
     const completedInCourse = completedSnap.docs.filter(d =>
       courseContentIdSet.has(d.data().contentId)
     );
     const completedCount = completedInCourse.length;
-    console.log(`[syncEnrollmentProgress] completedInCourse=${completedCount}/${totalCount} → ${Math.round(completedCount/totalCount*100)}%`);
 
-    // 5. Calculate progress and update enrollment
+    // 5. Calculate and update enrollment progress
     const progress = Math.min(100, Math.round((completedCount / totalCount) * 100));
 
     await runTransaction(db, async (t) => {
@@ -220,7 +188,6 @@ async function syncEnrollmentProgress(studentId: string, courseId: string): Prom
         lastAccessedAt: Timestamp.now(),
       });
     });
-    console.log(`[syncEnrollmentProgress] Updated enrollment progress to ${progress}%`);
   } catch (e) {
     console.warn('[contentProgressService] syncEnrollmentProgress failed (non-fatal):', e);
   }
