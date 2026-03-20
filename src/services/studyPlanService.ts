@@ -535,7 +535,7 @@ export const studyPlanService = {
       console.error('[computeRealStreak] fatal error:', e);
       return 0;
     }
-  }
+  },
 
   // ── NEW: Chat History ─────────────────────────────────────────────────────
 
