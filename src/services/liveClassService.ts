@@ -250,4 +250,18 @@ export const attendanceService = {
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ ...d.data() } as LiveClassAttendance));
   },
+
+  /**
+   * Returns all attendance records for a given student.
+   * Uses the userId field (stored on every attendance doc).
+   * Only records with a non-null durationMins are meaningful for time tracking.
+   */
+  async getAttendanceByStudent(studentId: string): Promise<LiveClassAttendance[]> {
+    const q = query(
+      collection(db, 'live_class_attendance'),
+      where('userId', '==', studentId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ ...d.data() } as LiveClassAttendance));
+  },
 };
