@@ -90,8 +90,9 @@ const Dashboard = () => {
   });
 
   useEffect(() => {
+    if (!user) return;
     loadDashboardData();
-  }, []);
+  }, [user?.uid]);
 
   const loadDashboardData = async () => {
     try {
