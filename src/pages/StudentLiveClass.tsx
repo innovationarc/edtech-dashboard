@@ -263,15 +263,16 @@ const StudentLiveClass: React.FC = () => {
   const [recordingView, setRecordingView] = useState<{ url: string; title: string } | null>(null);
   const unsubRef = useRef<() => void>();
 
-  // Real-time snapshot of ALL classes
+  // Real-time snapshot of ALL classes — only register when authenticated
   useEffect(() => {
+    if (!user) return;
     setLoading(true);
     unsubRef.current = liveClassService.onSnapshot((list) => {
       setClasses(list);
       setLoading(false);
     });
     return () => unsubRef.current?.();
-  }, []);
+  }, [user?.uid]);
 
   const handleJoin = async (cls: LiveClass) => {
     if (!user) return;
