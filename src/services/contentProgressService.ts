@@ -44,6 +44,12 @@ export interface ContentProgress {
 const progressId = (contentId: string, studentId: string) => 
   `${contentId}__${studentId}`;
 
+// Cooldown cache: prevent syncProgressForCourse from running more than once
+// per course per student within a 10-minute window.
+// Key: `studentId__courseId`, Value: last run timestamp (ms)
+const syncCooldownCache = new Map<string, number>();
+const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
 /**
  * For a given course, find any linked live class recordings where the student
  * attended the live class. If attended but content_progress not yet marked
@@ -130,6 +136,12 @@ async function autoCompleteFromLiveAttendance(
  * Fire-and-forget — never throws, never blocks the caller.
  */
 async function syncEnrollmentProgress(studentId: string, courseId: string): Promise<void> {
+  // Skip if synced recently — avoids repeated heavy reads on every dashboard mount
+  const cooldownKey = `${studentId}__${courseId}`;
+  const lastRun = syncCooldownCache.get(cooldownKey) ?? 0;
+  if (Date.now() - lastRun < SYNC_COOLDOWN_MS) return;
+  syncCooldownCache.set(cooldownKey, Date.now());
+
   try {
     // 1. Find the enrollment doc
     const enrollQ = query(
