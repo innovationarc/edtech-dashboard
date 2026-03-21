@@ -1,5 +1,5 @@
 // src/pages/CourseEnrollment.tsx
-
+ 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, Clock, Play, BookOpen, Award, Eye,
