@@ -150,6 +150,12 @@ const deserializeAttemptRecord = (id: string, data: any): LiveExamAttemptRecord 
   bestPercentage: data.bestPercentage,
 });
 
+// ─── Attempt record cache ────────────────────────────────────────────────────
+// getStudentAttemptRecord() is called once per active exam inside loadLiveExams()
+// on every dashboard poll. Cache per liveExamId+studentId for 5 minutes.
+const attemptRecordCache = new Map<string, { data: LiveExamAttemptRecord | null; ts: number }>();
+const ATTEMPT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const liveExamService = {
@@ -380,6 +386,9 @@ export const liveExamService = {
     } catch (e: any) {
       console.error('liveExamService.recordAttempt:', e);
       // Non-fatal — don't rethrow so exam session creation is not blocked
+    } finally {
+      // Invalidate cached attempt record so the next poll reflects the new count
+      attemptRecordCache.delete(`${payload.liveExamId}__${payload.studentId}`);
     }
   },
 
@@ -405,6 +414,9 @@ export const liveExamService = {
     liveExamId: string,
     studentId: string
   ): Promise<LiveExamAttemptRecord | null> {
+    const cacheKey = `${liveExamId}__${studentId}`;
+    const cached = attemptRecordCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < ATTEMPT_CACHE_TTL) return cached.data;
     try {
       const snap = await getDocs(
         query(
@@ -413,8 +425,9 @@ export const liveExamService = {
           where('studentId', '==', studentId)
         )
       );
-      if (snap.empty) return null;
-      return deserializeAttemptRecord(snap.docs[0].id, snap.docs[0].data());
+      const result = snap.empty ? null : deserializeAttemptRecord(snap.docs[0].id, snap.docs[0].data());
+      attemptRecordCache.set(cacheKey, { data: result, ts: Date.now() });
+      return result;
     } catch (e: any) {
       console.error('liveExamService.getStudentAttemptRecord:', e);
       return null;
