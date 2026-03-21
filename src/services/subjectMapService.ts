@@ -5,7 +5,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { contentLibraryService, LibraryContent, LibraryCourse, ContentNode } from './contentLibraryService';
 import { contentProgressService, ContentProgress } from './contentProgressService';
-import { attendanceService } from './liveClassService';
+
 
 export interface TopicStar {
   id: string;
@@ -118,48 +118,48 @@ function extractAllContent(nodes: ContentNode[]): LibraryContent[] {
 }
 
 /**
- * Check if content is completed from live class attendance
- * Content is counted as completed if student attended the live class for at least 70% of duration
+ * Batch-fetch all ended live classes and this student's attendance in two queries.
+ * Returns a Set of contentIds the student completed via live class (>=70% attendance).
+ * Called ONCE per buildSubjectMap instead of once per content item to avoid quota exhaustion.
  */
-async function isContentCompletedFromLiveClass(
-  contentId: string,
-  studentId: string
-): Promise<boolean> {
+async function getLiveClassCompletedContentIds(studentId: string): Promise<Set<string>> {
+  const completed = new Set<string>();
   try {
-    // Get all live classes that have this contentId
-    const classesQuery = query(
+    // Query 1: all ended live classes
+    const classesSnap = await getDocs(query(
       collection(db, 'live_classes'),
-      where('contentId', '==', contentId),
       where('status', '==', 'ended')
-    );
-    const classesSnap = await getDocs(classesQuery);
-    
-    if (classesSnap.empty) return false;
-    
-    // Check attendance for each class
+    ));
+    if (classesSnap.empty) return completed;
+
+    // Query 2: all attendance records for this student
+    const attendanceSnap = await getDocs(query(
+      collection(db, 'live_class_attendance'),
+      where('userId', '==', studentId)
+    ));
+
+    // Build attendance lookup: classId -> durationMins
+    const attendanceMap = new Map<string, number>();
+    attendanceSnap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.classId && d.durationMins) attendanceMap.set(d.classId, d.durationMins);
+    });
+
+    // Check each class against the student's attendance
     for (const classDoc of classesSnap.docs) {
       const classData = classDoc.data();
-      const attendance = await attendanceService.getByClass(classDoc.id);
-      
-      const studentAttendance = attendance.find(a => a.userId === studentId);
-      if (!studentAttendance || !studentAttendance.durationMins) continue;
-      
+      if (!classData.contentId) continue;
       const classDuration = classData.actualDurationMins || classData.durationMins;
       if (!classDuration) continue;
-      
-      const attendancePercentage = (studentAttendance.durationMins / classDuration) * 100;
-      
-      // If student attended 70%+ of any linked class, mark as completed
-      if (attendancePercentage >= 70) {
-        return true;
+      const studentMins = attendanceMap.get(classDoc.id) ?? 0;
+      if ((studentMins / classDuration) * 100 >= 70) {
+        completed.add(classData.contentId);
       }
     }
-    
-    return false;
   } catch (err) {
-    console.error('Error checking live class attendance:', err);
-    return false;
+    console.error('[subjectMapService] batch live class check failed:', err);
   }
+  return completed;
 }
 
 export const subjectMapService = {
@@ -172,6 +172,9 @@ export const subjectMapService = {
     
     // 2. Get all progress data for this student
     const progressData = await contentProgressService.getStudentProgress(studentId);
+    
+    // 3. Batch-fetch live class completions ONCE (avoids per-content Firestore queries)
+    const liveClassCompleted = await getLiveClassCompletedContentIds(studentId);
     
     // 3. Create progress lookup map
     const progressMap = new Map<string, ContentProgress>();
@@ -252,18 +255,10 @@ export const subjectMapService = {
               completedContentCount++;
             }
           } else {
-            // No content_progress doc — check live class attendance directly
-            try {
-              const liveClassCompleted = await isContentCompletedFromLiveClass(
-                content.id,
-                studentId
-              );
-              if (liveClassCompleted) {
-                completedContentCount++;
-                totalTopicProgress += 100;
-              }
-            } catch (e) {
-              console.error('[subjectMapService] live class check failed for', content.id, e);
+            // No content_progress doc — check pre-fetched live class batch
+            if (liveClassCompleted.has(content.id)) {
+              completedContentCount++;
+              totalTopicProgress += 100;
             }
           }
         }
