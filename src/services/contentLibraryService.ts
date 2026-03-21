@@ -78,6 +78,16 @@ function toDate(val: any): Date {
   return new Date(val);
 }
 
+// ==================== CACHE ====================
+// In-memory cache for the student's full library (course structure + content docs).
+// Keyed by studentId. Invalidated after 10 minutes so fresh enrollments show up.
+// This eliminates the N×getDoc waterfall on every dashboard mount/poll.
+const libraryCache = new Map<string, { data: LibraryCourse[]; ts: number }>();
+const LIBRARY_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+// Per-content doc cache — avoids re-fetching the same content doc across courses
+const contentDocCache = new Map<string, LibraryContent | null>();
+
 // ==================== SERVICE ====================
 
 export const contentLibraryService = {
@@ -88,6 +98,12 @@ export const contentLibraryService = {
    */
   async getStudentLibrary(studentId: string): Promise<LibraryCourse[]> {
     if (!studentId?.trim()) return [];
+
+    // Return cached result if still fresh
+    const cached = libraryCache.get(studentId);
+    if (cached && Date.now() - cached.ts < LIBRARY_CACHE_TTL) {
+      return cached.data;
+    }
 
     // 1. Get all enrollments for this student
     const enrollQ = query(
@@ -147,7 +163,19 @@ export const contentLibraryService = {
     // Sort by enrolledAt desc
     results.sort((a, b) => b.enrolledAt.getTime() - a.enrolledAt.getTime());
 
+    // Cache result for this session
+    libraryCache.set(studentId, { data: results, ts: Date.now() });
+
     return results;
+  },
+
+  /**
+   * Invalidate the library cache for a student — call this after enrollment changes.
+   */
+  invalidateCache(studentId: string): void {
+    libraryCache.delete(studentId);
+    // Also clear content doc cache since content may have changed
+    contentDocCache.clear();
   },
 
   /**
@@ -189,12 +217,16 @@ export const contentLibraryService = {
    * Now includes all video/note fields for the LessonViewer.
    */
   async fetchContentData(contentId: string): Promise<LibraryContent | null> {
+    // Return from cache if available (null is also a valid cached value — content not found)
+    if (contentDocCache.has(contentId)) {
+      return contentDocCache.get(contentId) ?? null;
+    }
     try {
       const contentDoc = await getDoc(doc(db, 'content', contentId));
       if (!contentDoc.exists()) return null;
 
       const d = contentDoc.data();
-      return {
+      const result: LibraryContent = {
         id: contentDoc.id,
         title: d.title || 'Untitled',
         subject: d.subject || '',
@@ -216,8 +248,11 @@ export const contentLibraryService = {
         noteGDrivePreviewUrl: d.noteGDrivePreviewUrl,
         noteGDriveDownloadUrl: d.noteGDriveDownloadUrl,
       };
+      contentDocCache.set(contentId, result);
+      return result;
     } catch (err) {
       console.error(`Error fetching content ${contentId}:`, err);
+      contentDocCache.set(contentId, null); // cache misses too
       return null;
     }
   },
