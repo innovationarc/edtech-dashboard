@@ -342,14 +342,16 @@ const StudentStream: React.FC = () => {
   const [watching, setWatching] = useState<LiveStream | null>(null);
   const unsubRef = useRef<() => void>();
 
+  // Real-time snapshot of ALL streams — only register when authenticated
   useEffect(() => {
+    if (!user) return;
     setLoading(true);
     unsubRef.current = streamService.onSnapshot(list => {
       setStreams(list);
       setLoading(false);
     });
     return () => unsubRef.current?.();
-  }, []);
+  }, [user?.uid]);
 
   // Keep watching stream synced with real-time updates
   useEffect(() => {
