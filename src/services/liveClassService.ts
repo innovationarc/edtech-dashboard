@@ -24,6 +24,19 @@ import {
   HMSKey,
 } from '../types/liveClassTypes';
 
+// ─── Cache ───────────────────────────────────────────────────────────────────
+// liveClassService.getAll() is called on every dashboard poll (loadLiveClasses
+// and loadLiveStreams). Cache the full list for 2 minutes — live class status
+// changes (scheduled→live→ended) are infrequent enough that a 2-min stale
+// window is acceptable. Cache is invalidated on any write (start/end/schedule/delete).
+const liveClassCache: { data: any[] | null; ts: number } = { data: null, ts: 0 };
+const LIVE_CLASS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+function invalidateLiveClassCache() {
+  liveClassCache.data = null;
+  liveClassCache.ts = 0;
+}
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 const SETTINGS_DOC = 'app_settings/live_class';
@@ -58,12 +71,19 @@ export const liveClassSettingsService = {
 
 export const liveClassService = {
   async getAll(): Promise<LiveClass[]> {
+    // Return cached list if still fresh
+    if (liveClassCache.data && Date.now() - liveClassCache.ts < LIVE_CLASS_CACHE_TTL) {
+      return liveClassCache.data as LiveClass[];
+    }
     const q = query(
       collection(db, 'live_classes'),
       orderBy('scheduledAt', 'desc')
     );
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as LiveClass));
+    const result = snap.docs.map((d) => ({ id: d.id, ...d.data() } as LiveClass));
+    liveClassCache.data = result;
+    liveClassCache.ts = Date.now();
+    return result;
   },
 
   async getByTeacher(teacherId: string): Promise<LiveClass[]> {
@@ -114,6 +134,7 @@ export const liveClassService = {
       actualDurationMins: null,
       createdAt: Timestamp.now(),
     });
+    invalidateLiveClassCache();
     return ref.id;
   },
 
@@ -122,6 +143,7 @@ export const liveClassService = {
       status: 'live',
       startedAt: Timestamp.now(),
     });
+    invalidateLiveClassCache();
   },
 
   async end(classId: string): Promise<void> {
@@ -164,10 +186,12 @@ export const liveClassService = {
         }
       }
     });
+    invalidateLiveClassCache();
   },
 
   async delete(classId: string): Promise<void> {
     await deleteDoc(doc(db, 'live_classes', classId));
+    invalidateLiveClassCache();
   },
 
   async setRecording(
@@ -181,6 +205,7 @@ export const liveClassService = {
       bunnyVideoId: bunnyVideoId || null,
       ...(contentId ? { contentId } : {}),
     });
+    invalidateLiveClassCache();
   },
 
   onSnapshot(callback: (classes: LiveClass[]) => void): () => void {
