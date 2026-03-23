@@ -50,6 +50,21 @@ export interface NovaConfig {
 const NOVA_DOCS_COL  = 'novaContextDocs';
 const NOVA_CONFIG_DOC = 'settings/novaConfig';
 
+// ─── Module-level caches ──────────────────────────────────────────────────────
+// getConfig and getAllDocs are called on EVERY Nova message. Cache them to avoid
+// per-message Firestore reads. Config changes rarely; docs change only when admin edits them.
+let configCache: { data: NovaConfig; ts: number } | null = null;
+const CONFIG_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+let docsCache: { data: NovaContextDoc[]; ts: number } | null = null;
+const DOCS_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+/** Call this after saving/updating config or docs to force a fresh fetch next time. */
+export function invalidateNovaCache() {
+  configCache = null;
+  docsCache = null;
+}
+
 const DEFAULT_CONFIG: NovaConfig = {
   systemPrompt: '',
   navigationEnabled: true,
@@ -88,16 +103,22 @@ export const novaContextService = {
   // ── Config ─────────────────────────────────────────────────────────────────
 
   async getConfig(): Promise<NovaConfig> {
+    // Return cached config if still fresh — avoids a Firestore read per message
+    if (configCache && Date.now() - configCache.ts < CONFIG_CACHE_TTL) {
+      return configCache.data;
+    }
     try {
       const snap = await getDoc(doc(db, NOVA_CONFIG_DOC));
       if (snap.exists()) {
         const d = snap.data();
-        return {
+        const result: NovaConfig = {
           systemPrompt:      d.systemPrompt      ?? DEFAULT_CONFIG.systemPrompt,
           navigationEnabled: d.navigationEnabled  ?? DEFAULT_CONFIG.navigationEnabled,
           maxContextDocs:    d.maxContextDocs     ?? DEFAULT_CONFIG.maxContextDocs,
           memoryHours:       d.memoryHours        ?? DEFAULT_CONFIG.memoryHours,
         };
+        configCache = { data: result, ts: Date.now() };
+        return result;
       }
     } catch (e) {
       console.warn('[novaContext] Failed to load novaConfig, using defaults:', e);
@@ -111,23 +132,32 @@ export const novaContextService = {
       { ...config, updatedAt: Timestamp.now(), updatedBy: adminUid },
       { merge: true }
     );
+    configCache = null; // invalidate so next read gets fresh config
   },
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
   /** Fetch all context docs, ordered by createdAt desc. */
   async getAllDocs(): Promise<NovaContextDoc[]> {
+    // Return cached docs if still fresh — same docs are fetched for every student every message
+    if (docsCache && Date.now() - docsCache.ts < DOCS_CACHE_TTL) {
+      return docsCache.data;
+    }
     try {
       const snap = await getDocs(
         query(collection(db, NOVA_DOCS_COL), orderBy('createdAt', 'desc'))
       );
-      return snap.docs.map(d => docToNovaContextDoc(d.id, d.data()));
+      const result = snap.docs.map(d => docToNovaContextDoc(d.id, d.data()));
+      docsCache = { data: result, ts: Date.now() };
+      return result;
     } catch {
       // Fallback if index not yet created
       const snap = await getDocs(collection(db, NOVA_DOCS_COL));
-      return snap.docs
+      const result = snap.docs
         .map(d => docToNovaContextDoc(d.id, d.data()))
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      docsCache = { data: result, ts: Date.now() };
+      return result;
     }
   },
 
