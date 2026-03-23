@@ -398,7 +398,8 @@ function btnStyle(color: string): React.CSSProperties {
 
 const FirestoreDebugPanel: React.FC = () => {
   const { user } = useDashboard();
-  if (user?.role !== 'admin') return null;
+  // TEMP: show for all users to debug reads — revert to admin-only after testing
+  if (!user) return null;
   return <FirestoreDebugPanelInner />;
 };
 
