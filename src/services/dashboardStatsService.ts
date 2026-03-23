@@ -3,9 +3,10 @@
 // All reads only — no writes to existing collections except appUsageLogs (new collection)
 
 import {
-  collection, doc, getDocs, getDoc, setDoc, query,
+  collection, doc, setDoc, query,
   where, orderBy, Timestamp, limit as fsLimit,
 } from 'firebase/firestore';
+import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
