@@ -45,6 +45,17 @@ function messagesCol(userId: string) {
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
+// ─── Cache ────────────────────────────────────────────────────────────────────
+// getRecentMessages fires on every Nova message. Cache per userId for 2 minutes —
+// short TTL so new messages appear in context quickly.
+const recentMsgCache = new Map<string, { data: any[]; ts: number }>();
+const RECENT_MSG_TTL = 2 * 60 * 1000; // 2 minutes
+
+/** Invalidate a user's message cache — called after saving a new message. */
+export function invalidateRecentMsgCache(userId: string) {
+  recentMsgCache.delete(userId);
+}
+
 export const novaMemoryService = {
 
   /**
@@ -72,6 +83,11 @@ export const novaMemoryService = {
    * Returns an empty array on any error so RAG still works without memory.
    */
   async getRecentMessages(userId: string, hours = 48): Promise<NovaMessage[]> {
+    // Return cached messages if still fresh — avoids subcollection read per message
+    const cacheKey = `${userId}_${hours}`;
+    const cached = recentMsgCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < RECENT_MSG_TTL) return cached.data;
+
     try {
       const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
       const cutoffTs = Timestamp.fromDate(cutoff);
@@ -104,7 +120,9 @@ export const novaMemoryService = {
       }));
 
       // Ensure chronological order regardless of which query path was used
-      return messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      const sorted = messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      recentMsgCache.set(cacheKey, { data: sorted, ts: Date.now() });
+      return sorted;
     } catch (e) {
       console.warn('[novaMemory] getRecentMessages failed (non-fatal):', e);
       return [];
