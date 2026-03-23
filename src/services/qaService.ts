@@ -2,18 +2,17 @@
 import {
   collection,
   doc,
-  getDocs,
   addDoc,
   updateDoc,
   query,
   where,
   orderBy,
   Timestamp,
-  getDoc,
   onSnapshot,
   deleteDoc,
   setDoc,
 } from 'firebase/firestore';
+import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 import { uploadService } from './uploadService';
 import Tesseract from 'tesseract.js';
