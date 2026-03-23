@@ -5,6 +5,7 @@ import MobileNavigation from './MobileNavigation';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
+import FirestoreDebugPanel from '../admin/FirestoreDebugPanel';
 import AuthenticationModal from '../auth/AuthenticationModal';
 
 import PageTransition from '../ui/PageTransition';
@@ -589,6 +590,9 @@ const DashboardLayout = () => {
       )}
 
       <TopProgressBar />
+
+      {/* Firestore read monitor — admin only, zero reads of its own */}
+      <FirestoreDebugPanel />
 
     </div>
   );
