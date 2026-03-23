@@ -32,6 +32,17 @@ export interface Announcement {
   updatedAt?: Date;
 }
 
+// ─── Cache ────────────────────────────────────────────────────────────────────
+// getAnnouncementsForUser is called on every dashboard poll (every 5 min).
+// Cache per userId for 5 minutes — announcements change infrequently.
+const announcementCache = new Map<string, { data: any[]; ts: number }>();
+const ANNOUNCEMENT_TTL = 5 * 60 * 1000; // 5 minutes
+
+export function invalidateAnnouncementCache(userId?: string) {
+  if (userId) announcementCache.delete(userId);
+  else announcementCache.clear();
+}
+
 export const announcementService = {
   // Create a new announcement
   async createAnnouncement(announcement: Omit<Announcement, 'id' | 'createdAt'>): Promise<string> {
@@ -73,9 +84,11 @@ export const announcementService = {
     userRole: string, 
     enrolledCourseIds: string[] = []
   ): Promise<Announcement[]> {
+    // Return cached announcements if still fresh — called on every dashboard poll
+    const cached = announcementCache.get(userId);
+    if (cached && Date.now() - cached.ts < ANNOUNCEMENT_TTL) return cached.data;
+
     try {
-      console.log('Getting announcements for user:', userId, 'role:', userRole, 'courses:', enrolledCourseIds);
-      
       const announcementsCollection = collection(db, 'announcements');
       const now = new Date();
       
@@ -87,8 +100,6 @@ export const announcementService = {
       
       const announcementsSnapshot = await getDocs(activeQuery);
       
-      console.log('Raw announcements from DB:', announcementsSnapshot.docs.length);
-      
       const allAnnouncements = announcementsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -97,34 +108,28 @@ export const announcementService = {
         expiresAt: doc.data().expiresAt?.toDate()
       })) as Announcement[];
       
-      console.log('Processed announcements:', allAnnouncements.length);
-      
       // Filter announcements based on user and targeting
       const filteredAnnouncements = allAnnouncements.filter(announcement => {
         // Check if announcement has expired
         if (announcement.expiresAt && announcement.expiresAt < now) {
-          console.log('Announcement expired:', announcement.title);
-          return false;
+            return false;
         }
         
         // Check targeting
         if (announcement.targetAudience === 'all') {
-          console.log('Announcement targets all:', announcement.title);
-          return true;
+            return true;
         }
         
         if (announcement.targetAudience === 'course') {
           const matches = announcement.targetCourses?.some(courseId => 
             enrolledCourseIds.includes(courseId)
           ) || false;
-          console.log('Course announcement match:', announcement.title, matches);
-          return matches;
+            return matches;
         }
         
         if (announcement.targetAudience === 'specific') {
           const matches = announcement.targetStudents?.includes(userId) || false;
-          console.log('Specific announcement match:', announcement.title, matches);
-          return matches;
+            return matches;
         }
         
         console.log('No match for announcement:', announcement.title, announcement.targetAudience);
@@ -134,11 +139,9 @@ export const announcementService = {
       // Sort by createdAt in descending order (most recent first)
       filteredAnnouncements.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       
-      console.log('Filtered announcements for user:', filteredAnnouncements.length);
-      
+      announcementCache.set(userId, { data: filteredAnnouncements, ts: Date.now() });
       return filteredAnnouncements;
     } catch (error: any) {
-      console.error('Error in getAnnouncementsForUser:', error);
       throw new Error(error.message);
     }
   },
