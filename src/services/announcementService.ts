@@ -1,15 +1,15 @@
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
   where,
   orderBy,
-  Timestamp 
+  Timestamp,
 } from 'firebase/firestore';
+import { getDocs } from './firestoreMonitor';
 import { db } from '../config/firebase';
 
 export interface Announcement {
