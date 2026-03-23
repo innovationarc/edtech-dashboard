@@ -1,7 +1,6 @@
 // src/services/settingsService.ts
 import {
   doc,
-  getDoc,
   setDoc,
   updateDoc,
   serverTimestamp,
@@ -10,11 +9,11 @@ import {
   query,
   orderBy,
   limit,
-  getDocs,
   where,
   writeBatch,
   Timestamp,
 } from 'firebase/firestore';
+import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
