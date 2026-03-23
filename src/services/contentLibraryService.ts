@@ -5,11 +5,10 @@
 import {
   collection,
   doc,
-  getDocs,
-  getDoc,
   query,
-  where,
+  where
 } from 'firebase/firestore';
+import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 
 // ==================== INTERFACES ====================
