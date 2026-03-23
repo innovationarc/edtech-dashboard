@@ -188,7 +188,9 @@ export const novaRAGService = {
     user: UserProfile | null,
     sessionId: string,
     siteName = 'the platform',
-    voiceMode = false
+    voiceMode = false,
+    /** In-memory chat history from ChatbotWidget state — avoids Firestore getRecentForContext read */
+    inMemoryHistory: Array<{ sender: 'user' | 'ai'; text: string }> = []
   ): Promise<NovaResponse> {
     const userId = user?.uid || '';
 
@@ -229,14 +231,8 @@ export const novaRAGService = {
           FAST_TIMEOUT,
           []
         ),
-        // Chat history — same count as text, capped at 600ms
-        withTimeout(
-          userId
-            ? novaChatHistoryService.getRecentForContext(userId, MAX_HISTORY_CONTEXT)
-            : Promise.resolve([]),
-          FAST_TIMEOUT,
-          [] as Array<{ sender: 'user' | 'ai'; text: string }>
-        ),
+        // Chat history — use in-memory state from ChatbotWidget (no Firestore read)
+        Promise.resolve(inMemoryHistory.slice(-MAX_HISTORY_CONTEXT)),
         // Config — same as text, capped at 600ms
         withTimeout(
           novaContextService.getConfig().catch(() => ({
@@ -280,7 +276,8 @@ export const novaRAGService = {
       if (userId) {
         novaMemoryService.saveMessage(userId, { text: userMessage, sender: 'user', sessionId }).catch(() => {});
         novaMemoryService.saveMessage(userId, { text: cleanText, sender: 'ai', sessionId }).catch(() => {});
-        novaMemoryService.pruneOldMessages(userId, 72).catch(() => {});
+        // Prune at 5% frequency — not after every message
+        if (Math.random() < 0.05) novaMemoryService.pruneOldMessages(userId, 72).catch(() => {});
         novaChatHistoryService.saveMessage(userId, { text: userMessage, sender: 'user', sessionId }).catch(() => {});
         novaChatHistoryService.saveMessage(userId, { text: cleanText, sender: 'ai', sessionId }).catch(() => {});
       }
@@ -309,10 +306,8 @@ export const novaRAGService = {
             msgs.slice(-MAX_MEMORY_MSGS)
           )
         : Promise.resolve([]),
-      // Persistent chat history — last 6 messages for context
-      userId
-        ? novaChatHistoryService.getRecentForContext(userId, MAX_HISTORY_CONTEXT)
-        : Promise.resolve([]),
+      // Persistent chat history — use in-memory state (no Firestore read)
+      Promise.resolve(inMemoryHistory.slice(-MAX_HISTORY_CONTEXT)),
       // Nova config
       novaContextService.getConfig().catch(() => ({
         systemPrompt: '', navigationEnabled: true, maxContextDocs: 3, memoryHours: 48,
@@ -362,8 +357,8 @@ export const novaRAGService = {
         sessionId,
       }).catch(() => {});
 
-      // Opportunistically prune short-term memory (fire-and-forget)
-      novaMemoryService.pruneOldMessages(userId, 72).catch(() => {});
+      // Prune at 5% frequency — not after every message
+      if (Math.random() < 0.05) novaMemoryService.pruneOldMessages(userId, 72).catch(() => {});
 
       // Persistent chat history (new — for UI display + cross-session context)
       novaChatHistoryService.saveMessage(userId, {
