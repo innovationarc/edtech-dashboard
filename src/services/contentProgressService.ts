@@ -4,14 +4,13 @@
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
   setDoc,
   query,
   where,
   Timestamp,
-  runTransaction,
+  runTransaction
 } from 'firebase/firestore';
+import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 
 export interface ContentProgress {
