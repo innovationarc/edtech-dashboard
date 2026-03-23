@@ -4,7 +4,6 @@
 // Only renders for admin role. Draggable, collapsible, production-safe.
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { firestoreMonitor, MonitorStats, ReadEntry } from '../../services/firestoreMonitor';
 import { useDashboard } from '../../contexts/DashboardContext';
 
@@ -134,9 +133,9 @@ const BarRow: React.FC<{ label: string; value: number; max: number }> = ({ label
 const FirestoreDebugPanelInner: React.FC = () => {
   const [stats, setStats] = useState<MonitorStats>(firestoreMonitor.getStats());
   const [enabled, setEnabled] = useState(firestoreMonitor.isEnabled);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(false); // expand by pressing ▴
   const [tab, setTab] = useState<Tab>('live');
-  const [pos, setPos] = useState({ x: 16, y: 80 });
+  const [pos, setPos] = useState({ x: 8, y: Math.max(80, window.innerHeight - 420) });
   const [filter, setFilter] = useState('');
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -226,7 +225,7 @@ const FirestoreDebugPanelInner: React.FC = () => {
     borderBottom: '1px solid rgba(99,102,241,0.2)',
   };
 
-  return createPortal(
+  return (
     <div ref={panelRef} style={panelStyle} onMouseDown={onMouseDown}>
       {/* Header */}
       <div style={headerStyle}>
@@ -366,8 +365,7 @@ const FirestoreDebugPanelInner: React.FC = () => {
           </div>
         </>
       )}
-    </div>,
-    document.body
+    </div>
   );
 };
 
