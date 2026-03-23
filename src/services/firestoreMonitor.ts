@@ -218,9 +218,7 @@ export const firestoreMonitor = {
   },
 };
 
-// Auto-restore enabled state from sessionStorage (survives page nav)
-try {
-  if (sessionStorage.getItem('__fsm_enabled') === '1') {
-    firestoreMonitor.enable();
-  }
-} catch { /* ignore */ }
+// Auto-start immediately — monitor is always on from the first import.
+// This ensures zero reads are missed, including those fired on module load.
+firestoreMonitor.enable();
+try { sessionStorage.setItem('__fsm_enabled', '1'); } catch { /* ignore */ }
