@@ -131,8 +131,7 @@ const BarRow: React.FC<{ label: string; value: number; max: number }> = ({ label
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-const FirestoreDebugPanel: React.FC = () => {
-  const { user } = useDashboard();
+const FirestoreDebugPanelInner: React.FC = () => {
   const [stats, setStats] = useState<MonitorStats>(firestoreMonitor.getStats());
   const [enabled, setEnabled] = useState(firestoreMonitor.isEnabled);
   const [collapsed, setCollapsed] = useState(false);
@@ -143,9 +142,6 @@ const FirestoreDebugPanel: React.FC = () => {
   const dragOffset = useRef({ x: 0, y: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-
-  // Only for admins
-  if (user?.role !== 'admin') return null;
 
   // Subscribe to monitor
   useEffect(() => {
@@ -399,5 +395,11 @@ function btnStyle(color: string): React.CSSProperties {
     transition: 'background 0.15s',
   };
 }
+
+const FirestoreDebugPanel: React.FC = () => {
+  const { user } = useDashboard();
+  if (user?.role !== 'admin') return null;
+  return <FirestoreDebugPanelInner />;
+};
 
 export default FirestoreDebugPanel;
