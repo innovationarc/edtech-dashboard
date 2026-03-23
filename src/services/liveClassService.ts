@@ -2,8 +2,6 @@
 import {
   collection,
   doc,
-  getDocs,
-  getDoc,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -15,6 +13,7 @@ import {
   runTransaction,
   setDoc,
 } from 'firebase/firestore';
+import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 import {
   LiveClass,
