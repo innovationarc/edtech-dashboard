@@ -66,6 +66,17 @@ function roleLabel(role: string): string {
   return map[role] || role;
 }
 
+// ─── Cache ────────────────────────────────────────────────────────────────────
+// getUserContext fires 3-4 Firestore queries per Nova message per user.
+// Cache per userId for 5 minutes — enrollments, goals, and events change slowly.
+const userContextCache = new Map<string, { data: NovaUserContext; ts: number }>();
+const USER_CONTEXT_TTL = 5 * 60 * 1000; // 5 minutes
+
+/** Invalidate a user's context cache — call after enrolling, saving a goal, etc. */
+export function invalidateUserContextCache(userId: string) {
+  userContextCache.delete(userId);
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const novaUserDataService = {
@@ -76,6 +87,12 @@ export const novaUserDataService = {
    * Never throws — returns empty formatted string on total failure.
    */
   async getUserContext(userId: string, profile: UserProfile | null): Promise<NovaUserContext> {
+    // Return cached context if still fresh — avoids 3-4 Firestore reads per message
+    if (userId) {
+      const cached = userContextCache.get(userId);
+      if (cached && Date.now() - cached.ts < USER_CONTEXT_TTL) return cached.data;
+    }
+
     const raw: NovaUserContext['raw'] = {
       profile,
       enrolledCourses: [],
@@ -195,9 +212,11 @@ export const novaUserDataService = {
       lines.push(`Upcoming sessions (next 7 days): ${raw.upcomingEvents.join(' | ')}`);
     }
 
-    return {
+    const result: NovaUserContext = {
       formatted: lines.join('\n'),
       raw,
     };
+    if (userId) userContextCache.set(userId, { data: result, ts: Date.now() });
+    return result;
   },
 };
