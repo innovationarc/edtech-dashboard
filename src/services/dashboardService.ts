@@ -4,7 +4,6 @@
 import {
   collection,
   doc,
-  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -13,6 +12,7 @@ import {
   orderBy,
   Timestamp,
 } from 'firebase/firestore';
+import { getDocs } from './firestoreMonitor';
 import { db } from '../config/firebase';
 
 export interface DashboardObjective {
