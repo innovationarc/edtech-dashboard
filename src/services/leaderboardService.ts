@@ -4,8 +4,9 @@
 // Only counts sessions: status in ['submitted','auto_submitted'], resultVisibility === 'visible', writtenEvaluationPending === false
 
 import {
-  collection, query, where, getDocs
+  collection, query, where,
 } from 'firebase/firestore';
+import { getDocs } from './firestoreMonitor';
 import { db } from '../config/firebase';
 import { ExamSession } from './examService';
 import { contentService, Content } from './contentService';
