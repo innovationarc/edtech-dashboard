@@ -1,3 +1,4 @@
+
 // src/services/dashboardStatsService.ts
 // New service: KPI stats, heatmaps, course progress, pending tasks, exam performance, continue learning
 // All reads only — no writes to existing collections except appUsageLogs (new collection)
@@ -281,29 +282,34 @@ export const dashboardStatsService = {
   // ── App Usage Heatmap ─────────────────────────────────────────────────────
 
   async getAppUsageHeatmap(studentId: string, weeksBack = 10): Promise<HeatmapDay[]> {
+    // Cache — this was reading 700+ docs on every load
+    const hKey = `app_${studentId}_${weeksBack}`;
+    if (isFresh(appHeatCache, hKey, HEATMAP_TTL)) return appHeatCache.get(hKey)!.data;
+
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - (weeksBack * 7));
 
     try {
-      // No orderBy — avoids composite index requirement.
-      // We build our own sorted grid in buildHeatmapGrid anyway.
+      // Limit to weeksBack*7 docs max — one per day.
+      // Multiple sessions per day are aggregated client-side via dayMap.
       const snap = await getDocs(query(
         collection(db, 'appUsageLogs'),
         where('studentId', '==', studentId),
         where('date', '>=', ymd(cutoff)),
+        fsLimit(weeksBack * 7),  // cap at 70 reads max (10 weeks × 7 days)
       ));
 
       const dayMap = new Map<string, number>();
       snap.docs.forEach(d => {
         const key = d.data().date as string;
-        // Convert seconds → minutes for threshold comparison
         const mins = Math.round((d.data().durationSeconds ?? 0) / 60);
         dayMap.set(key, (dayMap.get(key) ?? 0) + mins);
       });
 
-      return buildHeatmapGrid(dayMap, weeksBack);
+      const appHeatResult = buildHeatmapGrid(dayMap, weeksBack);
+      appHeatCache.set(hKey, { data: appHeatResult, ts: Date.now() });
+      return appHeatResult;
     } catch (e) {
-      // Log so browser console shows the Firestore index creation link if needed
       console.error('[getAppUsageHeatmap] query failed:', e);
       return buildHeatmapGrid(new Map(), weeksBack);
     }
@@ -312,16 +318,23 @@ export const dashboardStatsService = {
   // Log a session — called from DashboardLayout
   // date param allows flushing a buffered session from a previous day (localStorage fallback)
   async logAppUsageSession(studentId: string, durationSeconds: number, date?: string): Promise<void> {
-    if (durationSeconds < 1) return; // ignore sub-second noise only
+    if (durationSeconds < 1) return;
     const dateKey = date ?? ymd(new Date());
     try {
-      const ref = doc(db, 'appUsageLogs', `${studentId}_${dateKey}_${Date.now()}`);
+      // ONE doc per student per day — merge accumulates duration instead of
+      // creating a new doc per session (which caused 700+ docs per student)
+      const ref = doc(db, 'appUsageLogs', `${studentId}_${dateKey}`);
+      const existing = await getDoc(ref);
+      const prev = existing.exists() ? (existing.data().durationSeconds ?? 0) : 0;
       await setDoc(ref, {
         studentId,
         date: dateKey,
-        durationSeconds: Math.round(durationSeconds),
+        durationSeconds: prev + Math.round(durationSeconds),
         recordedAt: Timestamp.now(),
       });
+      // Invalidate heatmap cache so next load reflects new data
+      const hKey = `app_${studentId}_10`;
+      appHeatCache.delete(hKey);
     } catch { /* non-fatal */ }
   },
 
