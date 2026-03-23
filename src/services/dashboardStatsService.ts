@@ -5,7 +5,7 @@
 
 import {
   collection, doc, setDoc, query,
-  where, orderBy, Timestamp, limit as fsLimit,
+  where, orderBy, Timestamp, limit as fsLimit, increment,
 } from 'firebase/firestore';
 import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
@@ -217,12 +217,14 @@ export const dashboardStatsService = {
       streakDays = streakSnap.value.data().currentStreak ?? 0;
     }
 
-    return {
+    const kpiResult = {
       todayStudyMinutes: todayPomodoro + todayEvents,
       weekStudyMinutes: weekPomodoro + weekEvents,
       tasksCompleted,
       streakDays,
     };
+    kpiCache.set(studentId, { data: kpiResult, ts: Date.now() });
+    return kpiResult;
   },
 
   // ── Study Activity Heatmap ────────────────────────────────────────────────
@@ -282,29 +284,29 @@ export const dashboardStatsService = {
   // ── App Usage Heatmap ─────────────────────────────────────────────────────
 
   async getAppUsageHeatmap(studentId: string, weeksBack = 10): Promise<HeatmapDay[]> {
-    // Cache — this was reading 700+ docs on every load
+    // Single doc per student — ALWAYS 1 read regardless of history length
     const hKey = `app_${studentId}_${weeksBack}`;
     if (isFresh(appHeatCache, hKey, HEATMAP_TTL)) return appHeatCache.get(hKey)!.data;
 
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - (weeksBack * 7));
+    const cutoffStr = ymd(cutoff);
 
     try {
-      // Limit to weeksBack*7 docs max — one per day.
-      // Multiple sessions per day are aggregated client-side via dayMap.
-      const snap = await getDocs(query(
-        collection(db, 'appUsageLogs'),
-        where('studentId', '==', studentId),
-        where('date', '>=', ymd(cutoff)),
-        fsLimit(weeksBack * 7),  // cap at 70 reads max (10 weeks × 7 days)
-      ));
+      // Single doc: appUsageLogs/{studentId}
+      // Structure: { dailyUsage: { "2026-03-23": 2700, "2026-03-22": 5400, ... } }
+      const snap = await getDoc(doc(db, 'appUsageLogs', studentId));
 
       const dayMap = new Map<string, number>();
-      snap.docs.forEach(d => {
-        const key = d.data().date as string;
-        const mins = Math.round((d.data().durationSeconds ?? 0) / 60);
-        dayMap.set(key, (dayMap.get(key) ?? 0) + mins);
-      });
+      if (snap.exists()) {
+        const daily = (snap.data().dailyUsage ?? {}) as Record<string, number>;
+        Object.entries(daily).forEach(([dateKey, secs]) => {
+          // Only include dates within the heatmap window
+          if (dateKey >= cutoffStr) {
+            dayMap.set(dateKey, Math.round((secs ?? 0) / 60));
+          }
+        });
+      }
 
       const appHeatResult = buildHeatmapGrid(dayMap, weeksBack);
       appHeatCache.set(hKey, { data: appHeatResult, ts: Date.now() });
@@ -315,26 +317,22 @@ export const dashboardStatsService = {
     }
   },
 
-  // Log a session — called from DashboardLayout
-  // date param allows flushing a buffered session from a previous day (localStorage fallback)
+  // Log a session — called from DashboardLayout every 60s and on page hide/unload.
+  // Uses increment() — atomic, 0 reads + 1 write per call.
+  // date param allows flushing a buffered session from a previous day (localStorage fallback).
   async logAppUsageSession(studentId: string, durationSeconds: number, date?: string): Promise<void> {
     if (durationSeconds < 1) return;
     const dateKey = date ?? ymd(new Date());
     try {
-      // ONE doc per student per day — merge accumulates duration instead of
-      // creating a new doc per session (which caused 700+ docs per student)
-      const ref = doc(db, 'appUsageLogs', `${studentId}_${dateKey}`);
-      const existing = await getDoc(ref);
-      const prev = existing.exists() ? (existing.data().durationSeconds ?? 0) : 0;
-      await setDoc(ref, {
+      // Single doc: appUsageLogs/{studentId}
+      // increment() atomically adds to the existing value — no read needed
+      await setDoc(doc(db, 'appUsageLogs', studentId), {
         studentId,
-        date: dateKey,
-        durationSeconds: prev + Math.round(durationSeconds),
-        recordedAt: Timestamp.now(),
-      });
-      // Invalidate heatmap cache so next load reflects new data
-      const hKey = `app_${studentId}_10`;
-      appHeatCache.delete(hKey);
+        dailyUsage: { [dateKey]: increment(Math.round(durationSeconds)) },
+        lastUpdated: Timestamp.now(),
+      }, { merge: true });
+      // Bust cache so next heatmap load reflects the new seconds
+      [`app_${studentId}_10`, `app_${studentId}_5`].forEach(k => appHeatCache.delete(k));
     } catch { /* non-fatal */ }
   },
 
