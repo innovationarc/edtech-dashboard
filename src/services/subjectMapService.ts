@@ -1,7 +1,8 @@
 // src/services/subjectMapService.ts
 // Builds subject constellation map from student's content library and progress
 
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
+import { getDocs } from './firestoreMonitor';
 import { db } from '../config/firebase';
 import { contentLibraryService, LibraryContent, LibraryCourse, ContentNode } from './contentLibraryService';
 import { contentProgressService, ContentProgress } from './contentProgressService';
