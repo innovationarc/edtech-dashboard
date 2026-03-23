@@ -83,28 +83,20 @@ export const novaChatHistoryService = {
   },
 
   /**
-   * Fetch messages from the last 30 days for UI display, oldest first.
-   * Also prunes messages older than 30 days (fire-and-forget).
+   * Fetch the most recent N messages for UI display, oldest first.
+   * Replaces the old getHistory (full 30-day scan) with a bounded read.
+   * Prune runs opportunistically at 5% frequency to avoid per-load cost.
    */
-  async getHistory(userId: string): Promise<NovaChatMessage[]> {
+  async getHistory(userId: string, n = 20): Promise<NovaChatMessage[]> {
     try {
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const cutoffTs = Timestamp.fromDate(cutoff);
-
       let snap;
       try {
         snap = await getDocs(
-          query(
-            chatCol(userId),
-            where('timestamp', '>=', cutoffTs),
-            orderBy('timestamp', 'asc')
-          )
+          query(chatCol(userId), orderBy('timestamp', 'desc'), limit(n))
         );
       } catch {
-        // Composite index may not exist yet — fallback without orderBy
-        snap = await getDocs(
-          query(chatCol(userId), where('timestamp', '>=', cutoffTs))
-        );
+        // Index fallback
+        snap = await getDocs(query(chatCol(userId), limit(n)));
       }
 
       const messages: NovaChatMessage[] = snap.docs.map(d => ({
@@ -115,11 +107,13 @@ export const novaChatHistoryService = {
         timestamp: toDate(d.data().timestamp),
       }));
 
-      // Chronological order regardless of query path
+      // Re-sort oldest-first for display
       messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
-      // Prune older messages opportunistically (fire-and-forget, don't await)
-      this.pruneOldMessages(userId, 30 * 24).catch(() => {});
+      // Prune old messages at 5% frequency — not on every load
+      if (Math.random() < 0.05) {
+        this.pruneOldMessages(userId, 30 * 24).catch(() => {});
+      }
 
       return messages;
     } catch (e) {
