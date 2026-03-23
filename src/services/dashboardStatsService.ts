@@ -101,6 +101,40 @@ function buildHeatmapGrid(dayMap: Map<string, number>, weeksBack: number): Heatm
   return days;
 }
 
+// ─── Module-level caches ──────────────────────────────────────────────────────
+// These functions are called on every dashboard mount. Cache per studentId to
+// avoid re-fetching the same data on every page navigation.
+interface CacheEntry<T> { data: T; ts: number; }
+const kpiCache     = new Map<string, CacheEntry<any>>();
+const heatmapCache = new Map<string, CacheEntry<any>>();
+const appHeatCache = new Map<string, CacheEntry<any>>();
+const progressCache= new Map<string, CacheEntry<any>>();
+const tasksCache   = new Map<string, CacheEntry<any>>();
+const examPerfCache= new Map<string, CacheEntry<any>>();
+const continueLearningCache = new Map<string, CacheEntry<any>>();
+
+const KPI_TTL      = 5  * 60 * 1000; // 5 min  — changes on activity
+const HEATMAP_TTL  = 10 * 60 * 1000; // 10 min — changes slowly
+const PROGRESS_TTL = 5  * 60 * 1000; // 5 min
+const TASKS_TTL    = 5  * 60 * 1000; // 5 min
+const EXAM_TTL     = 10 * 60 * 1000; // 10 min — exam results don't change often
+const CONTINUE_TTL = 5  * 60 * 1000; // 5 min
+
+function isFresh<T>(cache: Map<string, CacheEntry<T>>, key: string, ttl: number): boolean {
+  const e = cache.get(key);
+  return !!e && (Date.now() - e.ts) < ttl;
+}
+
+/** Call after a student completes an activity to bust relevant caches */
+export function invalidateDashboardCache(studentId: string) {
+  kpiCache.delete(studentId);
+  heatmapCache.delete(studentId);
+  appHeatCache.delete(studentId);
+  progressCache.delete(studentId);
+  tasksCache.delete(studentId);
+  continueLearningCache.delete(studentId);
+}
+
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const dashboardStatsService = {
@@ -108,6 +142,7 @@ export const dashboardStatsService = {
   // ── KPI Stats ─────────────────────────────────────────────────────────────
 
   async getKPIStats(studentId: string): Promise<KPIStats> {
+    if (isFresh(kpiCache, studentId, KPI_TTL)) return kpiCache.get(studentId)!.data;
     const now = new Date();
     const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
     const weekStart = new Date(now); weekStart.setDate(now.getDate() - 6); weekStart.setHours(0, 0, 0, 0);
@@ -191,6 +226,8 @@ export const dashboardStatsService = {
   // ── Study Activity Heatmap ────────────────────────────────────────────────
 
   async getStudyHeatmap(studentId: string, weeksBack = 10): Promise<HeatmapDay[]> {
+    const hKey = `${studentId}_${weeksBack}`;
+    if (isFresh(heatmapCache, hKey, HEATMAP_TTL)) return heatmapCache.get(hKey)!.data;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - (weeksBack * 7));
     cutoff.setHours(0, 0, 0, 0);
@@ -235,7 +272,9 @@ export const dashboardStatsService = {
       });
     }
 
-    return buildHeatmapGrid(dayMap, weeksBack);
+    const heatmapResult = buildHeatmapGrid(dayMap, weeksBack);
+    heatmapCache.set(`${studentId}_${weeksBack}`, { data: heatmapResult, ts: Date.now() });
+    return heatmapResult;
   },
 
   // ── App Usage Heatmap ─────────────────────────────────────────────────────
@@ -288,6 +327,7 @@ export const dashboardStatsService = {
   // ── Course Progress ───────────────────────────────────────────────────────
 
   async getCourseProgress(studentId: string): Promise<CourseProgressItem[]> {
+    if (isFresh(progressCache, studentId, PROGRESS_TTL)) return progressCache.get(studentId)!.data;
     try {
       const enrollSnap = await getDocs(query(
         collection(db, 'enrollments'),
@@ -312,7 +352,7 @@ export const dashboardStatsService = {
         }
       });
 
-      return enrollments
+      const progressResult = enrollments
         .filter((e: any) => courseMap.has(e.courseId))
         .map((e: any) => {
           const c = courseMap.get(e.courseId);
@@ -332,6 +372,8 @@ export const dashboardStatsService = {
         .sort((a: CourseProgressItem, b: CourseProgressItem) =>
           b.lastAccessedAt.getTime() - a.lastAccessedAt.getTime()
         );
+      progressCache.set(studentId, { data: progressResult, ts: Date.now() });
+      return progressResult;
     } catch (e) {
       console.warn('[dashboardStatsService] getCourseProgress:', e);
       return [];
@@ -341,6 +383,7 @@ export const dashboardStatsService = {
   // ── Pending Tasks / Deadlines ─────────────────────────────────────────────
 
   async getPendingTasks(studentId: string): Promise<PendingTaskItem[]> {
+    if (isFresh(tasksCache, studentId, TASKS_TTL)) return tasksCache.get(studentId)!.data;
     const now = new Date();
     const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
     const tomorrowEnd = new Date(now); tomorrowEnd.setDate(now.getDate() + 1); tomorrowEnd.setHours(23, 59, 59, 999);
@@ -447,10 +490,12 @@ export const dashboardStatsService = {
 
     // Sort: overdue first, then by date asc
     const order = { overdue: 0, today: 1, tomorrow: 2, upcoming: 3 };
-    return items.sort((a, b) =>
+    const tasksResult = items.sort((a, b) =>
       order[a.urgency] - order[b.urgency] ||
       a.dueDate.getTime() - b.dueDate.getTime()
     ).slice(0, 10);
+    tasksCache.set(studentId, { data: tasksResult, ts: Date.now() });
+    return tasksResult;
   },
 
   // ── Exam Performance (per enrolled course) ────────────────────────────────
@@ -460,6 +505,7 @@ export const dashboardStatsService = {
     courseTitle: string;
     points: ExamPerformancePoint[];
   }[]> {
+    if (isFresh(examPerfCache, studentId, EXAM_TTL)) return examPerfCache.get(studentId)!.data;
     try {
       // Get student exam sessions that are submitted and result visible
       const snap = await getDocs(query(
@@ -500,11 +546,13 @@ export const dashboardStatsService = {
         })
       );
 
-      return Array.from(byCourse.entries()).map(([courseId, points]) => ({
+      const examResult = Array.from(byCourse.entries()).map(([courseId, points]) => ({
         courseId,
         courseTitle: courseTitles.get(courseId) ?? (courseId === '_no_course' ? 'General' : courseId),
         points: points.sort((a, b) => a.date.localeCompare(b.date)),
       }));
+      examPerfCache.set(studentId, { data: examResult, ts: Date.now() });
+      return examResult;
     } catch (e) {
       console.warn('[dashboardStatsService] getExamPerformance:', e);
       return [];
@@ -514,6 +562,7 @@ export const dashboardStatsService = {
   // ── Continue Learning ─────────────────────────────────────────────────────
 
   async getContinueLearning(studentId: string): Promise<ContinueLearningItem | null> {
+    if (isFresh(continueLearningCache, studentId, CONTINUE_TTL)) return continueLearningCache.get(studentId)!.data;
     try {
       const snap = await getDocs(query(
         collection(db, 'enrollments'),
@@ -527,7 +576,7 @@ export const dashboardStatsService = {
       const course = await getDoc(doc(db, 'courses', e.courseId));
       if (!course.exists()) return null;
       const c = course.data();
-      return {
+      const continueResult = {
         courseId: e.courseId,
         title: c.title ?? 'Untitled',
         instructor: c.instructor ?? '',
@@ -535,6 +584,8 @@ export const dashboardStatsService = {
         lastAccessedAt: toDate(e.lastAccessedAt),
         thumbnail: c.thumbnailUrl ?? c.thumbnail,
       };
+      continueLearningCache.set(studentId, { data: continueResult, ts: Date.now() });
+      return continueResult;
     } catch {
       return null;
     }
