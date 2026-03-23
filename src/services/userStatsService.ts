@@ -1,5 +1,8 @@
 // src/services/userStatsService.ts
-import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import {
+  doc, setDoc, Timestamp,
+} from 'firebase/firestore';
+import { getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 
 export interface UserStats {
