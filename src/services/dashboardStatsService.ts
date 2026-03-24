@@ -113,6 +113,13 @@ const appHeatCache = new Map<string, CacheEntry<any>>();
 const progressCache= new Map<string, CacheEntry<any>>();
 const tasksCache   = new Map<string, CacheEntry<any>>();
 const examPerfCache= new Map<string, CacheEntry<any>>();
+
+// In-flight dedup maps — prevent concurrent calls from all firing Firestore reads
+// before the first one resolves and populates the cache.
+const kpiInFlight          = new Map<string, Promise<any>>();
+const progressInFlight     = new Map<string, Promise<any>>();
+const examPerfInFlight     = new Map<string, Promise<any>>();
+const continueLearningInFlight = new Map<string, Promise<any>>();
 const continueLearningCache = new Map<string, CacheEntry<any>>();
 
 const KPI_TTL      = 5  * 60 * 1000; // 5 min  — changes on activity
@@ -518,57 +525,65 @@ export const dashboardStatsService = {
     points: ExamPerformancePoint[];
   }[]> {
     if (isFresh(examPerfCache, studentId, EXAM_TTL)) return examPerfCache.get(studentId)!.data;
-    try {
-      // Get student exam sessions that are submitted and result visible
-      const snap = await getDocs(query(
-        collection(db, 'examSessions'),
-        where('studentId', '==', studentId),
-        where('resultVisibility', '==', 'visible'),
-        orderBy('submittedAt', 'asc'),
-        fsLimit(100),
-      ));
+    // Dedup concurrent calls — reuse in-flight promise to prevent race condition
+    if (examPerfInFlight.has(studentId)) return examPerfInFlight.get(studentId)!;
+    const fetch = (async () => {
+      try {
+        // Get student exam sessions that are submitted and result visible
+        const snap = await getDocs(query(
+          collection(db, 'examSessions'),
+          where('studentId', '==', studentId),
+          where('resultVisibility', '==', 'visible'),
+          orderBy('submittedAt', 'asc'),
+          fsLimit(100),
+        ));
 
-      if (snap.empty) return [];
+        if (snap.empty) return [];
 
-      // Group by courseId
-      const byCourse = new Map<string, ExamPerformancePoint[]>();
-      snap.docs.forEach(d => {
-        const data = d.data();
-        if (!['submitted', 'auto_submitted'].includes(data.status ?? '')) return;
-        const courseId = data.courseId ?? '_no_course';
-        const pt: ExamPerformancePoint = {
-          date: ymd(toDate(data.submittedAt ?? data.startedAt)),
-          examTitle: data.contentTitle ?? data.examTitle ?? 'Exam',
-          percentage: data.percentage ?? 0,
+        // Group by courseId
+        const byCourse = new Map<string, ExamPerformancePoint[]>();
+        snap.docs.forEach(d => {
+          const data = d.data();
+          if (!['submitted', 'auto_submitted'].includes(data.status ?? '')) return;
+          const courseId = data.courseId ?? '_no_course';
+          const pt: ExamPerformancePoint = {
+            date: ymd(toDate(data.submittedAt ?? data.startedAt)),
+            examTitle: data.contentTitle ?? data.examTitle ?? 'Exam',
+            percentage: data.percentage ?? 0,
+            courseId,
+          };
+          if (!byCourse.has(courseId)) byCourse.set(courseId, []);
+          byCourse.get(courseId)!.push(pt);
+        });
+
+        // Get course titles
+        const courseIds = [...byCourse.keys()].filter(id => id !== '_no_course');
+        const courseTitles = new Map<string, string>();
+        await Promise.allSettled(
+          courseIds.map(async id => {
+            try {
+              const s = await getDoc(doc(db, 'courses', id));
+              if (s.exists()) courseTitles.set(id, s.data().title ?? id);
+            } catch { /* skip */ }
+          })
+        );
+
+        const examResult = Array.from(byCourse.entries()).map(([courseId, points]) => ({
           courseId,
-        };
-        if (!byCourse.has(courseId)) byCourse.set(courseId, []);
-        byCourse.get(courseId)!.push(pt);
-      });
-
-      // Get course titles
-      const courseIds = [...byCourse.keys()].filter(id => id !== '_no_course');
-      const courseTitles = new Map<string, string>();
-      await Promise.allSettled(
-        courseIds.map(async id => {
-          try {
-            const s = await getDoc(doc(db, 'courses', id));
-            if (s.exists()) courseTitles.set(id, s.data().title ?? id);
-          } catch { /* skip */ }
-        })
-      );
-
-      const examResult = Array.from(byCourse.entries()).map(([courseId, points]) => ({
-        courseId,
-        courseTitle: courseTitles.get(courseId) ?? (courseId === '_no_course' ? 'General' : courseId),
-        points: points.sort((a, b) => a.date.localeCompare(b.date)),
-      }));
-      examPerfCache.set(studentId, { data: examResult, ts: Date.now() });
-      return examResult;
-    } catch (e) {
-      console.warn('[dashboardStatsService] getExamPerformance:', e);
-      return [];
-    }
+          courseTitle: courseTitles.get(courseId) ?? (courseId === '_no_course' ? 'General' : courseId),
+          points: points.sort((a, b) => a.date.localeCompare(b.date)),
+        }));
+        examPerfCache.set(studentId, { data: examResult, ts: Date.now() });
+        return examResult;
+      } catch (e) {
+        console.warn('[dashboardStatsService] getExamPerformance:', e);
+        return [];
+      } finally {
+        examPerfInFlight.delete(studentId);
+      }
+    })();
+    examPerfInFlight.set(studentId, fetch);
+    return fetch;
   },
 
   // ── Continue Learning ─────────────────────────────────────────────────────
