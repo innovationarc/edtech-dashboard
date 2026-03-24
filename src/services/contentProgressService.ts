@@ -49,6 +49,12 @@ const progressId = (contentId: string, studentId: string) =>
 const syncCooldownCache = new Map<string, number>();
 const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
+// Cache for getStudentProgress — called on every dashboard mount by subjectMapService
+// and dashboardStatsService. 3-min TTL, invalidated on any progress write.
+const studentProgressCache = new Map<string, { data: ContentProgress[]; ts: number }>();
+const STUDENT_PROGRESS_TTL = 3 * 60 * 1000; // 3 minutes
+const studentProgressInFlight = new Map<string, Promise<ContentProgress[]>>();
+
 /**
  * For a given course, find any linked live class recordings where the student
  * attended the live class. If attended but content_progress not yet marked
@@ -250,6 +256,7 @@ export const contentProgressService = {
     if (isCompleted && !wasAlreadyCompleted && courseId) {
       syncEnrollmentProgress(studentId, courseId); // fire-and-forget
     }
+    studentProgressCache.delete(studentId); // invalidate cache after write
   },
 
   /**
@@ -291,27 +298,42 @@ export const contentProgressService = {
     if (courseId) {
       syncEnrollmentProgress(studentId, courseId); // fire-and-forget
     }
+    studentProgressCache.delete(studentId); // invalidate cache after write
   },
 
   /**
    * Get all progress for a student
    */
   async getStudentProgress(studentId: string): Promise<ContentProgress[]> {
-    const q = query(
-      collection(db, 'content_progress'),
-      where('studentId', '==', studentId)
-    );
-    const snap = await getDocs(q);
-    
-    return snap.docs.map(d => {
-      const data = d.data();
-      return {
-        ...data,
-        lastWatchedAt: data.lastWatchedAt?.toDate() || new Date(),
-        firstWatchedAt: data.firstWatchedAt?.toDate() || new Date(),
-        completedAt: data.completedAt?.toDate() || undefined,
-      } as ContentProgress;
-    });
+    // Return cached if fresh
+    const cached = studentProgressCache.get(studentId);
+    if (cached && Date.now() - cached.ts < STUDENT_PROGRESS_TTL) return cached.data;
+    // Dedup concurrent calls
+    if (studentProgressInFlight.has(studentId)) return studentProgressInFlight.get(studentId)!;
+    const fetch = (async () => {
+      try {
+        const q = query(
+          collection(db, 'content_progress'),
+          where('studentId', '==', studentId)
+        );
+        const snap = await getDocs(q);
+        const result = snap.docs.map(d => {
+          const data = d.data();
+          return {
+            ...data,
+            lastWatchedAt: data.lastWatchedAt?.toDate() || new Date(),
+            firstWatchedAt: data.firstWatchedAt?.toDate() || new Date(),
+            completedAt: data.completedAt?.toDate() || undefined,
+          } as ContentProgress;
+        });
+        studentProgressCache.set(studentId, { data: result, ts: Date.now() });
+        return result;
+      } finally {
+        studentProgressInFlight.delete(studentId);
+      }
+    })();
+    studentProgressInFlight.set(studentId, fetch);
+    return fetch;
   },
 
   /**
