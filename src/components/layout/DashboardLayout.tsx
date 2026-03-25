@@ -14,12 +14,10 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { dashboardStatsService } from '../../services/dashboardStatsService';
+import { firestoreMonitorPersistService, DashboardKey } from '../../services/firestoreMonitorPersistService';
 
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
-// Ghost is anchored bottom-right at (R, B) px from the viewport edges.
-// tx/ty are translate offsets applied on top of that anchor.
-// This clamp ensures the ghost stays fully within the viewport at all times.
 const clampPosition = (
   pos: { x: number; y: number },
   widgetEl: HTMLDivElement | null,
@@ -27,8 +25,8 @@ const clampPosition = (
 ): { x: number; y: number } => {
   const W = window.innerWidth;
   const H = window.innerHeight;
-  const R = isMobile ? 16 : 20; // right anchor
-  const B = isMobile ? 76 : 20; // bottom anchor
+  const R = isMobile ? 16 : 20;
+  const B = isMobile ? 76 : 20;
   const ghostW = widgetEl ? widgetEl.offsetWidth  : 56;
   const ghostH = widgetEl ? widgetEl.offsetHeight : 56;
   return {
@@ -37,6 +35,19 @@ const clampPosition = (
   };
 };
 
+// Map user role to DashboardKey for the persist service
+function roleToDashboardKey(role?: string): DashboardKey {
+  switch (role) {
+    case 'admin':          return 'admin';
+    case 'student':        return 'student';
+    case 'teacher':        return 'teacher';
+    case 'manager':
+    case 'coordinator':    return 'manager';
+    case 'course_manager': return 'course_manager';
+    default:               return '_global';
+  }
+}
+
 const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated, theme, glitterTheme, user } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
@@ -44,7 +55,6 @@ const DashboardLayout = () => {
   const [uid, setUid] = useState<string | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
-  // Stagger state — true while cards should be animating in
   const [staggerActive, setStaggerActive] = useState(false);
 
   const dragging = useRef(false);
@@ -53,23 +63,32 @@ const DashboardLayout = () => {
   const positionRef = useRef({ x: 0, y: 0 });
   const prevDragPos = useRef({ x: 0, y: 0 });
   const widgetRef = useRef<HTMLDivElement>(null);
-  const isMobileRef = useRef(false); // mirror of isMobile state for use inside event handlers
+  const isMobileRef = useRef(false);
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const eyeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flyRafId = useRef(0);
   const isFlying = useRef(false);
-  const chatOpen = useRef(false); // blocks ghost drag while Nova panel is open
+  const chatOpen = useRef(false);
+
+  // ── Firestore Monitor persist service init ───────────────────────────────
+  useEffect(() => {
+    if (!user?.uid) return;
+    const dk = roleToDashboardKey(user.role);
+    firestoreMonitorPersistService.init(dk);
+    return () => {
+      // Don't destroy on every user change — only on full unmount
+    };
+  }, [user?.uid, user?.role]);
 
   // ── App usage session tracking ───────────────────────────────────────────
   const sessionStartRef = useRef<number>(Date.now());
-  const savedUpToRef = useRef<number>(Date.now()); // tracks what's already been saved
+  const savedUpToRef = useRef<number>(Date.now());
 
   useEffect(() => {
     if (!user?.uid || user?.role !== 'student') return;
     sessionStartRef.current = Date.now();
     savedUpToRef.current = Date.now();
 
-    // Flush any unsaved seconds buffered in localStorage from a previous refresh
     const bufferKey = `appUsageBuffer_${user.uid}`;
     const buffered = localStorage.getItem(bufferKey);
     if (buffered) {
@@ -88,11 +107,10 @@ const DashboardLayout = () => {
     const save = async () => {
       const seconds = getUnsavedSeconds();
       if (seconds < 1) return;
-      savedUpToRef.current = Date.now(); // mark as saved immediately to prevent double-count
+      savedUpToRef.current = Date.now();
       await dashboardStatsService.logAppUsageSession(user.uid, seconds).catch(() => {});
     };
 
-    // Synchronous localStorage buffer for beforeunload — guaranteed even if async fails
     const bufferToLocalStorage = () => {
       const seconds = getUnsavedSeconds();
       if (seconds < 1) return;
@@ -100,22 +118,18 @@ const DashboardLayout = () => {
       localStorage.setItem(bufferKey, JSON.stringify({ date: dateKey, seconds }));
     };
 
-    // Save every 60s so at most 60s is ever at risk
     const iv = setInterval(save, 60 * 1000);
 
-    // visibilitychange — most reliable trigger (fires before page dies on refresh/close)
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        bufferToLocalStorage(); // sync — guaranteed
-        save();                 // async — best effort
+        bufferToLocalStorage();
+        save();
       } else {
-        // Coming back to the tab — clear any buffer since we're still alive
         localStorage.removeItem(bufferKey);
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // beforeunload — sync buffer as final safety net
     const onBeforeUnload = () => bufferToLocalStorage();
     window.addEventListener('beforeunload', onBeforeUnload);
 
@@ -123,11 +137,10 @@ const DashboardLayout = () => {
       clearInterval(iv);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('beforeunload', onBeforeUnload);
-      save(); // SPA navigation unmount
+      save();
     };
   }, [user?.uid, user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep isMobileRef in sync with isMobile state
   useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
 
   useEffect(() => {
@@ -141,7 +154,6 @@ const DashboardLayout = () => {
     };
   }, []);
 
-  // Nova navigation — ChatbotWidget dispatches 'nova-navigate' with { path }
   const navigate = useNavigate();
   useEffect(() => {
     const handleNovaNavigate = (e: Event) => {
@@ -178,7 +190,6 @@ const DashboardLayout = () => {
         if (snap.exists()) {
           const saved = snap.data()?.preferences?.chatbotWidgetPosition;
           if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
-            // Clamp loaded position — recovers any previously-saved off-screen coordinates
             const clamped = clampPosition(saved, widgetRef.current, isMobileRef.current);
             positionRef.current = clamped;
             setPosition(clamped);
@@ -201,7 +212,6 @@ const DashboardLayout = () => {
     }, 500);
   }, []);
 
-  // Separated from useCallback so setEyeOffset always has fresh closure
   const applyEyeOffset = (dx: number, dy: number) => {
     setEyeOffset({
       x: CLAMP(dx * 0.3, 4),
@@ -228,7 +238,6 @@ const DashboardLayout = () => {
       const raw = { x: dragStart.current.posX + dx, y: dragStart.current.posY + dy };
       const { x: newX, y: newY } = clampPosition(raw, widgetRef.current, isMobileRef.current);
 
-      // Eye offset from frame delta
       const fdx = newX - prevDragPos.current.x;
       const fdy = newY - prevDragPos.current.y;
       prevDragPos.current = { x: newX, y: newY };
@@ -243,7 +252,6 @@ const DashboardLayout = () => {
       if (!dragStart.current) return;
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
-      // Clamp final position before saving to Firestore
       const finalPos = clampPosition({ ...positionRef.current }, widgetRef.current, isMobileRef.current);
       positionRef.current = finalPos;
       setPosition(finalPos);
@@ -259,7 +267,6 @@ const DashboardLayout = () => {
   }, [savePosition]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    // Block drag during fly animation or while chat panel is open
     if (isFlying.current || chatOpen.current) return;
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
@@ -297,7 +304,6 @@ const DashboardLayout = () => {
       if (!dragStart.current) return;
       dragStart.current = null;
       setTimeout(() => { dragging.current = false; }, 0);
-      // Clamp final position before saving to Firestore
       const finalPos = clampPosition({ ...positionRef.current }, widgetRef.current, isMobileRef.current);
       positionRef.current = finalPos;
       setPosition(finalPos);
@@ -313,7 +319,6 @@ const DashboardLayout = () => {
   }, [savePosition]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    // Block drag during fly animation or while chat panel is open
     if (isFlying.current || chatOpen.current) return;
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'BUTTON' || target.isContentEditable) return;
@@ -324,12 +329,9 @@ const DashboardLayout = () => {
     hasMoved.current = false;
   }, []);
 
-
-  // Ghost fly animation — pure rAF, zero React state updates during flight
   useEffect(() => {
     const handleFly = () => {
       if (isFlying.current || !widgetRef.current) return;
-      // Close chatbot if open before flying
       window.dispatchEvent(new CustomEvent('ghost-close-chat'));
       isFlying.current = true;
 
@@ -339,8 +341,6 @@ const DashboardLayout = () => {
       const H = window.innerHeight;
       const duration = 3800;
 
-      // Path waypoints — offsets relative to startX/startY
-      // Widget is anchored bottom-right, so negative y = up, negative x = left
       const path = [
         { x: startX,            y: startY           },
         { x: startX - 80,       y: startY - 280     },
@@ -352,7 +352,6 @@ const DashboardLayout = () => {
         { x: startX,            y: startY           },
       ];
 
-      // Catmull-Rom interpolation for smooth looping path
       const getPoint = (t: number) => {
         const segments = path.length - 1;
         const seg = Math.min(Math.floor(t * segments), segments - 1);
@@ -370,13 +369,11 @@ const DashboardLayout = () => {
       const prevPt = { x: startX, y: startY };
       const tick = (now: number) => {
         const t = Math.min((now - start) / duration, 1);
-        // Ease in-out
         const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
         const pt = getPoint(ease);
         if (widgetRef.current) {
           widgetRef.current.style.transform = `translate(${pt.x}px, ${pt.y}px)`;
         }
-        // Tell GhostIcon to tilt/move eyes in flight direction
         window.dispatchEvent(new CustomEvent('ghost-move', { detail: { dx: pt.x - prevPt.x, dy: pt.y - prevPt.y } }));
         prevPt.x = pt.x; prevPt.y = pt.y;
         if (t < 1) {
@@ -396,8 +393,6 @@ const DashboardLayout = () => {
     window.addEventListener('ghost-fly', handleFly);
     return () => {
       window.removeEventListener('ghost-fly', handleFly);
-      // If fly animation was in progress when this effect cleans up, reset all state
-      // so the ghost is never left stuck off-screen with isFlying permanently true.
       if (isFlying.current) {
         cancelAnimationFrame(flyRafId.current);
         isFlying.current = false;
@@ -411,13 +406,8 @@ const DashboardLayout = () => {
     };
   }, []);
 
-
-
   const isLight = theme === 'light';
 
-  // ── Glitter background definitions ──────────────────────────────────────────
-  // Each glitter option has a dark variant and a light variant so they always
-  // harmonise with the active dark / light mode.
   const glitterStyles: Record<string, React.CSSProperties> = {
     none: {},
     silver: {
@@ -520,7 +510,6 @@ const DashboardLayout = () => {
         .dl-inner::-webkit-scrollbar { display: none !important; }
         .dl-inner { scrollbar-width: none !important; -ms-overflow-style: none !important; }
 
-        /* ── Login stagger: GPU-only (transform + opacity only) ── */
         @keyframes loginFadeUp {
           from { opacity: 0; transform: translateY(20px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -570,14 +559,11 @@ const DashboardLayout = () => {
             position: 'fixed',
             transform: `translate(${position.x}px, ${position.y}px)`,
             zIndex: 1000,
-            // On mobile, lift above the bottom nav (~64px). On desktop, sit at edge.
             bottom: isMobile ? 76 : 20,
             right: isMobile ? 16 : 20,
             userSelect: 'none',
             touchAction: 'none',
             cursor: 'grab',
-            // Must be visible so the chat panel (position:fixed inside a transformed
-            // parent would break, but modals use portal — ghost btn is relative here)
             overflow: 'visible',
           }}
         >
@@ -591,7 +577,7 @@ const DashboardLayout = () => {
 
       <TopProgressBar />
 
-      {/* Firestore read monitor — admin only, zero reads of its own */}
+      {/* Firestore monitor modal — config-driven, admin controls visibility per dashboard */}
       <FirestoreDebugPanel />
 
     </div>
