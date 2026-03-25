@@ -1,13 +1,19 @@
 // src/components/admin/FirestoreDebugPanel.tsx
-// Firestore read monitor — fullscreen mode + JSON/CSV export.
-// Zero reads of its own. Draggable, touch-friendly, production-safe.
+// Firestore read/write monitor modal — shown per-dashboard based on admin config.
+// Reads toggle config from Firestore (_config doc). Zero extra reads of its own beyond that.
+// Admin-only: global enable/disable. Per-dashboard: modal visibility toggle.
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { firestoreMonitor, MonitorStats, ReadEntry } from '../../services/firestoreMonitor';
-import { dashboardStatsService } from '../../services/dashboardStatsService';
+import {
+  firestoreMonitorPersistService,
+  MonitorConfig,
+  DashboardKey,
+  DEFAULT_CONFIG,
+} from '../../services/firestoreMonitorPersistService';
 import { useDashboard } from '../../contexts/DashboardContext';
 
-type Tab = 'live' | 'callers' | 'collections' | 'cleanup';
+type Tab = 'live' | 'callers' | 'collections';
 
 function fmt(n: number): string { return n.toLocaleString(); }
 function elapsed(from: Date): string {
@@ -33,46 +39,51 @@ function exportJSON(stats: MonitorStats) {
     sessionStart: stats.sessionStart.toISOString(),
     summary: {
       totalReads: stats.totalReads,
-      totalOperations: stats.entries.length,
+      totalWrites: stats.totalWrites,
+      totalOperations: stats.readEntries.length + stats.writeEntries.length,
       byCollection: stats.byCollection,
       byCaller: stats.byCaller,
     },
-    entries: stats.entries.map(e => ({
-      id: e.id,
-      timestamp: ts(e.timestamp),
-      type: e.type,
-      caller: e.caller,
-      collection: e.collection,
-      docCount: e.docCount,
+    readEntries: stats.readEntries.map(e => ({
+      id: e.id, timestamp: ts(e.timestamp),
+      type: e.type, caller: e.caller,
+      collection: e.collection, docCount: e.docCount,
+    })),
+    writeEntries: stats.writeEntries.map(e => ({
+      id: e.id, timestamp: ts(e.timestamp),
+      type: e.type, caller: e.caller, collection: e.collection,
     })),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `firestore-reads-${Date.now()}.json`;
-  a.click();
+  const a = document.createElement('a'); a.href = url;
+  a.download = `firestore-monitor-${Date.now()}.json`; a.click();
   URL.revokeObjectURL(url);
 }
 
 function exportCSV(stats: MonitorStats) {
   const rows = [
     ['timestamp', 'type', 'caller', 'collection', 'docCount'],
-    ...stats.entries.map(e => [
+    ...stats.readEntries.map(e => [
       ts(e.timestamp), e.type,
       `"${e.caller.replace(/"/g, '""')}"`,
       e.collection, String(e.docCount),
+    ]),
+    ...stats.writeEntries.map(e => [
+      ts(e.timestamp), e.type,
+      `"${e.caller.replace(/"/g, '""')}"`,
+      e.collection, '1',
     ]),
   ];
   const csv = rows.map(r => r.join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `firestore-reads-${Date.now()}.csv`;
-  a.click();
+  const a = document.createElement('a'); a.href = url;
+  a.download = `firestore-monitor-${Date.now()}.csv`; a.click();
   URL.revokeObjectURL(url);
 }
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 const Sparkline: React.FC<{ entries: ReadEntry[]; width: number }> = ({ entries, width }) => {
   const buckets = 30;
@@ -124,15 +135,15 @@ const EntryRow: React.FC<{ entry: ReadEntry; fullscreen: boolean }> = ({ entry, 
   </div>
 );
 
-const BarRow: React.FC<{ label: string; value: number; max: number; fullscreen: boolean }> = ({ label, value, max, fullscreen }) => (
+const BarRow: React.FC<{ label: string; value: number; max: number; fullscreen: boolean; color?: string }> = ({ label, value, max, fullscreen, color }) => (
   <div style={{ padding: fullscreen ? '5px 12px' : '3px 8px', fontFamily: 'monospace' }}>
     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
       <span style={{ color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                      maxWidth: fullscreen ? 600 : 180, fontSize: fullscreen ? 12 : 10.5 }} title={label}>{label}</span>
-      <span style={{ color: readsColor(value), fontWeight: 700, marginLeft: 12, fontSize: fullscreen ? 13 : 11 }}>{fmt(value)}</span>
+      <span style={{ color: color ?? readsColor(value), fontWeight: 700, marginLeft: 12, fontSize: fullscreen ? 13 : 11 }}>{fmt(value)}</span>
     </div>
     <div style={{ height: fullscreen ? 4 : 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2 }}>
-      <div style={{ height: '100%', width: `${(value / max) * 100}%`, background: readsColor(value), borderRadius: 2, transition: 'width 0.3s ease' }} />
+      <div style={{ height: '100%', width: `${(value / max) * 100}%`, background: color ?? readsColor(value), borderRadius: 2, transition: 'width 0.3s ease' }} />
     </div>
   </div>
 );
@@ -144,9 +155,9 @@ const StatBox: React.FC<{ label: string; value: string; color: string; fs: boole
   </div>
 );
 
-const EmptyState: React.FC<{ enabled: boolean }> = ({ enabled }) => (
+const EmptyState: React.FC = () => (
   <div style={{ padding: '32px 0', textAlign: 'center', color: 'rgba(255,255,255,0.18)', fontSize: 11 }}>
-    {enabled ? 'Waiting for Firestore reads…' : 'Press ▶ to start monitoring'}
+    Waiting for Firestore operations…
   </div>
 );
 
@@ -159,137 +170,116 @@ const Btn: React.FC<{ color: string; title: string; onClick: () => void; childre
   }}>{children}</button>
 );
 
-// ─── Main panel ───────────────────────────────────────────────────────────────
+// ─── Inner panel (always rendered when visible) ───────────────────────────────
 
 const FirestoreDebugPanelInner: React.FC = () => {
   const [stats, setStats]         = useState<MonitorStats>(firestoreMonitor.getStats());
-  const [enabled, setEnabled]     = useState(firestoreMonitor.isEnabled);
+  const [tab, setTab]             = useState<Tab>('live');
+  const [filter, setFilter]       = useState('');
   const [collapsed, setCollapsed] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [tab, setTab]             = useState<Tab>('live');
-  const [pos, setPos]             = useState({ x: 8, y: Math.max(80, window.innerHeight - 460) });
-  const [filter, setFilter]       = useState('');
-  const [cleaning, setCleaning]   = useState(false);
-  const [cleanLog, setCleanLog]   = useState<string[]>([]);
+  const [position, setPosition]   = useState({ x: 0, y: 0 });
+  const [flushing, setFlushing]   = useState(false);
+
   const dragging    = useRef(false);
-  const dragOffset  = useRef({ x: 0, y: 0 });
+  const dragStart   = useRef<{ mx: number; my: number; px: number; py: number } | null>(null);
+  const panelRef    = useRef<HTMLDivElement>(null);
+  const sparkW      = fullscreen ? 500 : 220;
 
-  useEffect(() => firestoreMonitor.subscribe(s => setStats({ ...s })), []);
+  useEffect(() => firestoreMonitor.subscribe(setStats), []);
 
-  const toggle = useCallback(() => {
-    if (enabled) { firestoreMonitor.disable(); }
-    else         { firestoreMonitor.enable();  }
-    setEnabled(v => !v);
-  }, [enabled]);
-
-  const reset = useCallback(() => firestoreMonitor.reset(), []);
-
-  const runCleanup = useCallback(async () => {
-    const uid = (window as any).__currentStudentIdForCleanup;
-    if (!uid) {
-      alert('Open the student dashboard first, then run cleanup.\nThe student UID will be detected automatically.');
-      return;
-    }
-    setCleaning(true);
-    setCleanLog([]);
-    try {
-      await dashboardStatsService.cleanupAppUsageLogs(uid, msg => {
-        setCleanLog(prev => [...prev.slice(-8), msg]);
-      });
-    } catch (e: any) {
-      setCleanLog(prev => [...prev, `ERROR: ${e.message}`]);
-    } finally {
-      setCleaning(false);
-    }
-  }, []);
-
-  // Mouse drag
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if (fullscreen || (e.target as HTMLElement).closest('button, input')) return;
+    if (fullscreen) return;
+    if ((e.target as HTMLElement).closest('button, input, select')) return;
     dragging.current = true;
-    dragOffset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    dragStart.current = { mx: e.clientX, my: e.clientY, px: position.x, py: position.y };
     e.preventDefault();
-  }, [pos, fullscreen]);
+  }, [fullscreen, position]);
 
   useEffect(() => {
-    const move = (e: MouseEvent) => {
-      if (!dragging.current) return;
-      setPos({ x: Math.max(0, Math.min(window.innerWidth - 320, e.clientX - dragOffset.current.x)),
-               y: Math.max(0, Math.min(window.innerHeight - 60,  e.clientY - dragOffset.current.y)) });
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current || !dragStart.current) return;
+      setPosition({
+        x: dragStart.current.px + (e.clientX - dragStart.current.mx),
+        y: dragStart.current.py + (e.clientY - dragStart.current.my),
+      });
     };
-    const up = () => { dragging.current = false; };
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', up);
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    const onUp = () => { dragging.current = false; dragStart.current = null; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
-  // Touch drag
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    if (fullscreen || (e.target as HTMLElement).closest('button, input')) return;
-    const t = e.touches[0];
-    dragging.current = true;
-    dragOffset.current = { x: t.clientX - pos.x, y: t.clientY - pos.y };
-  }, [pos, fullscreen]);
-
-  useEffect(() => {
-    const move = (e: TouchEvent) => {
-      if (!dragging.current) return;
-      const t = e.touches[0];
-      setPos({ x: Math.max(0, Math.min(window.innerWidth - 320, t.clientX - dragOffset.current.x)),
-               y: Math.max(0, Math.min(window.innerHeight - 60,  t.clientY - dragOffset.current.y)) });
-    };
-    const up = () => { dragging.current = false; };
-    window.addEventListener('touchmove', move, { passive: true });
-    window.addEventListener('touchend', up);
-    return () => { window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up); };
-  }, []);
+  const now = Date.now();
+  const recentReads = stats.readEntries.filter(e => now - e.timestamp.getTime() < 60_000);
+  const readsPerMin = recentReads.reduce((s, e) => s + e.docCount, 0);
+  const sessionSecs = Math.floor((now - stats.sessionStart.getTime()) / 1000);
 
   const filteredEntries = filter
-    ? stats.entries.filter(e => e.caller.toLowerCase().includes(filter.toLowerCase()) || e.collection.toLowerCase().includes(filter.toLowerCase()))
-    : stats.entries;
+    ? stats.readEntries.filter(e => e.caller.includes(filter) || e.collection.includes(filter))
+    : stats.readEntries;
 
-  const topCallers = firestoreMonitor.topCallers(50);
-  const topCols    = firestoreMonitor.topCollections(50);
-  const maxCaller  = topCallers[0]?.reads ?? 1;
-  const maxCol     = topCols[0]?.reads ?? 1;
-  const sessionSecs = Math.floor((Date.now() - stats.sessionStart.getTime()) / 1000);
-  const readsPerMin = sessionSecs > 0 ? Math.round((stats.totalReads / sessionSecs) * 60) : 0;
-  const sparkW = fullscreen ? Math.min(window.innerWidth - 28, 1400) : 298;
-  const contentH = fullscreen ? 'calc(100vh - 200px)' : '260px';
+  const topCallers = firestoreMonitor.topCallers(20);
+  const topCols    = firestoreMonitor.topCollections(20);
+  const maxCaller  = Math.max(...topCallers.map(c => c.reads), 1);
+  const maxCol     = Math.max(...topCols.map(c => c.reads + c.writes), 1);
+
+  const contentH = fullscreen ? undefined : (collapsed ? 0 : 200);
+
+  const handleFlush = async () => {
+    setFlushing(true);
+    try { await firestoreMonitorPersistService.flush(); } finally { setFlushing(false); }
+  };
 
   const panelStyle: React.CSSProperties = fullscreen
-    ? { position: 'fixed', inset: 0, zIndex: 99999, fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace",
-        background: 'rgba(6,6,14,0.99)', backdropFilter: 'blur(20px)', display: 'flex', flexDirection: 'column' }
-    : { position: 'fixed', left: pos.x, top: pos.y, width: 320, zIndex: 99999,
-        fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace",
-        borderRadius: 12, overflow: 'hidden',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(99,102,241,0.3)',
-        background: 'rgba(10,10,20,0.97)', backdropFilter: 'blur(20px)',
-        userSelect: 'none', cursor: 'grab' };
+    ? { position: 'fixed', inset: 0, zIndex: 9999, borderRadius: 0, display: 'flex', flexDirection: 'column' }
+    : {
+        position: 'fixed',
+        bottom: 20, left: 20,
+        transform: `translate(${position.x}px, ${position.y}px)`,
+        zIndex: 9998,
+        width: 320,
+        borderRadius: 12,
+        cursor: dragging.current ? 'grabbing' : 'grab',
+        maxHeight: collapsed ? 'none' : 480,
+        display: 'flex', flexDirection: 'column',
+      };
 
   return (
-    <div style={panelStyle} onMouseDown={onMouseDown} onTouchStart={onTouchStart}>
-
+    <div
+      ref={panelRef}
+      onMouseDown={onMouseDown}
+      style={{
+        ...panelStyle,
+        background: 'rgba(10,12,18,0.97)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        color: '#e2e8f0',
+        userSelect: 'none',
+        overflow: 'hidden',
+      }}
+    >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6,
-                    padding: fullscreen ? '10px 16px' : '7px 10px',
-                    background: 'rgba(99,102,241,0.15)',
-                    borderBottom: '1px solid rgba(99,102,241,0.25)', flexShrink: 0 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                      background: enabled ? '#22c55e' : '#ef4444',
-                      boxShadow: enabled ? '0 0 6px #22c55e' : 'none' }} />
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: fullscreen ? '10px 16px' : '7px 10px',
+        borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0,
+        background: 'rgba(99,102,241,0.08)',
+      }}>
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e',
+                      boxShadow: '0 0 6px #22c55e' }} />
         <span style={{ color: '#e2e8f0', fontSize: fullscreen ? 14 : 11, fontWeight: 700, letterSpacing: '0.05em', flex: 1 }}>
           FIRESTORE MONITOR
-          {fullscreen && <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 10, fontSize: 11 }}>— fullscreen · drag disabled</span>}
+          {fullscreen && <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: 10, fontSize: 11 }}>— live session</span>}
         </span>
         <span style={{ fontSize: fullscreen ? 18 : 13, fontWeight: 800, color: readsColor(stats.totalReads), minWidth: 50, textAlign: 'right' }}>
-          {fmt(stats.totalReads)}
+          {fmt(stats.totalReads)}R / {fmt(stats.totalWrites)}W
         </span>
-        <Btn color={enabled ? '#ef4444' : '#22c55e'} title={enabled ? 'Stop' : 'Start'} onClick={toggle}>{enabled ? '■' : '▶'}</Btn>
-        <Btn color="#6366f1"  title="Reset"           onClick={reset}>↺</Btn>
-        <Btn color="#0ea5e9"  title="Export JSON"      onClick={() => exportJSON(stats)}>⬇J</Btn>
-        <Btn color="#10b981"  title="Export CSV"       onClick={() => exportCSV(stats)}>⬇C</Btn>
-        <Btn color="#f59e0b"  title={fullscreen ? 'Exit fullscreen' : 'Open fullscreen'} onClick={() => setFullscreen(v => !v)}>
+        <Btn color="#22c55e" title="Flush to Firestore now" onClick={handleFlush}>{flushing ? '⏳' : '⬆'}</Btn>
+        <Btn color="#6366f1" title="Reset session counters" onClick={() => firestoreMonitor.reset()}>↺</Btn>
+        <Btn color="#0ea5e9" title="Export JSON" onClick={() => exportJSON(stats)}>⬇J</Btn>
+        <Btn color="#10b981" title="Export CSV"  onClick={() => exportCSV(stats)}>⬇C</Btn>
+        <Btn color="#f59e0b" title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'} onClick={() => setFullscreen(v => !v)}>
           {fullscreen ? '⊡' : '⊞'}
         </Btn>
         {!fullscreen && (
@@ -302,35 +292,36 @@ const FirestoreDebugPanelInner: React.FC = () => {
       {!collapsed && (
         <>
           {/* Stats bar */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr',
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr',
                         padding: fullscreen ? '8px 16px' : '5px 8px', gap: 4,
                         borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
-            <StatBox label="Total reads"  value={fmt(stats.totalReads)}    color={readsColor(stats.totalReads)} fs={fullscreen} />
-            <StatBox label="Reads/min"    value={fmt(readsPerMin)}          color={readsPerMin > 100 ? '#ef4444' : '#94a3b8'} fs={fullscreen} />
-            <StatBox label="Operations"   value={fmt(stats.entries.length)} color="#94a3b8" fs={fullscreen} />
-            <StatBox label="Session"      value={`${sessionSecs}s`}         color="rgba(255,255,255,0.3)" fs={fullscreen} />
+            <StatBox label="Reads"    value={fmt(stats.totalReads)}    color={readsColor(stats.totalReads)} fs={fullscreen} />
+            <StatBox label="Writes"   value={fmt(stats.totalWrites)}   color="#a78bfa" fs={fullscreen} />
+            <StatBox label="R/min"    value={fmt(readsPerMin)}          color={readsPerMin > 100 ? '#ef4444' : '#94a3b8'} fs={fullscreen} />
+            <StatBox label="Ops"      value={fmt(stats.readEntries.length + stats.writeEntries.length)} color="#94a3b8" fs={fullscreen} />
+            <StatBox label="Session"  value={`${sessionSecs}s`}         color="rgba(255,255,255,0.3)" fs={fullscreen} />
           </div>
 
           {/* Sparkline */}
           <div style={{ padding: fullscreen ? '6px 16px 4px' : '4px 8px 2px',
                         borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
-            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginBottom: 3 }}>LAST 60s ACTIVITY</div>
-            <Sparkline entries={stats.entries} width={sparkW} />
+            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginBottom: 3 }}>LAST 60s READS</div>
+            <Sparkline entries={stats.readEntries} width={sparkW} />
           </div>
 
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-            {(['live', 'callers', 'collections', 'cleanup'] as Tab[]).map(t => (
+            {(['live', 'callers', 'collections'] as Tab[]).map(t => (
               <button key={t} onClick={() => setTab(t)} style={{
                 flex: 1, padding: fullscreen ? '8px 0' : '5px 0',
                 fontSize: fullscreen ? 11 : 10, fontWeight: 600,
                 background: tab === t ? 'rgba(99,102,241,0.2)' : 'transparent',
-                color: tab === t ? '#818cf8' : t === 'cleanup' ? '#f59e0b' : 'rgba(255,255,255,0.3)',
+                color: tab === t ? '#818cf8' : 'rgba(255,255,255,0.3)',
                 border: 'none', cursor: 'pointer',
                 borderBottom: tab === t ? '2px solid #6366f1' : '2px solid transparent',
                 textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'inherit',
               }}>
-                {t === 'live' ? `Live (${filteredEntries.length})` : t === 'callers' ? `Callers (${topCallers.length})` : t === 'collections' ? `Collections (${topCols.length})` : '🧹 Fix'}
+                {t === 'live' ? `Live (${filteredEntries.length})` : t === 'callers' ? `Callers (${topCallers.length})` : `Collections (${topCols.length})`}
               </button>
             ))}
           </div>
@@ -347,7 +338,7 @@ const FirestoreDebugPanelInner: React.FC = () => {
             </div>
           )}
 
-          {/* Column headers */}
+          {/* Column headers (live tab) */}
           {tab === 'live' && filteredEntries.length > 0 && (
             <div style={{ display: 'grid',
                           gridTemplateColumns: fullscreen ? '50px 1fr 150px 90px 55px' : '40px 1fr 70px 42px',
@@ -366,47 +357,25 @@ const FirestoreDebugPanelInner: React.FC = () => {
                onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()}>
             {tab === 'live' && (
               filteredEntries.length === 0
-                ? <EmptyState enabled={enabled} />
+                ? <EmptyState />
                 : filteredEntries.map(e => <EntryRow key={e.id} entry={e} fullscreen={fullscreen} />)
             )}
             {tab === 'callers' && (
-              topCallers.length === 0 ? <EmptyState enabled={enabled} />
+              topCallers.length === 0 ? <EmptyState />
                 : <div style={{ padding: '4px 0' }}>
                     {topCallers.map(({ caller, reads }) => <BarRow key={caller} label={caller} value={reads} max={maxCaller} fullscreen={fullscreen} />)}
                   </div>
             )}
             {tab === 'collections' && (
-              topCols.length === 0 ? <EmptyState enabled={enabled} />
+              topCols.length === 0 ? <EmptyState />
                 : <div style={{ padding: '4px 0' }}>
-                    {topCols.map(({ collection, reads }) => <BarRow key={collection} label={collection} value={reads} max={maxCol} fullscreen={fullscreen} />)}
+                    {topCols.map(({ collection, reads, writes }) => (
+                      <div key={collection}>
+                        <BarRow label={`${collection} (reads)`}  value={reads}  max={maxCol} fullscreen={fullscreen} color="#22c55e" />
+                        <BarRow label={`${collection} (writes)`} value={writes} max={maxCol} fullscreen={fullscreen} color="#a78bfa" />
+                      </div>
+                    ))}
                   </div>
-            )}
-            {tab === 'cleanup' && (
-              <div style={{ padding: 14, fontFamily: 'monospace' }}>
-                <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: 12, marginBottom: 8 }}>🧹 appUsageLogs Cleanup</div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, marginBottom: 12, lineHeight: 1.6 }}>
-                  Merges duplicate per-session docs into one doc per day.<br/>
-                  Reduces heatmap reads from 700+ to ~70. Run once per student.<br/>
-                  Safe to run multiple times — idempotent.
-                </div>
-                <button onClick={runCleanup} disabled={cleaning} style={{
-                  width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-                  background: cleaning ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.2)',
-                  color: '#f59e0b', fontWeight: 700, fontSize: 12, cursor: cleaning ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit', marginBottom: 10,
-                }}>
-                  {cleaning ? '⏳ Running...' : '▶ Run Cleanup for Current Student'}
-                </button>
-                <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', marginBottom: 6 }}>LOG</div>
-                <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 8, minHeight: 60, maxHeight: 140, overflowY: 'auto' }}>
-                  {cleanLog.length === 0
-                    ? <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>No output yet</span>
-                    : cleanLog.map((line, i) => (
-                        <div key={i} style={{ color: line.startsWith('ERROR') ? '#ef4444' : line.startsWith('Done') ? '#22c55e' : '#94a3b8', fontSize: 10, marginBottom: 2 }}>{line}</div>
-                      ))
-                  }
-                </div>
-              </div>
             )}
           </div>
 
@@ -415,8 +384,8 @@ const FirestoreDebugPanelInner: React.FC = () => {
                         color: 'rgba(255,255,255,0.18)',
                         borderTop: '1px solid rgba(255,255,255,0.04)',
                         display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
-            <span>⬇J = JSON export · ⬇C = CSV export · ⊞ = fullscreen</span>
-            <span>{stats.entries.length} ops · max 500</span>
+            <span>⬆ flush to DB · ⊞ fullscreen · ↺ reset</span>
+            <span>{stats.readEntries.length + stats.writeEntries.length} ops · max 500</span>
           </div>
         </>
       )}
@@ -424,12 +393,38 @@ const FirestoreDebugPanelInner: React.FC = () => {
   );
 };
 
-// ─── Guard wrapper ────────────────────────────────────────────────────────────
+// ─── Config-aware guard ───────────────────────────────────────────────────────
 
 const FirestoreDebugPanel: React.FC = () => {
   const { user } = useDashboard();
-  // TEMP: show for all users to debug reads — revert to: user?.role !== 'admin' after testing
-  if (!user) return null;
+  const [config, setConfig] = useState<MonitorConfig>(DEFAULT_CONFIG);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    firestoreMonitorPersistService.getMonitorConfig().then(cfg => {
+      setConfig(cfg);
+      setLoaded(true);
+    });
+    // Re-check config every 30s so admin changes propagate without refresh
+    const iv = setInterval(() => {
+      firestoreMonitorPersistService.getMonitorConfig().then(setConfig);
+    }, 30_000);
+    return () => clearInterval(iv);
+  }, []);
+
+  if (!loaded || !user) return null;
+  if (!config.globalEnabled) return null;
+
+  // Map user role to dashboard key
+  const dk: DashboardKey = (user.role === 'admin' ? 'admin'
+    : user.role === 'student' ? 'student'
+    : user.role === 'teacher' ? 'teacher'
+    : user.role === 'manager' || user.role === 'coordinator' ? 'manager'
+    : user.role === 'course_manager' ? 'course_manager'
+    : '_global') as DashboardKey;
+
+  if (!config.dashboardToggles[dk]) return null;
+
   return <FirestoreDebugPanelInner />;
 };
 
