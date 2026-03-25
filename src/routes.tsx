@@ -81,6 +81,9 @@ import StreamSettings from './components/admin/StreamSettings';
 // NEW: Live Exam Page
 import LiveExam from './pages/LiveExam';
 
+// NEW: Firebase Monitor (Admin only)
+import AdminFirebaseMonitor from './pages/AdminFirebaseMonitor';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Returns the correct home dashboard path for any role
@@ -355,6 +358,13 @@ const AppRoutes = () => {
           <AdminManagerRoute>
             <CourseAssignment />
           </AdminManagerRoute>
+        } />
+
+        {/* Firebase Monitor - Admin only */}
+        <Route path="firebase-monitor" element={
+          <AdminRoute>
+            <AdminFirebaseMonitor />
+          </AdminRoute>
         } />
         
         {/* User Management - Admin, Manager, Coordinator */}
