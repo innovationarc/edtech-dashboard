@@ -178,12 +178,23 @@ const FolderCard: React.FC<{ node: ContentNode; index: number; onClick: () => vo
 // ─── Content Card ─────────────────────────────────────────────────────────────
 const ContentCard: React.FC<{ node: ContentNode; onClick: () => void; index: number }> = ({ node, onClick, index }) => {
   const content = node.contentData;
-  if (!content) return null;
-
-  const meta = TYPE_META[content.type as ContentType] || TYPE_META.lesson;
   const [hovered, setHovered] = useState(false);
   const { theme } = useDashboard();
   const isLight = theme === 'light';
+
+  // Fallback if content data is missing
+  if (!content) {
+    return (
+      <Card
+        style={{ animationDelay: `${index * 45}ms`, animationFillMode: 'both' }}
+        className={`animate-fadeSlideUp flex items-center gap-3 px-5 py-4 italic ${isLight ? 'text-gray-400' : 'text-white/25'}`}
+      >
+        {node.name || 'Content unavailable'}
+      </Card>
+    );
+  }
+
+  const meta = TYPE_META[content.type as ContentType] || TYPE_META.lesson;
 
   return (
     <Card
@@ -384,13 +395,20 @@ const ContentLibrary: React.FC = () => {
   };
 
   // ── Filtering ──
-  const filterNodes = (nodes: ContentNode[], query: string) => {
-    if (!query.trim()) return nodes;
-    const lq = query.toLowerCase();
-    return nodes.filter(n => {
-      if (n.type === 'folder') return n.name.toLowerCase().includes(lq);
-      return n.contentData?.title.toLowerCase().includes(lq) || n.contentData?.description?.toLowerCase().includes(lq);
-    });
+  const filterNodes = (nodes: ContentNode[], term: string): ContentNode[] => {
+    if (!term.trim()) return nodes;
+    const t = term.toLowerCase();
+    return nodes.reduce((acc: ContentNode[], n) => {
+      if (n.type === 'content') {
+        const title = (n.contentData?.title || n.name || '').toLowerCase();
+        if (title.includes(t)) acc.push(n);
+      } else if (n.type === 'folder') {
+        const filtered = filterNodes(n.children || [], term);
+        if (n.name.toLowerCase().includes(t) || filtered.length > 0)
+          acc.push({ ...n, children: filtered });
+      }
+      return acc;
+    }, []);
   };
 
   const filteredCourses = useMemo(
