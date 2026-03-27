@@ -1,8 +1,9 @@
 // api/verify-recaptcha.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET_KEY;
-const MIN_SCORE = 0.5;
+const RECAPTCHA_SECRET_V3 = process.env.RECAPTCHA_SECRET_KEY;
+const RECAPTCHA_SECRET_V2 = process.env.RECAPTCHA_V2_SECRET_KEY;
+const MIN_SCORE = 0.6;
 
 const ALLOWED_ORIGINS = [
   'https://edtech-dashboard-alpha.vercel.app',
@@ -11,116 +12,106 @@ const ALLOWED_ORIGINS = [
 ];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // ── CORS ─────────────────────────────────────────────────────
+  // ── CORS ──────────────────────────────────────────────────────
   const origin = req.headers.origin || '';
-
-  console.log('[reCAPTCHA] Incoming request:', {
-    method: req.method,
-    origin,
-    originAllowed: ALLOWED_ORIGINS.includes(origin),
-  });
-
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+  if (req.method !== 'POST')   { res.status(405).json({ error: 'Method not allowed' }); return; }
   // ─────────────────────────────────────────────────────────────
 
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
+  const { token, action, version = 'v3' } = req.body as {
+    token?:   string;
+    action?:  string;
+    version?: 'v2' | 'v3';
+  };
 
-  if (!RECAPTCHA_SECRET) {
-    console.error('[reCAPTCHA] ERROR: RECAPTCHA_SECRET_KEY is not set in environment variables');
-    res.status(500).json({ error: 'RECAPTCHA_SECRET_KEY not configured in Vercel environment variables' });
-    return;
-  }
-
-  console.log('[reCAPTCHA] Secret key loaded: YES (length:', RECAPTCHA_SECRET.length, ')');
-
-  const { token, action } = req.body;
-
-  console.log('[reCAPTCHA] Request body:', {
-    tokenReceived: !!token,
-    tokenLength: token?.length ?? 0,
-    action,
-  });
+  console.log('[reCAPTCHA] Request:', { version, action, tokenLength: token?.length ?? 0 });
 
   if (!token || !action) {
-    console.error('[reCAPTCHA] ERROR: Missing token or action in request body');
     res.status(400).json({ error: 'Missing token or action' });
     return;
   }
 
-  try {
-    console.log('[reCAPTCHA] Sending verification request to Google...');
+  // ── Pick secret key based on version ─────────────────────────
+  const secret = version === 'v2' ? RECAPTCHA_SECRET_V2 : RECAPTCHA_SECRET_V3;
 
+  if (!secret) {
+    const envVar = version === 'v2' ? 'RECAPTCHA_V2_SECRET_KEY' : 'RECAPTCHA_SECRET_KEY';
+    console.error(`[reCAPTCHA] ERROR: ${envVar} not set in environment`);
+    res.status(500).json({ error: `${envVar} not configured` });
+    return;
+  }
+
+  try {
     const googleRes = await fetch('https://www.google.com/recaptcha/api/siteverify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        secret: RECAPTCHA_SECRET,
-        response: token,
-      }),
+      body: new URLSearchParams({ secret, response: token }),
     });
 
-    console.log('[reCAPTCHA] Google response status:', googleRes.status);
-
     const result = await googleRes.json() as {
-      success: boolean;
-      score: number;
-      action: string;
-      hostname: string;
-      challenge_ts: string;
+      success:       boolean;
+      score?:        number;   // v3 only
+      action?:       string;   // v3 only
+      hostname?:     string;
+      challenge_ts?: string;
       'error-codes'?: string[];
     };
 
-    // Log the FULL raw response from Google
-    console.log('[reCAPTCHA] Full Google response:', JSON.stringify(result, null, 2));
+    console.log('[reCAPTCHA] Google response:', JSON.stringify(result, null, 2));
 
+    // ── v2 path: simple pass/fail ─────────────────────────────
+    if (version === 'v2') {
+      if (!result.success) {
+        console.error('[reCAPTCHA] v2 FAILED. Error codes:', result['error-codes']);
+        res.status(403).json({ error: 'Security check failed. Please try again.' });
+        return;
+      }
+      console.log('[reCAPTCHA] v2 SUCCESS');
+      res.status(200).json({ success: true });
+      return;
+    }
+
+    // ── v3 path: check success, action match, and score ───────
     if (!result.success) {
-      console.error('[reCAPTCHA] FAILED: Google returned success=false');
-      console.error('[reCAPTCHA] Error codes:', result['error-codes']);
+      console.error('[reCAPTCHA] v3 FAILED: success=false. Error codes:', result['error-codes']);
       res.status(403).json({
         error: 'reCAPTCHA verification failed',
-        // Remove the line below before going to production
-        debug_error_codes: result['error-codes'],
+        requiresV2: false,
       });
       return;
     }
 
     if (result.action !== action) {
-      console.error(`[reCAPTCHA] FAILED: Action mismatch — expected "${action}", got "${result.action}"`);
+      console.error(`[reCAPTCHA] v3 FAILED: action mismatch — expected "${action}", got "${result.action}"`);
       res.status(403).json({
         error: 'reCAPTCHA action mismatch',
-        // Remove the line below before going to production
-        debug_action: { expected: action, received: result.action },
+        requiresV2: false,
       });
       return;
     }
 
-    if (result.score < MIN_SCORE) {
-      console.error(`[reCAPTCHA] FAILED: Score too low — got ${result.score}, minimum is ${MIN_SCORE}`);
+    if ((result.score ?? 0) < MIN_SCORE) {
+      console.warn(`[reCAPTCHA] v3 score too low: ${result.score} < ${MIN_SCORE} — requesting v2 fallback`);
+      // Key flag: tells the frontend to show the v2 checkbox
       res.status(403).json({
-        error: 'Suspicious activity detected. Please try again.',
-        // Remove the line below before going to production
-        debug_score: { received: result.score, minimum: MIN_SCORE },
+        error: 'Additional verification required.',
+        requiresV2: true,
+        score: result.score,
       });
       return;
     }
 
-    console.log('[reCAPTCHA] SUCCESS — score:', result.score, '| action:', result.action);
+    console.log('[reCAPTCHA] v3 SUCCESS — score:', result.score, '| action:', result.action);
     res.status(200).json({ success: true, score: result.score });
 
   } catch (err: any) {
-    console.error('[reCAPTCHA] EXCEPTION during verification:', err.message, err.stack);
+    console.error('[reCAPTCHA] EXCEPTION:', err.message, err.stack);
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }
