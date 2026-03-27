@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDashboard } from '../contexts/DashboardContext';
+import Card from '../components/ui/Card';
 import {
   contentLibraryService,
   LibraryCourse,
@@ -41,47 +42,42 @@ const TYPE_META: Record<ContentType, {
   label: string;
   icon: React.ReactNode;
   pill: string;
-  glow: string;
   iconWrap: string;
 }> = {
   lesson: {
     label: 'Lesson',
     icon: <Play size={14} strokeWidth={2.5} className="ml-0.5" />,
     pill: 'bg-violet-500/15 text-violet-300 border-violet-500/20',
-    glow: 'rgba(139,92,246,0.15)',
     iconWrap: 'bg-violet-500/15 text-violet-300',
   },
   trick: {
     label: 'Trick',
     icon: <Zap size={14} strokeWidth={2.5} />,
     pill: 'bg-amber-500/15 text-amber-300 border-amber-500/20',
-    glow: 'rgba(245,158,11,0.15)',
     iconWrap: 'bg-amber-500/15 text-amber-300',
   },
   note: {
     label: 'Note',
     icon: <FileText size={14} strokeWidth={2.5} />,
     pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20',
-    glow: 'rgba(16,185,129,0.15)',
     iconWrap: 'bg-emerald-500/15 text-emerald-300',
   },
   exam: {
     label: 'Exam',
     icon: <ClipboardList size={14} strokeWidth={2.5} />,
     pill: 'bg-rose-500/15 text-rose-300 border-rose-500/20',
-    glow: 'rgba(244,63,94,0.15)',
     iconWrap: 'bg-rose-500/15 text-rose-300',
   },
 };
 
 // Folder accent colors cycling
 const FOLDER_ACCENTS = [
-  { bg: 'bg-indigo-500/8',  border: 'border-indigo-500/15', hover: 'hover:border-indigo-400/35', dot: 'bg-indigo-400', glow: 'rgba(99,102,241,0.2)' },
-  { bg: 'bg-sky-500/8',     border: 'border-sky-500/15',    hover: 'hover:border-sky-400/35',    dot: 'bg-sky-400',    glow: 'rgba(56,189,248,0.2)' },
-  { bg: 'bg-violet-500/8',  border: 'border-violet-500/15', hover: 'hover:border-violet-400/35', dot: 'bg-violet-400', glow: 'rgba(167,139,250,0.2)' },
-  { bg: 'bg-emerald-500/8', border: 'border-emerald-500/15',hover: 'hover:border-emerald-400/35',dot: 'bg-emerald-400',glow: 'rgba(52,211,153,0.2)' },
-  { bg: 'bg-rose-500/8',    border: 'border-rose-500/15',   hover: 'hover:border-rose-400/35',   dot: 'bg-rose-400',   glow: 'rgba(251,113,133,0.2)' },
-  { bg: 'bg-amber-500/8',   border: 'border-amber-500/15',  hover: 'hover:border-amber-400/35',  dot: 'bg-amber-400',  glow: 'rgba(251,191,36,0.2)' },
+  { border: 'border-indigo-500/20',  hover: 'hover:border-indigo-400/40', dot: 'bg-indigo-400' },
+  { border: 'border-sky-500/20',     hover: 'hover:border-sky-400/40',    dot: 'bg-sky-400'    },
+  { border: 'border-violet-500/20',  hover: 'hover:border-violet-400/40', dot: 'bg-violet-400' },
+  { border: 'border-emerald-500/20', hover: 'hover:border-emerald-400/40',dot: 'bg-emerald-400'},
+  { border: 'border-rose-500/20',    hover: 'hover:border-rose-400/40',   dot: 'bg-rose-400'   },
+  { border: 'border-amber-500/20',   hover: 'hover:border-amber-400/40',  dot: 'bg-amber-400'  },
 ];
 
 // ─── Course Card ──────────────────────────────────────────────────────────────
@@ -97,43 +93,43 @@ const CourseCard: React.FC<{ course: LibraryCourse; onClick: () => void; index: 
       onMouseLeave={() => setHovered(false)}
       style={{ animationDelay: `${index * 70}ms`, animationFillMode: 'both' }}
       className="animate-fadeSlideUp group relative w-full text-left rounded-2xl overflow-hidden
-                 border border-white/6 bg-[#0f111a]
-                 transition-all duration-500 ease-out
-                 hover:border-white/14 hover:shadow-2xl hover:shadow-black/60 hover:-translate-y-1.5
-                 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                 transition-all duration-500 ease-out hover:-translate-y-1.5
+                 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 p-0"
     >
-      {/* Thumbnail */}
-      <div className="relative h-48 overflow-hidden bg-[#0c0e16]">
-        {thumb ? (
-          <img
-            src={thumb}
-            alt={course.title}
-            className="w-full h-full object-cover transition-all duration-700 ease-out"
-            style={{ transform: hovered ? 'scale(1.06)' : 'scale(1)', opacity: hovered ? 0.9 : 0.7 }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <GraduationCap size={44} className="text-white/10" />
-          </div>
-        )}
-        {/* Bottom fade */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0f111a] via-transparent to-transparent" />
-      </div>
+      <Card className="p-0 h-full transition-all duration-300 hover:shadow-card-hover overflow-hidden">
+        {/* Thumbnail */}
+        <div className="relative h-48 overflow-hidden bg-background-800">
+          {thumb ? (
+            <img
+              src={thumb}
+              alt={course.title}
+              className="w-full h-full object-cover transition-all duration-700 ease-out"
+              style={{ transform: hovered ? 'scale(1.06)' : 'scale(1)', opacity: hovered ? 0.9 : 0.7 }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <GraduationCap size={44} className="text-white/10" />
+            </div>
+          )}
+          {/* Bottom fade */}
+          <div className="absolute inset-0 bg-gradient-to-t from-background-900 via-transparent to-transparent" />
+        </div>
 
-      {/* Course name */}
-      <div className="px-4 py-4">
-        <p className="text-[15px] font-semibold text-white/90 group-hover:text-white leading-snug line-clamp-2 transition-colors duration-300">
-          {course.title}
-        </p>
-      </div>
+        {/* Course name */}
+        <div className="px-4 py-4">
+          <p className="text-[15px] font-semibold text-white group-hover:text-white/90 leading-snug line-clamp-2 transition-colors duration-300">
+            {course.title}
+          </p>
+        </div>
 
-      {/* Hover arrow */}
-      <div
-        className="absolute bottom-4 right-4 transition-all duration-300"
-        style={{ opacity: hovered ? 1 : 0, transform: hovered ? 'translateX(0)' : 'translateX(-6px)' }}
-      >
-        <ChevronRight size={16} className="text-white/40" />
-      </div>
+        {/* Hover arrow */}
+        <div
+          className="absolute bottom-4 right-4 transition-all duration-300"
+          style={{ opacity: hovered ? 1 : 0, transform: hovered ? 'translateX(0)' : 'translateX(-6px)' }}
+        >
+          <ChevronRight size={16} className="text-white/40" />
+        </div>
+      </Card>
     </button>
   );
 };
@@ -150,37 +146,26 @@ const FolderCard: React.FC<{ node: ContentNode; index: number; onClick: () => vo
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{ animationDelay: `${index * 55}ms`, animationFillMode: 'both' }}
-      className={`animate-fadeSlideUp group relative w-full text-left rounded-2xl border
-                  ${acc.bg} ${acc.border} ${acc.hover}
-                  px-5 py-5 transition-all duration-400 ease-out
-                  hover:shadow-xl hover:-translate-y-1
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+      className="animate-fadeSlideUp w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     >
-      {/* Glow blob on hover */}
-      <div
-        className="absolute inset-0 rounded-2xl transition-opacity duration-500 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle at 30% 50%, ${acc.glow}, transparent 70%)`,
-          opacity: hovered ? 1 : 0,
-        }}
-      />
+      <Card className={`p-0 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 border ${acc.border} ${acc.hover}`}>
+        <div className="flex items-center gap-4 px-5 py-5">
+          {/* Dot accent */}
+          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${acc.dot} transition-transform duration-300 ${hovered ? 'scale-125' : 'scale-100'}`} />
 
-      <div className="relative flex items-center gap-4">
-        {/* Dot accent */}
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${acc.dot} transition-transform duration-300 ${hovered ? 'scale-125' : 'scale-100'}`} />
+          {/* Name */}
+          <span className="flex-1 text-[15px] font-medium text-gray-300 group-hover:text-white transition-colors duration-300 leading-snug">
+            {node.name}
+          </span>
 
-        {/* Name */}
-        <span className="flex-1 text-[15px] font-medium text-white/80 group-hover:text-white transition-colors duration-300 leading-snug">
-          {node.name}
-        </span>
-
-        {/* Arrow */}
-        <ChevronRight
-          size={16}
-          className="flex-shrink-0 text-white/20 transition-all duration-300"
-          style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', opacity: hovered ? 0.7 : 0.25 }}
-        />
-      </div>
+          {/* Arrow */}
+          <ChevronRight
+            size={16}
+            className="flex-shrink-0 text-gray-500 transition-all duration-300"
+            style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', opacity: hovered ? 0.7 : 0.4 }}
+          />
+        </div>
+      </Card>
     </button>
   );
 };
@@ -196,7 +181,7 @@ const ContentCard: React.FC<{ node: ContentNode; onClick: () => void; index: num
     return (
       <div
         style={{ animationDelay: `${index * 45}ms`, animationFillMode: 'both' }}
-        className="animate-fadeSlideUp flex items-center gap-3 px-5 py-4 rounded-2xl border border-white/5 bg-white/2 text-white/25 text-sm italic"
+        className="animate-fadeSlideUp flex items-center gap-3 px-5 py-4 rounded-2xl border border-white/5 text-gray-500 text-sm italic"
       >
         {node.name || 'Content unavailable'}
       </div>
@@ -210,54 +195,44 @@ const ContentCard: React.FC<{ node: ContentNode; onClick: () => void; index: num
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{ animationDelay: `${index * 45}ms`, animationFillMode: 'both' }}
-      className="animate-fadeSlideUp group relative w-full text-left rounded-2xl border border-white/6
-                 bg-[#0f111a] hover:border-white/12 hover:bg-[#131520]
-                 transition-all duration-400 ease-out hover:shadow-lg hover:shadow-black/40 hover:-translate-y-0.5
-                 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 overflow-hidden"
+      className="animate-fadeSlideUp w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     >
-      {/* Glow on hover */}
-      <div
-        className="absolute inset-0 rounded-2xl pointer-events-none transition-opacity duration-500"
-        style={{
-          background: `radial-gradient(ellipse at 0% 50%, ${meta.glow}, transparent 60%)`,
-          opacity: hovered ? 1 : 0,
-        }}
-      />
+      <Card className="p-0 transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5">
+        <div className="flex items-center gap-4 px-5 py-4">
+          {/* Type icon */}
+          <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${meta.iconWrap} transition-transform duration-300 ${hovered ? 'scale-110' : 'scale-100'}`}>
+            {meta.icon}
+          </div>
 
-      <div className="relative flex items-center gap-4 px-5 py-4">
-        {/* Type icon */}
-        <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${meta.iconWrap} transition-transform duration-300 ${hovered ? 'scale-110' : 'scale-100'}`}>
-          {meta.icon}
-        </div>
-
-        {/* Text */}
-        <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-white/85 group-hover:text-white transition-colors duration-300 leading-snug mb-1 line-clamp-1">
-            {content.title}
-          </p>
-          {content.description && (
-            <p className="text-[12px] text-white/35 group-hover:text-white/50 transition-colors duration-300 line-clamp-1 leading-relaxed">
-              {content.description}
+          {/* Text */}
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] font-semibold text-white transition-colors duration-300 leading-snug mb-1 line-clamp-1">
+              {content.title}
             </p>
-          )}
+            {content.description && (
+              <p className="text-[12px] text-gray-400 transition-colors duration-300 line-clamp-1 leading-relaxed">
+                {content.description}
+              </p>
+            )}
+          </div>
+
+          {/* Type pill */}
+          <span
+            className={`flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${meta.pill} transition-all duration-300`}
+            style={{ opacity: hovered ? 1 : 0.75 }}
+          >
+            {meta.icon}
+            {meta.label}
+          </span>
+
+          {/* Arrow */}
+          <ChevronRight
+            size={15}
+            className="flex-shrink-0 text-gray-500 transition-all duration-300"
+            style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', opacity: hovered ? 0.6 : 0.3 }}
+          />
         </div>
-
-        {/* Type pill */}
-        <span
-          className={`flex-shrink-0 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${meta.pill} transition-all duration-300`}
-          style={{ opacity: hovered ? 1 : 0.75 }}
-        >
-          {meta.icon}
-          {meta.label}
-        </span>
-
-        {/* Arrow */}
-        <ChevronRight
-          size={15}
-          className="flex-shrink-0 text-white/20 transition-all duration-300"
-          style={{ transform: hovered ? 'translateX(3px)' : 'translateX(0)', opacity: hovered ? 0.6 : 0.2 }}
-        />
-      </div>
+      </Card>
     </button>
   );
 };
@@ -269,11 +244,11 @@ const Breadcrumb: React.FC<{ trail: Crumb[]; onNav: (i: number) => void }> = ({ 
       const isLast = i === trail.length - 1;
       return (
         <React.Fragment key={i}>
-          {i > 0 && <ChevronRight size={12} className="text-white/15 flex-shrink-0" />}
+          {i > 0 && <ChevronRight size={12} className="text-gray-600 flex-shrink-0" />}
           {isLast
             ? <span className="text-sm font-semibold text-white truncate max-w-[200px]">{c.label}</span>
             : <button onClick={() => onNav(i)}
-                className="text-sm text-white/35 hover:text-white/80 transition-colors duration-200 truncate max-w-[160px] focus:outline-none">
+                className="text-sm text-gray-400 hover:text-white transition-colors duration-200 truncate max-w-[160px] focus:outline-none">
                 {c.label}
               </button>
           }
@@ -286,20 +261,20 @@ const Breadcrumb: React.FC<{ trail: Crumb[]; onNav: (i: number) => void }> = ({ 
 // ─── Search box ───────────────────────────────────────────────────────────────
 const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeholder: string }> = ({ value, onChange, placeholder }) => (
   <div className="relative">
-    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" />
+    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
     <input
       type="text"
       placeholder={placeholder}
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full pl-9 pr-9 py-2.5 text-sm bg-white/4 border border-white/8 rounded-xl
-                 text-white/80 placeholder-white/20
-                 focus:outline-none focus:border-white/20 focus:bg-white/6
+      className="w-full pl-9 pr-9 py-2.5 text-sm bg-background-800 border border-white/8 rounded-xl
+                 text-white placeholder-gray-500
+                 focus:outline-none focus:border-primary-500/40 focus:bg-background-700
                  transition-all duration-200"
     />
     {value && (
       <button onClick={() => onChange('')}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors focus:outline-none">
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors focus:outline-none">
         <X size={14} />
       </button>
     )}
@@ -313,8 +288,8 @@ const PageSlide: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 // ==================== MAIN PAGE ====================
 const ContentLibrary: React.FC = () => {
-  const { user }  = useDashboard();
-  const navigate  = useNavigate();
+  const { user, primaryColor, accentColor } = useDashboard();
+  const navigate = useNavigate();
 
   const [courses, setCourses]   = useState<LibraryCourse[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -379,8 +354,6 @@ const ContentLibrary: React.FC = () => {
 
   const openContent = useCallback((node: ContentNode) => {
     if (!selectedCourse || !node.contentData) return;
-    // Pass the already-hydrated content data via router state so LessonViewer
-    // doesn't need to re-fetch — eliminates the race condition / StrictMode issue
     navigate(getContentRoute(node.contentData, selectedCourse.courseId), {
       state: { contentData: node.contentData },
     });
@@ -442,159 +415,146 @@ const ContentLibrary: React.FC = () => {
       `}</style>
 
       <div
-        className="min-h-screen bg-[#0a0c14] text-white"
+        className="space-y-6"
         style={{ opacity: transitioning ? 0 : 1, transition: 'opacity 0.12s ease' }}
       >
-        {/* Subtle ambient */}
-        <div className="fixed inset-0 pointer-events-none" style={{
-          background:
-            'radial-gradient(ellipse 60% 35% at 70% 0%, rgba(99,102,241,0.07) 0%, transparent 60%),' +
-            'radial-gradient(ellipse 40% 25% at 5% 90%,  rgba(16,185,129,0.04) 0%, transparent 55%)',
-        }} />
+        {/* ── HEADER ── */}
+        <div>
+          {isInsideCourse ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={goBack}
+                className="flex items-center gap-2 text-sm text-gray-400 hover:text-white
+                           transition-colors duration-200 focus:outline-none group"
+              >
+                <ArrowLeft size={15} className="transition-transform duration-200 group-hover:-translate-x-0.5" />
+                <span className="hidden sm:inline">Library</span>
+              </button>
+              <span className="text-gray-600 text-lg leading-none">|</span>
+              <Breadcrumb trail={trail} onNav={navTo} />
+            </div>
+          ) : (
+            <div className="animate-fadeIn">
+              <h1 className="text-2xl font-bold text-white tracking-tight">My Library</h1>
+              {!loading && (
+                <p className="text-sm text-gray-400 mt-1">
+                  {courses.length === 0
+                    ? 'No courses enrolled yet'
+                    : `${courses.length} course${courses.length !== 1 ? 's' : ''}`
+                  }
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
-        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10">
+        {/* ── LOADING ── */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-32 gap-5 animate-fadeIn">
+            <Loader2 size={28} className="text-primary-400 animate-spin" />
+            <p className="text-sm text-gray-400">Loading your library…</p>
+          </div>
+        )}
 
-          {/* ── HEADER ── */}
-          <div className="mb-10">
-            {isInsideCourse ? (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={goBack}
-                  className="flex items-center gap-2 text-sm text-white/40 hover:text-white/80
-                             transition-colors duration-200 focus:outline-none group"
-                >
-                  <ArrowLeft size={15} className="transition-transform duration-200 group-hover:-translate-x-0.5" />
-                  <span className="hidden sm:inline">Library</span>
-                </button>
-                <span className="text-white/10 text-lg leading-none">|</span>
-                <Breadcrumb trail={trail} onNav={navTo} />
+        {/* ── ERROR ── */}
+        {!loading && error && (
+          <div className="flex items-center gap-3 p-4 rounded-2xl bg-error-DEFAULT/10 border border-error-DEFAULT/20 text-error-DEFAULT text-sm animate-fadeIn">
+            <AlertCircle size={15} className="flex-shrink-0" />
+            <span className="flex-1">{error}</span>
+            <button onClick={load} className="text-xs underline hover:no-underline opacity-70 hover:opacity-100 transition-opacity">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* ── COURSE LIST ── */}
+        {!loading && !error && !isInsideCourse && (
+          <PageSlide>
+            {/* Search */}
+            {courses.length > 4 && (
+              <div className="mb-6 max-w-xs">
+                <SearchBox value={courseSearch} onChange={setCourseSearch} placeholder="Search courses…" />
               </div>
-            ) : (
-              <div className="animate-fadeIn">
-                <h1 className="text-2xl font-bold text-white tracking-tight">My Library</h1>
-                {!loading && (
-                  <p className="text-sm text-white/30 mt-1">
-                    {courses.length === 0
-                      ? 'No courses enrolled yet'
-                      : `${courses.length} course${courses.length !== 1 ? 's' : ''}`
-                    }
-                  </p>
+            )}
+
+            {/* Empty */}
+            {filteredCourses.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 text-center animate-fadeIn">
+                <div className="w-16 h-16 rounded-2xl bg-background-800 border border-white/6 flex items-center justify-center mb-5">
+                  <GraduationCap size={24} className="text-gray-500" />
+                </div>
+                <p className="text-base font-medium text-gray-400 mb-1">
+                  {courseSearch ? 'No results' : 'No courses yet'}
+                </p>
+                <p className="text-sm text-gray-500 max-w-xs">
+                  {courseSearch ? 'Try a different keyword.' : 'Enroll in a course to get started.'}
+                </p>
+              </div>
+            )}
+
+            {/* Grid */}
+            {filteredCourses.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredCourses.map((course, i) => (
+                  <CourseCard key={course.courseId} course={course} index={i} onClick={() => openCourse(course)} />
+                ))}
+              </div>
+            )}
+          </PageSlide>
+        )}
+
+        {/* ── INSIDE COURSE (folders + content) ── */}
+        {!loading && !error && isInsideCourse && (
+          <PageSlide>
+            {/* Search — only show if there's content to search */}
+            {currentNodes.length > 5 && (
+              <div className="mb-6 max-w-xs">
+                <SearchBox value={contentSearch} onChange={setContentSearch} placeholder="Search…" />
+              </div>
+            )}
+
+            {/* Empty */}
+            {folderNodes.length === 0 && contentNodes.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 text-center animate-fadeIn">
+                <div className="w-16 h-16 rounded-2xl bg-background-800 border border-white/6 flex items-center justify-center mb-5">
+                  <span className="text-2xl">✦</span>
+                </div>
+                <p className="text-base font-medium text-gray-400 mb-1">
+                  {contentSearch ? 'Nothing found' : 'Nothing here yet'}
+                </p>
+                {contentSearch && (
+                  <p className="text-sm text-gray-500">Try different keywords.</p>
                 )}
               </div>
             )}
-          </div>
 
-          {/* ── LOADING ── */}
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-32 gap-5 animate-fadeIn">
-              <div className="relative">
-                <Loader2 size={28} className="text-indigo-400 animate-spin" />
-                <div className="absolute inset-0 blur-xl bg-indigo-500/20 rounded-full" />
+            {/* ── Folders ── */}
+            {folderNodes.length > 0 && (
+              <div className="mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {folderNodes.map((node, i) => (
+                    <FolderCard key={node.id} node={node} index={i} onClick={() => openFolder(node)} />
+                  ))}
+                </div>
               </div>
-              <p className="text-sm text-white/25">Loading your library…</p>
-            </div>
-          )}
+            )}
 
-          {/* ── ERROR ── */}
-          {!loading && error && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl bg-rose-500/8 border border-rose-500/15 text-rose-300/80 text-sm animate-fadeIn">
-              <AlertCircle size={15} className="flex-shrink-0" />
-              <span className="flex-1">{error}</span>
-              <button onClick={load} className="text-xs underline hover:no-underline opacity-70 hover:opacity-100 transition-opacity">
-                Retry
-              </button>
-            </div>
-          )}
+            {/* ── Divider between folders and content ── */}
+            {folderNodes.length > 0 && contentNodes.length > 0 && (
+              <div className="h-px bg-white/5 mb-6 animate-fadeIn" />
+            )}
 
-          {/* ── COURSE LIST ── */}
-          {!loading && !error && !isInsideCourse && (
-            <PageSlide>
-              {/* Search */}
-              {courses.length > 4 && (
-                <div className="mb-8 max-w-xs">
-                  <SearchBox value={courseSearch} onChange={setCourseSearch} placeholder="Search courses…" />
-                </div>
-              )}
+            {/* ── Content ── */}
+            {contentNodes.length > 0 && (
+              <div className="flex flex-col gap-2.5">
+                {contentNodes.map((node, i) => (
+                  <ContentCard key={node.id} node={node} index={i} onClick={() => openContent(node)} />
+                ))}
+              </div>
+            )}
+          </PageSlide>
+        )}
 
-              {/* Empty */}
-              {filteredCourses.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-24 text-center animate-fadeIn">
-                  <div className="w-16 h-16 rounded-2xl bg-white/3 border border-white/6 flex items-center justify-center mb-5">
-                    <GraduationCap size={24} className="text-white/20" />
-                  </div>
-                  <p className="text-base font-medium text-white/40 mb-1">
-                    {courseSearch ? 'No results' : 'No courses yet'}
-                  </p>
-                  <p className="text-sm text-white/20 max-w-xs">
-                    {courseSearch ? 'Try a different keyword.' : 'Enroll in a course to get started.'}
-                  </p>
-                </div>
-              )}
-
-              {/* Grid */}
-              {filteredCourses.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredCourses.map((course, i) => (
-                    <CourseCard key={course.courseId} course={course} index={i} onClick={() => openCourse(course)} />
-                  ))}
-                </div>
-              )}
-            </PageSlide>
-          )}
-
-          {/* ── INSIDE COURSE (folders + content) ── */}
-          {!loading && !error && isInsideCourse && (
-            <PageSlide>
-              {/* Search — only show if there's content to search */}
-              {currentNodes.length > 5 && (
-                <div className="mb-8 max-w-xs">
-                  <SearchBox value={contentSearch} onChange={setContentSearch} placeholder="Search…" />
-                </div>
-              )}
-
-              {/* Empty */}
-              {folderNodes.length === 0 && contentNodes.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-24 text-center animate-fadeIn">
-                  <div className="w-16 h-16 rounded-2xl bg-white/3 border border-white/6 flex items-center justify-center mb-5">
-                    <span className="text-2xl">✦</span>
-                  </div>
-                  <p className="text-base font-medium text-white/40 mb-1">
-                    {contentSearch ? 'Nothing found' : 'Nothing here yet'}
-                  </p>
-                  {contentSearch && (
-                    <p className="text-sm text-white/20">Try different keywords.</p>
-                  )}
-                </div>
-              )}
-
-              {/* ── Folders ── */}
-              {folderNodes.length > 0 && (
-                <div className="mb-8">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {folderNodes.map((node, i) => (
-                      <FolderCard key={node.id} node={node} index={i} onClick={() => openFolder(node)} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Divider between folders and content ── */}
-              {folderNodes.length > 0 && contentNodes.length > 0 && (
-                <div className="h-px bg-white/5 mb-8 animate-fadeIn" />
-              )}
-
-              {/* ── Content ── */}
-              {contentNodes.length > 0 && (
-                <div className="flex flex-col gap-2.5">
-                  {contentNodes.map((node, i) => (
-                    <ContentCard key={node.id} node={node} index={i} onClick={() => openContent(node)} />
-                  ))}
-                </div>
-              )}
-            </PageSlide>
-          )}
-
-        </div>
       </div>
     </>
   );
