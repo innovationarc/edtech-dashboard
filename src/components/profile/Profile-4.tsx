@@ -1,4 +1,4 @@
-// src/components/profile/Profile-4.tsx — Student Profile v3 Matte Crystal Sparkle
+// src/components/profile/Profile-4.tsx — Student Profile v3 Matte Crystal Sparkle (Mobile Fixed)
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import {
@@ -92,15 +92,15 @@ const InfoRow = ({ icon:Icon, label, value, accent='rgba(99,102,241,0.14)' }: {
 }) => {
   if (!value) return null;
   return (
-    <div style={{ display:'flex',alignItems:'flex-start',gap:10,padding:'7px 0',
+    <div className="info-row" style={{ display:'flex',alignItems:'flex-start',gap:10,padding:'7px 0',
       borderBottom:'1px solid rgba(255,255,255,0.04)', position:'relative',zIndex:4 }}>
       <div style={{ width:26,height:26,borderRadius:8,flexShrink:0,background:accent,
         display:'flex',alignItems:'center',justifyContent:'center' }}>
         <Icon size={13} color="#94a3b8" />
       </div>
-      <div>
-        <div style={{ fontSize:9.5,fontWeight:700,color:'#334155',textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:2 }}>{label}</div>
-        <div style={{ fontSize:12.5,fontWeight:600,color:'#cbd5e1' }}>{value}</div>
+      <div style={{ minWidth:0, flex:1 }}>
+        <div className="info-label" style={{ fontSize:9.5,fontWeight:700,color:'#334155',textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:2 }}>{label}</div>
+        <div className="info-value" style={{ fontSize:12.5,fontWeight:600,color:'#cbd5e1', wordBreak:'break-word' }}>{value}</div>
       </div>
     </div>
   );
@@ -147,6 +147,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
   /* hover tilt for stat/info cards */
   const tilt = {
     onMouseMove: (e: React.MouseEvent<HTMLDivElement>) => {
+      if (window.innerWidth <= 768) return;
       const el = e.currentTarget;
       const r = el.getBoundingClientRect();
       const rx = ((e.clientY - r.top - r.height/2) / r.height) * -10;
@@ -169,7 +170,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
 
   return (
     <>
-      {/* ── Keyframes ── */}
+      {/* ── Keyframes & Responsive Styles ── */}
       <style>{`
         @keyframes spPop{0%{transform:scale(0) translate(0,0);opacity:1}60%{opacity:.8}100%{transform:scale(0) translate(var(--dx),var(--dy));opacity:0}}
         @keyframes avSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
@@ -190,6 +191,30 @@ const Profile4 = ({ onClose }: Profile4Props) => {
         .pv-scroll::-webkit-scrollbar{width:5px}
         .pv-scroll::-webkit-scrollbar-track{background:#0f1117}
         .pv-scroll::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+
+        /* MOBILE RESPONSIVE FIXES */
+        @media (max-width: 768px) {
+          .pv-print { padding: 0 12px 24px !important; }
+          .pv-scroll { padding: 0 !important; }
+          .identity-row { flex-direction: column !important; align-items: center !important; text-align: center !important; padding: 0 16px !important; }
+          .identity-row .name-section { align-items: center !important; }
+          .stat-grid { grid-template-columns: 1fr !important; }
+          .id-chips { grid-template-columns: 1fr !important; }
+          .achievements-grid { grid-template-columns: 1fr !important; }
+          .info-grid { grid-template-columns: 1fr !important; }
+          .subject-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .action-buttons { flex-direction: column !important; }
+          .action-buttons button { width: 100% !important; justify-content: center !important; }
+          .info-row { padding: 10px 0 !important; }
+          .info-label { font-size: 10px !important; margin-bottom: 4px !important; }
+          .info-value { font-size: 13px !important; }
+          .hero-section { height: 140px !important; }
+          .avatar-container { margin-top: -40px !important; }
+          .avatar-wrap { width: 90px !important; height: 90px !important; }
+          .avatar-inner { width: 84px !important; height: 84px !important; }
+          .badges-container { justify-content: center !important; }
+          .level-bar-container { max-width: 100% !important; }
+        }
       `}</style>
 
       {/* ── Backdrop ── */}
@@ -208,7 +233,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
             {/* ══ BANNER CARD ══ */}
             <GlassCard>
               {/* Hero */}
-              <div style={{ position:'relative',height:190,overflow:'hidden',borderRadius:'24px 24px 0 0' }}>
+              <div className="hero-section" style={{ position:'relative',height:190,overflow:'hidden',borderRadius:'24px 24px 0 0' }}>
                 <div style={{ position:'absolute',inset:0,background:`linear-gradient(135deg,#312e81 0%,${primaryColor} 35%,#7c3aed 65%,#9333ea 100%)` }} />
                 {/* Orbs */}
                 {[
@@ -246,17 +271,17 @@ const Profile4 = ({ onClose }: Profile4Props) => {
               </div>
 
               {/* Identity row */}
-              <div style={{ padding:'0 28px',marginTop:-55,position:'relative',zIndex:5,display:'flex',alignItems:'flex-end',gap:22 }}>
+              <div className="identity-row" style={{ padding:'0 28px',marginTop:-55,position:'relative',zIndex:5,display:'flex',alignItems:'flex-end',gap:22 }}>
                 {/* Avatar */}
-                <div style={{ position:'relative',flexShrink:0 }}>
+                <div className="avatar-container" style={{ position:'relative',flexShrink:0 }}>
                   <div style={{ position:'absolute',inset:-10,borderRadius:30,
                     background:`radial-gradient(circle,rgba(${pRgb},0.6)0%,transparent 70%)`,
                     filter:'blur(12px)',animation:'avPulse 2.8s ease-in-out infinite',zIndex:0 }} />
-                  <div style={{ position:'absolute',inset:-4,borderRadius:26,
+                  <div className="avatar-wrap" style={{ position:'absolute',inset:-4,borderRadius:26,
                     background:`conic-gradient(from 0deg,${primaryColor} 0%,#8b5cf6 33%,#a855f7 66%,${primaryColor} 100%)`,
                     animation:'avSpin 5s linear infinite',zIndex:1,filter:'blur(0.5px)' }} />
                   <div style={{ position:'absolute',inset:-2,borderRadius:24,background:'#0f1117',zIndex:2 }} />
-                  <div style={{ width:108,height:108,borderRadius:22,overflow:'hidden',position:'relative',zIndex:3,
+                  <div className="avatar-inner" style={{ width:108,height:108,borderRadius:22,overflow:'hidden',position:'relative',zIndex:3,
                     border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 8px 30px rgba(0,0,0,0.45)' }}>
                     {user.profilePictureUrl ? (
                       <img src={user.profilePictureUrl} alt={user.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} />
@@ -275,11 +300,11 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                 </div>
 
                 {/* Name + badges + level */}
-                <div style={{ paddingBottom:16,flex:1,minWidth:0 }}>
+                <div className="name-section" style={{ paddingBottom:16,flex:1,minWidth:0 }}>
                   <div style={{ fontSize:22,fontWeight:900,color:'#f1f5f9',letterSpacing:'-0.025em',lineHeight:1.2,marginBottom:8 }}>
                     {user.surname} {user.name}
                   </div>
-                  <div style={{ display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',marginBottom:13 }}>
+                  <div className="badges-container" style={{ display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',marginBottom:13 }}>
                     <span style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'3px 11px',borderRadius:20,
                       fontSize:11,fontWeight:700,background:`rgba(${pRgb},0.18)`,color:'#a5b4fc',
                       border:`1px solid rgba(${pRgb},0.3)` }}>🎓 Student</span>
@@ -296,7 +321,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                     </span>
                   </div>
                   {/* Profile level bar */}
-                  <div style={{ display:'flex',alignItems:'center',gap:10 }}>
+                  <div className="level-bar-container" style={{ display:'flex',alignItems:'center',gap:10,maxWidth:320 }}>
                     <span style={{ fontSize:10.5,fontWeight:700,color:'#475569',whiteSpace:'nowrap' }}>Profile Level</span>
                     <div style={{ flex:1,height:7,borderRadius:4,background:'rgba(255,255,255,0.07)',overflow:'hidden',position:'relative' }}>
                       <div style={{ height:'100%',width:`${profileCompletion}%`,borderRadius:4,
@@ -313,7 +338,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
               </div>
 
               {/* Stat cards */}
-              <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,padding:'20px 28px 0' }}>
+              <div className="stat-grid" style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,padding:'20px 28px 0' }}>
                 {[
                   { icon:CheckSquare, num:'24',   lbl:'Assignments Done',  delta:'↑ +5 this week',  dC:'#34d399', dB:'rgba(16,185,129,0.12)',  glow:'rgba(16,185,129,0.5)', iconBg:'rgba(16,185,129,0.14)' },
                   { icon:BarChart2,   num:'91%',  lbl:'Attendance Rate',   delta:'3 days missed',   dC:'#fbbf24', dB:'rgba(245,158,11,0.12)', glow:'rgba(245,158,11,0.45)', iconBg:'rgba(245,158,11,0.14)' },
@@ -341,7 +366,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
               </div>
 
               {/* ID chips */}
-              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,padding:'14px 28px 0' }}>
+              <div className="id-chips" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,padding:'14px 28px 0' }}>
                 {[
                   { lbl:'Student ID',   val:user.userId },
                   { lbl:'Reg. Number',  val:user.registrationNumber || user.userId },
@@ -349,13 +374,13 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                   <div key={lbl} style={{ padding:'13px 18px',borderRadius:15,
                     background:`rgba(${pRgb},0.07)`,border:`1px solid rgba(${pRgb},0.18)`,transition:'all 0.2s ease' }}>
                     <div style={{ fontSize:9.5,fontWeight:800,color:'#475569',textTransform:'uppercase',letterSpacing:'0.09em',marginBottom:4 }}>{lbl}</div>
-                    <div style={{ fontSize:14,fontWeight:800,color:'#e2e8f0',letterSpacing:'0.04em',fontFamily:"'Courier New',monospace" }}>{val||'—'}</div>
+                    <div style={{ fontSize:14,fontWeight:800,color:'#e2e8f0',letterSpacing:'0.04em',fontFamily:"'Courier New',monospace", wordBreak:'break-all' }}>{val||'—'}</div>
                   </div>
                 ))}
               </div>
 
               {/* Action buttons */}
-              <div className="no-print" style={{ display:'flex',gap:10,padding:'14px 28px 24px',flexWrap:'wrap' }}>
+              <div className="action-buttons no-print" style={{ display:'flex',gap:10,padding:'14px 28px 24px',flexWrap:'wrap' }}>
                 {[
                   { label:'✏️ Edit Profile', primary:true,  onClick:() => {} },
                   { label:'🔒 Password',      primary:false, onClick:() => setShowPasswordModal(true) },
@@ -390,7 +415,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
             </GlassCard>
 
             {/* ══ ACHIEVEMENTS ══ */}
-            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14 }}>
+            <div className="achievements-grid" style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14 }}>
               {[
                 { em:'🏆', title:'Top Student',  sub:'Rank #7 this month',  bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.22)', glow:'rgba(245,158,11,0.3)' },
                 { em:'🔥', title:'7-Day Streak', sub:'Study consistency',    bg:'rgba(239,68,68,0.08)',  border:'rgba(239,68,68,0.20)', glow:'rgba(239,68,68,0.25)' },
@@ -406,9 +431,9 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                   onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)'; }}>
                   {i===0 && <div style={{ position:'absolute',bottom:-15,right:-15,width:80,height:80,borderRadius:'50%',background:'rgba(245,158,11,0.3)',filter:'blur(20px)' }} />}
                   <div style={{ fontSize:24,flexShrink:0,position:'relative',zIndex:4 }}>{em}</div>
-                  <div style={{ position:'relative',zIndex:4 }}>
-                    <div style={{ fontSize:12.5,fontWeight:800,color:'#e2e8f0' }}>{title}</div>
-                    <div style={{ fontSize:10,color:'#475569',fontWeight:600,marginTop:2 }}>{sub}</div>
+                  <div style={{ position:'relative',zIndex:4, minWidth:0 }}>
+                    <div style={{ fontSize:12.5,fontWeight:800,color:'#e2e8f0', whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{title}</div>
+                    <div style={{ fontSize:10,color:'#475569',fontWeight:600,marginTop:2, whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{sub}</div>
                   </div>
                 </div>
               ))}
@@ -420,7 +445,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                 background:`radial-gradient(circle,rgba(${pRgb},0.12)0%,transparent 70%)`,
                 filter:'blur(24px)',zIndex:0 }} />
               <div style={{ position:'relative',zIndex:2 }}>
-                <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
+                <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:8 }}>
                   <span style={{ fontSize:13.5,fontWeight:800,color:'#e2e8f0',display:'flex',alignItems:'center',gap:8 }}>
                     <Zap size={15} color="#818cf8" /> Semester Progress
                   </span>
@@ -438,7 +463,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                   <span style={{ fontSize:10,fontWeight:800,color:'#818cf8' }}>62% Complete</span>
                   <span style={{ fontSize:10,fontWeight:600,color:'#334155' }}>Finals</span>
                 </div>
-                <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10 }}>
+                <div className="subject-grid" style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10 }}>
                   {[
                     { n:'Mathematics', g:'A+', pct:95, bg:'rgba(16,185,129,0.10)', border:'rgba(16,185,129,0.18)', c:'#34d399', f:'#10b981' },
                     { n:'Physics',     g:'B+', pct:78, bg:'rgba(59,130,246,0.10)', border:'rgba(59,130,246,0.18)', c:'#60a5fa', f:'#3b82f6' },
@@ -460,7 +485,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
             </GlassCard>
 
             {/* ══ INFO GRID ══ */}
-            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:14 }}>
+            <div className="info-grid" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:14 }}>
               {[
                 { title:'Personal Information', Icon:User, glow:`rgba(${pRgb},0.15)`, accent:`rgba(${pRgb},0.14)`,
                   rows:[
