@@ -7,6 +7,7 @@ import RegisterModal from './RegisterModal';
 import ForgotPasswordModal from './ForgotPasswordModal';
 import ForgotUserIdModal from './ForgotUserIdModal';
 import AccountStatusModal from './AccountStatusModal';
+import RecaptchaV2Modal from './RecaptchaV2Modal';
 import { useRecaptcha } from '../../hooks/useRecaptcha';
 
 // ─── Self-contained color tokens (no external config needed) ───────────────
@@ -126,7 +127,8 @@ interface SignInModalProps {
 
 const SignInModal = ({ onClose }: SignInModalProps) => {
   const { handleSignIn, forcedLogoutMessage, setForcedLogoutMessage } = useDashboard();
-  const { executeRecaptcha } = useRecaptcha();
+  // ── CHANGE 1: destructure v2Modal from useRecaptcha ──────────
+  const { executeRecaptcha, v2Modal } = useRecaptcha();
 
   // State management
   const [userId, setUserId] = useState('');
@@ -234,8 +236,9 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
 
     try {
       await executeRecaptcha('sign_in');
-    } catch (err) {
-      setError('Please wait for security verification to load');
+    } catch (err: any) {
+      // Covers both v3 failure and v2 modal cancel
+      setError(err.message || 'Security verification failed. Please try again.');
       setLoading(false);
       return;
     }
@@ -585,6 +588,9 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
         </div>
       </div>
       </div>
+
+      {/* ── CHANGE 2: v2 fallback modal — renders as overlay on top ── */}
+      <RecaptchaV2Modal {...v2Modal} />
     </div>
   );
 };
