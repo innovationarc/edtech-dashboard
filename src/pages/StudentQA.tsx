@@ -612,7 +612,7 @@ const StudentQA = () => {
           ))}
         </div>
       )
-
+      }
       {showAskQuestionModal && (
         <AskQuestionModal
           onClose={() => setShowAskQuestionModal(false)}
