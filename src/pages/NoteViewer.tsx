@@ -20,7 +20,7 @@ const NoAnimCard = ({ children, className, style }: { children: React.ReactNode;
   const ctx = useDashboard();
   return (
     <div data-no-anim>
-      <style>{\`
+      <style>{`\
         [data-no-anim] * { animation-duration: 0.001ms !important; animation-delay: 0s !important; animation-fill-mode: none !important; }
         [data-no-anim] .cm-tilt,[data-no-anim] .cm-lift,[data-no-anim] .cm-spring,
         [data-no-anim] .cm-glow,[data-no-anim] .cm-magnetic,[data-no-anim] .cm-reset {
