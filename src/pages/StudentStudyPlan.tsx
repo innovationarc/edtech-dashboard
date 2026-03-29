@@ -3490,7 +3490,7 @@ const StudentStudyPlan = () => {
             <p style={{ fontSize: 12, color: T.text2, margin: '6px 0 0' }}>{completedCount} of {events.length} events completed</p>
           </NoAnimCard>
           </div>
-
+      }
           {subjectBreakdown.length > 0 && (
             <NoAnimCard>
               <h3 style={{ fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 6 }}><BarChart size={14} style={{ color: T.primaryColor }} />Subject Breakdown</h3>
