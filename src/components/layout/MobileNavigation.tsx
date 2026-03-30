@@ -1,4 +1,3 @@
-/* /src/components/layout/MobileNavigation.tsx */
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -17,6 +16,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { useDashboard } from '../../contexts/DashboardContext';
+import { useState, useEffect, useRef } from 'react';
 
 const hexRgb = (hex: string) => {
   if (!hex || hex.length < 7) return '99,102,241';
@@ -29,6 +29,35 @@ const MobileNavigation = () => {
   const darkMode = theme !== 'light';
   const pRgb = hexRgb(primaryColor);
   const gradient = `linear-gradient(135deg,${primaryColor} 0%,${accentColor} 100%)`;
+
+  /* ── Scroll-hide behaviour ── */
+  const [visible, setVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      if (currentY > lastScrollY.current + 4) {
+        // scrolling down → hide
+        setVisible(false);
+      } else if (currentY < lastScrollY.current - 4) {
+        // scrolling up → show
+        setVisible(true);
+      }
+      lastScrollY.current = currentY;
+
+      // Re-show after scroll stops for 300ms
+      if (scrollTimer.current) clearTimeout(scrollTimer.current);
+      scrollTimer.current = setTimeout(() => setVisible(true), 300);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (scrollTimer.current) clearTimeout(scrollTimer.current);
+    };
+  }, []);
 
   const isLight = theme === 'light';
   const themeBgColor: Record<string, string> = {
@@ -106,7 +135,6 @@ const MobileNavigation = () => {
           { name: 'Ask Q', icon: <MessageSquare size={20} />, path: '/student-qa' },
           { name: 'Tasks', icon: <FileText size={20} />, path: '/student-tasks' },
           { name: 'Study', icon: <Calendar size={20} />, path: '/student-study-plan' },
-          { name: 'Awards', icon: <Trophy size={20} />, path: '/achievements' },
           { name: 'Settings', icon: <Settings size={20} />, path: '/settings' }
         ];
       case 'teacher':
@@ -115,6 +143,7 @@ const MobileNavigation = () => {
           { name: 'Upload', icon: <Upload size={20} />, path: '/content' },
           { name: 'Questions', icon: <MessageSquare size={20} />, path: '/teacher-qa' },
           { name: 'Tasks', icon: <FileText size={20} />, path: '/teacher-tasks' },
+          { name: 'Study Plan', icon: <Calendar size={20} />, path: '/study-plan' },
           ...baseItems,
           { name: 'Awards', icon: <Trophy size={20} />, path: '/achievements' },
           { name: 'Settings', icon: <Settings size={20} />, path: '/settings' }
@@ -124,6 +153,8 @@ const MobileNavigation = () => {
           { name: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
           { name: 'Users', icon: <Users size={20} />, path: '/users' },
           { name: 'Analytics', icon: <BarChart3 size={20} />, path: '/analytics' },
+          { name: 'Study Plan', icon: <Calendar size={20} />, path: '/study-plan' },
+          { name: 'Q&A', icon: <MessageSquare size={20} />, path: '/teacher-qa' },
           { name: 'Awards', icon: <Trophy size={20} />, path: '/achievements' },
           { name: 'Settings', icon: <Settings size={20} />, path: '/settings' }
         ];
@@ -147,6 +178,8 @@ const MobileNavigation = () => {
         WebkitBackdropFilter: 'blur(20px)',
         boxShadow: darkMode ? '0 -2px 16px rgba(0,0,0,0.3)' : '0 -2px 12px rgba(0,0,0,0.07)',
         fontFamily: "'Outfit', sans-serif",
+        transform: visible ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 0.3s cubic-bezier(0.34,1.15,0.64,1)',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '6px 4px' }}>
