@@ -36,25 +36,45 @@ const MobileNavigation = () => {
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const onScroll = () => {
-      const currentY = window.scrollY;
+    const getScrollEl = () => document.getElementById('dl-scroll');
+
+    const onScroll = (e: Event) => {
+      const el = e.currentTarget as HTMLElement;
+      const currentY = el.scrollTop;
       if (currentY > lastScrollY.current + 4) {
-        // scrolling down → hide
         setVisible(false);
       } else if (currentY < lastScrollY.current - 4) {
-        // scrolling up → show
         setVisible(true);
       }
       lastScrollY.current = currentY;
 
-      // Re-show after scroll stops for 300ms
       if (scrollTimer.current) clearTimeout(scrollTimer.current);
-      scrollTimer.current = setTimeout(() => setVisible(true), 300);
+      scrollTimer.current = setTimeout(() => setVisible(true), 400);
     };
 
-    window.addEventListener('scroll', onScroll, { passive: true });
+    // Attach immediately if el exists, otherwise wait for it
+    let el = getScrollEl();
+    if (el) {
+      lastScrollY.current = el.scrollTop;
+      el.addEventListener('scroll', onScroll, { passive: true });
+    } else {
+      const observer = new MutationObserver(() => {
+        el = getScrollEl();
+        if (el) {
+          observer.disconnect();
+          lastScrollY.current = el.scrollTop;
+          el.addEventListener('scroll', onScroll, { passive: true });
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      return () => {
+        observer.disconnect();
+        if (scrollTimer.current) clearTimeout(scrollTimer.current);
+      };
+    }
+
     return () => {
-      window.removeEventListener('scroll', onScroll);
+      el?.removeEventListener('scroll', onScroll);
       if (scrollTimer.current) clearTimeout(scrollTimer.current);
     };
   }, []);
