@@ -540,7 +540,7 @@ const DashboardLayout = () => {
 
       <div className={`flex-1 flex flex-col ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`} style={{ background: 'transparent' }}>
         <main className="dl-main flex-1 overflow-y-hidden" style={{ paddingTop: isMobile ? 60 : 64, background: 'transparent' }}>
-          <div className={`dl-inner h-full overflow-y-auto p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`}>
+          <div id="dl-scroll" className={`dl-inner h-full overflow-y-auto p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`}>
             <PageTransition>
               <Outlet />
             </PageTransition>
