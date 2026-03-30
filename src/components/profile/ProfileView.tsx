@@ -286,55 +286,26 @@ const ProfileView = ({ user, onEdit, onChangePassword, onClose }: ProfileViewPro
             BANNER CARD
         ══════════════════════════════════════ */}
         <GlassCard>
-          {/* ── Hero gradient ── */}
+          {/* ── Hero banner with starfield GIF ── */}
           <div className="pv-banner" style={{ position: 'relative', height: 190, overflow: 'hidden', borderRadius: '24px 24px 0 0' }}>
-            {/* Base gradient */}
+            {/* Starfield GIF background */}
             <div style={{
               position: 'absolute', inset: 0,
-              background: `linear-gradient(135deg,#312e81 0%,${primaryColor} 35%,#7c3aed 65%,#9333ea 100%)`,
+              backgroundImage: 'url(/assets/starfield-banner.gif)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
             }} />
-            {/* Orbs */}
-            {[
-              { w: 260, h: 260, t: -80, l: -50, bg: `rgba(${pRgb},0.6)` },
-              { w: 300, h: 300, t: -100, r: -80, bg: 'rgba(139,92,246,0.5)' },
-              { w: 220, h: 220, b: -100, l: '35%', bg: 'rgba(167,139,250,0.4)' },
-              { w: 180, h: 180, t: 20, l: '45%', bg: 'rgba(196,181,253,0.2)' },
-            ].map((o, i) => (
-              <div key={i} style={{
-                position: 'absolute', borderRadius: '50%', filter: 'blur(45px)',
-                width: o.w, height: o.h,
-                top: o.t, left: o.l as any, right: (o as any).r, bottom: (o as any).b,
-                background: o.bg,
-              }} />
-            ))}
-            {/* Grid overlay */}
-            <div style={{
-              position: 'absolute', inset: 0, opacity: 0.08,
-              backgroundImage: 'linear-gradient(rgba(255,255,255,.6)1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6)1px,transparent 1px)',
-              backgroundSize: '40px 40px',
-            }} />
-            {/* Diagonal gloss */}
+            {/* Subtle overlay for better text readability */}
             <div style={{
               position: 'absolute', inset: 0,
-              background: 'linear-gradient(135deg,rgba(255,255,255,.07)0%,transparent 50%,rgba(0,0,0,.10)100%)',
+              background: 'linear-gradient(135deg, rgba(49,46,129,0.3) 0%, rgba(0,0,0,0.2) 100%)',
             }} />
             {/* Top shimmer */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, height: 2,
               background: 'linear-gradient(90deg,transparent,rgba(255,255,255,.5)35%,rgba(255,255,255,.95)50%,rgba(255,255,255,.5)65%,transparent)',
             }} />
-            {/* Floating particles */}
-            {[
-              { l: '12%', d: '5s', delay: '0s' }, { l: '28%', d: '4.2s', delay: '1.1s' },
-              { l: '48%', d: '5.8s', delay: '0.5s' }, { l: '68%', d: '3.9s', delay: '1.8s' },
-              { l: '84%', d: '4.6s', delay: '0.9s' }, { l: '93%', d: '5.2s', delay: '2.3s' },
-            ].map((p, i) => (
-              <div key={i} style={{
-                position: 'absolute', borderRadius: '50%', background: 'rgba(255,255,255,0.8)',
-                width: 3, height: 3, bottom: 0, left: p.l,
-                animation: `fpRise ${p.d} ${p.delay} linear infinite`,
-              }} />
-            ))}
             {/* Close btn */}
             {onClose && (
               <button onClick={onClose} className="no-print" style={{
