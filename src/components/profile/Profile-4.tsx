@@ -65,57 +65,75 @@ function useSparkle() {
   }, []);
 }
 
-/* ─── GlassCard ─── */
-const GlassCard = ({ children, style, className='', onMouseEnter }: {
-  children: React.ReactNode; style?: React.CSSProperties;
-  className?: string; onMouseEnter?: React.MouseEventHandler<HTMLDivElement>;
-}) => (
-  <div className={className} onMouseEnter={onMouseEnter} style={{
-    position:'relative', isolation:'isolate', overflow:'hidden',
-    background:'rgba(22,26,40,0.82)',
-    backdropFilter:'blur(32px) saturate(180%)', WebkitBackdropFilter:'blur(32px) saturate(180%)',
-    border:'1px solid rgba(255,255,255,0.09)',
-    boxShadow:'0 8px 40px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.08)',
-    borderRadius:24, fontFamily:"'Outfit',sans-serif", ...style,
-  }}>
-    <div style={{ position:'absolute',top:0,left:0,right:0,height:1,borderRadius:'24px 24px 0 0',pointerEvents:'none',zIndex:20,
-      background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.15)30%,rgba(255,255,255,0.32)50%,rgba(255,255,255,0.15)70%,transparent)' }} />
-    <div style={{ position:'absolute',inset:0,borderRadius:'inherit',pointerEvents:'none',zIndex:1,
-      background:NOISE, opacity:0.04, mixBlendMode:'overlay' as const }} />
-    {children}
-  </div>
-);
-
-/* ─── InfoRow ─── */
-const InfoRow = ({ icon:Icon, label, value, accent='rgba(99,102,241,0.14)' }: {
-  icon:React.ElementType; label:string; value?:string; accent?:string;
-}) => {
-  if (!value) return null;
-  return (
-    <div className="info-row" style={{ display:'flex',alignItems:'flex-start',gap:10,padding:'7px 0',
-      borderBottom:'1px solid rgba(255,255,255,0.04)', position:'relative',zIndex:4 }}>
-      <div style={{ width:26,height:26,borderRadius:8,flexShrink:0,background:accent,
-        display:'flex',alignItems:'center',justifyContent:'center' }}>
-        <Icon size={13} color="#94a3b8" />
-      </div>
-      <div style={{ minWidth:0, flex:1 }}>
-        <div className="info-label" style={{ fontSize:9.5,fontWeight:700,color:'#334155',textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:2 }}>{label}</div>
-        <div className="info-value" style={{ fontSize:12.5,fontWeight:600,color:'#cbd5e1', wordBreak:'break-word' }}>{value}</div>
-      </div>
-    </div>
-  );
-};
-
 /* ══════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════ */
 const Profile4 = ({ onClose }: Profile4Props) => {
-  const { user, primaryColor = '#6366f1' } = useDashboard();
+  const { user, primaryColor = '#6366f1', theme } = useDashboard();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [profileCompletion, setProfileCompletion] = useState(0);
   const spawnSparkle = useSparkle();
   const pRgb = hexRgb(primaryColor);
   const gradient = `linear-gradient(135deg,${primaryColor},#8b5cf6)`;
+  
+  // Theme-aware colors
+  const isLightTheme = theme === 'light';
+  const cardBg = isLightTheme ? 'rgba(255,255,255,0.92)' : 'rgba(22,26,40,0.82)';
+  const textPrimary = isLightTheme ? '#111827' : '#ffffff';
+  const textSecondary = isLightTheme ? '#6b7280' : '#9ca3af';
+  const textTertiary = isLightTheme ? '#94a3b8' : '#64748b';
+  const borderColor = isLightTheme ? 'rgba(0,0,0,0.09)' : 'rgba(255,255,255,0.09)';
+  const hoverBg = isLightTheme ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.03)';
+  const shimmerColor = isLightTheme ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.15)';
+  const bannerOverlay = isLightTheme 
+    ? 'linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.1) 100%)'
+    : 'linear-gradient(135deg, rgba(49,46,129,0.3) 0%, rgba(0,0,0,0.2) 100%)';
+  const shadowColor = isLightTheme ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.4)';
+  const accentBg = isLightTheme ? `rgba(${pRgb},0.08)` : `rgba(${pRgb},0.14)`;
+  const backdropBlur = isLightTheme ? 'blur(24px) saturate(160%)' : 'blur(32px) saturate(180%)';
+
+  /* ─── Theme-aware GlassCard ─── */
+  const GlassCard = ({ children, style, className='', onMouseEnter }: {
+    children: React.ReactNode; style?: React.CSSProperties;
+    className?: string; onMouseEnter?: React.MouseEventHandler<HTMLDivElement>;
+  }) => (
+    <div className={className} onMouseEnter={onMouseEnter} style={{
+      position:'relative', isolation:'isolate', overflow:'hidden',
+      background:cardBg,
+      backdropFilter:backdropBlur, WebkitBackdropFilter:backdropBlur,
+      border:`1px solid ${borderColor}`,
+      boxShadow:`0 8px 40px ${shadowColor},inset 0 1px 0 ${shimmerColor}`,
+      borderRadius:24, fontFamily:"'Outfit',sans-serif", ...style,
+    }}>
+      <div style={{ position:'absolute',top:0,left:0,right:0,height:1,borderRadius:'24px 24px 0 0',pointerEvents:'none',zIndex:20,
+        background: isLightTheme 
+          ? 'linear-gradient(90deg,transparent,rgba(0,0,0,0.08)30%,rgba(0,0,0,0.15)50%,rgba(0,0,0,0.08)70%,transparent)'
+          : 'linear-gradient(90deg,transparent,rgba(255,255,255,0.15)30%,rgba(255,255,255,0.32)50%,rgba(255,255,255,0.15)70%,transparent)' }} />
+      <div style={{ position:'absolute',inset:0,borderRadius:'inherit',pointerEvents:'none',zIndex:1,
+        background:NOISE, opacity:isLightTheme ? 0.02 : 0.04, mixBlendMode:'overlay' as const }} />
+      {children}
+    </div>
+  );
+
+  /* ─── Theme-aware InfoRow ─── */
+  const InfoRow = ({ icon:Icon, label, value, accent=accentBg }: {
+    icon:React.ElementType; label:string; value?:string; accent?:string;
+  }) => {
+    if (!value) return null;
+    return (
+      <div className="info-row" style={{ display:'flex',alignItems:'flex-start',gap:10,padding:'7px 0',
+        borderBottom:`1px solid ${isLightTheme ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)'}`, position:'relative',zIndex:4 }}>
+        <div style={{ width:26,height:26,borderRadius:8,flexShrink:0,background:accent,
+          display:'flex',alignItems:'center',justifyContent:'center' }}>
+          <Icon size={13} color={textTertiary} />
+        </div>
+        <div>
+          <div className="info-label" style={{ fontSize:9.5,fontWeight:700,color:textTertiary,textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:2 }}>{label}</div>
+          <div className="info-value" style={{ fontSize:12.5,fontWeight:600,color:textSecondary, wordBreak:'break-word' }}>{value}</div>
+        </div>
+      </div>
+    );
+  };
 
   /* lock scroll */
   useEffect(() => {
@@ -245,7 +263,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                 {/* Subtle overlay for better text readability */}
                 <div style={{
                   position:'absolute',inset:0,
-                  background:'linear-gradient(135deg, rgba(49,46,129,0.3) 0%, rgba(0,0,0,0.2) 100%)',
+                  background:bannerOverlay,
                 }} />
                 {/* Top shimmer */}
                 <div style={{ position:'absolute',top:0,left:0,right:0,height:2,
@@ -293,17 +311,17 @@ const Profile4 = ({ onClose }: Profile4Props) => {
 
                 {/* Name + badges + level */}
                 <div className="name-section" style={{ paddingBottom:16,flex:1,minWidth:0 }}>
-                  <div style={{ fontSize:22,fontWeight:900,color:'#f1f5f9',letterSpacing:'-0.025em',lineHeight:1.2,marginBottom:8 }}>
+                  <div style={{ fontSize:22,fontWeight:900,color:textPrimary,letterSpacing:'-0.025em',lineHeight:1.2,marginBottom:8 }}>
                     {user.surname} {user.name}
                   </div>
                   <div className="badges-container" style={{ display:'flex',alignItems:'center',gap:7,flexWrap:'wrap',marginBottom:13 }}>
                     <span style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'3px 11px',borderRadius:20,
-                      fontSize:11,fontWeight:700,background:`rgba(${pRgb},0.18)`,color:'#a5b4fc',
+                      fontSize:11,fontWeight:700,background:`rgba(${pRgb},0.18)`,color:isLightTheme ? primaryColor : '#a5b4fc',
                       border:`1px solid rgba(${pRgb},0.3)` }}>🎓 Student</span>
                     {gradeLabel(user.classGrade) && (
                       <span style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'3px 11px',borderRadius:20,
-                        fontSize:11,fontWeight:700,background:'rgba(255,255,255,0.07)',color:'#94a3b8',
-                        border:'1px solid rgba(255,255,255,0.09)' }}>{gradeLabel(user.classGrade)} · {user.class}</span>
+                        fontSize:11,fontWeight:700,background:isLightTheme ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.07)',color:textTertiary,
+                        border:`1px solid ${borderColor}` }}>{gradeLabel(user.classGrade)} · {user.class}</span>
                     )}
                     <span style={{ display:'inline-flex',alignItems:'center',gap:5,padding:'3px 11px',borderRadius:20,
                       fontSize:11,fontWeight:700,background:'rgba(16,185,129,0.12)',color:'#34d399',
@@ -314,8 +332,8 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                   </div>
                   {/* Profile level bar */}
                   <div className="level-bar-container" style={{ display:'flex',alignItems:'center',gap:10,maxWidth:320 }}>
-                    <span style={{ fontSize:10.5,fontWeight:700,color:'#475569',whiteSpace:'nowrap' }}>Profile Level</span>
-                    <div style={{ flex:1,height:7,borderRadius:4,background:'rgba(255,255,255,0.07)',overflow:'hidden',position:'relative' }}>
+                    <span style={{ fontSize:10.5,fontWeight:700,color:textTertiary,whiteSpace:'nowrap' }}>Profile Level</span>
+                    <div style={{ flex:1,height:7,borderRadius:4,background:isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)',overflow:'hidden',position:'relative' }}>
                       <div style={{ height:'100%',width:`${profileCompletion}%`,borderRadius:4,
                         background:`linear-gradient(90deg,${primaryColor},#8b5cf6,#a855f7)`,
                         boxShadow:`0 0 12px rgba(${pRgb},0.6)`,position:'relative',overflow:'hidden' }}>
@@ -324,7 +342,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                           animation:'lvSweep 2.2s ease-in-out infinite' }} />
                       </div>
                     </div>
-                    <span style={{ fontSize:11,fontWeight:800,color:'#818cf8',whiteSpace:'nowrap' }}>{profileCompletion}%</span>
+                    <span style={{ fontSize:11,fontWeight:800,color:primaryColor,whiteSpace:'nowrap' }}>{profileCompletion}%</span>
                   </div>
                 </div>
               </div>
@@ -338,19 +356,19 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                 ].map(({ icon:Icon, num, lbl, delta, dC, dB, glow, iconBg }, i) => (
                   <div key={i} className="pv-sweep" onMouseEnter={spawnSparkle} {...tilt}
                     style={{ borderRadius:18,padding:'16px 18px',position:'relative',overflow:'hidden',isolation:'isolate',cursor:'pointer',
-                      background:'rgba(255,255,255,0.035)',backdropFilter:'blur(20px)',
-                      border:'1px solid rgba(255,255,255,0.08)',
-                      boxShadow:'0 4px 20px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06)',
+                      background:isLightTheme ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.035)',backdropFilter:'blur(20px)',
+                      border:`1px solid ${borderColor}`,
+                      boxShadow:`0 4px 20px ${shadowColor},inset 0 1px 0 ${shimmerColor}`,
                       transition:'transform 0.25s cubic-bezier(0.34,1.25,0.64,1),box-shadow 0.25s ease',
                       transformStyle:'preserve-3d' as const }}>
                     <div style={{ position:'absolute',bottom:-20,right:-20,width:100,height:100,borderRadius:'50%',
                       background:glow,filter:'blur(24px)',opacity:0.35,zIndex:0 }} />
                     <div style={{ position:'relative',zIndex:4 }}>
                       <div style={{ width:38,height:38,borderRadius:11,background:iconBg,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:12 }}>
-                        <Icon size={17} color="#94a3b8" />
+                        <Icon size={17} color={textTertiary} />
                       </div>
-                      <div style={{ fontSize:26,fontWeight:900,color:'#f1f5f9',letterSpacing:'-0.03em',lineHeight:1 }}>{num}</div>
-                      <div style={{ fontSize:11,fontWeight:600,color:'#475569',marginTop:4 }}>{lbl}</div>
+                      <div style={{ fontSize:26,fontWeight:900,color:textPrimary,letterSpacing:'-0.03em',lineHeight:1 }}>{num}</div>
+                      <div style={{ fontSize:11,fontWeight:600,color:textTertiary,marginTop:4 }}>{lbl}</div>
                       <span style={{ fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:6,marginTop:8,display:'inline-block',background:dB,color:dC }}>{delta}</span>
                     </div>
                   </div>
@@ -365,8 +383,8 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                 ].map(({ lbl, val }) => (
                   <div key={lbl} style={{ padding:'13px 18px',borderRadius:15,
                     background:`rgba(${pRgb},0.07)`,border:`1px solid rgba(${pRgb},0.18)`,transition:'all 0.2s ease' }}>
-                    <div style={{ fontSize:9.5,fontWeight:800,color:'#475569',textTransform:'uppercase',letterSpacing:'0.09em',marginBottom:4 }}>{lbl}</div>
-                    <div style={{ fontSize:14,fontWeight:800,color:'#e2e8f0',letterSpacing:'0.04em',fontFamily:"'Courier New',monospace", wordBreak:'break-all' }}>{val||'—'}</div>
+                    <div style={{ fontSize:9.5,fontWeight:800,color:textTertiary,textTransform:'uppercase',letterSpacing:'0.09em',marginBottom:4 }}>{lbl}</div>
+                    <div style={{ fontSize:14,fontWeight:800,color:textSecondary,letterSpacing:'0.04em',fontFamily:"'Courier New',monospace", wordBreak:'break-all' }}>{val||'—'}</div>
                   </div>
                 ))}
               </div>
@@ -386,20 +404,20 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                       transition:'all 0.25s cubic-bezier(0.34,1.25,0.64,1)',
                       ...(primary
                         ? { background:gradient,color:'#fff',boxShadow:`0 4px 18px rgba(${pRgb},0.45)` }
-                        : { background:'rgba(255,255,255,0.05)',color:'#cbd5e1',
-                            boxShadow:'0 2px 10px rgba(0,0,0,0.25)',border:'1px solid rgba(255,255,255,0.10)' }
+                        : { background:hoverBg,color:textSecondary,
+                            boxShadow:`0 2px 10px ${shadowColor}`,border:`1px solid ${borderColor}` }
                       ),
                     }}
                     onMouseEnter={e => {
                       const el = e.currentTarget;
                       if (primary) { el.style.transform='translateY(-3px) scale(1.05)'; el.style.boxShadow=`0 12px 30px rgba(${pRgb},0.55)`; }
-                      else { el.style.transform='translateY(-2px) scale(1.04)'; el.style.background='rgba(255,255,255,0.08)'; }
+                      else { el.style.transform='translateY(-2px) scale(1.04)'; el.style.background=isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'; }
                     }}
                     onMouseLeave={e => {
                       const el = e.currentTarget;
                       el.style.transform='';
-                      el.style.boxShadow = primary ? `0 4px 18px rgba(${pRgb},0.45)` : '0 2px 10px rgba(0,0,0,0.25)';
-                      if (!primary) el.style.background='rgba(255,255,255,0.05)';
+                      el.style.boxShadow = primary ? `0 4px 18px rgba(${pRgb},0.45)` : `0 2px 10px ${shadowColor}`;
+                      if (!primary) el.style.background=hoverBg;
                     }}
                   >{label}</button>
                 ))}
@@ -416,16 +434,16 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                 <div key={i} className="pv-sweep" onMouseEnter={spawnSparkle}
                   style={{ borderRadius:18,padding:'14px 16px',position:'relative',overflow:'hidden',isolation:'isolate',cursor:'pointer',
                     background:bg,backdropFilter:'blur(24px)',border:`1px solid ${border}`,
-                    boxShadow:'0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)',
+                    boxShadow:`0 4px 20px ${shadowColor},inset 0 1px 0 ${shimmerColor}`,
                     display:'flex',alignItems:'center',gap:13,
                     transition:'transform 0.25s cubic-bezier(0.34,1.25,0.64,1),box-shadow 0.25s ease' }}
                   onMouseEnter={e => { e.currentTarget.style.transform='translateY(-5px) scale(1.03)'; e.currentTarget.style.boxShadow=`0 16px 38px ${glow}`; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)'; }}>
+                  onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=`0 4px 20px ${shadowColor},inset 0 1px 0 ${shimmerColor}`; }}>
                   {i===0 && <div style={{ position:'absolute',bottom:-15,right:-15,width:80,height:80,borderRadius:'50%',background:'rgba(245,158,11,0.3)',filter:'blur(20px)' }} />}
                   <div style={{ fontSize:24,flexShrink:0,position:'relative',zIndex:4 }}>{em}</div>
                   <div style={{ position:'relative',zIndex:4, minWidth:0 }}>
-                    <div style={{ fontSize:12.5,fontWeight:800,color:'#e2e8f0', whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{title}</div>
-                    <div style={{ fontSize:10,color:'#475569',fontWeight:600,marginTop:2, whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{sub}</div>
+                    <div style={{ fontSize:12.5,fontWeight:800,color:textSecondary, whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{title}</div>
+                    <div style={{ fontSize:10,color:textTertiary,fontWeight:600,marginTop:2, whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{sub}</div>
                   </div>
                 </div>
               ))}
@@ -438,12 +456,12 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                 filter:'blur(24px)',zIndex:0 }} />
               <div style={{ position:'relative',zIndex:2 }}>
                 <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:8 }}>
-                  <span style={{ fontSize:13.5,fontWeight:800,color:'#e2e8f0',display:'flex',alignItems:'center',gap:8 }}>
-                    <Zap size={15} color="#818cf8" /> Semester Progress
+                  <span style={{ fontSize:13.5,fontWeight:800,color:textSecondary,display:'flex',alignItems:'center',gap:8 }}>
+                    <Zap size={15} color={primaryColor} /> Semester Progress
                   </span>
-                  <span style={{ fontSize:11,fontWeight:600,color:'#475569' }}>Week 14 of 22</span>
+                  <span style={{ fontSize:11,fontWeight:600,color:textTertiary }}>Week 14 of 22</span>
                 </div>
-                <div style={{ height:10,borderRadius:6,background:'rgba(255,255,255,0.06)',overflow:'hidden',marginBottom:10 }}>
+                <div style={{ height:10,borderRadius:6,background:isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',overflow:'hidden',marginBottom:10 }}>
                   <div style={{ height:'100%',width:'62%',borderRadius:6,
                     background:`linear-gradient(90deg,${primaryColor},#8b5cf6,#a855f7)`,
                     boxShadow:`0 0 14px rgba(${pRgb},0.5)`,position:'relative',overflow:'hidden' }}>
@@ -451,9 +469,9 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                   </div>
                 </div>
                 <div style={{ display:'flex',justifyContent:'space-between',marginBottom:16 }}>
-                  <span style={{ fontSize:10,fontWeight:600,color:'#334155' }}>Semester Start</span>
-                  <span style={{ fontSize:10,fontWeight:800,color:'#818cf8' }}>62% Complete</span>
-                  <span style={{ fontSize:10,fontWeight:600,color:'#334155' }}>Finals</span>
+                  <span style={{ fontSize:10,fontWeight:600,color:textTertiary }}>Semester Start</span>
+                  <span style={{ fontSize:10,fontWeight:800,color:primaryColor }}>62% Complete</span>
+                  <span style={{ fontSize:10,fontWeight:600,color:textTertiary }}>Finals</span>
                 </div>
                 <div className="subject-grid" style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10 }}>
                   {[
@@ -465,9 +483,9 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                     <div key={n} style={{ borderRadius:12,padding:'10px 12px',textAlign:'center',background:bg,border:`1px solid ${border}`,transition:'transform 0.2s ease' }}
                       onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-3px)'}}
                       onMouseLeave={e=>{e.currentTarget.style.transform=''}}>
-                      <div style={{ fontSize:10,fontWeight:700,color:'#475569',marginBottom:4 }}>{n}</div>
+                      <div style={{ fontSize:10,fontWeight:700,color:textTertiary,marginBottom:4 }}>{n}</div>
                       <div style={{ fontSize:17,fontWeight:900,color:c }}>{g}</div>
-                      <div style={{ height:3,borderRadius:2,background:'rgba(255,255,255,0.06)',marginTop:6,overflow:'hidden' }}>
+                      <div style={{ height:3,borderRadius:2,background:isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',marginTop:6,overflow:'hidden' }}>
                         <div style={{ height:'100%',width:`${pct}%`,borderRadius:2,background:f }} />
                       </div>
                     </div>
@@ -514,28 +532,30 @@ const Profile4 = ({ onClose }: Profile4Props) => {
               ].map(({ title, Icon:SectionIcon, glow, accent, rows }) => (
                 <div key={title} className="pv-sweep" onMouseEnter={spawnSparkle}
                   style={{ borderRadius:20,padding:'18px 20px',position:'relative',overflow:'hidden',isolation:'isolate',cursor:'pointer',
-                    background:'rgba(255,255,255,0.032)',backdropFilter:'blur(24px)',
-                    border:'1px solid rgba(255,255,255,0.08)',
-                    boxShadow:'0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)',
+                    background:isLightTheme ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.032)',backdropFilter:'blur(24px)',
+                    border:`1px solid ${borderColor}`,
+                    boxShadow:`0 4px 20px ${shadowColor},inset 0 1px 0 ${shimmerColor}`,
                     transition:'transform 0.25s cubic-bezier(0.34,1.25,0.64,1),box-shadow 0.25s ease,border-color 0.25s ease',
                     transformStyle:'preserve-3d' as const }}
-                  onMouseEnter={e => { e.currentTarget.style.transform='translateY(-5px)'; e.currentTarget.style.boxShadow='0 20px 48px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,255,255,0.10)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.13)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='0 4px 20px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.08)'; }}>
+                  onMouseEnter={e => { e.currentTarget.style.transform='translateY(-5px)'; e.currentTarget.style.boxShadow=`0 20px 48px ${isLightTheme ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.45)'},inset 0 1px 0 ${shimmerColor}`; e.currentTarget.style.borderColor=isLightTheme ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.13)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow=`0 4px 20px ${shadowColor},inset 0 1px 0 ${shimmerColor}`; e.currentTarget.style.borderColor=borderColor; }}>
                   {/* Corner glow */}
                   <div style={{ position:'absolute',top:-35,right:-35,width:120,height:120,borderRadius:'50%',
                     background:`radial-gradient(circle,${glow} 0%,transparent 70%)`,filter:'blur(22px)',zIndex:0 }} />
                   {/* Top shimmer */}
                   <div style={{ position:'absolute',top:0,left:0,right:0,height:1,zIndex:2,
-                    background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.10)40%,rgba(255,255,255,0.20)50%,rgba(255,255,255,0.10)60%,transparent)' }} />
+                    background:isLightTheme 
+                      ? 'linear-gradient(90deg,transparent,rgba(0,0,0,0.06)40%,rgba(0,0,0,0.12)50%,rgba(0,0,0,0.06)60%,transparent)'
+                      : 'linear-gradient(90deg,transparent,rgba(255,255,255,0.10)40%,rgba(255,255,255,0.20)50%,rgba(255,255,255,0.10)60%,transparent)' }} />
                   {/* Noise */}
                   <div style={{ position:'absolute',inset:0,borderRadius:'inherit',pointerEvents:'none',zIndex:1,
-                    background:NOISE,opacity:0.04,mixBlendMode:'overlay' as const }} />
+                    background:NOISE,opacity:isLightTheme ? 0.02 : 0.04,mixBlendMode:'overlay' as const }} />
                   {/* Header */}
                   <div style={{ display:'flex',alignItems:'center',gap:9,marginBottom:14,position:'relative',zIndex:4 }}>
                     <div style={{ width:32,height:32,borderRadius:10,background:accent,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-                      <SectionIcon size={14} color="#94a3b8" />
+                      <SectionIcon size={14} color={textTertiary} />
                     </div>
-                    <span style={{ fontSize:13,fontWeight:800,color:'#e2e8f0' }}>{title}</span>
+                    <span style={{ fontSize:13,fontWeight:800,color:textSecondary }}>{title}</span>
                   </div>
                   {rows.map(r => <InfoRow key={r.label} icon={r.icon} label={r.label} value={r.value} accent={accent} />)}
                 </div>
