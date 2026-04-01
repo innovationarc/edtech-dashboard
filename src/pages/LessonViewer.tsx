@@ -1409,5 +1409,5 @@ const LessonViewer: React.FC = () => {
       </div>
     </>
   );
-
+};
 export default LessonViewer;
