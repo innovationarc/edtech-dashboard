@@ -7,6 +7,7 @@ import { gamificationService } from '../services/gamificationService';
 import { getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserSettings, getGlobalSettings, saveAppearanceSettings } from '../services/settingsService';
+import { BG_CATALOG } from '../components/ui/backgrounds';
 
 interface DashboardContextType {
   sidebarOpen: boolean;
@@ -117,6 +118,8 @@ const hasAuthTokens = (): boolean => {
     return false;
   }
 };
+
+const GLITTER_IDS = ['none', 'silver', 'gold', 'purple'];
 
 export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -334,8 +337,9 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                   if (a.fontFamily)   { setFontFamily(a.fontFamily);     localStorage.setItem('fontFamily', a.fontFamily); }
                   // `background` is the new unified field; fall back to `glitterTheme` for old accounts
                   const bg = a.background || a.glitterTheme || 'none';
-                  setBackground(bg);       localStorage.setItem('background', bg);
-                  setGlitterTheme(bg);     localStorage.setItem('glitterTheme', bg);
+                  const glitterVal = GLITTER_IDS.includes(bg) ? bg : (BG_CATALOG.find(b => b.id === bg)?.data ?? bg);
+                  setBackground(bg);           localStorage.setItem('background',    bg);
+                  setGlitterTheme(glitterVal); localStorage.setItem('glitterTheme', glitterVal);
                   if (a.cardStyle)      { setCardStyle(a.cardStyle);           localStorage.setItem('cardStyle',      a.cardStyle); }
                   if (a.cardAnimation)  { setCardAnimation(a.cardAnimation);   localStorage.setItem('cardAnimation',  a.cardAnimation); }
                 }
@@ -691,10 +695,19 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     saveAppearanceToDb({ glitterTheme: glitter });
   };
 
+  // Resolves a background id to the value glitterTheme should hold:
+  // - glitter ids ('none','silver','gold','purple') → pass through as-is
+  // - image ids → resolve to the data URL so all components treat it like a backgroundImage
+  const resolveGlitterValue = (bg: string): string => {
+    if (GLITTER_IDS.includes(bg)) return bg;
+    const entry = BG_CATALOG.find(b => b.id === bg);
+    return entry ? entry.data : bg;
+  };
+
   const handleSetBackground = (bg: string) => {
+    const glitterVal = resolveGlitterValue(bg);
     setBackground(bg);
-    // Keep glitterTheme in sync for backward compat (glitter ids overlap)
-    setGlitterTheme(bg);
+    setGlitterTheme(glitterVal);
     saveAppearanceToDb({ background: bg, glitterTheme: bg });
   };
 
