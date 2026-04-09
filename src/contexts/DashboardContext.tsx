@@ -530,6 +530,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       console.log('Looking for:', background);
       const entry = BG_CATALOG.find(b => b.id === background);
       console.log('Found entry:', !!entry);
+      console.log('entry.data (first 100 chars):', entry.data?.slice(0, 100));
       // END TEMP DEBUG
       if (entry) {
         document.body.style.backgroundImage     = `url(${entry.data})`;
