@@ -7,6 +7,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
 import FirestoreDebugPanel from '../admin/FirestoreDebugPanel';
 import AuthenticationModal from '../auth/AuthenticationModal';
+import { BG_CATALOG } from '../ui/backgrounds';
 
 import PageTransition from '../ui/PageTransition';
 import TopProgressBar from '../ui/TopProgressBar';
@@ -494,16 +495,31 @@ const DashboardLayout = () => {
     },
   };
 
-  const activeGlitter = glitterStyles[glitterTheme] ?? {};
   const glitterIds = ['none', 'silver', 'gold', 'purple'];
   const isImageBg = background && !glitterIds.includes(background);
+
+  // For image backgrounds, build the same style shape as glitter entries
+  const imageStyle: React.CSSProperties = (() => {
+    if (!isImageBg) return {};
+    const entry = BG_CATALOG.find(b => b.id === background);
+    if (!entry) return {};
+    return {
+      backgroundImage: `url(${entry.data})`,
+      backgroundSize: 'cover',
+      backgroundPosition: entry.bgPosition || 'center center',
+      backgroundAttachment: 'fixed',
+      backgroundRepeat: 'no-repeat',
+    };
+  })();
+
+  const activeGlitter = isImageBg ? imageStyle : (glitterStyles[glitterTheme] ?? {});
 
   return (
     <div
       className="flex h-screen overflow-hidden"
       style={{
-        backgroundColor: isImageBg ? 'transparent' : 'var(--color-background, #0d1117)',
-        ...(isImageBg ? {} : activeGlitter),
+        backgroundColor: 'var(--color-background, #0d1117)',
+        ...activeGlitter,
       }}
     >
       <style>{`
