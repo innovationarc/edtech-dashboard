@@ -493,7 +493,16 @@ const DashboardLayout = () => {
     },
   };
 
-  const activeGlitter = glitterStyles[glitterTheme] ?? {};
+  // If glitterTheme is a data: URL (image background), apply it directly as backgroundImage
+  // exactly the same way glitter radial-gradients are applied — same CSS property, same spread
+  const activeGlitter: React.CSSProperties = glitterTheme.startsWith('data:')
+    ? {
+        backgroundImage: `url(${glitterTheme})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center center',
+        backgroundRepeat: 'no-repeat',
+      }
+    : (glitterStyles[glitterTheme] ?? {});
 
   return (
     <div
