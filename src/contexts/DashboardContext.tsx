@@ -7,7 +7,6 @@ import { gamificationService } from '../services/gamificationService';
 import { getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserSettings, getGlobalSettings, saveAppearanceSettings } from '../services/settingsService';
-import { BG_CATALOG } from '../components/ui/backgrounds';
 
 interface DashboardContextType {
   sidebarOpen: boolean;
@@ -522,30 +521,13 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     document.body.style.backgroundColor = colors.bg;
 
     // ── Custom image background ──────────────────────────────────────────────
-    const glitterIds = ['none', 'silver', 'gold', 'purple'];
-    const isImageBg = background && !glitterIds.includes(background);
-    if (isImageBg) {
-      // TEMP DEBUG
-      console.log('BG_CATALOG entries:', BG_CATALOG.map(b => b.id));
-      console.log('Looking for:', background);
-      const entry = BG_CATALOG.find(b => b.id === background);
-      console.log('Found entry:', !!entry);
-      console.log('entry.data (first 100 chars):', entry.data?.slice(0, 100));
-      // END TEMP DEBUG
-      if (entry) {
-        document.body.style.backgroundImage     = `url(${entry.data})`;
-        document.body.style.backgroundSize      = 'cover';
-        document.body.style.backgroundPosition  = entry.bgPosition || 'center center';
-        document.body.style.backgroundAttachment = 'fixed';
-        document.body.style.backgroundRepeat    = 'no-repeat';
-      }
-    } else {
-      document.body.style.backgroundImage     = '';
-      document.body.style.backgroundSize      = '';
-      document.body.style.backgroundPosition  = '';
-      document.body.style.backgroundAttachment = '';
-      document.body.style.backgroundRepeat    = '';
-    }
+    // Image backgrounds are applied in DashboardLayout via BG_CATALOG,
+    // same mechanism as glitter. Always clear any leftover body styles.
+    document.body.style.backgroundImage     = '';
+    document.body.style.backgroundSize      = '';
+    document.body.style.backgroundPosition  = '';
+    document.body.style.backgroundAttachment = '';
+    document.body.style.backgroundRepeat    = '';
   }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, glitterTheme, background, cardStyle, cardAnimation, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
 
   // Cleanup timeout on unmount
