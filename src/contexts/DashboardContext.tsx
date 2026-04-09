@@ -7,6 +7,7 @@ import { gamificationService } from '../services/gamificationService';
 import { getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getUserSettings, getGlobalSettings, saveAppearanceSettings } from '../services/settingsService';
+import { BG_CATALOG } from '../components/ui/backgrounds';
 
 interface DashboardContextType {
   sidebarOpen: boolean;
@@ -44,6 +45,8 @@ interface DashboardContextType {
   setDashboardLayout: (layout: string) => void;
   glitterTheme: string;
   setGlitterTheme: (glitter: string) => void;
+  background: string;
+  setBackground: (bg: string) => void;
   cardStyle: string;
   setCardStyle: (style: string) => void;
   cardAnimation: string;
@@ -135,6 +138,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
   const [dashboardLayout, setDashboardLayout] = useState(() => localStorage.getItem('dashboardLayout') || 'default');
   const [glitterTheme, setGlitterTheme] = useState(() => localStorage.getItem('glitterTheme') || 'none');
+  const [background, setBackground]     = useState(() => localStorage.getItem('background') || 'none');
   const [cardStyle, setCardStyle]           = useState(() => localStorage.getItem('cardStyle') || 'liquid');
   const [cardAnimation, setCardAnimation]   = useState(() => localStorage.getItem('cardAnimation') || 'tilt');
   const [siteName, setSiteName] = useState('Learning Management Portal');
@@ -329,7 +333,10 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                   if (a.primaryColor) { setPrimaryColor(a.primaryColor); localStorage.setItem('primaryColor', a.primaryColor); }
                   if (a.accentColor)  { setAccentColor(a.accentColor);   localStorage.setItem('accentColor', a.accentColor); }
                   if (a.fontFamily)   { setFontFamily(a.fontFamily);     localStorage.setItem('fontFamily', a.fontFamily); }
-                  if (a.glitterTheme) { setGlitterTheme(a.glitterTheme); localStorage.setItem('glitterTheme', a.glitterTheme); }
+                  // `background` is the new unified field; fall back to `glitterTheme` for old accounts
+                  const bg = a.background || a.glitterTheme || 'none';
+                  setBackground(bg);       localStorage.setItem('background', bg);
+                  setGlitterTheme(bg);     localStorage.setItem('glitterTheme', bg);
                   if (a.cardStyle)      { setCardStyle(a.cardStyle);           localStorage.setItem('cardStyle',      a.cardStyle); }
                   if (a.cardAnimation)  { setCardAnimation(a.cardAnimation);   localStorage.setItem('cardAnimation',  a.cardAnimation); }
                 }
@@ -438,6 +445,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     localStorage.setItem('accentColor',  accentColor);
     localStorage.setItem('fontFamily',   fontFamily);
     localStorage.setItem('glitterTheme', glitterTheme);
+    localStorage.setItem('background',   background);
     localStorage.setItem('cardStyle',      cardStyle);
     localStorage.setItem('cardAnimation',  cardAnimation);
 
@@ -512,7 +520,27 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     // Update BOTH html and body so no dark bleed shows behind content
     document.documentElement.style.backgroundColor = colors.bg;
     document.body.style.backgroundColor = colors.bg;
-  }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, glitterTheme, cardStyle, cardAnimation, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
+
+    // ── Custom image background ──────────────────────────────────────────────
+    const glitterIds = ['none', 'silver', 'gold', 'purple'];
+    const isImageBg = background && !glitterIds.includes(background);
+    if (isImageBg) {
+      const entry = BG_CATALOG.find(b => b.id === background);
+      if (entry) {
+        document.body.style.backgroundImage     = `url(${entry.data})`;
+        document.body.style.backgroundSize      = 'cover';
+        document.body.style.backgroundPosition  = entry.bgPosition || 'center center';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundRepeat    = 'no-repeat';
+      }
+    } else {
+      document.body.style.backgroundImage     = '';
+      document.body.style.backgroundSize      = '';
+      document.body.style.backgroundPosition  = '';
+      document.body.style.backgroundAttachment = '';
+      document.body.style.backgroundRepeat    = '';
+    }
+  }, [theme, primaryColor, accentColor, fontFamily, dashboardLayout, glitterTheme, background, cardStyle, cardAnimation, siteName, siteTagline, contactEmail, siteLogoUrl, timezone]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -623,10 +651,10 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   // Persists a partial appearance patch to Firestore (fire-and-forget)
   const saveAppearanceToDb = (patch: Partial<{
     theme: string; primaryColor: string; accentColor: string;
-    fontFamily: string; glitterTheme: string; cardStyle: string; cardAnimation: string;
+    fontFamily: string; glitterTheme: string; background: string; cardStyle: string; cardAnimation: string;
   }>) => {
     if (!user?.uid) return;
-    const current = { theme, primaryColor, accentColor, fontFamily, glitterTheme, cardStyle, cardAnimation };
+    const current = { theme, primaryColor, accentColor, fontFamily, glitterTheme, background, cardStyle, cardAnimation };
     saveAppearanceSettings(user.uid, { ...current, ...patch }).catch(() => {});
   };
 
@@ -673,6 +701,13 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const handleSetGlitterTheme = (glitter: string) => {
     setGlitterTheme(glitter);
     saveAppearanceToDb({ glitterTheme: glitter });
+  };
+
+  const handleSetBackground = (bg: string) => {
+    setBackground(bg);
+    // Keep glitterTheme in sync for backward compat (glitter ids overlap)
+    setGlitterTheme(bg);
+    saveAppearanceToDb({ background: bg, glitterTheme: bg });
   };
 
   const handleSetCardStyle = (style: string) => {
@@ -723,6 +758,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
         setDashboardLayout,
         glitterTheme,
         setGlitterTheme: handleSetGlitterTheme,
+        background,
+        setBackground: handleSetBackground,
         cardStyle,
         setCardStyle: handleSetCardStyle,
         cardAnimation,
