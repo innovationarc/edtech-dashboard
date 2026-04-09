@@ -24,7 +24,8 @@ export interface AppearanceSettings {
   primaryColor: string;
   accentColor: string;
   fontFamily: string;
-  glitterTheme: string;
+  glitterTheme: string; // kept for backward compat — use `background` going forward
+  background: string;   // 'none' | 'silver' | 'gold' | 'purple' | image-id (e.g. 'lunar-horizon')
   cardStyle: string;
   cardAnimation: string;
 }
