@@ -1,4 +1,3 @@
-// src/components/layout/DashboardLayout.tsx
 import { Outlet, useNavigate } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
@@ -7,7 +6,6 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import ChatbotWidget from '../ChatbotWidget';
 import FirestoreDebugPanel from '../admin/FirestoreDebugPanel';
 import AuthenticationModal from '../auth/AuthenticationModal';
-import { BG_CATALOG } from '../ui/backgrounds';
 
 import PageTransition from '../ui/PageTransition';
 import TopProgressBar from '../ui/TopProgressBar';
@@ -50,7 +48,7 @@ function roleToDashboardKey(role?: string): DashboardKey {
 }
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated, theme, glitterTheme, background, user } = useDashboard();
+  const { sidebarOpen, isAuthenticated, theme, glitterTheme, user } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
@@ -495,29 +493,11 @@ const DashboardLayout = () => {
     },
   };
 
-  const glitterIds = ['none', 'silver', 'gold', 'purple'];
-  const isImageBg = background && !glitterIds.includes(background);
-
-  // For image backgrounds, build the same style shape as glitter entries
-  const imageStyle: React.CSSProperties = (() => {
-    if (!isImageBg) return {};
-    const entry = BG_CATALOG.find(b => b.id === background);
-    if (!entry) return {};
-    return {
-      backgroundImage: `url(${entry.data})`,
-      backgroundSize: 'cover',
-      backgroundPosition: entry.bgPosition || 'center center',
-      backgroundAttachment: 'fixed',
-      backgroundRepeat: 'no-repeat',
-    };
-  })();
-
-  const activeGlitter = isImageBg ? imageStyle : (glitterStyles[glitterTheme] ?? {});
+  const activeGlitter = glitterStyles[glitterTheme] ?? {};
 
   return (
     <div
       className="flex h-screen overflow-hidden"
-      {...(isImageBg ? { 'data-image-bg': 'true' } : {})}
       style={{
         backgroundColor: 'var(--color-background, #0d1117)',
         ...activeGlitter,
@@ -528,29 +508,6 @@ const DashboardLayout = () => {
         .dl-main { scrollbar-width: none !important; -ms-overflow-style: none !important; }
         .dl-inner::-webkit-scrollbar { display: none !important; }
         .dl-inner { scrollbar-width: none !important; -ms-overflow-style: none !important; }
-
-        /* ── Image background — make all solid surfaces transparent/frosted ── */
-        /* The backdrop-filter is already on sidebar/header — we just let it show through */
-        [data-image-bg] aside,
-        [data-image-bg] header,
-        [data-image-bg] nav,
-        [data-image-bg] .mobile-nav {
-          background-color: rgba(10,12,20,0.45) !important;
-          background-image: none !important;
-        }
-        [data-image-bg] .dl-main {
-          background-color: transparent !important;
-        }
-        /* Cards — frosted glass over the image */
-        [data-image-bg] .bg-card,
-        [data-image-bg] .bg-background-900,
-        [data-image-bg] .bg-background-800,
-        [data-image-bg] .dashboard-card,
-        [data-image-bg] .glass-card {
-          background-color: rgba(10,12,20,0.45) !important;
-          backdrop-filter: blur(20px) saturate(160%) !important;
-          -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
-        }
 
         @keyframes loginFadeUp {
           from { opacity: 0; transform: translateY(20px); }
