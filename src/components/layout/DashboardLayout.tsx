@@ -49,7 +49,7 @@ function roleToDashboardKey(role?: string): DashboardKey {
 }
 
 const DashboardLayout = () => {
-  const { sidebarOpen, isAuthenticated, theme, glitterTheme, user } = useDashboard();
+  const { sidebarOpen, isAuthenticated, theme, glitterTheme, background, user } = useDashboard();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
@@ -495,13 +495,15 @@ const DashboardLayout = () => {
   };
 
   const activeGlitter = glitterStyles[glitterTheme] ?? {};
+  const glitterIds = ['none', 'silver', 'gold', 'purple'];
+  const isImageBg = background && !glitterIds.includes(background);
 
   return (
     <div
       className="flex h-screen overflow-hidden"
       style={{
-        backgroundColor: 'var(--color-background, #0d1117)',
-        ...activeGlitter,
+        backgroundColor: isImageBg ? 'transparent' : 'var(--color-background, #0d1117)',
+        ...(isImageBg ? {} : activeGlitter),
       }}
     >
       <style>{`
