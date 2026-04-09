@@ -525,7 +525,12 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     const glitterIds = ['none', 'silver', 'gold', 'purple'];
     const isImageBg = background && !glitterIds.includes(background);
     if (isImageBg) {
+      // TEMP DEBUG
+      console.log('BG_CATALOG entries:', BG_CATALOG.map(b => b.id));
+      console.log('Looking for:', background);
       const entry = BG_CATALOG.find(b => b.id === background);
+      console.log('Found entry:', !!entry);
+      // END TEMP DEBUG
       if (entry) {
         document.body.style.backgroundImage     = `url(${entry.data})`;
         document.body.style.backgroundSize      = 'cover';
