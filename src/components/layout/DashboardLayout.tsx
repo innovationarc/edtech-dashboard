@@ -493,9 +493,8 @@ const DashboardLayout = () => {
     },
   };
 
-  // If glitterTheme is a data: URL (image background), apply it directly as backgroundImage
-  // exactly the same way glitter radial-gradients are applied — same CSS property, same spread
-  const activeGlitter: React.CSSProperties = glitterTheme.startsWith('data:')
+  const isImageBg = glitterTheme.startsWith('data:');
+  const activeGlitter: React.CSSProperties = isImageBg
     ? {
         backgroundImage: `url(${glitterTheme})`,
         backgroundSize: 'cover',
@@ -508,7 +507,7 @@ const DashboardLayout = () => {
     <div
       className="flex h-screen overflow-hidden"
       style={{
-        backgroundColor: 'var(--color-background, #0d1117)',
+        backgroundColor: isImageBg ? 'transparent' : 'var(--color-background, #0d1117)',
         ...activeGlitter,
       }}
     >
