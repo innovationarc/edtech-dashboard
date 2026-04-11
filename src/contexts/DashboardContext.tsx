@@ -139,7 +139,16 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
   const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#10b981');
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('fontFamily') || 'Inter');
   const [dashboardLayout, setDashboardLayout] = useState(() => localStorage.getItem('dashboardLayout') || 'default');
-  const [glitterTheme, setGlitterTheme] = useState(() => localStorage.getItem('glitterTheme') || 'none');
+  const [glitterTheme, setGlitterTheme] = useState(() => {
+    const stored = localStorage.getItem('glitterTheme') || 'none';
+    // If it's an image id (not a glitter name and not already a data URL),
+    // resolve it to the data URL immediately so components get the right value on first render
+    if (!GLITTER_IDS.includes(stored) && !stored.startsWith('data:')) {
+      const entry = BG_CATALOG.find(b => b.id === stored);
+      if (entry) return entry.data;
+    }
+    return stored;
+  });
   const [background, setBackground]     = useState(() => localStorage.getItem('background') || 'none');
   const [cardStyle, setCardStyle]           = useState(() => localStorage.getItem('cardStyle') || 'liquid');
   const [cardAnimation, setCardAnimation]   = useState(() => localStorage.getItem('cardAnimation') || 'tilt');
@@ -339,7 +348,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                   const bg = a.background || a.glitterTheme || 'none';
                   const glitterVal = GLITTER_IDS.includes(bg) ? bg : (BG_CATALOG.find(b => b.id === bg)?.data ?? bg);
                   setBackground(bg);           localStorage.setItem('background',    bg);
-                  setGlitterTheme(glitterVal); localStorage.setItem('glitterTheme', glitterVal);
+                  setGlitterTheme(glitterVal); localStorage.setItem('glitterTheme',  bg); // save id not data URL
                   if (a.cardStyle)      { setCardStyle(a.cardStyle);           localStorage.setItem('cardStyle',      a.cardStyle); }
                   if (a.cardAnimation)  { setCardAnimation(a.cardAnimation);   localStorage.setItem('cardAnimation',  a.cardAnimation); }
                 }
@@ -447,7 +456,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     localStorage.setItem('primaryColor', primaryColor);
     localStorage.setItem('accentColor',  accentColor);
     localStorage.setItem('fontFamily',   fontFamily);
-    localStorage.setItem('glitterTheme', glitterTheme);
+    localStorage.setItem('glitterTheme', background); // persist the id, not the resolved data URL
     localStorage.setItem('background',   background);
     localStorage.setItem('cardStyle',      cardStyle);
     localStorage.setItem('cardAnimation',  cardAnimation);
@@ -708,6 +717,8 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     const glitterVal = resolveGlitterValue(bg);
     setBackground(bg);
     setGlitterTheme(glitterVal);
+    localStorage.setItem('background',   bg); // always save the id
+    localStorage.setItem('glitterTheme', bg); // save id, not data URL — resolved on next load
     saveAppearanceToDb({ background: bg, glitterTheme: bg });
   };
 
