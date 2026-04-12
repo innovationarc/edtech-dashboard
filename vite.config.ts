@@ -97,7 +97,7 @@ export default defineConfig({
         skipWaiting: false,
         clientsClaim: true,
 
-        // Raised to 2.5 MiB to accommodate shared app shell chunk
+        // 2.5 MiB — covers index chunk (shared app shell ~2.37 MB)
         maximumFileSizeToCacheInBytes: 2.5 * 1024 * 1024,
 
         // Runtime caching strategies
@@ -233,36 +233,59 @@ export default defineConfig({
           if (id.includes('node_modules/recharts')) return 'vendor-recharts';
           if (id.includes('node_modules/d3') || id.includes('node_modules/d3-')) return 'vendor-d3';
 
-          // ── AI / Groq / Gemini SDKs ──
-          if (id.includes('node_modules/@google') || id.includes('node_modules/groq')) return 'vendor-ai';
+          // ── AI / Gemini SDK ──
+          if (id.includes('node_modules/@google')) return 'vendor-ai';
 
           // ── UI utilities ──
           if (id.includes('node_modules/lucide-react')) return 'vendor-lucide';
           if (id.includes('node_modules/date-fns')) return 'vendor-datefns';
 
-          // ── Math / Markdown / Syntax highlighting (heavy) ──
-          if (id.includes('node_modules/katex')) return 'vendor-katex';
-          if (id.includes('node_modules/marked') || id.includes('node_modules/markdown')) return 'vendor-markdown';
-          if (id.includes('node_modules/highlight.js') || id.includes('node_modules/lowlight') || id.includes('node_modules/refractor')) return 'vendor-highlight';
+          // ── Math rendering ──
+          if (id.includes('node_modules/katex') || id.includes('node_modules/react-katex')) return 'vendor-katex';
+
+          // ── Sanitization ──
           if (id.includes('node_modules/dompurify') || id.includes('node_modules/DOMPurify')) return 'vendor-dompurify';
 
-          // ── Tanstack (tables, query, virtual) ──
-          if (id.includes('node_modules/@tanstack')) return 'vendor-tanstack';
+          // ── HTTP ──
+          if (id.includes('node_modules/axios')) return 'vendor-http';
 
-          // ── Form / validation libs ──
-          if (id.includes('node_modules/zod') || id.includes('node_modules/react-hook-form') || id.includes('node_modules/@hookform')) return 'vendor-forms';
+          // ── 100ms video SDK (very heavy) ──
+          if (id.includes('node_modules/@100mslive')) return 'vendor-100ms';
 
-          // ── Utility libs ──
-          if (id.includes('node_modules/clsx') || id.includes('node_modules/tailwind-merge') || id.includes('node_modules/class-variance-authority')) return 'vendor-utils';
-          if (id.includes('node_modules/zustand') || id.includes('node_modules/jotai') || id.includes('node_modules/immer')) return 'vendor-state';
-          if (id.includes('node_modules/axios') || id.includes('node_modules/ky') || id.includes('node_modules/got')) return 'vendor-http';
+          // ── Tesseract OCR (very heavy) ──
+          if (id.includes('node_modules/tesseract.js')) return 'vendor-tesseract';
 
-          // ── PDF / file handling ──
-          if (id.includes('node_modules/pdfjs-dist') || id.includes('node_modules/pdf-lib')) return 'vendor-pdf';
-          if (id.includes('node_modules/jszip') || id.includes('node_modules/file-saver')) return 'vendor-files';
+          // ── Supabase ──
+          if (id.includes('node_modules/@supabase')) return 'vendor-supabase';
 
-          // ── Radix UI primitives ──
-          if (id.includes('node_modules/@radix-ui')) return 'vendor-radix';
+          // ── PDF generation ──
+          if (id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas')) return 'vendor-pdf';
+
+          // ── Video streaming ──
+          if (id.includes('node_modules/hls.js')) return 'vendor-hls';
+
+          // ── Charts ──
+          if (id.includes('node_modules/chart.js') || id.includes('node_modules/react-chartjs-2')) return 'vendor-charts';
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3') || id.includes('node_modules/d3-')) return 'vendor-d3';
+
+          // ── Stripe ──
+          if (id.includes('node_modules/@stripe')) return 'vendor-stripe';
+
+          // ── Barcode / QR ──
+          if (id.includes('node_modules/bwip-js') || id.includes('node_modules/qrcode')) return 'vendor-barcode';
+
+          // ── Crypto ──
+          if (id.includes('node_modules/crypto-js')) return 'vendor-crypto';
+
+          // ── Misc UI components ──
+          if (id.includes('node_modules/react-calendar')) return 'vendor-calendar';
+          if (id.includes('node_modules/react-google-recaptcha')) return 'vendor-recaptcha';
+
+          // ── Storage / DB ──
+          if (id.includes('node_modules/dexie')) return 'vendor-dexie';
+
+          // ── UUID / clsx / small utils ──
+          if (id.includes('node_modules/uuid') || id.includes('node_modules/clsx')) return 'vendor-utils';
 
           // ── Everything else in node_modules ──
           if (id.includes('node_modules')) return 'vendor-misc';
