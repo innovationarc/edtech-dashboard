@@ -23,7 +23,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt',
+      registerType: 'prompt', // Show update prompt to user, don't auto-replace
       injectRegister: 'auto',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
 
@@ -38,14 +38,48 @@ export default defineConfig({
         scope: '/',
         start_url: '/',
         icons: [
-          { src: 'icons/icon-72x72.png', sizes: '72x72', type: 'image/png' },
-          { src: 'icons/icon-96x96.png', sizes: '96x96', type: 'image/png' },
-          { src: 'icons/icon-128x128.png', sizes: '128x128', type: 'image/png' },
-          { src: 'icons/icon-144x144.png', sizes: '144x144', type: 'image/png' },
-          { src: 'icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
-          { src: 'icons/icon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-          { src: 'icons/icon-384x384.png', sizes: '384x384', type: 'image/png' },
-          { src: 'icons/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          {
+            src: 'icons/icon-72x72.png',
+            sizes: '72x72',
+            type: 'image/png',
+          },
+          {
+            src: 'icons/icon-96x96.png',
+            sizes: '96x96',
+            type: 'image/png',
+          },
+          {
+            src: 'icons/icon-128x128.png',
+            sizes: '128x128',
+            type: 'image/png',
+          },
+          {
+            src: 'icons/icon-144x144.png',
+            sizes: '144x144',
+            type: 'image/png',
+          },
+          {
+            src: 'icons/icon-152x152.png',
+            sizes: '152x152',
+            type: 'image/png',
+          },
+          {
+            src: 'icons/icon-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
+            src: 'icons/icon-384x384.png',
+            sizes: '384x384',
+            type: 'image/png',
+          },
+          {
+            src: 'icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
         ],
         categories: ['education'],
         lang: 'en',
@@ -53,14 +87,22 @@ export default defineConfig({
       },
 
       workbox: {
+        // Cache name versioning
         cacheId: 'pie-academy-v1',
+
+        // Files to precache (your built app shell)
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
+
+        // Skip waiting — new SW activates after user confirms update prompt
         skipWaiting: false,
         clientsClaim: true,
+
         // Default 2 MiB limit — chunks must stay under this
         maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
 
+        // Runtime caching strategies
         runtimeCaching: [
+          // ── Google Fonts ── Cache First
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
@@ -79,6 +121,8 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+
+          // ── Images (CDN, Bunny, Firebase Storage) ── Cache First
           {
             urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|webp|avif)(\?.*)?$/i,
             handler: 'CacheFirst',
@@ -88,6 +132,8 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+
+          // ── Firebase Storage (notes, PDFs, lesson assets) ── Cache First
           {
             urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
@@ -97,6 +143,8 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+
+          // ── Bunny CDN (video thumbnails, assets) ── Cache First
           {
             urlPattern: /^https:\/\/.*\.b-cdn\.net\/.*/i,
             handler: 'CacheFirst',
@@ -106,6 +154,9 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+
+          // ── Firestore REST API ── Network First with offline fallback
+          // (IndexedDB handles actual data caching; this just handles network errors)
           {
             urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
             handler: 'NetworkFirst',
@@ -116,6 +167,8 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+
+          // ── Firebase Auth ── Network First
           {
             urlPattern: /^https:\/\/identitytoolkit\.googleapis\.com\/.*/i,
             handler: 'NetworkFirst',
@@ -126,14 +179,23 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+
+          // ── All other API calls ── Network Only (AI, streaming, live)
+          // These fall through to network and fail gracefully via OfflineBanner
         ],
 
+        // Offline fallback — serve cached app shell for all navigation
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/favicon\.ico/],
+        navigateFallbackDenylist: [
+          // Don't intercept API calls
+          /^\/api\//,
+          /^\/favicon\.ico/,
+        ],
       },
 
+      // Development mode — enable SW in dev for testing
       devOptions: {
-        enabled: false,
+        enabled: false, // Set to true when testing SW locally
         type: 'module',
       },
     }),
