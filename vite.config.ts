@@ -97,8 +97,8 @@ export default defineConfig({
         skipWaiting: false,
         clientsClaim: true,
 
-        // Default 2 MiB limit — chunks must stay under this
-        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+        // Raised to 2.5 MiB to accommodate shared app shell chunk
+        maximumFileSizeToCacheInBytes: 2.5 * 1024 * 1024,
 
         // Runtime caching strategies
         runtimeCaching: [
@@ -239,6 +239,30 @@ export default defineConfig({
           // ── UI utilities ──
           if (id.includes('node_modules/lucide-react')) return 'vendor-lucide';
           if (id.includes('node_modules/date-fns')) return 'vendor-datefns';
+
+          // ── Math / Markdown / Syntax highlighting (heavy) ──
+          if (id.includes('node_modules/katex')) return 'vendor-katex';
+          if (id.includes('node_modules/marked') || id.includes('node_modules/markdown')) return 'vendor-markdown';
+          if (id.includes('node_modules/highlight.js') || id.includes('node_modules/lowlight') || id.includes('node_modules/refractor')) return 'vendor-highlight';
+          if (id.includes('node_modules/dompurify') || id.includes('node_modules/DOMPurify')) return 'vendor-dompurify';
+
+          // ── Tanstack (tables, query, virtual) ──
+          if (id.includes('node_modules/@tanstack')) return 'vendor-tanstack';
+
+          // ── Form / validation libs ──
+          if (id.includes('node_modules/zod') || id.includes('node_modules/react-hook-form') || id.includes('node_modules/@hookform')) return 'vendor-forms';
+
+          // ── Utility libs ──
+          if (id.includes('node_modules/clsx') || id.includes('node_modules/tailwind-merge') || id.includes('node_modules/class-variance-authority')) return 'vendor-utils';
+          if (id.includes('node_modules/zustand') || id.includes('node_modules/jotai') || id.includes('node_modules/immer')) return 'vendor-state';
+          if (id.includes('node_modules/axios') || id.includes('node_modules/ky') || id.includes('node_modules/got')) return 'vendor-http';
+
+          // ── PDF / file handling ──
+          if (id.includes('node_modules/pdfjs-dist') || id.includes('node_modules/pdf-lib')) return 'vendor-pdf';
+          if (id.includes('node_modules/jszip') || id.includes('node_modules/file-saver')) return 'vendor-files';
+
+          // ── Radix UI primitives ──
+          if (id.includes('node_modules/@radix-ui')) return 'vendor-radix';
 
           // ── Everything else in node_modules ──
           if (id.includes('node_modules')) return 'vendor-misc';
