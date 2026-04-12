@@ -48,7 +48,7 @@ import type {
   SyncQueueItem,
 } from './dexie';
 
-import { db as firestore } from '../../config/firebase';
+import { db as firestore } from '../config/firebase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
