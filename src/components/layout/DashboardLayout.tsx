@@ -14,6 +14,8 @@ import { auth, db } from '../../config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { dashboardStatsService } from '../../services/dashboardStatsService';
 import { firestoreMonitorPersistService, DashboardKey } from '../../services/firestoreMonitorPersistService';
+import SyncStatusBadge from '../shared/SyncStatusBadge';
+import { useSyncService } from '../../hooks/useSyncService';
 
 const CLAMP = (v: number, max: number) => Math.max(-max, Math.min(max, v));
 
@@ -49,6 +51,7 @@ function roleToDashboardKey(role?: string): DashboardKey {
 
 const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated, theme, glitterTheme, user } = useDashboard();
+  const { status: syncStatus, pendingCount } = useSyncService();
   const [isMobile, setIsMobile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [uid, setUid] = useState<string | null>(null);
@@ -575,6 +578,13 @@ const DashboardLayout = () => {
           }}
         >
           <ChatbotWidget eyeOffset={eyeOffset} />
+        </div>
+      )}
+
+      {/* Sync status badge — bottom-left corner, unobtrusive */}
+      {isAuthenticated && (
+        <div className="fixed bottom-2 left-3 z-50">
+          <SyncStatusBadge status={syncStatus} pendingCount={pendingCount} />
         </div>
       )}
 
