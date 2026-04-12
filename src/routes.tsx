@@ -84,6 +84,9 @@ import LiveExam from './pages/LiveExam';
 // NEW: Firebase Monitor (Admin only)
 import AdminFirebaseMonitor from './pages/AdminFirebaseMonitor';
 
+// PWA: Offline banner for network-only pages
+import OfflineBanner from './components/shared/OfflineBanner';
+
 import { useDashboard } from './contexts/DashboardContext';
 
 // Returns the correct home dashboard path for any role
@@ -342,14 +345,18 @@ const AppRoutes = () => {
         {/* AI Model Settings - Admin only */}
         <Route path="ai-settings" element={
           <AdminRoute>
-            <AIModelSettings />
+            <OfflineBanner feature="AI Model Settings">
+              <AIModelSettings />
+            </OfflineBanner>
           </AdminRoute>
         } />
 
         {/* Nova Chatbot Context - Admin only */}
         <Route path="nova-context" element={
           <AdminRoute>
-            <AdminNovaContext />
+            <OfflineBanner feature="Nova AI Context">
+              <AdminNovaContext />
+            </OfflineBanner>
           </AdminRoute>
         } />
 
@@ -363,7 +370,9 @@ const AppRoutes = () => {
         {/* Firebase Monitor - Admin only */}
         <Route path="firebase-monitor" element={
           <AdminRoute>
-            <AdminFirebaseMonitor />
+            <OfflineBanner feature="Firebase Monitor">
+              <AdminFirebaseMonitor />
+            </OfflineBanner>
           </AdminRoute>
         } />
         
@@ -465,27 +474,41 @@ const AppRoutes = () => {
         {/* Note viewer */}
         <Route path="content-library/note/:courseId/:contentId" element={<NoteViewer />} />
         {/* Exam viewer — accessible to all authenticated users (student takes exam here) */}
-        <Route path="content-library/exam/:courseId/:contentId" element={<ExamViewer />} />
+        <Route path="content-library/exam/:courseId/:contentId" element={
+          <OfflineBanner feature="Exams">
+            <ExamViewer />
+          </OfflineBanner>
+        } />
         {/* Live exam direct route — no courseId, used by live exam page */}
-        <Route path="exam/:contentId" element={<ExamViewer />} />
+        <Route path="exam/:contentId" element={
+          <OfflineBanner feature="Exams">
+            <ExamViewer />
+          </OfflineBanner>
+        } />
 
         {/* ── Exam Evaluation Routes ── */}
         {/* Hub page — shows all exams with written parts */}
         <Route path="exam-evaluation" element={
           <EvaluatorRoute>
-            <ExamEvaluation />
+            <OfflineBanner feature="Exam Evaluation">
+              <ExamEvaluation />
+            </OfflineBanner>
           </EvaluatorRoute>
         } />
         {/* Direct link to a specific exam's evaluation */}
         <Route path="exam-evaluation/:contentId" element={
           <EvaluatorRoute>
-            <ExamEvaluation />
+            <OfflineBanner feature="Exam Evaluation">
+              <ExamEvaluation />
+            </OfflineBanner>
           </EvaluatorRoute>
         } />
         {/* Scoped to a specific course */}
         <Route path="exam-evaluation/:contentId/:courseId" element={
           <EvaluatorRoute>
-            <ExamEvaluation />
+            <OfflineBanner feature="Exam Evaluation">
+              <ExamEvaluation />
+            </OfflineBanner>
           </EvaluatorRoute>
         } />
 
@@ -493,19 +516,25 @@ const AppRoutes = () => {
         {/* Teacher + Admin: schedule, host, and manage live classes */}
         <Route path="live-classes" element={
           <TeacherAdminRoute>
-            <TeacherLiveClass />
+            <OfflineBanner feature="Live Classes">
+              <TeacherLiveClass />
+            </OfflineBanner>
           </TeacherAdminRoute>
         } />
         {/* Student: view upcoming, join live, and rewatch recordings */}
         <Route path="student-live-classes" element={
           <StudentRoute>
-            <StudentLiveClass />
+            <OfflineBanner feature="Live Classes">
+              <StudentLiveClass />
+            </OfflineBanner>
           </StudentRoute>
         } />
         {/* Admin only: configure provider, API keys, and Bunny.net */}
         <Route path="live-class-settings" element={
           <AdminRoute>
-            <LiveClassSettings />
+            <OfflineBanner feature="Live Class Settings">
+              <LiveClassSettings />
+            </OfflineBanner>
           </AdminRoute>
         } />
 
@@ -513,19 +542,25 @@ const AppRoutes = () => {
         {/* Teacher + Admin: create and manage live streams (YouTube, Bunny, Cloudflare) */}
         <Route path="streams" element={
           <TeacherAdminRoute>
-            <TeacherStream />
+            <OfflineBanner feature="Live Streams">
+              <TeacherStream />
+            </OfflineBanner>
           </TeacherAdminRoute>
         } />
         {/* Student: watch live streams and recordings */}
         <Route path="student-streams" element={
           <StudentRoute>
-            <StudentStream />
+            <OfflineBanner feature="Live Streams">
+              <StudentStream />
+            </OfflineBanner>
           </StudentRoute>
         } />
         {/* Admin only: configure streaming provider API keys */}
         <Route path="stream-settings" element={
           <AdminRoute>
-            <StreamSettings />
+            <OfflineBanner feature="Stream Settings">
+              <StreamSettings />
+            </OfflineBanner>
           </AdminRoute>
         } />
 
@@ -533,13 +568,17 @@ const AppRoutes = () => {
         {/* Teacher + Admin: create and manage live exams */}
         <Route path="live-exams" element={
           <TeacherAdminRoute>
-            <LiveExam />
+            <OfflineBanner feature="Live Exams">
+              <LiveExam />
+            </OfflineBanner>
           </TeacherAdminRoute>
         } />
         {/* Student: view and attempt live exams assigned to them */}
         <Route path="student-live-exams" element={
           <StudentRoute>
-            <LiveExam />
+            <OfflineBanner feature="Live Exams">
+              <LiveExam />
+            </OfflineBanner>
           </StudentRoute>
         } />
 
