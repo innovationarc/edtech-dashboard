@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes';
 import { DashboardProvider } from './contexts/DashboardContext';
+import UpdatePrompt from './components/shared/UpdatePrompt';
 
 // Module-level promise — resolves once grecaptcha is ready, shared across all components
 let recaptchaReadyPromise: Promise<void> | null = null;
@@ -24,7 +25,6 @@ function App() {
   useEffect(() => {
     const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
     if (!siteKey || document.getElementById('recaptcha-script')) {
-      // Script already exists, resolve immediately
       waitForRecaptcha();
       return;
     }
@@ -35,13 +35,11 @@ function App() {
     script.async = true;
     document.head.appendChild(script);
 
-    // Hide the floating badge
     const style = document.createElement('style');
     style.id = 'recaptcha-badge-hide';
     style.textContent = `.grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }`;
     document.head.appendChild(style);
 
-    // Start resolving the promise early
     waitForRecaptcha();
   }, []);
 
@@ -49,6 +47,7 @@ function App() {
     <DashboardProvider>
       <Router>
         <AppRoutes />
+        <UpdatePrompt />
       </Router>
     </DashboardProvider>
   );
