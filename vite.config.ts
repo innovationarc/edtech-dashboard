@@ -40,7 +40,8 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
         skipWaiting: false,
         clientsClaim: true,
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // Must be high enough to cover largest individual chunk after splitting
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
 
         runtimeCaching: [
           {
@@ -126,9 +127,90 @@ export default defineConfig({
   },
 
   build: {
-    // Suppress size warnings — chunks are large due to unavoidable deps
-    // (Firebase, 100ms, Tesseract). React.lazy() already handles runtime
-    // performance — pages only download their chunk when first visited.
-    chunkSizeWarningLimit: 4000,
+    chunkSizeWarningLimit: 2000,
+
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // ── RULE: Only split packages that have NO React hook usage ────────
+          // Any package using useState/useEffect/useLayoutEffect etc must NOT
+          // be separated from React. Those are left undefined (Vite handles them).
+          // The catch-all vendor-misc caused crashes — it is intentionally removed.
+
+          // ── React ecosystem — all in ONE chunk, non-negotiable ─────────────
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-is/') ||
+            id.includes('node_modules/scheduler/') ||
+            id.includes('node_modules/react-router-dom/') ||
+            id.includes('node_modules/react-router/')
+          ) return 'vendor-react';
+
+          // ── Pure JS — no React hooks, safe to isolate ─────────────────────
+
+          // Firebase (pure JS, no hooks)
+          if (id.includes('node_modules/@firebase/firestore'))  return 'firebase-firestore';
+          if (id.includes('node_modules/@firebase/auth'))       return 'firebase-auth';
+          if (id.includes('node_modules/@firebase/storage'))    return 'firebase-storage';
+          if (id.includes('node_modules/@firebase/analytics'))  return 'firebase-analytics';
+          if (id.includes('node_modules/@firebase/functions'))  return 'firebase-functions';
+          if (id.includes('node_modules/@firebase/messaging'))  return 'firebase-messaging';
+          if (
+            id.includes('node_modules/@firebase') ||
+            id.includes('node_modules/firebase')
+          ) return 'firebase-core';
+
+          // Tesseract OCR (pure JS, ~4MB, lazy loaded)
+          if (id.includes('node_modules/tesseract.js'))         return 'vendor-tesseract';
+
+          // HLS video (pure JS)
+          if (id.includes('node_modules/hls.js'))               return 'vendor-hls';
+
+          // Gemini AI (pure JS)
+          if (id.includes('node_modules/@google/generative-ai')) return 'vendor-ai';
+
+          // date-fns (pure JS)
+          if (id.includes('node_modules/date-fns'))             return 'vendor-datefns';
+
+          // KaTeX core (pure JS) — react-katex uses hooks so leave it out
+          if (id.includes('node_modules/katex/'))               return 'vendor-katex';
+
+          // crypto-js (pure JS)
+          if (id.includes('node_modules/crypto-js'))            return 'vendor-crypto';
+
+          // axios (pure JS)
+          if (id.includes('node_modules/axios'))                return 'vendor-http';
+
+          // dexie (pure JS)
+          if (id.includes('node_modules/dexie'))                return 'vendor-dexie';
+
+          // Supabase (pure JS)
+          if (id.includes('node_modules/@supabase'))            return 'vendor-supabase';
+
+          // Stripe (pure JS)
+          if (id.includes('node_modules/@stripe'))              return 'vendor-stripe';
+
+          // Barcode/QR (pure JS)
+          if (
+            id.includes('node_modules/bwip-js') ||
+            id.includes('node_modules/qrcode')
+          ) return 'vendor-barcode';
+
+          // uuid + clsx (pure JS, tiny)
+          if (
+            id.includes('node_modules/uuid') ||
+            id.includes('node_modules/clsx')
+          ) return 'vendor-utils';
+
+          // ── React-dependent packages — DO NOT isolate, let Vite co-locate ──
+          // These use React hooks internally and must share React's instance:
+          // @100mslive, recharts, d3, chart.js, react-chartjs-2, framer-motion,
+          // lucide-react, react-calendar, react-google-recaptcha, react-katex,
+          // html2canvas, jspdf, dompurify
+          // → returning undefined lets Vite decide where to put them (safe)
+        },
+      },
+    },
   },
 });
