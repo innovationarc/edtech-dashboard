@@ -3,25 +3,30 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.pieos.academy',
   appName: 'pie Academy',
-  // Points to your live Vercel deployment
-  // Secrets never leave the server — APK is just a native shell
   server: {
     url: 'https://edtech-dashboard-alpha.vercel.app',
-    cleartext: false, // HTTPS only
+    cleartext: false,
   },
-  webDir: 'dist', // fallback for local builds
+  webDir: 'dist',
   android: {
     allowMixedContent: false,
     captureInput: true,
-    webContentsDebuggingEnabled: false, // set true only during dev
+    webContentsDebuggingEnabled: false,
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
-      launchAutoHide: true,
+      // Don't auto-hide — we call SplashScreen.hide() manually from React
+      // once the app is fully loaded
+      launchShowDuration: 0,
+      launchAutoHide: false,
+      // Show splash on app resume too (coming back from background)
+      showOnLaunch: true,
       backgroundColor: '#0f0f1a',
       androidSplashResourceName: 'splash',
+      androidScaleType: 'CENTER_CROP',
       showSpinner: false,
+      splashFullScreen: true,
+      splashImmersive: true,
     },
     StatusBar: {
       style: 'dark',
