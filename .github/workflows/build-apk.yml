@@ -44,8 +44,13 @@ jobs:
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       # ── 5. Install dependencies ──────────────────────────────────────────────
+      - name: Install libvips (required by sharp)
+        run: sudo apt-get install -y libvips-dev
+
       - name: Install dependencies
         run: npm install
+        env:
+          SHARP_IGNORE_GLOBAL_LIBVIPS: false
 
       # ── 6. Add Android platform (skip if already exists) ─────────────────────
       - name: Add Android platform
