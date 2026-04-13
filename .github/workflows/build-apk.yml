@@ -47,9 +47,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # ── 6. Add Android platform ──────────────────────────────────────────────
+      # ── 6. Add Android platform (skip if already exists) ─────────────────────
       - name: Add Android platform
-        run: npx cap add android
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          else
+            echo "Android platform already exists, skipping."
+          fi
 
       # ── 7. Create required directories ───────────────────────────────────────
       - name: Create Android asset directories
