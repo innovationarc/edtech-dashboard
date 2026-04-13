@@ -72,6 +72,11 @@ jobs:
       # splash_logo.png is your app icon used as the splash center image
       - name: Copy splash screen resources
         run: |
+          # Remove any existing splash.png to avoid duplicate resource conflict
+          rm -f android/app/src/main/res/drawable/splash.png
+          rm -f android/app/src/main/res/drawable-land/splash.png
+          rm -f android/app/src/main/res/drawable-port/splash.png
+
           # Copy splash drawable XML
           cp android-assets/drawable/splash.xml android/app/src/main/res/drawable/splash.xml
           cp android-assets/drawable/splash.xml android/app/src/main/res/drawable-land/splash.xml
