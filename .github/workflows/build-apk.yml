@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: '20'
 
-      # ── 3. Setup Java (required for Android Gradle build) ───────────────────
+      # ── 3. Setup Java ────────────────────────────────────────────────────────
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -43,7 +43,7 @@ jobs:
       - name: Install Android build tools
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
-      # ── 5. Install npm dependencies ──────────────────────────────────────────
+      # ── 5. Install dependencies ──────────────────────────────────────────────
       - name: Install dependencies
         run: npm install
 
@@ -51,28 +51,50 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      # ── 7. Create required asset directories ─────────────────────────────────
-      # cap sync tries to write into these before they exist — create them first
+      # ── 7. Create required directories ───────────────────────────────────────
       - name: Create Android asset directories
         run: |
           mkdir -p android/app/src/main/assets
-          mkdir -p android/app/src/main/res
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/drawable-land
+          mkdir -p android/app/src/main/res/drawable-port
 
-      # ── 8. Sync Capacitor ────────────────────────────────────────────────────
+      # ── 8. Copy splash resources ─────────────────────────────────────────────
+      # splash.xml defines the native splash screen background + logo
+      # splash_logo.png is your app icon used as the splash center image
+      - name: Copy splash screen resources
+        run: |
+          # Copy splash drawable XML
+          cp android-assets/drawable/splash.xml android/app/src/main/res/drawable/splash.xml
+          cp android-assets/drawable/splash.xml android/app/src/main/res/drawable-land/splash.xml
+          cp android-assets/drawable/splash.xml android/app/src/main/res/drawable-port/splash.xml
+
+          # Use app icon as splash logo if splash_logo.png doesn't exist yet
+          if [ -f "android-assets/splash_logo.png" ]; then
+            cp android-assets/splash_logo.png android/app/src/main/res/drawable/splash_logo.png
+          elif [ -f "public/icons/icon-512x512.png" ]; then
+            cp public/icons/icon-512x512.png android/app/src/main/res/drawable/splash_logo.png
+          else
+            # Create a minimal placeholder so the build doesn't fail
+            convert -size 288x288 xc:#6366f1 android/app/src/main/res/drawable/splash_logo.png 2>/dev/null || \
+            echo "No splash logo found — splash will show solid color only"
+          fi
+
+      # ── 9. Sync Capacitor ────────────────────────────────────────────────────
       - name: Sync Capacitor with Android
         run: npx cap sync android
 
-      # ── 9. Grant Gradle execute permission ──────────────────────────────────
+      # ── 10. Grant Gradle execute permission ──────────────────────────────────
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # ── 10a. Build DEBUG APK ─────────────────────────────────────────────────
+      # ── 11a. Build DEBUG APK ─────────────────────────────────────────────────
       - name: Build Debug APK
         if: ${{ github.event.inputs.build_type == 'debug' }}
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      # ── 10b. Build RELEASE APK ───────────────────────────────────────────────
+      # ── 11b. Build RELEASE APK ───────────────────────────────────────────────
       - name: Build Release APK
         if: ${{ github.event.inputs.build_type == 'release' }}
         working-directory: android
@@ -85,7 +107,7 @@ jobs:
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
             --no-daemon
 
-      # ── 11. Find and rename APK ──────────────────────────────────────────────
+      # ── 12. Find and rename APK ──────────────────────────────────────────────
       - name: Locate APK
         id: find_apk
         run: |
@@ -99,7 +121,7 @@ jobs:
           cp "$APK_PATH" "$NEW_NAME"
           echo "apk_name=$NEW_NAME" >> $GITHUB_OUTPUT
 
-      # ── 12. Upload APK as downloadable artifact ──────────────────────────────
+      # ── 13. Upload APK ───────────────────────────────────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -107,7 +129,7 @@ jobs:
           path: ${{ steps.find_apk.outputs.apk_name }}
           retention-days: 30
 
-      # ── 13. Summary ──────────────────────────────────────────────────────────
+      # ── 14. Summary ──────────────────────────────────────────────────────────
       - name: Build summary
         run: |
           echo "## ✅ pie Academy APK Built" >> $GITHUB_STEP_SUMMARY
