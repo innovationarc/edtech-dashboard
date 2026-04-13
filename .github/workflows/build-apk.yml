@@ -47,9 +47,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # ── 6. Sync Capacitor ────────────────────────────────────────────────────
-      # No build step needed — APK is just a WebView shell pointing to Vercel.
-      # All secrets and logic stay on Vercel's servers. Zero env vars needed here.
+      # ── 6. Add + Sync Capacitor Android platform ─────────────────────────────
+      # cap add android creates the full native project from scratch
+      # cap sync copies capacitor config and plugins into it
+      - name: Add Android platform
+        run: npx cap add android
+
       - name: Sync Capacitor with Android
         run: npx cap sync android
 
