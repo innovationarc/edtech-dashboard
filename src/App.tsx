@@ -4,6 +4,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes';
 import { DashboardProvider } from './contexts/DashboardContext';
 import UpdatePrompt from './components/shared/UpdatePrompt';
+import AppSplash from './components/shared/AppSplash';
 
 // Module-level promise — resolves once grecaptcha is ready, shared across all components
 let recaptchaReadyPromise: Promise<void> | null = null;
@@ -22,6 +23,14 @@ export const waitForRecaptcha = (): Promise<void> => {
 };
 
 function App() {
+  // Dismiss the Capacitor splash screen once React has fully mounted
+  useEffect(() => {
+    const dismiss = (window as unknown as Record<string, unknown>).__splashDismiss;
+    if (typeof dismiss === 'function') {
+      (dismiss as () => void)();
+    }
+  }, []);
+
   useEffect(() => {
     const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
     if (!siteKey || document.getElementById('recaptcha-script')) {
@@ -45,6 +54,8 @@ function App() {
 
   return (
     <DashboardProvider>
+      {/* Splash screen — only visible in Capacitor app, invisible in browser */}
+      <AppSplash />
       <Router>
         <AppRoutes />
         <UpdatePrompt />
