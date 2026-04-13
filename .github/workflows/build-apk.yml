@@ -47,27 +47,32 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # ── 6. Add + Sync Capacitor Android platform ─────────────────────────────
-      # cap add android creates the full native project from scratch
-      # cap sync copies capacitor config and plugins into it
+      # ── 6. Add Android platform ──────────────────────────────────────────────
       - name: Add Android platform
         run: npx cap add android
 
+      # ── 7. Create required asset directories ─────────────────────────────────
+      # cap sync tries to write into these before they exist — create them first
+      - name: Create Android asset directories
+        run: |
+          mkdir -p android/app/src/main/assets
+          mkdir -p android/app/src/main/res
+
+      # ── 8. Sync Capacitor ────────────────────────────────────────────────────
       - name: Sync Capacitor with Android
         run: npx cap sync android
 
-      # ── 7. Grant Gradle execute permission ──────────────────────────────────
+      # ── 9. Grant Gradle execute permission ──────────────────────────────────
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # ── 8a. Build DEBUG APK ──────────────────────────────────────────────────
+      # ── 10a. Build DEBUG APK ─────────────────────────────────────────────────
       - name: Build Debug APK
         if: ${{ github.event.inputs.build_type == 'debug' }}
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      # ── 8b. Build RELEASE APK ───────────────────────────────────────────────
-      # Only the keystore is needed here — not your app secrets
+      # ── 10b. Build RELEASE APK ───────────────────────────────────────────────
       - name: Build Release APK
         if: ${{ github.event.inputs.build_type == 'release' }}
         working-directory: android
@@ -80,7 +85,7 @@ jobs:
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
             --no-daemon
 
-      # ── 9. Find and rename APK ───────────────────────────────────────────────
+      # ── 11. Find and rename APK ──────────────────────────────────────────────
       - name: Locate APK
         id: find_apk
         run: |
@@ -94,7 +99,7 @@ jobs:
           cp "$APK_PATH" "$NEW_NAME"
           echo "apk_name=$NEW_NAME" >> $GITHUB_OUTPUT
 
-      # ── 10. Upload APK as downloadable artifact ──────────────────────────────
+      # ── 12. Upload APK as downloadable artifact ──────────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -102,7 +107,7 @@ jobs:
           path: ${{ steps.find_apk.outputs.apk_name }}
           retention-days: 30
 
-      # ── 11. Summary ──────────────────────────────────────────────────────────
+      # ── 13. Summary ──────────────────────────────────────────────────────────
       - name: Build summary
         run: |
           echo "## ✅ pie Academy APK Built" >> $GITHUB_STEP_SUMMARY
