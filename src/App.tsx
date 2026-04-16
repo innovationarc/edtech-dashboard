@@ -5,6 +5,7 @@ import AppRoutes from './routes';
 import { DashboardProvider } from './contexts/DashboardContext';
 import UpdatePrompt from './components/shared/UpdatePrompt';
 import AppSplash from './components/shared/AppSplash';
+import { useSyncService } from './hooks/useSyncService';
 
 // Module-level promise — resolves once grecaptcha is ready, shared across all components
 let recaptchaReadyPromise: Promise<void> | null = null;
@@ -23,6 +24,9 @@ export const waitForRecaptcha = (): Promise<void> => {
 };
 
 function App() {
+  // Initialize offline sync engine — tied to Firebase auth state
+  useSyncService();
+
   // Dismiss the Capacitor splash screen once React has fully mounted
   useEffect(() => {
     const dismiss = (window as unknown as Record<string, unknown>).__splashDismiss;
