@@ -1,3 +1,7 @@
+// src/services/announcementService.ts
+// Offline-first: reads Dexie first, syncs Firestore in background.
+// All original methods and signatures preserved 100%.
+
 import {
   collection,
   doc,
@@ -11,6 +15,16 @@ import {
 } from 'firebase/firestore';
 import { getDocs } from './firestoreMonitor';
 import { db } from '../config/firebase';
+import { db as localDB } from '../lib/dexie';
+
+// ─── Cache ────────────────────────────────────────────────────────────────────
+const announcementCache = new Map<string, { data: any[]; ts: number }>();
+const ANNOUNCEMENT_TTL = 5 * 60 * 1000;
+
+export function invalidateAnnouncementCache(userId?: string) {
+  if (userId) announcementCache.delete(userId);
+  else announcementCache.clear();
+}
 
 export interface Announcement {
   id: string;
@@ -24,27 +38,38 @@ export interface Announcement {
   type: 'assignment' | 'announcement' | 'reminder' | 'urgent';
   priority: 'low' | 'medium' | 'high';
   targetAudience: 'all' | 'course' | 'specific';
-  targetStudents?: string[]; // student IDs for specific targeting
-  targetCourses?: string[]; // course IDs for course-specific announcements
+  targetStudents?: string[];
+  targetCourses?: string[];
   isActive: boolean;
   expiresAt?: Date;
   createdAt: Date;
   updatedAt?: Date;
 }
 
-// ─── Cache ────────────────────────────────────────────────────────────────────
-// getAnnouncementsForUser is called on every dashboard poll (every 5 min).
-// Cache per userId for 5 minutes — announcements change infrequently.
-const announcementCache = new Map<string, { data: any[]; ts: number }>();
-const ANNOUNCEMENT_TTL = 5 * 60 * 1000; // 5 minutes
+// ─── Offline helpers ──────────────────────────────────────────────────────────
+function toLocalAnnouncement(a: Announcement) {
+  return {
+    id: a.id,
+    title: a.title,
+    content: a.message,
+    authorId: a.teacherId,
+    targetRoles: [] as string[],
+    createdAt: a.createdAt.getTime(),
+    _synced: true,
+    // Store full data as JSON in content for reconstruction
+    _raw: JSON.stringify(a),
+  };
+}
 
-export function invalidateAnnouncementCache(userId?: string) {
-  if (userId) announcementCache.delete(userId);
-  else announcementCache.clear();
+function fromLocalAnnouncement(local: any): Announcement | null {
+  try {
+    if (local._raw) return JSON.parse(local._raw) as Announcement;
+  } catch { /* fall through */ }
+  return null;
 }
 
 export const announcementService = {
-  // Create a new announcement
+
   async createAnnouncement(announcement: Omit<Announcement, 'id' | 'createdAt'>): Promise<string> {
     try {
       const docRef = await addDoc(collection(db, 'announcements'), {
@@ -58,15 +83,12 @@ export const announcementService = {
     }
   },
 
-  // Get all announcements (for admin/teacher view)
   async getAllAnnouncements(): Promise<Announcement[]> {
     try {
-      const announcementsCollection = collection(db, 'announcements');
-      const announcementsSnapshot = await getDocs(
-        query(announcementsCollection, orderBy('createdAt', 'desc'))
+      const snap = await getDocs(
+        query(collection(db, 'announcements'), orderBy('createdAt', 'desc'))
       );
-      
-      return announcementsSnapshot.docs.map(doc => ({
+      return snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt.toDate(),
@@ -78,87 +100,158 @@ export const announcementService = {
     }
   },
 
-  // Get announcements for a specific user (student view)
   async getAnnouncementsForUser(
-    userId: string, 
-    userRole: string, 
+    userId: string,
+    userRole: string,
     enrolledCourseIds: string[] = []
   ): Promise<Announcement[]> {
-    // Return cached announcements if still fresh — called on every dashboard poll
+    // 1. Try Dexie first — works offline
+    try {
+      const local = await localDB.announcements.toArray();
+      if (local.length > 0) {
+        const cached = announcementCache.get(userId);
+
+        // Reconstruct announcements from local storage
+        const announcements: Announcement[] = local
+          .map(fromLocalAnnouncement)
+          .filter((a): a is Announcement => a !== null);
+
+        if (announcements.length > 0) {
+          const now = new Date();
+          const filtered = announcements
+            .filter(a => {
+              if (!a.isActive) return false;
+              if (a.expiresAt && a.expiresAt < now) return false;
+              if (a.targetAudience === 'all') return true;
+              if (a.targetAudience === 'course') {
+                return a.targetCourses?.some(id => enrolledCourseIds.includes(id)) ?? false;
+              }
+              if (a.targetAudience === 'specific') {
+                return a.targetStudents?.includes(userId) ?? false;
+              }
+              return false;
+            })
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+          // Background sync if cache is stale
+          if (!cached || Date.now() - cached.ts >= ANNOUNCEMENT_TTL) {
+            this._syncAnnouncementsFromFirestore(userId, userRole, enrolledCourseIds).catch(() => {});
+          }
+
+          return filtered;
+        }
+      }
+    } catch { /* fall through to Firestore */ }
+
+    // 2. Return memory cache if fresh
     const cached = announcementCache.get(userId);
     if (cached && Date.now() - cached.ts < ANNOUNCEMENT_TTL) return cached.data;
 
+    // 3. Fetch from Firestore
     try {
-      const announcementsCollection = collection(db, 'announcements');
-      const now = new Date();
-      
-      // Get all active announcements (without orderBy to avoid composite index requirement)
-      const activeQuery = query(
-        announcementsCollection,
-        where('isActive', '==', true)
+      const snap = await getDocs(
+        query(collection(db, 'announcements'), where('isActive', '==', true))
       );
-      
-      const announcementsSnapshot = await getDocs(activeQuery);
-      
-      const allAnnouncements = announcementsSnapshot.docs.map(doc => ({
+      const now = new Date();
+      const all = snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt.toDate(),
         updatedAt: doc.data().updatedAt?.toDate(),
         expiresAt: doc.data().expiresAt?.toDate()
       })) as Announcement[];
-      
-      // Filter announcements based on user and targeting
-      const filteredAnnouncements = allAnnouncements.filter(announcement => {
-        // Check if announcement has expired
-        if (announcement.expiresAt && announcement.expiresAt < now) {
-            return false;
+
+      const filtered = all.filter(a => {
+        if (a.expiresAt && a.expiresAt < now) return false;
+        if (a.targetAudience === 'all') return true;
+        if (a.targetAudience === 'course') {
+          return a.targetCourses?.some(id => enrolledCourseIds.includes(id)) ?? false;
         }
-        
-        // Check targeting
-        if (announcement.targetAudience === 'all') {
-            return true;
+        if (a.targetAudience === 'specific') {
+          return a.targetStudents?.includes(userId) ?? false;
         }
-        
-        if (announcement.targetAudience === 'course') {
-          const matches = announcement.targetCourses?.some(courseId => 
-            enrolledCourseIds.includes(courseId)
-          ) || false;
-            return matches;
-        }
-        
-        if (announcement.targetAudience === 'specific') {
-          const matches = announcement.targetStudents?.includes(userId) || false;
-            return matches;
-        }
-        
-        console.log('No match for announcement:', announcement.title, announcement.targetAudience);
         return false;
-      });
-      
-      // Sort by createdAt in descending order (most recent first)
-      filteredAnnouncements.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      
-      announcementCache.set(userId, { data: filteredAnnouncements, ts: Date.now() });
-      return filteredAnnouncements;
+      }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      announcementCache.set(userId, { data: filtered, ts: Date.now() });
+
+      // Persist ALL active announcements to Dexie for offline
+      await localDB.announcements.bulkPut(
+        all.map(a => ({
+          id: a.id,
+          title: a.title,
+          content: a.message,
+          authorId: a.teacherId,
+          targetRoles: [],
+          createdAt: a.createdAt.getTime(),
+          _synced: true,
+          _raw: JSON.stringify(a),
+        }))
+      ).catch(() => {});
+
+      return filtered;
     } catch (error: any) {
       throw new Error(error.message);
     }
   },
 
-  // Get announcements by teacher
+  // Background sync helper
+  async _syncAnnouncementsFromFirestore(
+    userId: string,
+    _userRole: string,
+    enrolledCourseIds: string[]
+  ): Promise<void> {
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'announcements'), where('isActive', '==', true))
+      );
+      const now = new Date();
+      const all = snap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt?.toDate(),
+        expiresAt: doc.data().expiresAt?.toDate()
+      })) as Announcement[];
+
+      const filtered = all.filter(a => {
+        if (a.expiresAt && a.expiresAt < now) return false;
+        if (a.targetAudience === 'all') return true;
+        if (a.targetAudience === 'course') {
+          return a.targetCourses?.some(id => enrolledCourseIds.includes(id)) ?? false;
+        }
+        if (a.targetAudience === 'specific') {
+          return a.targetStudents?.includes(userId) ?? false;
+        }
+        return false;
+      }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      announcementCache.set(userId, { data: filtered, ts: Date.now() });
+      await localDB.announcements.bulkPut(
+        all.map(a => ({
+          id: a.id,
+          title: a.title,
+          content: a.message,
+          authorId: a.teacherId,
+          targetRoles: [],
+          createdAt: a.createdAt.getTime(),
+          _synced: true,
+          _raw: JSON.stringify(a),
+        }))
+      ).catch(() => {});
+    } catch { /* non-fatal */ }
+  },
+
   async getAnnouncementsByTeacher(teacherId: string): Promise<Announcement[]> {
     try {
-      const announcementsCollection = collection(db, 'announcements');
-      const teacherQuery = query(
-        announcementsCollection,
-        where('teacherId', '==', teacherId),
-        orderBy('createdAt', 'desc')
+      const snap = await getDocs(
+        query(
+          collection(db, 'announcements'),
+          where('teacherId', '==', teacherId),
+          orderBy('createdAt', 'desc')
+        )
       );
-      
-      const announcementsSnapshot = await getDocs(teacherQuery);
-      
-      return announcementsSnapshot.docs.map(doc => ({
+      return snap.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt.toDate(),
@@ -170,35 +263,32 @@ export const announcementService = {
     }
   },
 
-  // Update an announcement
   async updateAnnouncement(id: string, updates: Partial<Announcement>): Promise<void> {
     try {
-      const announcementRef = doc(db, 'announcements', id);
-      const updateData = { ...updates };
-      
+      const updateData = { ...updates } as any;
       if (updateData.expiresAt) {
-        updateData.expiresAt = Timestamp.fromDate(updateData.expiresAt) as any;
+        updateData.expiresAt = Timestamp.fromDate(updateData.expiresAt);
       }
-      
-      await updateDoc(announcementRef, {
+      await updateDoc(doc(db, 'announcements', id), {
         ...updateData,
         updatedAt: Timestamp.now()
       });
+      announcementCache.clear();
     } catch (error: any) {
       throw new Error(error.message);
     }
   },
 
-  // Delete an announcement
   async deleteAnnouncement(id: string): Promise<void> {
     try {
       await deleteDoc(doc(db, 'announcements', id));
+      await localDB.announcements.delete(id).catch(() => {});
+      announcementCache.clear();
     } catch (error: any) {
       throw new Error(error.message);
     }
   },
 
-  // Mark announcement as inactive (soft delete)
   async deactivateAnnouncement(id: string): Promise<void> {
     try {
       await this.updateAnnouncement(id, { isActive: false });
