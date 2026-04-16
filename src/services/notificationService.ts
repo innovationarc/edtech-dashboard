@@ -1,9 +1,6 @@
-/**
- * notificationService.ts
- * Per-user notification system backed by Firestore.
- * Supports real-time subscriptions, announcement syncing,
- * read/unread state, and full CRUD operations.
- */
+// src/services/notificationService.ts
+// Offline-first: reads Dexie first, syncs Firestore in background.
+// All original methods and signatures preserved 100%.
 
 import {
   collection,
@@ -21,10 +18,8 @@ import {
   getCountFromServer,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-
-// ─────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────
+import { db as localDB } from '../lib/dexie';
+import syncService from '../lib/syncService';
 
 export type NotificationType =
   | 'announcement'
@@ -46,32 +41,15 @@ export interface AppNotification {
   isRead: boolean;
   createdAt: Date;
   readAt?: Date;
-  /** ID of the source document (e.g. announcement ID) */
   relatedId?: string;
-  /** Source collection name (e.g. 'announcement') */
   relatedType?: string;
-  /** Extra data (teacherName, courseName, grade, etc.) */
   metadata?: Record<string, unknown>;
-  /**
-   * Permanent notifications (announcements, enrollment, QA answers,
-   * exam results, task evaluation) stay until the student manually deletes
-   * them.  Transient notifications (casual in-app confirmations) are
-   * auto-purged after 24 hours.
-   */
   isPermanent?: boolean;
 }
 
-// ─────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────
-
 const NOTIF_COLLECTION = 'notifications';
 
-// ─────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────
-
-function mapDoc(d: ReturnType<typeof getDocs> extends Promise<infer S> ? never : any): AppNotification {
+function mapDoc(d: any): AppNotification {
   const data = d.data();
   return {
     id: d.id,
@@ -81,15 +59,40 @@ function mapDoc(d: ReturnType<typeof getDocs> extends Promise<infer S> ? never :
   } as AppNotification;
 }
 
-// ─────────────────────────────────────────
-// Service
-// ─────────────────────────────────────────
+// ─── Dexie ↔ AppNotification ──────────────────────────────────────────────────
+function toLocalNotif(n: AppNotification) {
+  return {
+    id: n.id,
+    userId: n.userId,
+    title: n.title,
+    body: n.message,
+    read: n.isRead,
+    createdAt: n.createdAt.getTime(),
+    _synced: true,
+    _pendingSync: false,
+    _raw: JSON.stringify(n),
+  };
+}
+
+function fromLocalNotif(local: any): AppNotification | null {
+  try {
+    if (local._raw) return JSON.parse(local._raw) as AppNotification;
+    // Fallback reconstruction
+    return {
+      id: local.id,
+      userId: local.userId,
+      title: local.title,
+      message: local.body,
+      type: 'system',
+      priority: 'medium',
+      isRead: local.read,
+      createdAt: local.createdAt ? new Date(local.createdAt) : new Date(),
+    };
+  } catch { return null; }
+}
 
 export const notificationService = {
-  /**
-   * Create a single notification for a user.
-   * Returns the new document ID.
-   */
+
   async createNotification(
     notification: Omit<AppNotification, 'id' | 'createdAt' | 'isRead'>
   ): Promise<string> {
@@ -99,16 +102,39 @@ export const notificationService = {
         isRead: false,
         createdAt: Timestamp.now(),
       });
+      // Persist to Dexie
+      const newNotif: AppNotification = {
+        ...notification,
+        id: docRef.id,
+        isRead: false,
+        createdAt: new Date(),
+      };
+      await localDB.notifications.put(toLocalNotif(newNotif)).catch(() => {});
       return docRef.id;
     } catch (err: any) {
       throw new Error(`createNotification: ${err.message}`);
     }
   },
 
-  /**
-   * Fetch all notifications for a user, newest first.
-   */
   async getUserNotifications(userId: string): Promise<AppNotification[]> {
+    // 1. Try Dexie first
+    try {
+      const local = await localDB.notifications
+        .where('userId').equals(userId)
+        .toArray();
+      if (local.length > 0) {
+        const result = local
+          .map(fromLocalNotif)
+          .filter((n): n is AppNotification => n !== null)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+        // Background sync
+        this._syncNotificationsFromFirestore(userId).catch(() => {});
+        return result;
+      }
+    } catch { /* fall through */ }
+
+    // 2. Firestore
     try {
       const q = query(
         collection(db, NOTIF_COLLECTION),
@@ -116,17 +142,55 @@ export const notificationService = {
         orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(mapDoc);
+      const result = snapshot.docs.map(mapDoc);
+
+      // Persist to Dexie
+      await localDB.notifications.bulkPut(result.map(toLocalNotif)).catch(() => {});
+      return result;
     } catch (err: any) {
       throw new Error(`getUserNotifications: ${err.message}`);
     }
   },
 
-  /**
-   * Returns the count of unread notifications for a user.
-   * Uses getCountFromServer (single read — no payload cost).
-   */
+  // Background sync helper
+  async _syncNotificationsFromFirestore(userId: string): Promise<void> {
+    try {
+      const q = query(
+        collection(db, NOTIF_COLLECTION),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const result = snapshot.docs.map(mapDoc);
+      await localDB.notifications.bulkPut(result.map(toLocalNotif)).catch(() => {});
+    } catch { /* non-fatal */ }
+  },
+
   async getUnreadCount(userId: string): Promise<number> {
+    // Try local count first (instant, offline-safe)
+    try {
+      const local = await localDB.notifications
+        .where('userId').equals(userId)
+        .toArray();
+      const localUnread = local.filter(n => !n.read).length;
+      if (local.length > 0) {
+        // Background: verify with Firestore
+        if (navigator.onLine) {
+          getCountFromServer(query(
+            collection(db, NOTIF_COLLECTION),
+            where('userId', '==', userId),
+            where('isRead', '==', false)
+          )).then(snap => {
+            // If count differs significantly, trigger a full sync
+            if (Math.abs(snap.data().count - localUnread) > 2) {
+              this._syncNotificationsFromFirestore(userId).catch(() => {});
+            }
+          }).catch(() => {});
+        }
+        return localUnread;
+      }
+    } catch { /* fall through */ }
+
     try {
       const q = query(
         collection(db, NOTIF_COLLECTION),
@@ -140,24 +204,36 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Mark a single notification as read.
-   */
   async markAsRead(notificationId: string): Promise<void> {
+    // Update Dexie immediately
+    try {
+      const local = await localDB.notifications.get(notificationId);
+      if (local) await localDB.notifications.put({ ...local, read: true });
+    } catch { /* non-fatal */ }
+
     try {
       await updateDoc(doc(db, NOTIF_COLLECTION, notificationId), {
         isRead: true,
         readAt: Timestamp.now(),
       });
-    } catch (err: any) {
-      throw new Error(`markAsRead: ${err.message}`);
+    } catch {
+      await syncService.writeDoc(NOTIF_COLLECTION, notificationId, {
+        isRead: true,
+        readAt: Timestamp.now(),
+      });
     }
   },
 
-  /**
-   * Mark ALL unread notifications as read for a user in a single batch.
-   */
   async markAllAsRead(userId: string): Promise<void> {
+    // Update all in Dexie immediately
+    try {
+      const local = await localDB.notifications
+        .where('userId').equals(userId)
+        .toArray();
+      const updates = local.map(n => ({ ...n, read: true }));
+      await localDB.notifications.bulkPut(updates).catch(() => {});
+    } catch { /* non-fatal */ }
+
     try {
       const q = query(
         collection(db, NOTIF_COLLECTION),
@@ -166,7 +242,6 @@ export const notificationService = {
       );
       const snapshot = await getDocs(q);
       if (snapshot.empty) return;
-
       const batch = writeBatch(db);
       const now = Timestamp.now();
       snapshot.docs.forEach(d => {
@@ -178,21 +253,24 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Delete a single notification.
-   */
   async deleteNotification(notificationId: string): Promise<void> {
+    await localDB.notifications.delete(notificationId).catch(() => {});
     try {
       await deleteDoc(doc(db, NOTIF_COLLECTION, notificationId));
-    } catch (err: any) {
-      throw new Error(`deleteNotification: ${err.message}`);
+    } catch {
+      await syncService.deleteDoc(NOTIF_COLLECTION, notificationId);
     }
   },
 
-  /**
-   * Delete ALL notifications for a user in a single batch.
-   */
   async clearAllNotifications(userId: string): Promise<void> {
+    // Clear from Dexie immediately
+    try {
+      const local = await localDB.notifications
+        .where('userId').equals(userId)
+        .toArray();
+      await localDB.notifications.bulkDelete(local.map(n => n.id)).catch(() => {});
+    } catch { /* non-fatal */ }
+
     try {
       const q = query(
         collection(db, NOTIF_COLLECTION),
@@ -200,7 +278,6 @@ export const notificationService = {
       );
       const snapshot = await getDocs(q);
       if (snapshot.empty) return;
-
       const batch = writeBatch(db);
       snapshot.docs.forEach(d => batch.delete(d.ref));
       await batch.commit();
@@ -209,19 +286,26 @@ export const notificationService = {
     }
   },
 
-  /**
-   * Subscribe to real-time notification updates for a user.
-   * Returns an unsubscribe function — call it on component unmount.
-   *
-   * @example
-   * const unsub = notificationService.subscribeToNotifications(userId, setNotifications);
-   * return () => unsub();
-   */
   subscribeToNotifications(
     userId: string,
     callback: (notifications: AppNotification[]) => void,
     onError?: (err: Error) => void
   ): () => void {
+    // Seed from Dexie immediately so UI shows data before Firestore resolves
+    localDB.notifications
+      .where('userId').equals(userId)
+      .toArray()
+      .then(local => {
+        if (local.length > 0) {
+          const result = local
+            .map(fromLocalNotif)
+            .filter((n): n is AppNotification => n !== null)
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          callback(result);
+        }
+      })
+      .catch(() => {});
+
     const q = query(
       collection(db, NOTIF_COLLECTION),
       where('userId', '==', userId),
@@ -231,7 +315,10 @@ export const notificationService = {
     const unsub = onSnapshot(
       q,
       snapshot => {
-        callback(snapshot.docs.map(mapDoc));
+        const result = snapshot.docs.map(mapDoc);
+        // Persist to Dexie on every update
+        localDB.notifications.bulkPut(result.map(toLocalNotif)).catch(() => {});
+        callback(result);
       },
       err => {
         console.error('notificationService.subscribeToNotifications error:', err);
@@ -242,20 +329,12 @@ export const notificationService = {
     return unsub;
   },
 
-  /**
-   * Syncs announcements targeted at the user into their personal
-   * notifications collection.  Idempotent — already-synced announcements
-   * are skipped by checking `relatedId` against existing notification docs.
-   *
-   * Call this once on mount of the notifications page (or after sign-in).
-   */
   async syncAnnouncementsAsNotifications(
     userId: string,
     userRole: string,
     enrolledCourseIds: string[] = []
   ): Promise<void> {
     try {
-      // 1. Collect already-synced announcement IDs
       const existingQ = query(
         collection(db, NOTIF_COLLECTION),
         where('userId', '==', userId),
@@ -268,19 +347,14 @@ export const notificationService = {
           .filter((id): id is string => Boolean(id))
       );
 
-      // 2. Fetch announcements visible to the user
-      // Dynamic import avoids circular dependency
       const { announcementService } = await import('./announcementService');
       const announcements = await announcementService.getAnnouncementsForUser(
-        userId,
-        userRole,
-        enrolledCourseIds
+        userId, userRole, enrolledCourseIds
       );
 
       const fresh = announcements.filter(a => !syncedIds.has(a.id));
       if (fresh.length === 0) return;
 
-      // 3. Batch-write new notification docs
       const batch = writeBatch(db);
       fresh.forEach(a => {
         const newRef = doc(collection(db, NOTIF_COLLECTION));
@@ -303,17 +377,31 @@ export const notificationService = {
       });
       await batch.commit();
     } catch (err: any) {
-      // Non-fatal — surface as warning so the page still loads
       console.warn('notificationService.syncAnnouncementsAsNotifications:', err.message);
     }
   },
-  /**
-   * Delete all non-permanent notifications older than 24 hours for a user.
-   * Call this once on mount of NotificationsPage so the inbox stays clean.
-   */
+
   async purgeTransient(userId: string): Promise<void> {
+    // Also purge from Dexie
     try {
-      const cutoff = new Date(Date.now() - 10 * 1000); // 10 seconds
+      const local = await localDB.notifications
+        .where('userId').equals(userId)
+        .toArray();
+      const cutoff = Date.now() - 10 * 1000;
+      const toDelete = local.filter(n => {
+        if (!n._raw) return false;
+        try {
+          const parsed = JSON.parse(n._raw) as AppNotification;
+          return !parsed.isPermanent && n.createdAt && n.createdAt < cutoff;
+        } catch { return false; }
+      });
+      if (toDelete.length > 0) {
+        await localDB.notifications.bulkDelete(toDelete.map(n => n.id)).catch(() => {});
+      }
+    } catch { /* non-fatal */ }
+
+    try {
+      const cutoff = new Date(Date.now() - 10 * 1000);
       const q = query(
         collection(db, NOTIF_COLLECTION),
         where('userId', '==', userId),
@@ -325,9 +413,7 @@ export const notificationService = {
       const batch = writeBatch(db);
       snap.docs.forEach(d => batch.delete(d.ref));
       await batch.commit();
-    } catch {
-      // Non-fatal — surface nothing, page still loads
-    }
+    } catch { /* non-fatal */ }
   },
-
 };
+
