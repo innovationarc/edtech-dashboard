@@ -50,7 +50,31 @@ jobs:
           SHARP_IGNORE_GLOBAL_LIBVIPS: true
         timeout-minutes: 10
 
-      # ── 6. Add Android platform (skip if already exists) ─────────────────────
+      # ── 6. Build React app (produces dist/) ──────────────────────────────────
+      # All VITE_ env vars are baked into the bundle at build time.
+      # The APK only needs Firebase config + gateway URL/key — no other secrets.
+      - name: Build React app
+        run: npm run build
+        env:
+          # ── Firebase (public by design) ──
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          # ── Gateway ──
+          VITE_GATEWAY_URL: ${{ secrets.VITE_GATEWAY_URL }}
+          VITE_GATEWAY_APP_KEY: ${{ secrets.VITE_GATEWAY_APP_KEY }}
+          # ── Render (geo lookup) ──
+          VITE_RENDER_URL: ${{ secrets.VITE_RENDER_URL }}
+          # ── reCAPTCHA site key (public) ──
+          VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
+          # ── SMS master key (needed by authService gateway calls) ──
+          VITE_SMS_MASTER_KEY: ${{ secrets.VITE_SMS_MASTER_KEY }}
+        timeout-minutes: 10
+
+      # ── 7. Add Android platform (skip if already exists) ─────────────────────
       - name: Add Android platform
         run: |
           if [ ! -d "android" ]; then
@@ -59,7 +83,7 @@ jobs:
             echo "Android platform already exists, skipping."
           fi
 
-      # ── 7. Create required directories ───────────────────────────────────────
+      # ── 8. Create required directories ───────────────────────────────────────
       - name: Create Android asset directories
         run: |
           mkdir -p android/app/src/main/assets
@@ -67,47 +91,42 @@ jobs:
           mkdir -p android/app/src/main/res/drawable-land
           mkdir -p android/app/src/main/res/drawable-port
 
-      # ── 8. Copy splash resources ─────────────────────────────────────────────
-      # splash.xml defines the native splash screen background + logo
-      # splash_logo.png is your app icon used as the splash center image
+      # ── 9. Copy splash resources ─────────────────────────────────────────────
       - name: Copy splash screen resources
         run: |
-          # Remove any existing splash.png to avoid duplicate resource conflict
           rm -f android/app/src/main/res/drawable/splash.png
           rm -f android/app/src/main/res/drawable-land/splash.png
           rm -f android/app/src/main/res/drawable-port/splash.png
 
-          # Copy splash drawable XML
           cp android-assets/drawable/splash.xml android/app/src/main/res/drawable/splash.xml
           cp android-assets/drawable/splash.xml android/app/src/main/res/drawable-land/splash.xml
           cp android-assets/drawable/splash.xml android/app/src/main/res/drawable-port/splash.xml
 
-          # Use app icon as splash logo if splash_logo.png doesn't exist yet
           if [ -f "android-assets/splash_logo.png" ]; then
             cp android-assets/splash_logo.png android/app/src/main/res/drawable/splash_logo.png
           elif [ -f "public/icons/icon-512x512.png" ]; then
             cp public/icons/icon-512x512.png android/app/src/main/res/drawable/splash_logo.png
           else
-            # Create a minimal placeholder so the build doesn't fail
             convert -size 288x288 xc:#6366f1 android/app/src/main/res/drawable/splash_logo.png 2>/dev/null || \
             echo "No splash logo found — splash will show solid color only"
           fi
 
-      # ── 9. Sync Capacitor ────────────────────────────────────────────────────
+      # ── 10. Sync Capacitor ───────────────────────────────────────────────────
+      # cap sync copies dist/ into android/app/src/main/assets/public
       - name: Sync Capacitor with Android
         run: npx cap sync android
 
-      # ── 10. Grant Gradle execute permission ──────────────────────────────────
+      # ── 11. Grant Gradle execute permission ──────────────────────────────────
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # ── 11a. Build DEBUG APK ─────────────────────────────────────────────────
+      # ── 12a. Build DEBUG APK ─────────────────────────────────────────────────
       - name: Build Debug APK
         if: ${{ github.event.inputs.build_type == 'debug' }}
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      # ── 11b. Build RELEASE APK ───────────────────────────────────────────────
+      # ── 12b. Build RELEASE APK ───────────────────────────────────────────────
       - name: Build Release APK
         if: ${{ github.event.inputs.build_type == 'release' }}
         working-directory: android
@@ -120,7 +139,7 @@ jobs:
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
             --no-daemon
 
-      # ── 12. Find and rename APK ──────────────────────────────────────────────
+      # ── 13. Find and rename APK ──────────────────────────────────────────────
       - name: Locate APK
         id: find_apk
         run: |
@@ -134,7 +153,7 @@ jobs:
           cp "$APK_PATH" "$NEW_NAME"
           echo "apk_name=$NEW_NAME" >> $GITHUB_OUTPUT
 
-      # ── 13. Upload APK ───────────────────────────────────────────────────────
+      # ── 14. Upload APK ───────────────────────────────────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -142,13 +161,12 @@ jobs:
           path: ${{ steps.find_apk.outputs.apk_name }}
           retention-days: 30
 
-      # ── 14. Summary ──────────────────────────────────────────────────────────
+      # ── 15. Summary ──────────────────────────────────────────────────────────
       - name: Build summary
         run: |
           echo "## ✅ pie Academy APK Built" >> $GITHUB_STEP_SUMMARY
           echo "- **Type:** ${{ github.event.inputs.build_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **File:** ${{ steps.find_apk.outputs.apk_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **App loads:** https://edtech-dashboard-alpha.vercel.app" >> $GITHUB_STEP_SUMMARY
           echo "- **Built at:** $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Download from the **Artifacts** section above ⬆️" >> $GITHUB_STEP_SUMMARY
