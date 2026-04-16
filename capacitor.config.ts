@@ -3,10 +3,8 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.pieos.academy',
   appName: 'pie Academy',
-  server: {
-    url: 'https://edtech-dashboard-alpha.vercel.app',
-    cleartext: false,
-  },
+  // No server.url — app loads from bundled dist/ inside the APK.
+  // This enables full offline support.
   webDir: 'dist',
   android: {
     allowMixedContent: false,
@@ -15,11 +13,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // Don't auto-hide — we call SplashScreen.hide() manually from React
-      // once the app is fully loaded
       launchShowDuration: 0,
       launchAutoHide: false,
-      // Show splash on app resume too (coming back from background)
       showOnLaunch: true,
       backgroundColor: '#0f0f1a',
       androidSplashResourceName: 'splash',
