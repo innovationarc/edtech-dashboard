@@ -50,6 +50,10 @@ jobs:
           SHARP_IGNORE_GLOBAL_LIBVIPS: true
         timeout-minutes: 10
 
+      # ── 5.5. Clear Vite cache (ensures fresh bundle every build) ─────────────
+      - name: Clear Vite cache
+        run: rm -rf node_modules/.vite dist
+
       # ── 6. Build React app (produces dist/) ──────────────────────────────────
       # All VITE_ env vars are baked into the bundle at build time.
       # The APK only needs Firebase config + gateway URL/key — no other secrets.
