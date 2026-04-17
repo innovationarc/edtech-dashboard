@@ -1,6 +1,6 @@
 // src/App.tsx
 import { useEffect } from 'react';
-import { HashRouter as Router } from 'react-router-dom';
+import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './routes';
 import { DashboardProvider } from './contexts/DashboardContext';
 import UpdatePrompt from './components/shared/UpdatePrompt';
