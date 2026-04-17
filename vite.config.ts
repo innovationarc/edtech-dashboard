@@ -7,6 +7,17 @@ export default defineConfig({
   base: './',   // ← CHANGED: relative paths for Capacitor WebView
   plugins: [
     react(),
+
+    // ── Fix Capacitor WebView: remove crossorigin attrs + fix absolute favicon path ──
+    {
+      name: 'capacitor-html-fix',
+      transformIndexHtml(html: string) {
+        return html
+          .replace(/ crossorigin/g, '')
+          .replace(/href="\/vite\.svg"/, 'href="./vite.svg"');
+      },
+    },
+
     VitePWA({
       registerType: 'prompt',
       injectRegister: null,    // ← CHANGED: was 'auto' — disable SW injection for APK
