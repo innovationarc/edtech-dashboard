@@ -303,6 +303,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
                     setUser(null);
                     setIsAuthenticated(false);
                     setSidebarOpen(false);
+                    window.dispatchEvent(new Event('app-signed-out')); // ✅ FIX
 
                     // Set the forced logout message shown on SignInModal
                     setForcedLogoutMessage(
@@ -595,6 +596,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       // Set user state immediately after successful sign-in
       setUser(userProfile);
       setIsAuthenticated(true);
+      window.dispatchEvent(new Event('app-signed-in')); // ✅ FIX
       
       // Only auto-open sidebar on desktop
       if (isDesktop) {
@@ -645,6 +647,7 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
       setUser(null);
       setIsAuthenticated(false);
       setSidebarOpen(false);
+      window.dispatchEvent(new Event('app-signed-out')); // ✅ FIX
     } catch (error: any) {
       // Silent fail in production
     }
