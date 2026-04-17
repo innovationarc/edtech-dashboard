@@ -53,7 +53,8 @@ const DashboardLayout = () => {
   const { sidebarOpen, isAuthenticated, theme, glitterTheme, user } = useDashboard();
   const { status: syncStatus, pendingCount } = useSyncService();
   const [isMobile, setIsMobile] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  // ✅ FIX: Initialize from actual auth state — no more one-render-behind flicker
+  const [showAuthModal, setShowAuthModal] = useState(!isAuthenticated);
   const [uid, setUid] = useState<string | null>(null);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [eyeOffset, setEyeOffset] = useState({ x: 0, y: 0 });
@@ -177,7 +178,8 @@ const DashboardLayout = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  useEffect(() => { setShowAuthModal(!isAuthenticated); }, [isAuthenticated]);
+  // ✅ FIX: Removed useEffect(() => { setShowAuthModal(!isAuthenticated); }, [isAuthenticated]);
+  // showAuthModal is now initialized correctly above — no render-behind delay.
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => setUid(user?.uid ?? null));
