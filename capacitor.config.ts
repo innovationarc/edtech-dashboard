@@ -6,6 +6,9 @@ const config: CapacitorConfig = {
   // No server.url — app loads from bundled dist/ inside the APK.
   // This enables full offline support.
   webDir: 'dist',
+  server: {
+    androidScheme: 'https', // ← ADDED: fixes JS execution blocked on capacitor:// scheme
+  },
   android: {
     allowMixedContent: false,
     captureInput: true,
