@@ -73,7 +73,7 @@ function AppInner() {
   // Not authed → show login immediately, no router needed
   if (!isAuthed) {
     return (
-      <div style={{ backgroundColor: '#0f0f1a', minHeight: '100vh' }}>
+      <div style={{ backgroundColor: '#ff0000', minHeight: '100vh' }}>
         <AppSplash />
         <AuthenticationModal onClose={() => setIsAuthed(true)} />
       </div>
