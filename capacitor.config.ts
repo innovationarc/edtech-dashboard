@@ -3,11 +3,13 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.pieos.academy',
   appName: 'pie Academy',
-  // No server.url — app loads from bundled dist/ inside the APK.
-  // This enables full offline support.
+  // TEMP: Loading from live URL to test if local file serving is the issue.
+  // Revert webDir and remove server.url once confirmed working.
   webDir: 'dist',
   server: {
-    androidScheme: 'https', // ← ADDED: fixes JS execution blocked on capacitor:// scheme
+    url: 'https://icdcbd.org',
+    cleartext: false,
+    androidScheme: 'https',
   },
   android: {
     allowMixedContent: false,
