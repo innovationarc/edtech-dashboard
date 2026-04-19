@@ -55,26 +55,19 @@ jobs:
         run: rm -rf node_modules/.vite dist
 
       # ── 6. Build React app (produces dist/) ──────────────────────────────────
-      # All VITE_ env vars are baked into the bundle at build time.
-      # The APK only needs Firebase config + gateway URL/key — no other secrets.
       - name: Build React app
         run: npm run build
         env:
-          # ── Firebase (public by design) ──
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
           VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          # ── Gateway ──
           VITE_GATEWAY_URL: ${{ secrets.VITE_GATEWAY_URL }}
           VITE_GATEWAY_APP_KEY: ${{ secrets.VITE_GATEWAY_APP_KEY }}
-          # ── Render (geo lookup) ──
           VITE_RENDER_URL: ${{ secrets.VITE_RENDER_URL }}
-          # ── reCAPTCHA site key (public) ──
           VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
-          # ── SMS master key (needed by authService gateway calls) ──
           VITE_SMS_MASTER_KEY: ${{ secrets.VITE_SMS_MASTER_KEY }}
         timeout-minutes: 10
 
@@ -116,9 +109,39 @@ jobs:
           fi
 
       # ── 10. Sync Capacitor ───────────────────────────────────────────────────
-      # cap sync copies dist/ into android/app/src/main/assets/public
       - name: Sync Capacitor with Android
         run: npx cap sync android
+
+      # ── 10.5. Patch AndroidManifest for WebView JS execution ─────────────────
+      - name: Patch AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          echo "── Before patch ──"
+          cat "$MANIFEST"
+          # Add hardwareAccelerated and usesCleartextTraffic to <application tag
+          sed -i 's/<application/<application android:hardwareAccelerated="true" android:usesCleartextTraffic="true"/' "$MANIFEST"
+          echo "── After patch ──"
+          cat "$MANIFEST"
+
+      # ── 10.6. Add network security config ────────────────────────────────────
+      - name: Create network security config
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <domain-config cleartextTrafficPermitted="true">
+                  <domain includeSubdomains="true">localhost</domain>
+              </domain-config>
+              <base-config cleartextTrafficPermitted="true">
+                  <trust-anchors>
+                      <certificates src="system"/>
+                  </trust-anchors>
+              </base-config>
+          </network-security-config>
+          EOF
+          # Reference it in the manifest
+          sed -i 's/android:hardwareAccelerated="true"/android:hardwareAccelerated="true" android:networkSecurityConfig="@xml\/network_security_config"/' "$MANIFEST"
 
       # ── 11. Grant Gradle execute permission ──────────────────────────────────
       - name: Make gradlew executable
