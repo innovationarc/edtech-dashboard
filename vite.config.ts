@@ -4,7 +4,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: './',   // ← CHANGED: relative paths for Capacitor WebView
+  base: './',
+  resolve: {
+    alias: {
+      crypto: 'crypto-js', // ← ADDED: prevent broken 'crypto' npm package from breaking bundle
+    },
+  },
   plugins: [
     react(),
 
@@ -20,8 +25,8 @@ export default defineConfig({
 
     VitePWA({
       registerType: 'prompt',
-      injectRegister: null,    // ← CHANGED: was 'auto' — disable SW injection for APK
-      disable: true,           // ← CHANGED: disable SW entirely — Dexie handles offline
+      injectRegister: null,
+      disable: true,
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icons/*.png'],
 
       manifest: {
