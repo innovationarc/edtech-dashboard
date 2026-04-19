@@ -112,20 +112,18 @@ jobs:
       - name: Sync Capacitor with Android
         run: npx cap sync android
 
-      # ── 10.5. Patch AndroidManifest for WebView JS execution ─────────────────
-      - name: Patch AndroidManifest.xml
+      # ── 10.5. Patch AndroidManifest + network security config ────────────────
+      - name: Patch AndroidManifest and add network security config
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          echo "── Before patch ──"
+          
+          # Add hardwareAccelerated, cleartextTraffic, and networkSecurityConfig
+          sed -i 's/<application/<application android:hardwareAccelerated="true" android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml\/network_security_config"/' "$MANIFEST"
+          
+          echo "── Patched manifest ──"
           cat "$MANIFEST"
-          # Add hardwareAccelerated and usesCleartextTraffic to <application tag
-          sed -i 's/<application/<application android:hardwareAccelerated="true" android:usesCleartextTraffic="true"/' "$MANIFEST"
-          echo "── After patch ──"
-          cat "$MANIFEST"
-
-      # ── 10.6. Add network security config ────────────────────────────────────
-      - name: Create network security config
-        run: |
+          
+          # Create network security config
           mkdir -p android/app/src/main/res/xml
           cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -140,8 +138,9 @@ jobs:
               </base-config>
           </network-security-config>
           EOF
-          # Reference it in the manifest
-          sed -i 's/android:hardwareAccelerated="true"/android:hardwareAccelerated="true" android:networkSecurityConfig="@xml\/network_security_config"/' "$MANIFEST"
+          
+          echo "── Network security config created ──"
+          cat android/app/src/main/res/xml/network_security_config.xml
 
       # ── 11. Grant Gradle execute permission ──────────────────────────────────
       - name: Make gradlew executable
