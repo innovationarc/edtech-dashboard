@@ -111,7 +111,15 @@ jobs:
       # ── 10. Sync Capacitor ───────────────────────────────────────────────────
       - name: Sync Capacitor with Android
         run: npx cap sync android
-
+# ── 10.4. Verify dist was synced ─────────────────────────────────────────
+      - name: Verify Capacitor sync
+        run: |
+          echo "── dist/ contents ──"
+          ls -la dist/
+          echo "── Synced assets ──"
+          ls -la android/app/src/main/assets/public/
+          echo "── index.html content ──"
+          cat android/app/src/main/assets/public/index.html
       # ── 10.5. Patch AndroidManifest + network security config ────────────────
       - name: Patch AndroidManifest and add network security config
         run: |
