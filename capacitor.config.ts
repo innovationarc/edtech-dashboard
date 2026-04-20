@@ -3,12 +3,8 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.pieos.academy',
   appName: 'pie Academy',
-  // TEMP: Loading from live URL to test if local file serving is the issue.
-  // Revert webDir and remove server.url once confirmed working.
   webDir: 'dist',
   server: {
-    url: 'https://icdcbd.org',
-    cleartext: false,
     androidScheme: 'https',
   },
   android: {
@@ -18,8 +14,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 0,
-      launchAutoHide: false,
+      launchShowDuration: 3000,
+      launchAutoHide: true,  // ← CHANGED
       showOnLaunch: true,
       backgroundColor: '#0f0f1a',
       androidSplashResourceName: 'splash',
