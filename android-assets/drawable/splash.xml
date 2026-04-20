@@ -3,7 +3,7 @@
 
     <!-- Background color matching app theme -->
     <item>
-        <color android:color="#0f0f1a" />
+        <color android:color="#fc0303" />
     </item>
 
     <!-- Centered logo bitmap -->
