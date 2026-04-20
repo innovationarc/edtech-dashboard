@@ -88,7 +88,11 @@ jobs:
           mkdir -p android/app/src/main/res/drawable-land
           mkdir -p android/app/src/main/res/drawable-port
 
-      # ── 9. Copy splash resources ─────────────────────────────────────────────
+      # ── 9. Sync Capacitor ────────────────────────────────────────────────────
+      - name: Sync Capacitor with Android
+        run: npx cap sync android
+
+      # ── 10. Copy splash resources (AFTER cap sync so it doesn't get overwritten)
       - name: Copy splash screen resources
         run: |
           rm -f android/app/src/main/res/drawable/splash.png
@@ -108,10 +112,10 @@ jobs:
             echo "No splash logo found — splash will show solid color only"
           fi
 
-      # ── 10. Sync Capacitor ───────────────────────────────────────────────────
-      - name: Sync Capacitor with Android
-        run: npx cap sync android
-# ── 10.4. Verify dist was synced ─────────────────────────────────────────
+          echo "── Splash color check ──"
+          cat android/app/src/main/res/drawable/splash.xml
+
+      # ── 10.4. Verify dist was synced ─────────────────────────────────────────
       - name: Verify Capacitor sync
         run: |
           echo "── dist/ contents ──"
@@ -120,18 +124,17 @@ jobs:
           ls -la android/app/src/main/assets/public/
           echo "── index.html content ──"
           cat android/app/src/main/assets/public/index.html
+
       # ── 10.5. Patch AndroidManifest + network security config ────────────────
       - name: Patch AndroidManifest and add network security config
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           
-          # Add hardwareAccelerated, cleartextTraffic, and networkSecurityConfig
           sed -i 's/<application/<application android:hardwareAccelerated="true" android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml\/network_security_config"/' "$MANIFEST"
           
           echo "── Patched manifest ──"
           cat "$MANIFEST"
           
-          # Create network security config
           mkdir -p android/app/src/main/res/xml
           cat > android/app/src/main/res/xml/network_security_config.xml << 'EOF'
           <?xml version="1.0" encoding="utf-8"?>
