@@ -495,7 +495,7 @@ const AnswerQuestionModal = ({ question, teacherId, teacherName, onClose, onSucc
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-[9999] p-4 overflow-y-auto">
       <div className="bg-background-900 rounded-xl w-full max-w-4xl my-8 relative">
         <button
           onClick={onClose}
@@ -727,7 +727,7 @@ const AddKnowledgeModal = ({ teacherId, teacherName, subjects, onClose, onSucces
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-[9999] p-4 overflow-y-auto">
       <div className="bg-background-900 rounded-xl w-full max-w-3xl my-8 relative">
         <button
           onClick={onClose}
