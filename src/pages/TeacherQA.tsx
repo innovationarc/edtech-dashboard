@@ -2,6 +2,7 @@
 // IMPORTANT: Copy this entire file, then immediately paste Part 2 after it
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Search, BookOpen, User, MessageSquare, Loader, AlertCircle, CheckCircle, Clock, Send, X, Mic, FileText, Volume2, Plus, Book, Trash2 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -493,8 +494,8 @@ const AnswerQuestionModal = ({ question, teacherId, teacherName, onClose, onSucc
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-background-900 rounded-xl w-full max-w-4xl my-8 relative">
         <button
           onClick={onClose}
@@ -639,7 +640,8 @@ const AnswerQuestionModal = ({ question, teacherId, teacherName, onClose, onSucc
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -724,8 +726,8 @@ const AddKnowledgeModal = ({ teacherId, teacherName, subjects, onClose, onSucces
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-background-900 rounded-xl w-full max-w-3xl my-8 relative">
         <button
           onClick={onClose}
@@ -870,7 +872,8 @@ const AddKnowledgeModal = ({ teacherId, teacherName, subjects, onClose, onSucces
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
