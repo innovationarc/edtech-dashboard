@@ -2,6 +2,7 @@
 // Fixed: courseService.getCoursesByInstructor, class grade dropdown, student picker, dashboard-matched styling
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus, Search, Edit2, Trash2, Eye, ChevronDown, X, Loader2,
   BookOpen, FolderOpen, Beaker, MessageSquare, Users, Link2, GraduationCap,
@@ -282,8 +283,8 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
   const modalBg: React.CSSProperties = { background: 'var(--color-surface, #1f2937)', border: '1px solid var(--color-border, rgba(255,255,255,0.08))' };
   const secBg: React.CSSProperties = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" style={modalBg}>
         <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
           <h2 className="text-base font-semibold text-white">{editGroup ? 'Edit Task Group' : 'New Task Group'}</h2>
@@ -415,7 +416,8 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -537,8 +539,8 @@ const TaskModal = ({ groupId, teacherId, existingTasks, editTask, onClose, onSav
   const typeMeta = TASK_TYPES.find(t => t.type === f.type)!;
   const TypeIcon = typeMeta.icon;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" style={modalBg}>
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
@@ -860,7 +862,8 @@ const TaskModal = ({ groupId, teacherId, existingTasks, editTask, onClose, onSav
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -909,8 +912,8 @@ const GradingModal = ({ sub, task, teacherId, teacherName, onClose, onGraded }: 
   const modalBg: React.CSSProperties = { background: 'var(--color-surface, #1f2937)', border: '1px solid var(--color-border, rgba(255,255,255,0.08))' };
   const secBg: React.CSSProperties = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" style={modalBg}>
         <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
           <div>
@@ -1013,7 +1016,8 @@ const GradingModal = ({ sub, task, teacherId, teacherName, onClose, onGraded }: 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
