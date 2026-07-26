@@ -1,7 +1,7 @@
 // src/pages/TeacherDashboard.tsx
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare } from 'lucide-react'; // Import MessageSquare
+import { format, formatDistanceToNow } from 'date-fns';
+import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
 import StatsCard from '../components/ui/StatsCard';
 import { getRandomQuoteByCategory } from '../utils/quotes';
@@ -10,7 +10,8 @@ import { useDashboard } from '../contexts/DashboardContext';
 import { userService } from '../services/userService';
 import { courseService } from '../services/courseService';
 import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService'; // Import studyPlanService
-import { qaService } from '../services/qaService'; // Import qaService for real-time Q&A notifications
+import { qaService, Question } from '../services/qaService'; // Import qaService for real-time Q&A notifications
+import { taskService, TaskGroup, Submission } from '../services/taskService';
 
 export default function TeacherDashboard() {
   const { user } = useDashboard();
@@ -26,6 +27,12 @@ export default function TeacherDashboard() {
   const [recentStudentActivity, setRecentStudentActivity] = useState<any[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<StudyPlanEvent[]>([]); // Use StudyPlanEvent type
   const [pendingQuestionsCount, setPendingQuestionsCount] = useState(0); // New state for pending questions
+
+  // ── "Needs Your Attention" widget state ──
+  const [ungradedSubmissions, setUngradedSubmissions] = useState<(Submission & { groupTitle: string })[]>([]);
+  const [dueSoonGroups, setDueSoonGroups] = useState<TaskGroup[]>([]);
+  const [pendingQuestionsPreview, setPendingQuestionsPreview] = useState<Question[]>([]);
+  const [attentionLoading, setAttentionLoading] = useState(true);
 
   useEffect(() => {
     // Set a new random education-focused quote when component mounts
@@ -50,6 +57,9 @@ export default function TeacherDashboard() {
           }
         }
         setPendingQuestionsCount(newPendingCount);
+        setPendingQuestionsPreview(
+          [...questions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).slice(0, 3)
+        );
       });
 
       return () => unsubscribe();
@@ -67,13 +77,15 @@ export default function TeacherDashboard() {
         teacherCourses,
         allEnrollments,
         teacherStudyPlanEvents, // Fetch study plan events
-        pendingQuestions // Fetch pending questions
+        pendingQuestions, // Fetch pending questions
+        teacherTaskGroups // Fetch this teacher's task groups (for grading + due-soon widget)
       ] = await Promise.all([
         userService.getAllUsers().catch(() => []),
         courseService.getCoursesByInstructor(user.uid).catch(() => [],),
         courseService.getAllEnrollments().catch(() => []),
         studyPlanService.getEventsByTeacher(user.uid).catch(() => []), // Fetch events for this teacher
-        qaService.getQuestions(undefined, 'pending').catch(() => []) // Fetch pending questions
+        qaService.getQuestions(undefined, 'pending').catch(() => []), // Fetch pending questions
+        taskService.getTaskGroupsByTeacher(user.uid).catch(() => [])
       ]);
 
       // Total Students
@@ -122,14 +134,52 @@ export default function TeacherDashboard() {
 
       setUpcomingClasses(filteredUpcomingClasses);
 
-      // Set pending questions count
+      // Set pending questions count + a small preview (oldest-waiting first = most urgent)
       setPendingQuestionsCount(pendingQuestions.length);
+      setPendingQuestionsPreview(
+        [...pendingQuestions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).slice(0, 3)
+      );
+
+      // Task groups due within the next 3 days (published only — no point nudging drafts)
+      const dueWindow = new Date(today);
+      dueWindow.setDate(today.getDate() + 3);
+      setDueSoonGroups(
+        teacherTaskGroups
+          .filter(g => g.status === 'published' && g.dueDate >= now && g.dueDate <= dueWindow)
+          .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+      );
+
+      // Ungraded submissions across all this teacher's task groups
+      loadUngradedSubmissions(teacherTaskGroups);
 
     } catch (err: any) {
       console.error('Error loading teacher dashboard data:', err);
       setError('Failed to load dashboard data. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Pulls submissions for every task group this teacher owns and keeps the ones still awaiting a grade.
+  // Kept separate from loadDashboardData so a failure here never blocks the rest of the dashboard.
+  const loadUngradedSubmissions = async (groups: TaskGroup[]) => {
+    setAttentionLoading(true);
+    try {
+      const publishedGroups = groups.filter(g => g.status !== 'draft');
+      const perGroupSubs = await Promise.all(
+        publishedGroups.map(g => taskService.getGroupSubmissions(g.id).catch(() => []))
+      );
+      const ungraded = publishedGroups.flatMap((g, i) =>
+        perGroupSubs[i]
+          .filter(s => s.status !== 'reviewed')
+          .map(s => ({ ...s, groupTitle: g.title }))
+      ).sort((a, b) => a.submittedAt.getTime() - b.submittedAt.getTime()); // oldest waiting first
+      setUngradedSubmissions(ungraded);
+    } catch (err) {
+      console.error('Error loading ungraded submissions:', err);
+      setUngradedSubmissions([]);
+    } finally {
+      setAttentionLoading(false);
     }
   };
 
@@ -216,6 +266,15 @@ export default function TeacherDashboard() {
           icon={<Calendar size={20} className="text-white" />}
         />
       </div>
+
+      {/* Needs Your Attention */}
+      <NeedsAttentionCard
+        loading={attentionLoading}
+        ungradedSubmissions={ungradedSubmissions}
+        dueSoonGroups={dueSoonGroups}
+        pendingQuestionsCount={pendingQuestionsCount}
+        pendingQuestionsPreview={pendingQuestionsPreview}
+      />
 
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -322,23 +381,6 @@ export default function TeacherDashboard() {
         </Card>
       </div>
 
-      {/* Pending Questions Card */}
-      <Card title="Pending Student Questions" className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-2xl font-bold text-white">{pendingQuestionsCount}</h3>
-            <p className="text-gray-400">questions awaiting your response</p>
-          </div>
-          <a
-            href="/teacher-qa"
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <MessageSquare size={20} />
-            <span>View Questions</span>
-          </a>
-        </div>
-      </Card>
-
       {/* Create Announcement Modal */}
       {showAnnouncementModal && (
         <CreateAnnouncementModal
@@ -347,5 +389,125 @@ export default function TeacherDashboard() {
         />
       )}
     </div>
+  );
+}
+
+// ─── Needs Your Attention widget ───────────────────────────────────────────────
+// Surfaces the three things a teacher is most likely to be blocking students on:
+// ungraded submissions, task groups due soon, and unanswered questions — each
+// row links straight to where it can be acted on.
+
+function joinNames(names: string[], extraCount: number): string {
+  if (names.length === 0) return '';
+  const base = names.slice(0, 2).join(', ');
+  const remaining = names.length - 2 + extraCount;
+  return remaining > 0 ? `${base} +${remaining} more` : base;
+}
+
+interface NeedsAttentionCardProps {
+  loading: boolean;
+  ungradedSubmissions: (Submission & { groupTitle: string })[];
+  dueSoonGroups: TaskGroup[];
+  pendingQuestionsCount: number;
+  pendingQuestionsPreview: Question[];
+}
+
+function NeedsAttentionCard({
+  loading, ungradedSubmissions, dueSoonGroups, pendingQuestionsCount, pendingQuestionsPreview,
+}: NeedsAttentionCardProps) {
+  const totalItems = ungradedSubmissions.length + dueSoonGroups.length + pendingQuestionsCount;
+
+  const dueDateLabel = (d: Date) => {
+    const diffHrs = (d.getTime() - Date.now()) / 36e5;
+    if (diffHrs <= 24) return `due ${formatDistanceToNow(d, { addSuffix: true })}`;
+    return `due ${format(d, 'MMM d')}`;
+  };
+
+  return (
+    <Card title="Needs Your Attention" icon={<AlertTriangle size={20} className="text-warning-DEFAULT" />} className="p-6">
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader size={16} className="animate-spin" />
+          <span className="text-sm">Checking what needs you...</span>
+        </div>
+      ) : totalItems === 0 ? (
+        <div className="text-center py-8">
+          <PartyPopper size={28} className="mx-auto text-primary-400 mb-2" />
+          <p className="text-white font-medium">You're all caught up!</p>
+          <p className="text-sm text-gray-400 mt-1">No grading, questions, or deadlines need you right now.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {ungradedSubmissions.length > 0 && (
+            <a
+              href="/teacher-tasks"
+              className="flex items-center justify-between gap-3 p-4 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-orange-500"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-orange-500/15 flex items-center justify-center shrink-0">
+                  <ClipboardCheck size={18} className="text-orange-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-white">
+                    {ungradedSubmissions.length} submission{ungradedSubmissions.length === 1 ? '' : 's'} awaiting grading
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {joinNames(ungradedSubmissions.map(s => s.studentName), 0)}
+                    {ungradedSubmissions[0] && ` · oldest waiting ${formatDistanceToNow(ungradedSubmissions[0].submittedAt)}`}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-gray-500 shrink-0" />
+            </a>
+          )}
+
+          {dueSoonGroups.length > 0 && (
+            <a
+              href="/teacher-tasks"
+              className="flex items-center justify-between gap-3 p-4 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-red-500"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
+                  <Clock size={18} className="text-red-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-white">
+                    {dueSoonGroups.length} task group{dueSoonGroups.length === 1 ? '' : 's'} due soon
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {dueSoonGroups[0].title} — {dueDateLabel(dueSoonGroups[0].dueDate)}
+                    {dueSoonGroups.length > 1 && ` +${dueSoonGroups.length - 1} more`}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-gray-500 shrink-0" />
+            </a>
+          )}
+
+          {pendingQuestionsCount > 0 && (
+            <a
+              href="/teacher-qa"
+              className="flex items-center justify-between gap-3 p-4 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-primary-500"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-primary-500/15 flex items-center justify-center shrink-0">
+                  <MessageSquare size={18} className="text-primary-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-white">
+                    {pendingQuestionsCount} question{pendingQuestionsCount === 1 ? '' : 's'} waiting for an answer
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {joinNames(pendingQuestionsPreview.map(q => q.studentName), pendingQuestionsCount - pendingQuestionsPreview.length)}
+                    {pendingQuestionsPreview[0] && ` · ${pendingQuestionsPreview[0].subject}`}
+                  </p>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-gray-500 shrink-0" />
+            </a>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
