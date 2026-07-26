@@ -2,14 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle } from 'lucide-react'; // Import MessageSquare
+import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle, Plus } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
 import StatsCard from '../components/ui/StatsCard';
 import { getRandomQuoteByCategory } from '../utils/quotes';
 import CreateAnnouncementModal from '../components/announcements/CreateAnnouncementModal';
 import { useDashboard } from '../contexts/DashboardContext';
 import { userService } from '../services/userService';
-import { courseService } from '../services/courseService';
+import { courseService, Course } from '../services/courseService';
 import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService'; // Import studyPlanService
 import { qaService, Question } from '../services/qaService'; // Import qaService for real-time Q&A notifications
 import { taskService, TaskGroup, Submission } from '../services/taskService';
@@ -29,6 +29,7 @@ export default function TeacherDashboard() {
   const [recentStudentActivity, setRecentStudentActivity] = useState<any[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<StudyPlanEvent[]>([]); // Use StudyPlanEvent type
   const [pendingQuestionsCount, setPendingQuestionsCount] = useState(0); // New state for pending questions
+  const [myCourses, setMyCourses] = useState<Course[]>([]); // For the "My Courses" strip
 
   // ── "Needs Your Attention" widget state ──
   const [ungradedSubmissions, setUngradedSubmissions] = useState<(Submission & { groupTitle: string })[]>([]);
@@ -95,6 +96,7 @@ export default function TeacherDashboard() {
 
       // Active Courses (created by this teacher)
       setActiveCourses(teacherCourses.length);
+      setMyCourses(teacherCourses);
 
       // Avg performance not available without quiz sessions
       setAvgPerformance(0);
@@ -282,6 +284,9 @@ export default function TeacherDashboard() {
         pendingQuestionsPreview={pendingQuestionsPreview}
       />
 
+      {/* My Courses */}
+      <MyCoursesStrip loading={loading} courses={myCourses} />
+
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="Recent Student Activity" className="p-6">
@@ -297,7 +302,24 @@ export default function TeacherDashboard() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-4 text-gray-400">No recent student activity.</div>
+              <div className="text-center py-6">
+                <p className="text-gray-400 mb-3">No recent student activity.</p>
+                {activeCourses === 0 ? (
+                  <button
+                    onClick={() => navigate('/course-creation')}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    <BookOpen size={14} /> Create your first course
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate('/course-enrollment')}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    <Users size={14} /> View your courses to get students enrolled
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </Card>
@@ -315,7 +337,15 @@ export default function TeacherDashboard() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-4 text-gray-400">No upcoming classes scheduled.</div>
+              <div className="text-center py-6">
+                <p className="text-gray-400 mb-3">No upcoming classes scheduled.</p>
+                <button
+                  onClick={() => navigate('/study-plan')}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                >
+                  <Calendar size={14} /> Schedule a class
+                </button>
+              </div>
             )}
           </div>
         </Card>
@@ -502,6 +532,96 @@ function NeedsAttentionCard({
               <ChevronRight size={18} className="text-gray-500 shrink-0" />
             </a>
           )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── My Courses strip ──────────────────────────────────────────────────────────
+// A real, clickable overview of the courses this teacher actually owns —
+// replaces the previous "Active Courses" number with something browsable.
+
+interface MyCoursesStripProps {
+  loading: boolean;
+  courses: Course[];
+}
+
+function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
+  const navigate = useNavigate();
+
+  return (
+    <Card title="My Courses" icon={<BookOpen size={20} className="text-primary-400" />} className="p-6">
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
+          <Loader size={16} className="animate-spin" />
+          <span className="text-sm">Loading your courses...</span>
+        </div>
+      ) : courses.length === 0 ? (
+        <div className="text-center py-8">
+          <BookOpen size={28} className="mx-auto text-gray-500 mb-2" />
+          <p className="text-white font-medium">You haven't created a course yet</p>
+          <p className="text-sm text-gray-400 mt-1 mb-4">Publish your first course to start enrolling students.</p>
+          <button
+            onClick={() => navigate('/course-creation')}
+            className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+          >
+            <Plus size={16} /> Create a Course
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-1 -mx-1 px-1">
+          {courses.map(course => {
+            const thumb = course.thumbnailUrl || course.thumbnail;
+            return (
+              <div
+                key={course.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/course-creation/${course.id}`)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/course-creation/${course.id}`); }}
+                className="shrink-0 w-56 bg-background-800 hover:bg-background-700 rounded-xl overflow-hidden cursor-pointer transition-colors border border-white/5 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <div className="h-24 bg-gradient-to-br from-primary-600/40 to-secondary-600/30 flex items-center justify-center relative">
+                  {thumb ? (
+                    <img src={thumb} alt={course.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <BookOpen size={26} className="text-white/70" />
+                  )}
+                  <span
+                    className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      course.isPublished ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/30 text-gray-300'
+                    }`}
+                  >
+                    {course.isPublished ? 'Published' : 'Draft'}
+                  </span>
+                </div>
+                <div className="p-3">
+                  <p className="font-medium text-white text-sm truncate" title={course.title}>{course.title}</p>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">{course.class || course.category}</p>
+                  <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+                    <span className="flex items-center gap-1"><Users size={12} /> {course.studentCount || 0}</span>
+                    <span className="flex items-center gap-1">
+                      <Star size={12} className={course.rating > 0 ? 'text-yellow-400 fill-yellow-400' : ''} />
+                      {course.rating > 0 ? course.rating.toFixed(1) : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Always-present "add new" tile */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/course-creation')}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/course-creation'); }}
+            className="shrink-0 w-56 rounded-xl border-2 border-dashed border-white/10 hover:border-primary-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors text-gray-400 hover:text-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <Plus size={22} />
+            <span className="text-sm font-medium">New Course</span>
+          </div>
         </div>
       )}
     </Card>
