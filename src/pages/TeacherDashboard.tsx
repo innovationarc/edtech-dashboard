@@ -1,5 +1,6 @@
 // src/pages/TeacherDashboard.tsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
@@ -15,6 +16,7 @@ import { taskService, TaskGroup, Submission } from '../services/taskService';
 
 export default function TeacherDashboard() {
   const { user } = useDashboard();
+  const navigate = useNavigate();
   const [dailyQuote, setDailyQuote] = useState(() => getRandomQuoteByCategory('education'));
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -246,24 +248,28 @@ export default function TeacherDashboard() {
           value={totalStudents.toString()}
           change={{ value: "12%", positive: true }} // Placeholder for actual change calculation
           icon={<Users size={20} className="text-white" />}
+          onClick={() => navigate('/course-enrollment')}
         />
         <StatsCard
           title="Active Courses"
           value={activeCourses.toString()}
           change={{ value: "2", positive: true }} // Placeholder
           icon={<BookOpen size={20} className="text-white" />}
+          onClick={() => navigate('/course-creation')}
         />
         <StatsCard
           title="Avg. Performance"
           value={`${avgPerformance}%`}
           change={{ value: "5%", positive: true }} // Placeholder
           icon={<TrendingUp size={20} className="text-white" />}
+          onClick={() => navigate('/leaderboard')}
         />
         <StatsCard
           title="Classes This Week"
           value={upcomingClasses.length.toString()} // Use actual count
           change={{ value: "3", positive: true }} // Still hardcoded
           icon={<Calendar size={20} className="text-white" />}
+          onClick={() => navigate('/study-plan')}
         />
       </div>
 
@@ -320,37 +326,27 @@ export default function TeacherDashboard() {
         <div className="lg:col-span-2">
           <Card title="Teaching Resources" className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer">
-                <div className="flex items-center gap-3 mb-2">
-                  <BookOpen size={20} className="text-primary-400" />
-                  <h4 className="font-medium text-white">Lesson Plans</h4>
+              {[
+                { icon: BookOpen, color: 'text-primary-400', title: 'Lesson Plans', desc: 'Create and manage your lesson content', path: '/content' },
+                { icon: Users, color: 'text-secondary-400', title: 'Topic Groups', desc: 'Organize subjects, chapters & topics', path: '/teacher-topic-groups' },
+                { icon: TrendingUp, color: 'text-accent-400', title: 'Progress Reports', desc: 'Grading stats & submission rates', path: '/teacher-tasks' },
+                { icon: Calendar, color: 'text-warning-DEFAULT', title: 'Schedule', desc: 'Manage your teaching schedule', path: '/study-plan' },
+              ].map(({ icon: TileIcon, color, title, desc, path }) => (
+                <div
+                  key={title}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(path)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
+                  className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <TileIcon size={20} className={color} />
+                    <h4 className="font-medium text-white">{title}</h4>
+                  </div>
+                  <p className="text-sm text-gray-400">{desc}</p>
                 </div>
-                <p className="text-sm text-gray-400">Create and manage your lesson plans</p>
-              </div>
-
-              <div className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer">
-                <div className="flex items-center gap-3 mb-2">
-                  <Users size={20} className="text-secondary-400" />
-                  <h4 className="font-medium text-white">Student Groups</h4>
-                </div>
-                <p className="text-sm text-gray-400">Organize students into groups</p>
-              </div>
-
-              <div className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer">
-                <div className="flex items-center gap-3 mb-2">
-                  <TrendingUp size={20} className="text-accent-400" />
-                  <h4 className="font-medium text-white">Progress Reports</h4>
-                </div>
-                <p className="text-sm text-gray-400">Track student progress</p>
-              </div>
-
-              <div className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer">
-                <div className="flex items-center gap-3 mb-2">
-                  <Calendar size={20} className="text-warning-DEFAULT" />
-                  <h4 className="font-medium text-white">Schedule</h4>
-                </div>
-                <p className="text-sm text-gray-400">Manage your teaching schedule</p>
-              </div>
+              ))}
             </div>
           </Card>
         </div>
