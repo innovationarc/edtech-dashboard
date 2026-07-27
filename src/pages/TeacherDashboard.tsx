@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle, Plus } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
-import StatsCard from '../components/ui/StatsCard';
 import { getRandomQuoteByCategory } from '../utils/quotes';
 import CreateAnnouncementModal from '../components/announcements/CreateAnnouncementModal';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -229,51 +228,34 @@ export default function TeacherDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white">Teacher Dashboard</h1>
           <p className="text-gray-400 mt-1">Inspire minds, shape futures</p>
+          <button
+            onClick={handleCreateAnnouncement}
+            className="mt-3 flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg hover:shadow-xl"
+          >
+            <Megaphone size={20} />
+            <span>Create Announcement</span>
+          </button>
         </div>
-        <button
-          onClick={handleCreateAnnouncement}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg hover:shadow-xl"
-        >
-          <Megaphone size={20} />
-          <span>Create Announcement</span>
-        </button>
+
+        {/* Daily Inspiration — compact widget, top-right corner */}
+        <CompactDailyInspiration
+          quote={dailyQuote}
+          onRefresh={() => setDailyQuote(getRandomQuoteByCategory('education'))}
+        />
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard
-          title="Total Students"
-          value={totalStudents.toString()}
-          change={{ value: "12%", positive: true }} // Placeholder for actual change calculation
-          icon={<Users size={20} className="text-white" />}
-          onClick={() => navigate('/course-enrollment')}
-        />
-        <StatsCard
-          title="Active Courses"
-          value={activeCourses.toString()}
-          change={{ value: "2", positive: true }} // Placeholder
-          icon={<BookOpen size={20} className="text-white" />}
-          onClick={() => navigate('/course-creation')}
-        />
-        <StatsCard
-          title="Avg. Performance"
-          value={`${avgPerformance}%`}
-          change={{ value: "5%", positive: true }} // Placeholder
-          icon={<TrendingUp size={20} className="text-white" />}
-          onClick={() => navigate('/leaderboard')}
-        />
-        <StatsCard
-          title="Classes This Week"
-          value={upcomingClasses.length.toString()} // Use actual count
-          change={{ value: "3", positive: true }} // Still hardcoded
-          icon={<Calendar size={20} className="text-white" />}
-          onClick={() => navigate('/study-plan')}
-        />
-      </div>
+      {/* Overview — all 4 key stats in a single compact card */}
+      <OverviewStatsCard
+        totalStudents={totalStudents}
+        activeCourses={activeCourses}
+        avgPerformance={avgPerformance}
+        classesThisWeek={upcomingClasses.length}
+        navigate={navigate}
+      />
 
       {/* Needs Your Attention */}
       <NeedsAttentionCard
@@ -351,61 +333,32 @@ export default function TeacherDashboard() {
         </Card>
       </div>
 
-      {/* Teacher Inspiration Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card title="Teaching Resources" className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { icon: BookOpen, color: 'text-primary-400', title: 'Lesson Plans', desc: 'Create and manage your lesson content', path: '/content' },
-                { icon: Users, color: 'text-secondary-400', title: 'Topic Groups', desc: 'Organize subjects, chapters & topics', path: '/teacher-topic-groups' },
-                { icon: TrendingUp, color: 'text-accent-400', title: 'Progress Reports', desc: 'Grading stats & submission rates', path: '/teacher-tasks' },
-                { icon: Calendar, color: 'text-warning-DEFAULT', title: 'Schedule', desc: 'Manage your teaching schedule', path: '/study-plan' },
-              ].map(({ icon: TileIcon, color, title, desc, path }) => (
-                <div
-                  key={title}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate(path)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
-                  className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <TileIcon size={20} className={color} />
-                    <h4 className="font-medium text-white">{title}</h4>
-                  </div>
-                  <p className="text-sm text-gray-400">{desc}</p>
-                </div>
-              ))}
+      {/* Teaching Resources */}
+      <Card title="Teaching Resources" className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { icon: BookOpen, color: 'text-primary-400', title: 'Lesson Plans', desc: 'Create and manage your lesson content', path: '/content' },
+            { icon: Users, color: 'text-secondary-400', title: 'Topic Groups', desc: 'Organize subjects, chapters & topics', path: '/teacher-topic-groups' },
+            { icon: TrendingUp, color: 'text-accent-400', title: 'Progress Reports', desc: 'Grading stats & submission rates', path: '/teacher-tasks' },
+            { icon: Calendar, color: 'text-warning-DEFAULT', title: 'Schedule', desc: 'Manage your teaching schedule', path: '/study-plan' },
+          ].map(({ icon: TileIcon, color, title, desc, path }) => (
+            <div
+              key={title}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(path)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
+              className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <TileIcon size={20} className={color} />
+                <h4 className="font-medium text-white">{title}</h4>
+              </div>
+              <p className="text-sm text-gray-400">{desc}</p>
             </div>
-          </Card>
+          ))}
         </div>
-
-        {/* Daily Inspiration */}
-        <Card title="Daily Inspiration" icon={<Lightbulb size={20} className="text-warning-DEFAULT" />}>
-          <div className="text-center">
-            <div className="mb-4">
-              <div className="text-4xl mb-3">🎓</div>
-              <blockquote className="text-sm text-gray-300 italic leading-relaxed mb-3">
-                "{dailyQuote.text}"
-              </blockquote>
-              <cite className="text-xs text-primary-400 font-medium">
-                — {dailyQuote.author}
-              </cite>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-background-700">
-              <button
-                onClick={() => setDailyQuote(getRandomQuoteByCategory('education'))}
-                className="text-xs bg-background-700 hover:bg-background-600 text-gray-300 hover:text-white px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 mx-auto"
-              >
-                <RotateCcw size={12} />
-                New Quote
-              </button>
-            </div>
-          </div>
-        </Card>
-      </div>
+      </Card>
 
       {/* Create Announcement Modal */}
       {showAnnouncementModal && (
@@ -625,5 +578,88 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
         </div>
       )}
     </Card>
+  );
+}
+
+// ─── Overview stats card ────────────────────────────────────────────────────────
+// All 4 key numbers in a single compact card instead of 4 separate large cards —
+// keeps the top of the dashboard short while staying just as clickable.
+
+interface OverviewStatsCardProps {
+  totalStudents: number;
+  activeCourses: number;
+  avgPerformance: number;
+  classesThisWeek: number;
+  navigate: (path: string) => void;
+}
+
+function OverviewStatsCard({ totalStudents, activeCourses, avgPerformance, classesThisWeek, navigate }: OverviewStatsCardProps) {
+  const stats = [
+    { label: 'Total Students', value: totalStudents.toString(), icon: Users, color: '#a78bfa', bg: 'rgba(139,92,246,0.12)', path: '/course-enrollment' },
+    { label: 'Active Courses', value: activeCourses.toString(), icon: BookOpen, color: '#38bdf8', bg: 'rgba(14,165,233,0.12)', path: '/course-creation' },
+    { label: 'Avg. Performance', value: `${avgPerformance}%`, icon: TrendingUp, color: '#34d399', bg: 'rgba(16,185,129,0.12)', path: '/leaderboard' },
+    { label: 'Classes This Week', value: classesThisWeek.toString(), icon: Calendar, color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', path: '/study-plan' },
+  ];
+
+  return (
+    <Card title="Overview" className="p-4 sm:p-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-background-700/70">
+        {stats.map(({ label, value, icon: Icon, color, bg, path }) => (
+          <button
+            key={label}
+            onClick={() => navigate(path)}
+            className="flex items-center gap-3 px-3 py-3 lg:px-4 first:pl-0 last:pr-0 hover:bg-background-800/50 rounded-lg transition-colors text-left focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <div
+              className="flex-shrink-0 rounded-xl flex items-center justify-center"
+              style={{ background: bg, color, width: 40, height: 40 }}
+            >
+              <Icon size={18} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 truncate">{label}</p>
+              <p className="text-xl font-bold text-white leading-tight">{value}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Compact Daily Inspiration widget ───────────────────────────────────────────
+// Lives in the top-right corner of the header instead of taking up a full card
+// slot at the bottom of the page.
+
+interface CompactDailyInspirationProps {
+  quote: { text: string; author: string };
+  onRefresh: () => void;
+}
+
+function CompactDailyInspiration({ quote, onRefresh }: CompactDailyInspirationProps) {
+  return (
+    <div className="w-full lg:w-80 shrink-0 rounded-xl p-4 bg-background-800/60 border border-background-700/70">
+      <div className="flex items-start gap-2.5">
+        <Lightbulb size={16} className="text-warning-DEFAULT shrink-0 mt-0.5" />
+        <div className="min-w-0 flex-1">
+          <blockquote
+            className="text-xs text-gray-300 italic leading-relaxed"
+            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            "{quote.text}"
+          </blockquote>
+          <div className="flex items-center justify-between mt-1.5">
+            <cite className="text-[11px] text-primary-400 font-medium not-italic">— {quote.author}</cite>
+            <button
+              onClick={onRefresh}
+              className="text-gray-500 hover:text-gray-300 transition-colors p-1 -m-1 rounded-full"
+              title="New quote"
+            >
+              <RotateCcw size={12} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
