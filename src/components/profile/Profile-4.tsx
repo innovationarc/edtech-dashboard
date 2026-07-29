@@ -4,10 +4,14 @@ import { useDashboard } from '../../contexts/DashboardContext';
 import {
   User, Mail, Phone, MapPin, Calendar, BookOpen,
   Edit, Lock, Printer, Loader, X, Clock, CheckCircle2,
-  GraduationCap, Shield, Zap, Award, Flame, BarChart2,
+  GraduationCap, Shield, Zap, Award, Flame,
   CheckSquare
 } from 'lucide-react';
 import ChangePasswordModal from './ChangePasswordModal';
+import ProfileEditModal from './ProfileEditModal';
+import { dashboardStatsService, KPIStats, CourseProgressItem } from '../../services/dashboardStatsService';
+import { userStatsService, UserStats } from '../../services/userStatsService';
+import ProfileEditModal from './ProfileEditModal';
 
 interface Profile4Props { onClose?: () => void; }
 
@@ -71,7 +75,12 @@ function useSparkle() {
 const Profile4 = ({ onClose }: Profile4Props) => {
   const { user, primaryColor = '#6366f1', theme } = useDashboard();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [profileCompletion, setProfileCompletion] = useState(0);
+  const [kpiStats, setKpiStats] = useState<KPIStats | null>(null);
+  const [courseProgress, setCourseProgress] = useState<CourseProgressItem[]>([]);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const spawnSparkle = useSparkle();
   const pRgb = hexRgb(primaryColor);
   const gradient = `linear-gradient(135deg,${primaryColor},#8b5cf6)`;
@@ -161,6 +170,25 @@ const Profile4 = ({ onClose }: Profile4Props) => {
     const pct = Math.round(fields.filter(f => f && String(f).trim()).length / fields.length * 100);
     setProfileCompletion(pct);
   }, [user]);
+
+  /* fetch real dashboard/gamification stats */
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    setStatsLoading(true);
+    Promise.allSettled([
+      dashboardStatsService.getKPIStats(user.uid),
+      dashboardStatsService.getCourseProgress(user.uid),
+      userStatsService.getUserStats(user.uid),
+    ]).then(([kpiRes, courseRes, statsRes]) => {
+      if (cancelled) return;
+      if (kpiRes.status === 'fulfilled') setKpiStats(kpiRes.value);
+      if (courseRes.status === 'fulfilled') setCourseProgress(courseRes.value);
+      if (statsRes.status === 'fulfilled') setUserStats(statsRes.value);
+      setStatsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   /* hover tilt for stat/info cards */
   const tilt = {
@@ -350,9 +378,18 @@ const Profile4 = ({ onClose }: Profile4Props) => {
               {/* Stat cards */}
               <div className="stat-grid" style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,padding:'20px 28px 0' }}>
                 {[
-                  { icon:CheckSquare, num:'24',   lbl:'Assignments Done',  delta:'↑ +5 this week',  dC:'#34d399', dB:'rgba(16,185,129,0.12)',  glow:'rgba(16,185,129,0.5)', iconBg:'rgba(16,185,129,0.14)' },
-                  { icon:BarChart2,   num:'91%',  lbl:'Attendance Rate',   delta:'3 days missed',   dC:'#fbbf24', dB:'rgba(245,158,11,0.12)', glow:'rgba(245,158,11,0.45)', iconBg:'rgba(245,158,11,0.14)' },
-                  { icon:Zap,         num:'4.5h', lbl:'Study Hours Today', delta:'↑ +12% this week', dC:'#34d399', dB:'rgba(16,185,129,0.12)',  glow:`rgba(${pRgb},0.5)`,   iconBg:`rgba(${pRgb},0.14)` },
+                  { icon:CheckSquare, num: statsLoading ? '…' : String(kpiStats?.tasksCompleted ?? 0),
+                    lbl:'Tasks Completed Today',
+                    delta: statsLoading ? '' : `${((kpiStats?.weekStudyMinutes ?? 0) > 0 ? Math.round((kpiStats!.weekStudyMinutes)/60*10)/10 : 0)}h studied this week`,
+                    dC:'#34d399', dB:'rgba(16,185,129,0.12)', glow:'rgba(16,185,129,0.5)', iconBg:'rgba(16,185,129,0.14)' },
+                  { icon:Flame, num: statsLoading ? '…' : String(kpiStats?.streakDays ?? 0),
+                    lbl:'Day Streak',
+                    delta: statsLoading ? '' : `Best: ${userStats?.longestStreak ?? kpiStats?.streakDays ?? 0} days`,
+                    dC:'#fbbf24', dB:'rgba(245,158,11,0.12)', glow:'rgba(245,158,11,0.45)', iconBg:'rgba(245,158,11,0.14)' },
+                  { icon:Zap, num: statsLoading ? '…' : `${Math.round(((kpiStats?.todayStudyMinutes ?? 0)/60)*10)/10}h`,
+                    lbl:'Study Hours Today',
+                    delta: statsLoading ? '' : `${kpiStats?.todayStudyMinutes ?? 0} min today`,
+                    dC:'#34d399', dB:'rgba(16,185,129,0.12)', glow:`rgba(${pRgb},0.5)`, iconBg:`rgba(${pRgb},0.14)` },
                 ].map(({ icon:Icon, num, lbl, delta, dC, dB, glow, iconBg }, i) => (
                   <div key={i} className="pv-sweep" onMouseEnter={spawnSparkle} {...tilt}
                     style={{ borderRadius:18,padding:'16px 18px',position:'relative',overflow:'hidden',isolation:'isolate',cursor:'pointer',
@@ -369,7 +406,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
                       </div>
                       <div style={{ fontSize:26,fontWeight:900,color:textPrimary,letterSpacing:'-0.03em',lineHeight:1 }}>{num}</div>
                       <div style={{ fontSize:11,fontWeight:600,color:textTertiary,marginTop:4 }}>{lbl}</div>
-                      <span style={{ fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:6,marginTop:8,display:'inline-block',background:dB,color:dC }}>{delta}</span>
+                      {delta && <span style={{ fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:6,marginTop:8,display:'inline-block',background:dB,color:dC }}>{delta}</span>}
                     </div>
                   </div>
                 ))}
@@ -392,7 +429,7 @@ const Profile4 = ({ onClose }: Profile4Props) => {
               {/* Action buttons */}
               <div className="action-buttons no-print" style={{ display:'flex',gap:10,padding:'14px 28px 24px',flexWrap:'wrap' }}>
                 {[
-                  { label:'✏️ Edit Profile', primary:true,  onClick:() => {} },
+                  { label:'✏️ Edit Profile', primary:true,  onClick:() => setShowEditModal(true) },
                   { label:'🔒 Password',      primary:false, onClick:() => setShowPasswordModal(true) },
                   { label:'🖨 Print Profile', primary:false, onClick:() => window.print() },
                 ].map(({ label, onClick, primary }) => (
@@ -427,9 +464,12 @@ const Profile4 = ({ onClose }: Profile4Props) => {
             {/* ══ ACHIEVEMENTS ══ */}
             <div className="achievements-grid" style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14 }}>
               {[
-                { em:'🏆', title:'Top Student',  sub:'Rank #7 this month',  bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.22)', glow:'rgba(245,158,11,0.3)' },
-                { em:'🔥', title:'7-Day Streak', sub:'Study consistency',    bg:'rgba(239,68,68,0.08)',  border:'rgba(239,68,68,0.20)', glow:'rgba(239,68,68,0.25)' },
-                { em:'📚', title:'Fast Learner', sub:'3 courses this term',  bg:`rgba(${pRgb},0.08)`,  border:`rgba(${pRgb},0.22)`, glow:`rgba(${pRgb},0.25)` },
+                { em:'⭐', title: statsLoading ? '…' : `${userStats?.totalPoints ?? 0} Points`, sub:'Total points earned',
+                  bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.22)', glow:'rgba(245,158,11,0.3)' },
+                { em:'🔥', title: statsLoading ? '…' : `${userStats?.longestStreak ?? 0}-Day Streak`, sub:'Longest study streak',
+                  bg:'rgba(239,68,68,0.08)', border:'rgba(239,68,68,0.20)', glow:'rgba(239,68,68,0.25)' },
+                { em:'📚', title: statsLoading ? '…' : `${userStats?.coursesCompleted ?? 0} Courses`, sub:'Completed so far',
+                  bg:`rgba(${pRgb},0.08)`, border:`rgba(${pRgb},0.22)`, glow:`rgba(${pRgb},0.25)` },
               ].map(({ em, title, sub, bg, border, glow }, i) => (
                 <div key={i} className="pv-sweep" onMouseEnter={spawnSparkle}
                   style={{ borderRadius:18,padding:'14px 16px',position:'relative',overflow:'hidden',isolation:'isolate',cursor:'pointer',
@@ -457,40 +497,62 @@ const Profile4 = ({ onClose }: Profile4Props) => {
               <div style={{ position:'relative',zIndex:2 }}>
                 <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:8 }}>
                   <span style={{ fontSize:13.5,fontWeight:800,color:textSecondary,display:'flex',alignItems:'center',gap:8 }}>
-                    <Zap size={15} color={primaryColor} /> Semester Progress
+                    <Zap size={15} color={primaryColor} /> Course Progress
                   </span>
-                  <span style={{ fontSize:11,fontWeight:600,color:textTertiary }}>Week 14 of 22</span>
+                  <span style={{ fontSize:11,fontWeight:600,color:textTertiary }}>
+                    {courseProgress.length} enrolled course{courseProgress.length === 1 ? '' : 's'}
+                  </span>
                 </div>
-                <div style={{ height:10,borderRadius:6,background:isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',overflow:'hidden',marginBottom:10 }}>
-                  <div style={{ height:'100%',width:'62%',borderRadius:6,
-                    background:`linear-gradient(90deg,${primaryColor},#8b5cf6,#a855f7)`,
-                    boxShadow:`0 0 14px rgba(${pRgb},0.5)`,position:'relative',overflow:'hidden' }}>
-                    <div style={{ position:'absolute',inset:0,background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)',animation:'lvSweep 2.5s ease-in-out infinite' }} />
-                  </div>
-                </div>
-                <div style={{ display:'flex',justifyContent:'space-between',marginBottom:16 }}>
-                  <span style={{ fontSize:10,fontWeight:600,color:textTertiary }}>Semester Start</span>
-                  <span style={{ fontSize:10,fontWeight:800,color:primaryColor }}>62% Complete</span>
-                  <span style={{ fontSize:10,fontWeight:600,color:textTertiary }}>Finals</span>
-                </div>
-                <div className="subject-grid" style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10 }}>
-                  {[
-                    { n:'Mathematics', g:'A+', pct:95, bg:'rgba(16,185,129,0.10)', border:'rgba(16,185,129,0.18)', c:'#34d399', f:'#10b981' },
-                    { n:'Physics',     g:'B+', pct:78, bg:'rgba(59,130,246,0.10)', border:'rgba(59,130,246,0.18)', c:'#60a5fa', f:'#3b82f6' },
-                    { n:'Biology',     g:'A',  pct:87, bg:'rgba(16,185,129,0.10)', border:'rgba(16,185,129,0.18)', c:'#34d399', f:'#10b981' },
-                    { n:'Chemistry',   g:'B',  pct:72, bg:'rgba(245,158,11,0.10)', border:'rgba(245,158,11,0.18)', c:'#fbbf24', f:'#f59e0b' },
-                  ].map(({ n, g, pct, bg, border, c, f }) => (
-                    <div key={n} style={{ borderRadius:12,padding:'10px 12px',textAlign:'center',background:bg,border:`1px solid ${border}`,transition:'transform 0.2s ease' }}
-                      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-3px)'}}
-                      onMouseLeave={e=>{e.currentTarget.style.transform=''}}>
-                      <div style={{ fontSize:10,fontWeight:700,color:textTertiary,marginBottom:4 }}>{n}</div>
-                      <div style={{ fontSize:17,fontWeight:900,color:c }}>{g}</div>
-                      <div style={{ height:3,borderRadius:2,background:isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',marginTop:6,overflow:'hidden' }}>
-                        <div style={{ height:'100%',width:`${pct}%`,borderRadius:2,background:f }} />
+                {(() => {
+                  const avgProgress = courseProgress.length
+                    ? Math.round(courseProgress.reduce((s, c) => s + (c.progress || 0), 0) / courseProgress.length)
+                    : 0;
+                  return (
+                    <>
+                      <div style={{ height:10,borderRadius:6,background:isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',overflow:'hidden',marginBottom:10 }}>
+                        <div style={{ height:'100%',width:`${avgProgress}%`,borderRadius:6,
+                          background:`linear-gradient(90deg,${primaryColor},#8b5cf6,#a855f7)`,
+                          boxShadow:`0 0 14px rgba(${pRgb},0.5)`,position:'relative',overflow:'hidden' }}>
+                          <div style={{ position:'absolute',inset:0,background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)',animation:'lvSweep 2.5s ease-in-out infinite' }} />
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                      <div style={{ display:'flex',justifyContent:'space-between',marginBottom:16 }}>
+                        <span style={{ fontSize:10,fontWeight:600,color:textTertiary }}>Just Started</span>
+                        <span style={{ fontSize:10,fontWeight:800,color:primaryColor }}>{avgProgress}% Complete (avg)</span>
+                        <span style={{ fontSize:10,fontWeight:600,color:textTertiary }}>All Courses Done</span>
+                      </div>
+                    </>
+                  );
+                })()}
+                {statsLoading ? (
+                  <div style={{ fontSize:12,color:textTertiary,padding:'8px 0' }}>Loading your courses…</div>
+                ) : courseProgress.length === 0 ? (
+                  <div style={{ fontSize:12,color:textTertiary,padding:'8px 0' }}>You're not enrolled in any courses yet.</div>
+                ) : (
+                  <div className="subject-grid" style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10 }}>
+                    {courseProgress.slice(0, 4).map((c) => {
+                      const pct = Math.round(c.progress || 0);
+                      const good = pct >= 80;
+                      const mid = pct >= 50 && pct < 80;
+                      const color = good ? '#34d399' : mid ? '#60a5fa' : '#fbbf24';
+                      const fill = good ? '#10b981' : mid ? '#3b82f6' : '#f59e0b';
+                      const bg = good ? 'rgba(16,185,129,0.10)' : mid ? 'rgba(59,130,246,0.10)' : 'rgba(245,158,11,0.10)';
+                      const border = good ? 'rgba(16,185,129,0.18)' : mid ? 'rgba(59,130,246,0.18)' : 'rgba(245,158,11,0.18)';
+                      return (
+                        <div key={c.courseId} style={{ borderRadius:12,padding:'10px 12px',textAlign:'center',background:bg,border:`1px solid ${border}`,transition:'transform 0.2s ease' }}
+                          onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-3px)'}}
+                          onMouseLeave={e=>{e.currentTarget.style.transform=''}}>
+                          <div style={{ fontSize:10,fontWeight:700,color:textTertiary,marginBottom:4, whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }} title={c.title}>{c.title}</div>
+                          <div style={{ fontSize:17,fontWeight:900,color }}>{pct}%</div>
+                          <div style={{ fontSize:9,fontWeight:600,color:textTertiary,marginTop:2 }}>{c.completedLessons}/{c.totalLessons} lessons</div>
+                          <div style={{ height:3,borderRadius:2,background:isLightTheme ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',marginTop:6,overflow:'hidden' }}>
+                            <div style={{ height:'100%',width:`${pct}%`,borderRadius:2,background:fill }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </GlassCard>
 
@@ -568,6 +630,10 @@ const Profile4 = ({ onClose }: Profile4Props) => {
 
       {showPasswordModal && (
         <ChangePasswordModal onClose={() => setShowPasswordModal(false)} onSuccess={() => setShowPasswordModal(false)} />
+      )}
+
+      {showEditModal && (
+        <ProfileEditModal onClose={() => setShowEditModal(false)} onSuccess={() => setShowEditModal(false)} />
       )}
     </>
   );
