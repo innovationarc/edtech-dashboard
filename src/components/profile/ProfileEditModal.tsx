@@ -192,18 +192,18 @@ const ProfileEditModal = ({ onClose, onSuccess }: ProfileEditModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-3xl w-full max-w-4xl my-4 relative shadow-2xl">
-        <button
-          onClick={onClose}
-          disabled={loading}
-          className="absolute right-4 top-4 text-slate-400 hover:text-slate-100 transition-all duration-200 hover:rotate-90 hover:scale-110 z-10 bg-slate-800 rounded-full p-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <X size={24} />
-        </button>
+    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-3xl w-full max-w-4xl relative shadow-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+        <div className="sticky top-0 bg-slate-900 rounded-t-3xl px-6 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 border-b border-slate-700/50 z-10">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="absolute right-4 top-4 sm:right-6 sm:top-6 text-slate-400 hover:text-slate-100 transition-all duration-200 hover:rotate-90 hover:scale-110 z-10 bg-slate-800 rounded-full p-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <X size={24} />
+          </button>
 
-        <div className="p-6 sm:p-8 relative">
-          <div className="flex items-center gap-4 mb-8">
+          <div className="flex items-center gap-4 pr-14">
             <div className="relative">
               <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl">
                 <User size={32} className="text-white" />
@@ -216,7 +216,9 @@ const ProfileEditModal = ({ onClose, onSuccess }: ProfileEditModalProps) => {
               <p className="text-slate-400 text-sm mt-1 font-semibold" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>Update your personal information</p>
             </div>
           </div>
+        </div>
 
+        <div className="p-6 sm:p-8 relative">
           {error && (
             <div className="bg-red-950/40 border border-red-800/30 text-red-300 px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
               <AlertCircle size={18} />
