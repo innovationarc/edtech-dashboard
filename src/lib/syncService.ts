@@ -13,6 +13,23 @@
  *   import { syncService } from '@/lib/syncService';
  *   syncService.init(userId); // call once after auth
  *   syncService.destroy();    // call on logout
+ *
+ * ─────────────────────────────────────────────────────────────────────────
+ * 2026-08 SCHEMA FIX
+ * The Firestore-side queries below were written against an older schema
+ * (userId-keyed docs, singular studyPlans/contentProgress collections) that
+ * no longer matches firestore.rules / the live web app. This caused every
+ * initial sync to fail with "Missing or insufficient permissions" because
+ * several collections (studyPlans, contentProgress) don't exist under those
+ * names anymore, so Firestore's default-deny rule rejected the reads.
+ *
+ * Local Dexie table names, LocalX types, and _synced/_pendingSync shapes are
+ * UNCHANGED — every other file that reads from localDB.* keeps working
+ * exactly as before. Only the Firestore collection names / field names used
+ * to populate those local tables were corrected, and results are mapped
+ * back into the original Local* shape (e.g. studentId → userId) so nothing
+ * downstream needs to change.
+ * ─────────────────────────────────────────────────────────────────────────
  */
 
 import {
@@ -130,30 +147,42 @@ class SyncService {
   };
 
   // ── Initial Sync: Firestore → IndexedDB ───────────────────────────────────
+  // Each sync* method below is independently try/caught so one missing/denied
+  // collection (e.g. a role-gated collection for a student account) can't
+  // abort the entire initial sync — it logs a warning and moves on instead.
 
   private async initialSync(): Promise<void> {
     if (!this.userId || !this.isOnline) return;
     this.setStatus('syncing');
 
-    try {
-      await Promise.all([
-        this.syncUserProfile(),
-        this.syncCourses(),
-        this.syncEnrollments(),
-        this.syncProgress(),
-        this.syncStudyPlan(),
-        this.syncPomodoroSessions(),
-        this.syncAnnouncements(),
-        this.syncNotifications(),
-        this.syncLeaderboard(),
-        this.syncAchievements(),
-        this.syncTasks(),
-      ]);
-      this.setStatus('idle');
-    } catch (err) {
-      console.error('[SyncService] Initial sync failed:', err);
-      this.setStatus('error');
-    }
+    const tasks: Array<[string, () => Promise<void>]> = [
+      ['userProfile', () => this.syncUserProfile()],
+      ['courses', () => this.syncCourses()],
+      ['enrollments', () => this.syncEnrollments()],
+      ['progress', () => this.syncProgress()],
+      ['studyPlan', () => this.syncStudyPlan()],
+      ['pomodoroSessions', () => this.syncPomodoroSessions()],
+      ['announcements', () => this.syncAnnouncements()],
+      ['notifications', () => this.syncNotifications()],
+      ['leaderboard', () => this.syncLeaderboard()],
+      ['achievements', () => this.syncAchievements()],
+      ['tasks', () => this.syncTasks()],
+    ];
+
+    const results = await Promise.allSettled(tasks.map(([, fn]) => fn()));
+
+    let hadFailure = false;
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        hadFailure = true;
+        console.warn(`[SyncService] "${tasks[i][0]}" sync failed (non-fatal):`, r.reason);
+      }
+    });
+
+    // Only surface 'error' status if EVERYTHING failed (e.g. fully offline/auth issue).
+    // Partial failures (one collection denied for this role) still count as idle,
+    // since the rest of the app's data did sync successfully.
+    this.setStatus(hadFailure && results.every(r => r.status === 'rejected') ? 'error' : 'idle');
   }
 
   private async refreshFromFirestore(): Promise<void> {
@@ -241,8 +270,11 @@ class SyncService {
   }
 
   private async syncCourseContent(courseId: string): Promise<void> {
+    // NOTE: live schema stores lessons/exams etc. in the top-level `content`
+    // collection (see firestore.rules `match /content/{contentId}`), not a
+    // `courses/{courseId}/content` subcollection. Query by courseId instead.
     const snap = await getDocs(
-      collection(firestore, 'courses', courseId, 'content')
+      query(collection(firestore, 'content'), where('courseId', '==', courseId))
     );
     const items: LocalContent[] = snap.docs.map(d => ({
       id: d.id,
@@ -255,70 +287,119 @@ class SyncService {
 
   private async syncEnrollments(): Promise<void> {
     if (!this.userId) return;
-    const snap = await getDocs(
-      query(
-        collection(firestore, 'enrollments'),
-        where('userId', '==', this.userId)
-      )
-    );
-    const items: LocalEnrollment[] = snap.docs.map(d => ({
-      id: d.id,
-      ...(d.data() as Omit<LocalEnrollment, 'id'>),
-      _synced: true,
-    }));
+    // Live schema: enrollments use `studentId`, with `userId` kept on some
+    // legacy docs (see firestore.rules — create accepts either field).
+    // Query both and merge so nothing is missed regardless of which field
+    // a given doc was written with.
+    const [byStudentId, byUserId] = await Promise.all([
+      getDocs(
+        query(collection(firestore, 'enrollments'), where('studentId', '==', this.userId))
+      ),
+      getDocs(
+        query(collection(firestore, 'enrollments'), where('userId', '==', this.userId))
+      ).catch(() => ({ docs: [] as typeof Array.prototype })), // tolerate if none exist
+    ]);
+
+    const seen = new Set<string>();
+    const items: LocalEnrollment[] = [];
+    for (const d of [...byStudentId.docs, ...(byUserId as any).docs ?? []]) {
+      if (seen.has(d.id)) continue;
+      seen.add(d.id);
+      const data = d.data() as Record<string, unknown>;
+      items.push({
+        id: d.id,
+        userId: this.userId!,
+        courseId: (data.courseId as string) ?? '',
+        enrolledAt: (data.enrolledAt as number) ?? undefined,
+        paymentStatus: (data.paymentStatus as string) ?? undefined,
+        _synced: true,
+      });
+    }
     await localDB.enrollments.bulkPut(items);
   }
 
   private async syncProgress(): Promise<void> {
     if (!this.userId) return;
+    // Live collection is `content_progress` (underscore), keyed by
+    // studentId, doc id format `${contentId}__${studentId}`.
     const snap = await getDocs(
       query(
-        collection(firestore, 'contentProgress'),
-        where('userId', '==', this.userId)
+        collection(firestore, 'content_progress'),
+        where('studentId', '==', this.userId)
       )
     );
-    const items: LocalProgress[] = snap.docs.map(d => ({
-      id: d.id,
-      ...(d.data() as Omit<LocalProgress, 'id'>),
-      _synced: true,
-      _pendingSync: false,
-    }));
+    const items: LocalProgress[] = snap.docs.map(d => {
+      const data = d.data() as Record<string, unknown>;
+      return {
+        id: d.id,
+        userId: this.userId!,
+        courseId: (data.courseId as string) ?? '',
+        contentId: (data.contentId as string) ?? '',
+        completed: Boolean(data.completed),
+        score: data.score as number | undefined,
+        watchedSeconds: data.watchedSeconds as number | undefined,
+        lastAccessedAt: data.lastAccessedAt as number | undefined,
+        updatedAt: data.updatedAt as number | undefined,
+        _synced: true,
+        _pendingSync: false,
+      };
+    });
     await localDB.progress.bulkPut(items);
   }
 
   private async syncStudyPlan(): Promise<void> {
     if (!this.userId) return;
-    const snap = await getDoc(doc(firestore, 'studyPlans', this.userId));
-    if (snap.exists()) {
-      await localDB.studyPlans.put({
-        id: snap.id,
-        ...(snap.data() as Omit<LocalStudyPlan, 'id'>),
-        _synced: true,
-        _pendingSync: false,
-      });
-    }
+    // Live schema replaced the single `studyPlans/{uid}` doc with a
+    // multi-doc `studyGoals` collection (one doc per goal, field studentId).
+    // Collapse the goals into the single LocalStudyPlan record shape so
+    // every other file reading localDB.studyPlans keeps working unchanged.
+    const snap = await getDocs(
+      query(collection(firestore, 'studyGoals'), where('studentId', '==', this.userId))
+    );
+    const goals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    await localDB.studyPlans.put({
+      id: this.userId,
+      userId: this.userId,
+      sessions: [], // live schema has no AI session array at this layer anymore
+      goals,
+      generatedAt: Date.now(),
+      updatedAt: Date.now(),
+      _synced: true,
+      _pendingSync: false,
+    });
   }
 
   private async syncPomodoroSessions(): Promise<void> {
     if (!this.userId) return;
-    // Last 30 days
+    // Live schema field is `studentId`, and timestamps use `startTime`
+    // (Firestore Timestamp) rather than `completedAt`. `duration` is the
+    // live field name (minutes) — mapped to durationMinutes below.
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const snap = await getDocs(
       query(
         collection(firestore, 'pomodoroSessions'),
-        where('userId', '==', this.userId),
-        where('completedAt', '>=', Timestamp.fromMillis(thirtyDaysAgo)),
-        orderBy('completedAt', 'desc')
+        where('studentId', '==', this.userId),
+        where('startTime', '>=', Timestamp.fromMillis(thirtyDaysAgo)),
+        orderBy('startTime', 'desc')
       )
     );
-    const items: LocalPomodoroSession[] = snap.docs.map(d => ({
-      id: d.id,
-      ...(d.data() as Omit<LocalPomodoroSession, 'id'>),
-      completedAt:
-        (d.data().completedAt as Timestamp)?.toMillis?.() ?? d.data().completedAt,
-      _synced: true,
-      _pendingSync: false,
-    }));
+    const items: LocalPomodoroSession[] = snap.docs.map(d => {
+      const data = d.data() as Record<string, unknown>;
+      const startTime = data.startTime as Timestamp | number | undefined;
+      const completedAtMs =
+        startTime instanceof Timestamp ? startTime.toMillis() : (startTime as number) ?? Date.now();
+      return {
+        id: d.id,
+        userId: this.userId!,
+        subject: data.subject as string | undefined,
+        topic: data.topic as string | undefined,
+        durationMinutes: (data.duration as number) ?? 0,
+        completedAt: completedAtMs,
+        _synced: true,
+        _pendingSync: false,
+      };
+    });
     await localDB.pomodoroSessions.bulkPut(items);
   }
 
@@ -358,6 +439,10 @@ class SyncService {
   }
 
   private async syncLeaderboard(): Promise<void> {
+    // NOTE: live `leaderboard` collection is doc-per-user but there's no
+    // guarantee every doc has a `score` field indexed the same way — if this
+    // starts throwing a missing-index error again, use `leaderboardCache`
+    // instead (already precomputed server-side per firestore.rules).
     const snap = await getDocs(
       query(
         collection(firestore, 'leaderboard'),
@@ -392,19 +477,28 @@ class SyncService {
 
   private async syncTasks(): Promise<void> {
     if (!this.userId) return;
-    const snap = await getDocs(
-      query(
-        collection(firestore, 'tasks'),
-        where('userId', '==', this.userId),
-        orderBy('createdAt', 'desc')
-      )
-    );
-    const items = snap.docs.map(d => ({
-      id: d.id,
-      ...(d.data() as Omit<LocalTask, 'id'>),
-      _synced: true,
-      _pendingSync: false,
-    }));
+    // Live schema has no student-owned `tasks` collection filterable by
+    // userId — tasks belong to teacher-created `taskGroups` and are read
+    // via the `tasks` collection with a blanket isSignedIn() read (no
+    // ownership `where` is enforced server-side, so querying without a
+    // `where` clause and filtering client-side is the only viable approach
+    // that matches the actual rules).
+    const snap = await getDocs(collection(firestore, 'tasks'));
+    const items = snap.docs
+      .map(d => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
+      .filter(t => !t.assignedTo || (t.assignedTo as string[]).includes(this.userId!))
+      .map(t => ({
+        id: t.id as string,
+        userId: this.userId!,
+        title: (t.title as string) ?? '',
+        completed: Boolean(t.completed),
+        dueDate: t.dueDate as number | undefined,
+        priority: t.priority as LocalTask['priority'],
+        createdAt: t.createdAt as number | undefined,
+        updatedAt: t.updatedAt as number | undefined,
+        _synced: true,
+        _pendingSync: false,
+      }));
     await localDB.tasks.bulkPut(items);
   }
 
@@ -468,9 +562,11 @@ class SyncService {
 
     switch (collectionName) {
       case 'contentProgress':
+      case 'content_progress':
         await localDB.progress.put(record as LocalProgress);
         break;
       case 'studyPlans':
+      case 'studyGoals':
         await localDB.studyPlans.put(record as LocalStudyPlan);
         break;
       case 'pomodoroSessions':
