@@ -8,6 +8,7 @@ import {
   BarChart2
 } from 'lucide-react';
 import ChangePasswordModal from './ChangePasswordModal';
+import ProfileEditModal3 from './ProfileEditModal-3';
 import { courseService, Course } from '../../services/courseService';
 
 interface Profile3Props { onClose?: () => void; }
@@ -70,6 +71,7 @@ function useSparkle() {
 const Profile3 = ({ onClose }: Profile3Props) => {
   const { user, primaryColor = '#6366f1', theme } = useDashboard();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [profileCompletion, setProfileCompletion] = useState(0);
   const [courses, setCourses] = useState<Course[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(true);
@@ -411,7 +413,7 @@ const Profile3 = ({ onClose }: Profile3Props) => {
               {/* Action buttons */}
               <div className="action-buttons no-print" style={{ display:'flex',gap:10,padding:'14px 28px 24px',flexWrap:'wrap' }}>
                 {[
-                  { label:'✏️ Edit Profile', primary:true,  onClick:() => {} },
+                  { label:'✏️ Edit Profile', primary:true,  onClick:() => setShowEditModal(true) },
                   { label:'🔒 Password',      primary:false, onClick:() => setShowPasswordModal(true) },
                   { label:'🖨 Print Profile', primary:false, onClick:() => window.print() },
                 ].map(({ label, onClick, primary }) => (
@@ -594,6 +596,9 @@ const Profile3 = ({ onClose }: Profile3Props) => {
         </div>{/* /scroll */}
       </div>{/* /backdrop */}
 
+      {showEditModal && (
+        <ProfileEditModal3 onClose={() => setShowEditModal(false)} onSuccess={() => setShowEditModal(false)} />
+      )}
       {showPasswordModal && (
         <ChangePasswordModal onClose={() => setShowPasswordModal(false)} onSuccess={() => setShowPasswordModal(false)} />
       )}
