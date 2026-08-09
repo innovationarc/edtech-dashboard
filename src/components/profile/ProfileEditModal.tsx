@@ -169,7 +169,7 @@ const ProfileEditModal = ({ onClose, onSuccess }: ProfileEditModalProps) => {
   // Success State
   if (success) {
     return (
-      <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-lg flex items-center justify-center z-[200] p-4">
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-3xl w-full max-w-md p-8 relative shadow-2xl">
           <div className="text-center">
             <div className="flex justify-center mb-6">
@@ -192,7 +192,7 @@ const ProfileEditModal = ({ onClose, onSuccess }: ProfileEditModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-lg flex items-center justify-center z-[200] p-4">
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-3xl w-full max-w-4xl relative shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="edit-profile-scroll overflow-y-auto overflow-x-hidden">
         <div className="sticky top-0 bg-slate-900 px-6 sm:px-8 pt-6 sm:pt-8 pb-4 sm:pb-6 border-b border-slate-700/50 z-10">
