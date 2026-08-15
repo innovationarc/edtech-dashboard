@@ -96,8 +96,8 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   // Success State
   if (success) {
     return (
-      <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4 md:p-6">
-        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-xl sm:rounded-2xl w-full max-w-[280px] xs:max-w-xs sm:max-w-md p-4 xs:p-6 sm:p-8 relative shadow-2xl animate-fadeIn">
+      <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-lg flex items-center justify-center z-[200] p-2 xs:p-3 sm:p-4 md:p-6">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl sm:rounded-3xl w-full max-w-[280px] xs:max-w-xs sm:max-w-md p-4 xs:p-6 sm:p-8 relative shadow-2xl animate-fadeIn">
           <div className="text-center">
             <div className="flex justify-center mb-4 sm:mb-6">
               <div className="bg-emerald-950/50 border border-emerald-800/30 rounded-full p-3 xs:p-3.5 sm:p-4 shadow-lg animate-scaleIn">
@@ -151,22 +151,23 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/90 flex items-center justify-center z-50 p-2 xs:p-3 sm:p-4">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-xl sm:rounded-2xl w-full max-w-[95vw] xs:max-w-[90vw] sm:max-w-md md:max-w-lg relative shadow-2xl max-h-[95vh] xs:max-h-[92vh] sm:max-h-[90vh] overflow-y-auto overflow-x-hidden">
+    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-lg flex items-center justify-center z-[200] p-2 xs:p-3 sm:p-4">
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl sm:rounded-3xl w-full max-w-[95vw] xs:max-w-[90vw] sm:max-w-md md:max-w-lg relative shadow-2xl max-h-[95vh] xs:max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="change-password-scroll overflow-y-auto overflow-x-hidden">
         {/* Header */}
-        <div className="sticky top-0 bg-slate-900 rounded-t-xl sm:rounded-t-2xl px-3 xs:px-4 sm:px-6 md:px-8 pt-4 xs:pt-5 sm:pt-6 md:pt-8 pb-3 xs:pb-3.5 sm:pb-4 border-b border-slate-700/30 z-10">
+        <div className="sticky top-0 bg-slate-900 px-3 xs:px-4 sm:px-6 md:px-8 pt-4 xs:pt-5 sm:pt-6 md:pt-8 pb-3 xs:pb-3.5 sm:pb-4 border-b border-slate-700/30 z-10">
           <button
             onClick={onClose}
             disabled={loading}
-            className="absolute top-3 right-3 xs:top-4 xs:right-4 sm:top-6 sm:right-6 p-1.5 xs:p-2 hover:bg-slate-800 disabled:hover:bg-transparent disabled:opacity-50 rounded-full transition-colors"
+            className="absolute right-4 top-4 sm:right-6 sm:top-6 text-slate-400 hover:text-slate-100 transition-all duration-200 hover:rotate-90 hover:scale-110 z-10 bg-slate-800 rounded-full p-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Close"
           >
-            <X className="w-5 h-5 xs:w-6 xs:h-6 text-slate-400 hover:text-slate-300" />
+            <X size={24} />
           </button>
           
-          <div className="flex items-center gap-2 xs:gap-2.5 sm:gap-3 mb-2 xs:mb-2.5 sm:mb-3 pr-10 xs:pr-12">
-            <div className="h-9 w-9 xs:h-10 xs:w-10 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-cyan-600/10 border border-cyan-500/30 flex items-center justify-center shadow-md flex-shrink-0">
-              <Lock className="w-4 h-4 xs:w-5 xs:h-5 sm:w-6 sm:h-6 text-cyan-400" />
+          <div className="flex items-center gap-2 xs:gap-2.5 sm:gap-3 mb-2 xs:mb-2.5 sm:mb-3 pr-14">
+            <div className="h-9 w-9 xs:h-10 xs:w-10 sm:h-12 sm:w-12 md:h-16 md:w-16 rounded-lg sm:rounded-xl md:rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-xl flex-shrink-0">
+              <Lock className="w-4 h-4 xs:w-5 xs:h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 text-white" />
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-xl xs:text-2xl sm:text-3xl font-bold text-slate-100 truncate" style={{ fontFamily: 'Inter, sans-serif' }}>
