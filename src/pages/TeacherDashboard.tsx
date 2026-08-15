@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle, Plus } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
-import StatsCard from '../components/ui/StatsCard';
 import { getRandomQuoteByCategory } from '../utils/quotes';
 import CreateAnnouncementModal from '../components/announcements/CreateAnnouncementModal';
 import { useDashboard } from '../contexts/DashboardContext';
@@ -228,52 +227,35 @@ export default function TeacherDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Teacher Dashboard</h1>
-          <p className="text-gray-400 mt-1">Inspire minds, shape futures</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Teacher Dashboard</h1>
+          <p className="text-gray-400 mt-1 text-sm sm:text-base">Inspire minds, shape futures</p>
+          <button
+            onClick={handleCreateAnnouncement}
+            className="mt-3 w-full sm:w-auto flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg transition-colors shadow-lg hover:shadow-xl"
+          >
+            <Megaphone size={20} />
+            <span>Create Announcement</span>
+          </button>
         </div>
-        <button
-          onClick={handleCreateAnnouncement}
-          className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors shadow-lg hover:shadow-xl"
-        >
-          <Megaphone size={20} />
-          <span>Create Announcement</span>
-        </button>
+
+        {/* Daily Inspiration — collapsible on mobile so it doesn't dominate the top of the screen */}
+        <CompactDailyInspiration
+          quote={dailyQuote}
+          onRefresh={() => setDailyQuote(getRandomQuoteByCategory('education'))}
+        />
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard
-          title="Total Students"
-          value={totalStudents.toString()}
-          change={{ value: "12%", positive: true }} // Placeholder for actual change calculation
-          icon={<Users size={20} className="text-white" />}
-          onClick={() => navigate('/course-enrollment')}
-        />
-        <StatsCard
-          title="Active Courses"
-          value={activeCourses.toString()}
-          change={{ value: "2", positive: true }} // Placeholder
-          icon={<BookOpen size={20} className="text-white" />}
-          onClick={() => navigate('/course-creation')}
-        />
-        <StatsCard
-          title="Avg. Performance"
-          value={`${avgPerformance}%`}
-          change={{ value: "5%", positive: true }} // Placeholder
-          icon={<TrendingUp size={20} className="text-white" />}
-          onClick={() => navigate('/leaderboard')}
-        />
-        <StatsCard
-          title="Classes This Week"
-          value={upcomingClasses.length.toString()} // Use actual count
-          change={{ value: "3", positive: true }} // Still hardcoded
-          icon={<Calendar size={20} className="text-white" />}
-          onClick={() => navigate('/study-plan')}
-        />
-      </div>
+      {/* Overview — all 4 key stats in a single compact card */}
+      <OverviewStatsCard
+        totalStudents={totalStudents}
+        activeCourses={activeCourses}
+        avgPerformance={avgPerformance}
+        classesThisWeek={upcomingClasses.length}
+        navigate={navigate}
+      />
 
       {/* Needs Your Attention */}
       <NeedsAttentionCard
@@ -351,61 +333,33 @@ export default function TeacherDashboard() {
         </Card>
       </div>
 
-      {/* Teacher Inspiration Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card title="Teaching Resources" className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { icon: BookOpen, color: 'text-primary-400', title: 'Lesson Plans', desc: 'Create and manage your lesson content', path: '/content' },
-                { icon: Users, color: 'text-secondary-400', title: 'Topic Groups', desc: 'Organize subjects, chapters & topics', path: '/teacher-topic-groups' },
-                { icon: TrendingUp, color: 'text-accent-400', title: 'Progress Reports', desc: 'Grading stats & submission rates', path: '/teacher-tasks' },
-                { icon: Calendar, color: 'text-warning-DEFAULT', title: 'Schedule', desc: 'Manage your teaching schedule', path: '/study-plan' },
-              ].map(({ icon: TileIcon, color, title, desc, path }) => (
-                <div
-                  key={title}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => navigate(path)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
-                  className="p-4 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <TileIcon size={20} className={color} />
-                    <h4 className="font-medium text-white">{title}</h4>
-                  </div>
-                  <p className="text-sm text-gray-400">{desc}</p>
-                </div>
-              ))}
+      {/* Teaching Resources */}
+      <Card title="Teaching Resources" className="p-3 sm:p-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          {[
+            { icon: BookOpen, color: 'text-primary-400', title: 'Lesson Plans', desc: 'Create and manage your lesson content', path: '/content' },
+            { icon: Users, color: 'text-secondary-400', title: 'Topic Groups', desc: 'Organize subjects, chapters & topics', path: '/teacher-topic-groups' },
+            { icon: TrendingUp, color: 'text-accent-400', title: 'Progress Reports', desc: 'Grading stats & submission rates', path: '/teacher-tasks' },
+            { icon: Calendar, color: 'text-warning-DEFAULT', title: 'Schedule', desc: 'Manage your teaching schedule', path: '/study-plan' },
+          ].map(({ icon: TileIcon, color, title, desc, path }) => (
+            <div
+              key={title}
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate(path)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
+              className="p-3 sm:p-4 min-h-[88px] bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
+                <TileIcon size={18} className={`${color} shrink-0 sm:hidden`} />
+                <TileIcon size={20} className={`${color} shrink-0 hidden sm:block`} />
+                <h4 className="font-medium text-white text-sm sm:text-base truncate">{title}</h4>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-400">{desc}</p>
             </div>
-          </Card>
+          ))}
         </div>
-
-        {/* Daily Inspiration */}
-        <Card title="Daily Inspiration" icon={<Lightbulb size={20} className="text-warning-DEFAULT" />}>
-          <div className="text-center">
-            <div className="mb-4">
-              <div className="text-4xl mb-3">🎓</div>
-              <blockquote className="text-sm text-gray-300 italic leading-relaxed mb-3">
-                "{dailyQuote.text}"
-              </blockquote>
-              <cite className="text-xs text-primary-400 font-medium">
-                — {dailyQuote.author}
-              </cite>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-background-700">
-              <button
-                onClick={() => setDailyQuote(getRandomQuoteByCategory('education'))}
-                className="text-xs bg-background-700 hover:bg-background-600 text-gray-300 hover:text-white px-3 py-1.5 rounded-full transition-colors flex items-center gap-1 mx-auto"
-              >
-                <RotateCcw size={12} />
-                New Quote
-              </button>
-            </div>
-          </div>
-        </Card>
-      </div>
+      </Card>
 
       {/* Create Announcement Modal */}
       {showAnnouncementModal && (
@@ -570,7 +524,7 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
           </button>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="flex gap-4 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollSnapType: 'x proximity' }}>
           {courses.map(course => {
             const thumb = course.thumbnailUrl || course.thumbnail;
             return (
@@ -580,7 +534,8 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
                 tabIndex={0}
                 onClick={() => navigate(`/course-creation/${course.id}`)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/course-creation/${course.id}`); }}
-                className="shrink-0 w-56 bg-background-800 hover:bg-background-700 rounded-xl overflow-hidden cursor-pointer transition-colors border border-white/5 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="shrink-0 w-48 sm:w-56 bg-background-800 hover:bg-background-700 rounded-xl overflow-hidden cursor-pointer transition-colors border border-white/5 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                style={{ scrollSnapAlign: 'start' }}
               >
                 <div className="h-24 bg-gradient-to-br from-primary-600/40 to-secondary-600/30 flex items-center justify-center relative">
                   {thumb ? (
@@ -617,7 +572,8 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
             tabIndex={0}
             onClick={() => navigate('/course-creation')}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/course-creation'); }}
-            className="shrink-0 w-56 rounded-xl border-2 border-dashed border-white/10 hover:border-primary-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors text-gray-400 hover:text-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="shrink-0 w-48 sm:w-56 rounded-xl border-2 border-dashed border-white/10 hover:border-primary-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors text-gray-400 hover:text-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            style={{ scrollSnapAlign: 'start' }}
           >
             <Plus size={22} />
             <span className="text-sm font-medium">New Course</span>
@@ -625,5 +581,102 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
         </div>
       )}
     </Card>
+  );
+}
+
+// ─── Overview stats card ────────────────────────────────────────────────────────
+// All 4 key numbers in a single compact card instead of 4 separate large cards —
+// keeps the top of the dashboard short while staying just as clickable.
+
+interface OverviewStatsCardProps {
+  totalStudents: number;
+  activeCourses: number;
+  avgPerformance: number;
+  classesThisWeek: number;
+  navigate: (path: string) => void;
+}
+
+function OverviewStatsCard({ totalStudents, activeCourses, avgPerformance, classesThisWeek, navigate }: OverviewStatsCardProps) {
+  const stats = [
+    { label: 'Total Students', value: totalStudents.toString(), icon: Users, color: '#a78bfa', bg: 'rgba(139,92,246,0.12)', path: '/course-enrollment' },
+    { label: 'Active Courses', value: activeCourses.toString(), icon: BookOpen, color: '#38bdf8', bg: 'rgba(14,165,233,0.12)', path: '/course-creation' },
+    { label: 'Avg. Performance', value: `${avgPerformance}%`, icon: TrendingUp, color: '#34d399', bg: 'rgba(16,185,129,0.12)', path: '/leaderboard' },
+    { label: 'Classes This Week', value: classesThisWeek.toString(), icon: Calendar, color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', path: '/study-plan' },
+  ];
+
+  return (
+    <Card title="Overview" className="p-3 sm:p-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        {stats.map(({ label, value, icon: Icon, color, bg, path }) => (
+          <button
+            key={label}
+            onClick={() => navigate(path)}
+            className="flex items-center gap-2.5 sm:gap-3 p-3 min-h-[64px] bg-background-800/60 hover:bg-background-800 rounded-xl transition-colors text-left focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <div
+              className="flex-shrink-0 rounded-xl flex items-center justify-center"
+              style={{ background: bg, color, width: 36, height: 36 }}
+            >
+              <Icon size={16} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-400 truncate">{label}</p>
+              <p className="text-lg sm:text-xl font-bold text-white leading-tight">{value}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Compact Daily Inspiration widget ───────────────────────────────────────────
+// Lives in the top-right corner of the header instead of taking up a full card
+// slot at the bottom of the page.
+
+interface CompactDailyInspirationProps {
+  quote: { text: string; author: string };
+  onRefresh: () => void;
+}
+
+function CompactDailyInspiration({ quote, onRefresh }: CompactDailyInspirationProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="w-full lg:w-80 shrink-0 rounded-xl bg-background-800/60 border border-background-700/70 overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center gap-2.5 p-3 sm:p-4 text-left focus:outline-none"
+      >
+        <Lightbulb size={16} className="text-warning-DEFAULT shrink-0" />
+        {!expanded ? (
+          <p className="text-xs text-gray-400 truncate flex-1 min-w-0">Daily Inspiration — tap to view</p>
+        ) : (
+          <p className="text-xs text-gray-400 flex-1">Daily Inspiration</p>
+        )}
+        <ChevronRight size={14} className={`text-gray-500 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="px-3 sm:px-4 pb-3 sm:pb-4 -mt-1">
+          <blockquote
+            className="text-xs text-gray-300 italic leading-relaxed"
+            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            "{quote.text}"
+          </blockquote>
+          <div className="flex items-center justify-between mt-1.5">
+            <cite className="text-[11px] text-primary-400 font-medium not-italic">— {quote.author}</cite>
+            <button
+              onClick={onRefresh}
+              className="text-gray-500 hover:text-gray-300 transition-colors p-1 -m-1 rounded-full"
+              title="New quote"
+            >
+              <RotateCcw size={12} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
