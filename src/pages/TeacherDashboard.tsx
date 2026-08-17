@@ -248,7 +248,7 @@ export default function TeacherDashboard() {
         />
       </div>
 
-      {/* Overview — all 4 key stats in a single compact card */}
+      {/* Overview — matches the stat-card style used on Study Plan for consistency across the app */}
       <OverviewStatsCard
         totalStudents={totalStudents}
         activeCourses={activeCourses}
@@ -598,35 +598,28 @@ interface OverviewStatsCardProps {
 
 function OverviewStatsCard({ totalStudents, activeCourses, avgPerformance, classesThisWeek, navigate }: OverviewStatsCardProps) {
   const stats = [
-    { label: 'Total Students', value: totalStudents.toString(), icon: Users, color: '#a78bfa', bg: 'rgba(139,92,246,0.12)', path: '/course-enrollment' },
-    { label: 'Active Courses', value: activeCourses.toString(), icon: BookOpen, color: '#38bdf8', bg: 'rgba(14,165,233,0.12)', path: '/course-creation' },
-    { label: 'Avg. Performance', value: `${avgPerformance}%`, icon: TrendingUp, color: '#34d399', bg: 'rgba(16,185,129,0.12)', path: '/leaderboard' },
-    { label: 'Classes This Week', value: classesThisWeek.toString(), icon: Calendar, color: '#fbbf24', bg: 'rgba(245,158,11,0.12)', path: '/study-plan' },
+    { label: 'Total Students', value: totalStudents.toString(), icon: Users, color: 'text-purple-400', bg: 'bg-purple-500/10', path: '/course-enrollment' },
+    { label: 'Active Courses', value: activeCourses.toString(), icon: BookOpen, color: 'text-blue-400', bg: 'bg-blue-500/10', path: '/course-creation' },
+    { label: 'Avg. Performance', value: `${avgPerformance}%`, icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-500/10', path: '/leaderboard' },
+    { label: 'Classes This Week', value: classesThisWeek.toString(), icon: Calendar, color: 'text-amber-400', bg: 'bg-amber-500/10', path: '/study-plan' },
   ];
 
   return (
-    <Card title="Overview" className="p-3 sm:p-6">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-        {stats.map(({ label, value, icon: Icon, color, bg, path }) => (
-          <button
-            key={label}
-            onClick={() => navigate(path)}
-            className="flex items-center gap-2.5 sm:gap-3 p-3 min-h-[64px] bg-background-800/60 hover:bg-background-800 rounded-xl transition-colors text-left focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <div
-              className="flex-shrink-0 rounded-xl flex items-center justify-center"
-              style={{ background: bg, color, width: 36, height: 36 }}
-            >
-              <Icon size={16} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-gray-400 truncate">{label}</p>
-              <p className="text-lg sm:text-xl font-bold text-white leading-tight">{value}</p>
-            </div>
-          </button>
-        ))}
-      </div>
-    </Card>
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {stats.map(({ label, value, icon: Icon, color, bg, path }) => (
+        <button
+          key={label}
+          onClick={() => navigate(path)}
+          className="bg-background-800 border border-background-700 hover:border-primary-500/40 rounded-2xl p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+        >
+          <div className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center mb-2`}>
+            <Icon size={16} className={color} />
+          </div>
+          <p className="text-xl font-bold text-white">{value}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{label}</p>
+        </button>
+      ))}
+    </div>
   );
 }
 
