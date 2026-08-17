@@ -1328,11 +1328,11 @@ const ExamEvaluation: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <p className="text-white/35 text-sm mt-0.5">Select an exam to evaluate written answers</p>
+                  <p className="text-white/45 text-sm mt-0.5">Select an exam to evaluate written answers</p>
                 </div>
               </div>
               <button onClick={loadExamList}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white text-sm transition">
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white text-sm transition">
                 <RefreshCcw size={13}/> Refresh
               </button>
             </div>
@@ -1343,66 +1343,77 @@ const ExamEvaluation: React.FC = () => {
               </div>
             )}
 
-            <div className="rounded-2xl bg-white/3 border border-white/8 p-4">
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="relative flex-1 min-w-44">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25"/>
-                  <input type="text" placeholder="Search exams, courses…" value={listSearch}
-                    onChange={e => setListSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white/70 placeholder-white/20 focus:outline-none focus:border-white/25"/>
-                </div>
-                <div className="min-w-36">
-                  <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1 font-semibold">Course</p>
+            <div className="rounded-2xl bg-white/3 border border-white/8 p-4 space-y-3">
+              {/* Search — always full width, own row */}
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"/>
+                <input type="text" placeholder="Search exams, courses…" value={listSearch}
+                  onChange={e => setListSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white/70 placeholder-white/25 focus:outline-none focus:border-white/25"/>
+              </div>
+
+              {/* Course / Subject — 2-col grid on mobile, inline on larger screens */}
+              <div className={`grid gap-3 ${allSubjects.length > 0 ? 'grid-cols-2' : 'grid-cols-1'} sm:flex sm:flex-wrap sm:items-end`}>
+                <div className="sm:min-w-36">
+                  <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Course</p>
                   <select value={filterCourse} onChange={e => setFilterCourse(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none appearance-none">
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none appearance-none">
                     <option value="all">All Courses</option>
                     {coursesInExams.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                   </select>
                 </div>
                 {allSubjects.length > 0 && (
-                  <div className="min-w-32">
-                    <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1 font-semibold">Subject</p>
+                  <div className="sm:min-w-32">
+                    <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Subject</p>
                     <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none appearance-none">
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none appearance-none">
                       <option value="all">All Subjects</option>
                       {allSubjects.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 )}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1 font-semibold">Status</p>
-                  <div className="flex gap-1 flex-wrap">
-                    {([
-                      { val: 'all'           as const, label: 'All'         },
-                      { val: 'has_pending'   as const, label: 'Has Pending' },
-                      { val: 'all_evaluated' as const, label: 'All Done'    },
-                      { val: 'has_reviews'   as const, label: 'Has Reviews' },
-                    ]).map(({ val, label }) => (
-                      <button key={val} onClick={() => setFilterStatus(val)}
-                        className={`px-3 py-2 rounded-xl text-xs font-medium transition
-                          ${filterStatus === val ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300' : 'bg-white/4 border border-white/8 text-white/40 hover:text-white/60'}`}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+              </div>
+
+              {/* Status — horizontally scrollable chip row on mobile, wraps freely on larger screens */}
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Status</p>
+                <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap pb-1 sm:pb-0 -mx-1 px-1 scrollbar-none">
+                  {([
+                    { val: 'all'           as const, label: 'All'         },
+                    { val: 'has_pending'   as const, label: 'Has Pending' },
+                    { val: 'all_evaluated' as const, label: 'All Done'    },
+                    { val: 'has_reviews'   as const, label: 'Has Reviews' },
+                  ]).map(({ val, label }) => (
+                    <button key={val} onClick={() => setFilterStatus(val)}
+                      className={`shrink-0 px-3.5 py-2.5 rounded-xl text-xs font-medium transition
+                        ${filterStatus === val ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300' : 'bg-white/4 border border-white/8 text-white/50 hover:text-white/70'}`}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <p className="text-white/30 text-sm">
+            <p className="text-white/40 text-sm">
               {listLoading ? 'Loading…' : `${filteredExams.length} exam${filteredExams.length !== 1 ? 's' : ''} found`}
             </p>
 
             {listLoading ? (
               <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-violet-400"/></div>
             ) : filteredExams.length === 0 ? (
-              <div className="flex flex-col items-center py-24 text-white/25">
-                <ClipboardList size={40} className="mb-4 opacity-40"/>
-                <p className="text-base font-medium">No written exams found</p>
-                <p className="text-sm mt-1 text-white/20">
+              <div className="flex flex-col items-center py-24 text-white/40">
+                <ClipboardList size={40} className="mb-4 opacity-50"/>
+                <p className="text-base font-medium text-white/70">No written exams found</p>
+                <p className="text-sm mt-1 text-white/40">
                   {listSearch || filterCourse !== 'all' || filterSubject !== 'all' || filterStatus !== 'all'
                     ? 'Try adjusting your filters' : 'No exams with written questions exist yet'}
                 </p>
+                {!(listSearch || filterCourse !== 'all' || filterSubject !== 'all' || filterStatus !== 'all') && (
+                  <button onClick={() => navigate('/content')}
+                    className="mt-4 flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-violet-500/15 border border-violet-500/25 text-violet-300 hover:bg-violet-500/20 text-sm font-medium transition">
+                    <FileText size={14}/> Add written questions to a course
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
