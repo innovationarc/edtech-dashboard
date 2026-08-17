@@ -116,11 +116,17 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl my-4">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Radio size={20} className="text-primary-400" /> Create Live Stream
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-700 transition-colors">
-            <X size={20} />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary-500/15 border border-primary-500/25 flex items-center justify-center shrink-0">
+              <Radio size={18} className="text-primary-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white leading-tight">Create Live Stream</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Configure and launch your stream</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-700 transition-colors">
+            <X size={18} />
           </button>
         </div>
 
@@ -134,7 +140,7 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
 
           {/* Title */}
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Stream Title *</label>
+            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Stream Title <span className="text-red-400">*</span></label>
             <input
               value={form.title}
               onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
@@ -157,7 +163,7 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
 
           {/* Scheduled At */}
           <div>
-            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Scheduled Date & Time *</label>
+            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Scheduled Date & Time <span className="text-red-400">*</span></label>
             <input
               type="datetime-local"
               value={form.scheduledAt}
@@ -169,28 +175,25 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
 
           {/* Provider */}
           <div>
-            <label className="block text-sm text-gray-300 mb-2 font-medium">Streaming Provider *</label>
-            <div className="space-y-2">
+            <label className="block text-sm text-gray-300 mb-2 font-medium">Streaming Provider <span className="text-red-400">*</span></label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {providers.map(p => (
-                <label
+                <button
+                  type="button"
                   key={p.id}
-                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  onClick={() => setForm(f => ({ ...f, provider: p.id, mode: p.id === 'cloudflare' ? f.mode : 'obs' }))}
+                  className={`text-left p-3.5 rounded-xl border transition-all ${
                     form.provider === p.id
                       ? 'border-primary-500/70 bg-primary-500/10'
-                      : 'border-gray-600 hover:border-gray-500'
+                      : 'border-gray-600 hover:border-gray-500 bg-gray-800/40'
                   }`}
                 >
-                  <input
-                    type="radio" name="provider" value={p.id}
-                    checked={form.provider === p.id}
-                    onChange={() => setForm(f => ({ ...f, provider: p.id, mode: p.id === 'cloudflare' ? f.mode : 'obs' }))}
-                    className="accent-primary-500"
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-white">{p.label}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{p.desc}</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
+                    <p className={`text-sm font-semibold ${form.provider === p.id ? 'text-primary-300' : 'text-white'}`}>{p.label}</p>
                   </div>
-                </label>
+                  <p className="text-xs text-gray-400 leading-snug">{p.desc}</p>
+                </button>
               ))}
             </div>
           </div>
@@ -199,22 +202,22 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
           {form.provider === 'cloudflare' && (
             <div>
               <label className="block text-sm text-gray-300 mb-2 font-medium">Streaming Mode</label>
-              <div className="flex gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 {[
                   { id: 'obs', label: 'OBS / External', desc: 'Stream via OBS or any RTMP encoder' },
                   { id: 'browser', label: 'Browser', desc: 'Stream live from this browser tab' },
                 ].map(m => (
-                  <label
+                  <button
+                    type="button"
                     key={m.id}
-                    className={`flex-1 flex flex-col gap-0.5 p-3 rounded-xl border cursor-pointer transition-all ${
-                      form.mode === m.id ? 'border-primary-500/70 bg-primary-500/10' : 'border-gray-600'
+                    onClick={() => setForm(f => ({ ...f, mode: m.id as 'obs' | 'browser' }))}
+                    className={`text-left p-3.5 rounded-xl border transition-all ${
+                      form.mode === m.id ? 'border-primary-500/70 bg-primary-500/10' : 'border-gray-600 hover:border-gray-500 bg-gray-800/40'
                     }`}
                   >
-                    <input type="radio" name="mode" value={m.id} checked={form.mode === m.id}
-                      onChange={() => setForm(f => ({ ...f, mode: m.id as 'obs' | 'browser' }))} className="hidden" />
-                    <span className="text-sm font-medium text-white">{m.label}</span>
-                    <span className="text-xs text-gray-400">{m.desc}</span>
-                  </label>
+                    <p className={`text-sm font-semibold ${form.mode === m.id ? 'text-primary-300' : 'text-white'}`}>{m.label}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 leading-snug">{m.desc}</p>
+                  </button>
                 ))}
               </div>
             </div>
@@ -285,16 +288,16 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 p-5 border-t border-gray-700">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors">
+        <div className="flex justify-end gap-3 p-5 border-t border-gray-700">
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors">
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
           >
-            {loading ? <Loader size={16} className="animate-spin" /> : <Radio size={16} />}
+            {loading ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
             {loading ? 'Creating…' : 'Create Stream'}
           </button>
         </div>
