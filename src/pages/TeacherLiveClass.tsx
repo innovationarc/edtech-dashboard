@@ -1,5 +1,6 @@
 // src/pages/TeacherLiveClass.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Video, Plus, Play, Square, Users, Clock, Calendar, Upload,
   ChevronRight, Loader, AlertCircle, CheckCircle, Trash2, Eye,
@@ -62,8 +63,8 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-start justify-center pt-20 sm:pt-24 p-4 overflow-y-auto bg-black/75 backdrop-blur-xl">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
@@ -167,7 +168,8 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -213,8 +215,8 @@ const RecordingModal: React.FC<RecordingModalProps> = ({ classItem, onClose, onS
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-start justify-center pt-20 sm:pt-24 p-4 overflow-y-auto bg-black/75 backdrop-blur-xl">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-700 shrink-0">
@@ -289,7 +291,8 @@ const RecordingModal: React.FC<RecordingModalProps> = ({ classItem, onClose, onS
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -458,8 +461,8 @@ const AttendeesModal: React.FC<{ classId: string; title: string; onClose: () => 
     });
   }, [classId]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-start justify-center pt-20 sm:pt-24 p-4 overflow-y-auto bg-black/75 backdrop-blur-xl">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
           <h3 className="font-semibold text-white flex items-center gap-2">
@@ -498,7 +501,8 @@ const AttendeesModal: React.FC<{ classId: string; title: string; onClose: () => 
           <button onClick={onClose} className="text-primary-400 hover:text-primary-300">Close</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
