@@ -1,5 +1,6 @@
 // src/pages/TeacherStream.tsx
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Radio, Plus, Play, Square, Eye, EyeOff, Copy, Check,
   Calendar, Loader, AlertCircle, Trash2, X, BookOpen,
@@ -110,8 +111,8 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-start justify-center pt-20 sm:pt-24 p-4 bg-black/75 backdrop-blur-xl overflow-y-auto">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl my-4">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
@@ -298,7 +299,8 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
