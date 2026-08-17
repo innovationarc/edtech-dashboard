@@ -96,7 +96,7 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   // Success State
   if (success) {
     return (
-      <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-lg flex items-center justify-center z-[200] p-2 xs:p-3 sm:p-4 md:p-6">
+      <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xl flex items-start justify-center z-[90] pt-20 sm:pt-24 p-2 xs:p-3 sm:p-4 md:p-6 overflow-y-auto">
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl sm:rounded-3xl w-full max-w-[280px] xs:max-w-xs sm:max-w-md p-4 xs:p-6 sm:p-8 relative shadow-2xl animate-fadeIn">
           <div className="text-center">
             <div className="flex justify-center mb-4 sm:mb-6">
@@ -151,7 +151,7 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-lg flex items-center justify-center z-[200] p-2 xs:p-3 sm:p-4">
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xl flex items-start justify-center z-[90] pt-20 sm:pt-24 p-2 xs:p-3 sm:p-4 overflow-y-auto">
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700/50 rounded-2xl sm:rounded-3xl w-full max-w-[95vw] xs:max-w-[90vw] sm:max-w-md md:max-w-lg relative shadow-2xl max-h-[95vh] xs:max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         <div className="change-password-scroll overflow-y-auto overflow-x-hidden">
         {/* Header */}
