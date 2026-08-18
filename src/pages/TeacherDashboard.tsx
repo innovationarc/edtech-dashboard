@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle, Plus } from 'lucide-react'; // Import MessageSquare
+import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle, Plus, Activity, Layers } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
 import { getRandomQuoteByCategory } from '../utils/quotes';
 import CreateAnnouncementModal from '../components/announcements/CreateAnnouncementModal';
@@ -271,7 +271,7 @@ export default function TeacherDashboard() {
 
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Recent Student Activity" className="p-6">
+        <Card title="Recent Student Activity" icon={<Activity size={20} className="text-blue-400" />} className="p-6">
           <div className="space-y-4">
             {recentStudentActivity.length > 0 ? (
               recentStudentActivity.map((activity, index) => (
@@ -306,7 +306,7 @@ export default function TeacherDashboard() {
           </div>
         </Card>
 
-        <Card title="Upcoming Classes" className="p-6">
+        <Card title="Upcoming Classes" icon={<Calendar size={20} className="text-amber-400" />} className="p-6">
           <div className="space-y-4">
             {upcomingClasses.length > 0 ? (
               upcomingClasses.map((cls) => (
@@ -334,7 +334,7 @@ export default function TeacherDashboard() {
       </div>
 
       {/* Teaching Resources */}
-      <Card title="Teaching Resources" className="p-3 sm:p-6">
+      <Card title="Teaching Resources" icon={<Layers size={20} className="text-secondary-400" />} className="p-3 sm:p-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
           {[
             { icon: BookOpen, color: 'text-primary-400', title: 'Lesson Plans', desc: 'Create and manage your lesson content', path: '/content' },
