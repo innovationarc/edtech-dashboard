@@ -341,6 +341,7 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
         </form>
       </div>
     </div>
+    </div>
   );
 };
 
