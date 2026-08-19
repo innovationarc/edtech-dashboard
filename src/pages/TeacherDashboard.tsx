@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle, Plus, Activity, Layers } from 'lucide-react'; // Import MessageSquare
+import { Users, BookOpen, TrendingUp, Calendar, Star, RotateCcw, Lightbulb, Megaphone, Loader, AlertCircle, MessageSquare, ClipboardCheck, Clock, PartyPopper, ChevronRight, AlertTriangle, Plus, Activity, Layers, CheckCircle2 } from 'lucide-react'; // Import MessageSquare
 import Card from '../components/ui/Card';
 import { getRandomQuoteByCategory } from '../utils/quotes';
 import CreateAnnouncementModal from '../components/announcements/CreateAnnouncementModal';
@@ -266,72 +266,75 @@ export default function TeacherDashboard() {
         pendingQuestionsPreview={pendingQuestionsPreview}
       />
 
-      {/* My Courses */}
-      <MyCoursesStrip loading={loading} courses={myCourses} />
+      {!loading && activeCourses === 0 ? (
+        /* Brand-new teacher: one consolidated checklist instead of 3 separate empty cards */
+        <OnboardingChecklist
+          hasCourse={activeCourses > 0}
+          hasStudents={totalStudents > 0}
+          hasClassScheduled={upcomingClasses.length > 0}
+          navigate={navigate}
+        />
+      ) : (
+        <>
+          {/* My Courses */}
+          <MyCoursesStrip loading={loading} courses={myCourses} />
 
-      {/* Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Recent Student Activity" icon={<Activity size={20} className="text-blue-400" />} className="p-6">
-          <div className="space-y-4">
-            {recentStudentActivity.length > 0 ? (
-              recentStudentActivity.map((activity, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-background-800 rounded-lg">
-                  <div>
-                    <p className="font-medium text-white">{activity.studentName}</p>
-                    <p className="text-sm text-gray-400">{activity.description}</p>
-                  </div>
-                  <span className={`text-sm font-medium ${activity.statusColor}`}>{activity.status}</span>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-gray-400 mb-3">No recent student activity.</p>
-                {activeCourses === 0 ? (
-                  <button
-                    onClick={() => navigate('/course-creation')}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
-                  >
-                    <BookOpen size={14} /> Create your first course
-                  </button>
+          {/* Recent Activity */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card title="Recent Student Activity" icon={<Activity size={20} className="text-blue-400" />} className="p-6">
+              <div className="space-y-4">
+                {recentStudentActivity.length > 0 ? (
+                  recentStudentActivity.map((activity, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-background-800 rounded-lg">
+                      <div>
+                        <p className="font-medium text-white">{activity.studentName}</p>
+                        <p className="text-sm text-gray-400">{activity.description}</p>
+                      </div>
+                      <span className={`text-sm font-medium ${activity.statusColor}`}>{activity.status}</span>
+                    </div>
+                  ))
                 ) : (
-                  <button
-                    onClick={() => navigate('/course-enrollment')}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
-                  >
-                    <Users size={14} /> View your courses to get students enrolled
-                  </button>
+                  <div className="text-center py-6">
+                    <p className="text-gray-400 mb-3">No recent student activity.</p>
+                    <button
+                      onClick={() => navigate('/course-enrollment')}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                    >
+                      <Users size={14} /> View your courses to get students enrolled
+                    </button>
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </Card>
+            </Card>
 
-        <Card title="Upcoming Classes" icon={<Calendar size={20} className="text-amber-400" />} className="p-6">
-          <div className="space-y-4">
-            {upcomingClasses.length > 0 ? (
-              upcomingClasses.map((cls) => (
-                <div key={cls.id} className={`flex items-center justify-between p-3 rounded-lg border-l-4 border-primary-500 bg-primary-900/20`}>
-                  <div>
-                    <p className="font-medium text-white">{cls.title}</p>
-                    <p className="text-sm text-gray-400">{cls.course} - {format(cls.date, 'MMM d')}</p>
+            <Card title="Upcoming Classes" icon={<Calendar size={20} className="text-amber-400" />} className="p-6">
+              <div className="space-y-4">
+                {upcomingClasses.length > 0 ? (
+                  upcomingClasses.map((cls) => (
+                    <div key={cls.id} className={`flex items-center justify-between p-3 rounded-lg border-l-4 border-primary-500 bg-primary-900/20`}>
+                      <div>
+                        <p className="font-medium text-white">{cls.title}</p>
+                        <p className="text-sm text-gray-400">{cls.course} - {format(cls.date, 'MMM d')}</p>
+                      </div>
+                      <span className="text-sm text-primary-400 font-medium">{cls.startTime} - {cls.endTime}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-gray-400 mb-3">No upcoming classes scheduled.</p>
+                    <button
+                      onClick={() => navigate('/study-plan')}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                    >
+                      <Calendar size={14} /> Schedule a class
+                    </button>
                   </div>
-                  <span className="text-sm text-primary-400 font-medium">{cls.startTime} - {cls.endTime}</span>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-gray-400 mb-3">No upcoming classes scheduled.</p>
-                <button
-                  onClick={() => navigate('/study-plan')}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
-                >
-                  <Calendar size={14} /> Schedule a class
-                </button>
+                )}
               </div>
-            )}
+            </Card>
           </div>
-        </Card>
-      </div>
+        </>
+      )}
 
       {/* Teaching Resources */}
       <Card title="Teaching Resources" icon={<Layers size={20} className="text-secondary-400" />} className="p-3 sm:p-6">
@@ -671,5 +674,90 @@ function CompactDailyInspiration({ quote, onRefresh }: CompactDailyInspirationPr
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Onboarding checklist ───────────────────────────────────────────────────────
+// Replaces 3 separate empty-state cards (My Courses / Recent Activity / Upcoming
+// Classes) with one consolidated "get started" flow for brand-new teachers with
+// zero courses — avoids a wall of "nothing here yet" boxes on first login.
+
+interface OnboardingChecklistProps {
+  hasCourse: boolean;
+  hasStudents: boolean;
+  hasClassScheduled: boolean;
+  navigate: (path: string) => void;
+}
+
+function OnboardingChecklist({ hasCourse, hasStudents, hasClassScheduled, navigate }: OnboardingChecklistProps) {
+  const steps = [
+    {
+      done: hasCourse,
+      title: 'Create your first course',
+      desc: 'Set up a course so students have something to enroll in.',
+      icon: BookOpen,
+      cta: 'Create a Course',
+      path: '/course-creation',
+    },
+    {
+      done: hasStudents,
+      title: 'Enroll students',
+      desc: 'Invite or add students to your course.',
+      icon: Users,
+      cta: 'Enroll Students',
+      path: '/course-enrollment',
+    },
+    {
+      done: hasClassScheduled,
+      title: 'Schedule your first class',
+      desc: 'Add a class to your study plan so students know when to show up.',
+      icon: Calendar,
+      cta: 'Schedule a Class',
+      path: '/study-plan',
+    },
+  ];
+  const completed = steps.filter(s => s.done).length;
+
+  return (
+    <Card title="Get Started" icon={<PartyPopper size={20} className="text-primary-400" />} className="p-6">
+      <div className="flex items-center justify-between mb-3 gap-4">
+        <p className="text-sm text-gray-400">Complete these steps to get your classroom up and running</p>
+        <span className="text-sm font-semibold text-primary-400 shrink-0">{completed}/{steps.length}</span>
+      </div>
+      <div className="h-1.5 bg-background-800 rounded-full overflow-hidden mb-5">
+        <div
+          className="h-full bg-primary-500 rounded-full transition-all duration-500"
+          style={{ width: `${(completed / steps.length) * 100}%` }}
+        />
+      </div>
+      <div className="space-y-3">
+        {steps.map(({ done, title, desc, icon: Icon, cta, path }) => (
+          <div
+            key={title}
+            className={`flex items-center gap-4 p-4 rounded-lg border transition-colors ${
+              done ? 'bg-background-800/40 border-background-700' : 'bg-background-800 border-background-700 hover:border-primary-500/40'
+            }`}
+          >
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+              done ? 'bg-green-500/15 text-green-400' : 'bg-primary-500/15 text-primary-400'
+            }`}>
+              {done ? <CheckCircle2 size={18} /> : <Icon size={16} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`font-medium ${done ? 'text-gray-400 line-through' : 'text-white'}`}>{title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+            </div>
+            {!done && (
+              <button
+                onClick={() => navigate(path)}
+                className="shrink-0 text-sm font-medium text-primary-400 hover:text-primary-300 whitespace-nowrap"
+              >
+                {cta} →
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
