@@ -24,15 +24,28 @@ const hexRgb = (hex: string) => {
   return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
 };
 
+/* Active nav-item text needs to sit on a translucent tint of itself, which tanks
+   contrast (~3.6:1, fails WCAG AA 4.5:1 for text). Shift the accent color toward
+   black in light mode / toward white in dark mode so the *text* stays legible
+   while the icon badge, background pill, and glow keep using the true brand color. */
+const readableAccentRgb = (pRgb: string, darkMode: boolean) => {
+  const [r, g, b] = pRgb.split(',').map(Number);
+  const amt = darkMode ? 0.22 : 0.18;
+  const adjust = darkMode
+    ? (c: number) => Math.min(255, Math.round(c + (255 - c) * amt))
+    : (c: number) => Math.max(0, Math.round(c * (1 - amt)));
+  return `${adjust(r)},${adjust(g)},${adjust(b)}`;
+};
+
 /* ── NavItem ── */
 interface NavItemProps {
   path: string; name: string; Icon: React.ElementType;
   isActive: boolean; expanded: boolean; darkMode: boolean;
-  pRgb: string; gradient: string;
+  pRgb: string; textRgb: string; gradient: string;
   onClick: () => void;
 }
 const NavItem: React.FC<NavItemProps> = ({
-  path, name, Icon, isActive, expanded, darkMode, pRgb, gradient, onClick,
+  path, name, Icon, isActive, expanded, darkMode, pRgb, textRgb, gradient, onClick,
 }) => {
   const [hov, setHov] = useState(false);
   return (
@@ -45,6 +58,8 @@ const NavItem: React.FC<NavItemProps> = ({
         display: 'flex', alignItems: 'center',
         gap: expanded ? 10 : 0,
         padding: expanded ? '8px 10px' : '8px',
+        minHeight: 44,
+        boxSizing: 'border-box',
         borderRadius: 12,
         textDecoration: 'none',
         overflow: 'hidden',
@@ -80,7 +95,7 @@ const NavItem: React.FC<NavItemProps> = ({
         <>
           <span style={{
             fontSize: 13, fontWeight: isActive ? 700 : hov ? 600 : 500, flex: 1,
-            color: isActive ? `rgb(${pRgb})` : hov ? (darkMode ? '#e2e8f0' : '#1f2937') : (darkMode ? '#94a3b8' : '#6b7280'),
+            color: isActive ? `rgb(${textRgb})` : hov ? (darkMode ? '#e2e8f0' : '#1f2937') : (darkMode ? '#94a3b8' : '#6b7280'),
             transition: 'color 0.15s ease',
             opacity: expanded ? 1 : 0,
           }}>
@@ -187,6 +202,7 @@ const Navigation = () => {
 
   const darkMode = theme !== 'light';
   const pRgb = hexRgb(primaryColor);
+  const textRgb = readableAccentRgb(pRgb, darkMode);
   const gradient = `linear-gradient(135deg,${primaryColor} 0%,${accentColor} 100%)`;
   const SIDEBAR_W = sidebarExpanded ? 220 : 64;
 
@@ -596,7 +612,7 @@ const Navigation = () => {
             fontWeight: 700, fontSize: 11, overflow: 'hidden',
           }}>
             {user?.profilePictureUrl
-              ? <img src={user.profilePictureUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={user.profilePictureUrl} alt={user.name} width={30} height={30} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : user && getInitials(user.name)}
           </div>
           {sidebarExpanded && (
@@ -618,7 +634,7 @@ const Navigation = () => {
               path={item.path} name={item.name} Icon={item.Icon}
               isActive={location.pathname === item.path}
               expanded={sidebarExpanded}
-              darkMode={darkMode} pRgb={pRgb} gradient={gradient}
+              darkMode={darkMode} pRgb={pRgb} textRgb={textRgb} gradient={gradient}
               onClick={() => { setShowProfile(false); setSidebarExpanded(false); }}
             />
           ))}
@@ -667,7 +683,7 @@ const Navigation = () => {
             <span style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: location.pathname === '/settings' ? gradient : (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'), boxShadow: location.pathname === '/settings' ? `0 3px 10px rgba(${pRgb},0.35)` : 'none' }}>
               <Settings size={14} color={location.pathname === '/settings' ? '#fff' : (darkMode ? '#64748b' : '#6b7280')} />
             </span>
-            {sidebarExpanded && <span style={{ fontSize: 13, fontWeight: location.pathname === '/settings' ? 700 : 500, color: location.pathname === '/settings' ? `rgb(${pRgb})` : (darkMode ? '#94a3b8' : '#6b7280'), whiteSpace: 'nowrap', opacity: sidebarExpanded ? 1 : 0 }}>Settings</span>}
+            {sidebarExpanded && <span style={{ fontSize: 13, fontWeight: location.pathname === '/settings' ? 700 : 500, color: location.pathname === '/settings' ? `rgb(${textRgb})` : (darkMode ? '#94a3b8' : '#6b7280'), whiteSpace: 'nowrap', opacity: sidebarExpanded ? 1 : 0 }}>Settings</span>}
           </Link>
 
           {/* Sign Out */}
@@ -741,7 +757,7 @@ const Navigation = () => {
             </div>
             <span style={{ fontSize: 15, fontWeight: 800, color: darkMode ? '#fff' : '#111827', letterSpacing: '-0.02em' }}>EduPlatform</span>
           </div>
-          <button onClick={toggleSidebarClick} style={{ width: 32, height: 32, borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <button onClick={toggleSidebarClick} style={{ width: 44, height: 44, borderRadius: 12, background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <HamburgerMenuIcon state={sidebarOpen ? 'open' : 'closed'} size={28} style={{ color: darkMode ? '#94a3b8' : '#6b7280' }} />
           </button>
         </div>
@@ -751,7 +767,7 @@ const Navigation = () => {
           style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, width: '100%', marginBottom: 8, flexShrink: 0, background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', border: darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)', cursor: 'pointer', transition: 'all 0.18s ease' }}>
           <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, background: gradient, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, overflow: 'hidden' }}>
             {user?.profilePictureUrl
-              ? <img src={user.profilePictureUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={user.profilePictureUrl} alt={user.name} width={32} height={32} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : user && getInitials(user.name)}
           </div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
@@ -770,7 +786,7 @@ const Navigation = () => {
               path={item.path} name={item.name} Icon={item.Icon}
               isActive={location.pathname === item.path}
               expanded={true}
-              darkMode={darkMode} pRgb={pRgb} gradient={gradient}
+              darkMode={darkMode} pRgb={pRgb} textRgb={textRgb} gradient={gradient}
               onClick={() => { setShowProfile(false); }}
             />
           ))}
@@ -832,7 +848,7 @@ const Navigation = () => {
           {isAuthenticated && (
             <div style={{ position: 'relative' }}>
               <button onClick={() => navigate('/notifications')} className="notif-btn" style={{
-                width: 38, height: 38, borderRadius: 12,
+                width: 44, height: 44, borderRadius: 12,
                 background: 'transparent', border: '1px solid transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', position: 'relative', transition: 'all 0.18s ease',
@@ -873,7 +889,7 @@ const Navigation = () => {
 
             {/* Search icon */}
             <button onClick={() => setShowMobileSearch(true)} style={{
-              width: 38, height: 38, borderRadius: 12,
+              width: 44, height: 44, borderRadius: 12,
               background: 'transparent', border: '1px solid transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', transition: 'all 0.18s ease',
@@ -1018,7 +1034,7 @@ const Navigation = () => {
             >
               <div style={{ width: 28, height: 28, borderRadius: 8, background: gradient, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, flexShrink: 0, overflow: 'hidden' }}>
                 {user?.profilePictureUrl
-                  ? <img src={user.profilePictureUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={user.profilePictureUrl} alt={user.name} width={28} height={28} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : user && getInitials(user.name)}
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: darkMode ? '#e2e8f0' : '#111827', whiteSpace: 'nowrap', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1028,7 +1044,7 @@ const Navigation = () => {
 
             {/* Sign out */}
             <button onClick={handleSignOutClick} disabled={isSigningOut} title="Sign Out" style={{
-              width: 38, height: 38, borderRadius: 12,
+              width: 44, height: 44, borderRadius: 12,
               background: 'transparent', border: '1px solid transparent',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', opacity: isSigningOut ? 0.6 : 1, transition: 'all 0.18s ease',
@@ -1066,7 +1082,7 @@ const Navigation = () => {
         {isAuthenticated ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: islandActive ? 0 : 1, transition: 'opacity 0.25s ease', pointerEvents: islandActive ? 'none' : 'auto' }}>
             <button onClick={toggleSidebarClick} style={{
-              width: 38, height: 38, borderRadius: 10,
+              width: 44, height: 44, borderRadius: 10,
               background: darkMode ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
               border: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -1125,7 +1141,7 @@ const Navigation = () => {
               fontWeight: 700, fontSize: 11, border: 'none', cursor: 'pointer', overflow: 'hidden',
             }}>
               {user?.profilePictureUrl
-                ? <img src={user.profilePictureUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ? <img src={user.profilePictureUrl} alt={user.name} width={32} height={32} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : user && getInitials(user.name)}
             </button>
           </div>
