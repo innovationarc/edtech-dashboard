@@ -228,8 +228,8 @@ export default function TeacherDashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 min-w-0">
+        <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-white">Teacher Dashboard</h1>
           <p className="text-gray-400 mt-1 text-sm sm:text-base">Inspire minds, shape futures</p>
           <button
@@ -608,17 +608,17 @@ function OverviewStatsCard({ totalStudents, activeCourses, avgPerformance, class
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 min-w-0">
       {stats.map(({ label, value, icon: Icon, color, bg, path }) => (
         <button
           key={label}
           onClick={() => navigate(path)}
-          className="bg-background-800 border border-background-700 hover:border-primary-500/40 rounded-2xl p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="bg-background-800 border border-background-700 hover:border-primary-500/40 rounded-2xl p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-0 w-full"
         >
           <div className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center mb-2`}>
             <Icon size={16} className={color} />
           </div>
-          <p className="text-xl font-bold text-white">{value}</p>
+          <p className="text-xl font-bold text-white truncate">{value}</p>
           <p className="text-xs text-gray-400 mt-0.5">{label}</p>
         </button>
       ))}
