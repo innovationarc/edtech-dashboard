@@ -257,28 +257,31 @@ export default function TeacherDashboard() {
         navigate={navigate}
       />
 
-      {/* Needs Your Attention */}
-      <NeedsAttentionCard
-        loading={attentionLoading}
-        ungradedSubmissions={ungradedSubmissions}
-        dueSoonGroups={dueSoonGroups}
-        pendingQuestionsCount={pendingQuestionsCount}
-        pendingQuestionsPreview={pendingQuestionsPreview}
-      />
-
-      {!loading && activeCourses === 0 ? (
-        /* Brand-new teacher: one consolidated checklist instead of 3 separate empty cards */
-        <OnboardingChecklist
-          hasCourse={activeCourses > 0}
-          hasStudents={totalStudents > 0}
-          hasClassScheduled={upcomingClasses.length > 0}
-          navigate={navigate}
+      {/* Needs Your Attention + Get Started/My Courses — side by side so neither card wastes width */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-start">
+        <NeedsAttentionCard
+          loading={attentionLoading}
+          ungradedSubmissions={ungradedSubmissions}
+          dueSoonGroups={dueSoonGroups}
+          pendingQuestionsCount={pendingQuestionsCount}
+          pendingQuestionsPreview={pendingQuestionsPreview}
         />
-      ) : (
-        <>
-          {/* My Courses */}
-          <MyCoursesStrip loading={loading} courses={myCourses} />
 
+        {!loading && activeCourses === 0 ? (
+          /* Brand-new teacher: one consolidated checklist instead of 3 separate empty cards */
+          <OnboardingChecklist
+            hasCourse={activeCourses > 0}
+            hasStudents={totalStudents > 0}
+            hasClassScheduled={upcomingClasses.length > 0}
+            navigate={navigate}
+          />
+        ) : (
+          <MyCoursesStrip loading={loading} courses={myCourses} />
+        )}
+      </div>
+
+      {!loading && activeCourses === 0 ? null : (
+        <>
           {/* Recent Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             <Card title="Recent Student Activity" icon={<Activity size={17} className="text-blue-400" />} className="p-3 sm:p-4">
