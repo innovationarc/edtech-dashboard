@@ -560,9 +560,9 @@ const DashboardLayout = () => {
 
       {isAuthenticated && <Navigation />}
 
-      <div className={`flex-1 flex flex-col ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`} style={{ background: 'transparent' }}>
-        <main className="dl-main flex-1 overflow-y-hidden overflow-x-hidden" style={{ paddingTop: isMobile ? 0 : 64, background: 'transparent' }}>
-          <div id="dl-scroll" className={`dl-inner h-full overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`} style={{ paddingTop: isMobile ? '72px' : undefined }}>
+      <div className={`flex-1 flex flex-col min-w-0 ${isAuthenticated && !isMobile ? 'ml-[64px]' : 'ml-0'}`} style={{ background: 'transparent' }}>
+        <main className="dl-main flex-1 overflow-y-hidden overflow-x-hidden min-w-0" style={{ paddingTop: isMobile ? 0 : 64, background: 'transparent' }}>
+          <div id="dl-scroll" className={`dl-inner h-full overflow-y-auto overflow-x-hidden min-w-0 p-3 sm:p-4 lg:p-6 pb-24 lg:pb-8${staggerActive ? ' login-stagger' : ''}`} style={{ paddingTop: isMobile ? '72px' : undefined }}>
             <PageTransition>
               <Outlet />
             </PageTransition>
