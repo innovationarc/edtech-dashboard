@@ -641,29 +641,19 @@ interface CompactDailyInspirationProps {
 
 function CompactDailyInspiration({ quote, onRefresh }: CompactDailyInspirationProps) {
   return (
-    <Card
-      title="Daily Inspiration"
-      icon={<Lightbulb size={17} className="text-warning-DEFAULT" />}
-      className="p-3 sm:p-4 w-full lg:w-80 shrink-0"
-    >
-      <blockquote
-        className="text-sm text-gray-300 italic leading-relaxed"
-        style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-      >
-        "{quote.text}"
-      </blockquote>
-      <div className="flex items-center justify-between mt-2">
-        <cite className="text-xs text-primary-400 font-medium not-italic truncate">— {quote.author}</cite>
-        <button
-          onClick={onRefresh}
-          className="shrink-0 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors px-2 py-1 -m-1 rounded-md"
-          title="New quote"
-        >
-          <RotateCcw size={12} />
-          <span>New</span>
-        </button>
+    <div className="w-full lg:w-80 shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-background-800/60 border border-background-700/70 min-w-0">
+      <Lightbulb size={15} className="text-warning-DEFAULT shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-gray-300 italic truncate">"{quote.text}" <span className="text-primary-400 not-italic">— {quote.author}</span></p>
       </div>
-    </Card>
+      <button
+        onClick={onRefresh}
+        className="shrink-0 text-gray-500 hover:text-gray-300 transition-colors p-1 -m-1 rounded-full"
+        title="New quote"
+      >
+        <RotateCcw size={13} />
+      </button>
+    </div>
   );
 }
 
