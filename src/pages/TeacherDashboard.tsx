@@ -227,16 +227,16 @@ export default function TeacherDashboard() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 min-w-0">
+    <div className="space-y-3 sm:space-y-4">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 min-w-0">
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Teacher Dashboard</h1>
-          <p className="text-gray-400 mt-1 text-sm sm:text-base">Inspire minds, shape futures</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-white">Teacher Dashboard</h1>
+          <p className="text-gray-400 mt-0.5 text-xs sm:text-sm">Inspire minds, shape futures</p>
           <button
             onClick={handleCreateAnnouncement}
-            className="mt-3 w-full sm:w-auto flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2.5 rounded-lg transition-colors shadow-lg hover:shadow-xl"
+            className="mt-2 w-full sm:w-auto flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-3.5 py-2 text-sm rounded-lg transition-colors shadow-lg hover:shadow-xl"
           >
-            <Megaphone size={20} />
+            <Megaphone size={16} />
             <span>Create Announcement</span>
           </button>
         </div>
@@ -280,53 +280,53 @@ export default function TeacherDashboard() {
           <MyCoursesStrip loading={loading} courses={myCourses} />
 
           {/* Recent Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card title="Recent Student Activity" icon={<Activity size={20} className="text-blue-400" />} className="p-6">
-              <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            <Card title="Recent Student Activity" icon={<Activity size={17} className="text-blue-400" />} className="p-3 sm:p-4">
+              <div className="space-y-2">
                 {recentStudentActivity.length > 0 ? (
                   recentStudentActivity.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-background-800 rounded-lg">
-                      <div>
-                        <p className="font-medium text-white">{activity.studentName}</p>
-                        <p className="text-sm text-gray-400">{activity.description}</p>
+                    <div key={index} className="flex items-center justify-between px-3 py-2 bg-background-800 rounded-lg">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{activity.studentName}</p>
+                        <p className="text-xs text-gray-400 truncate">{activity.description}</p>
                       </div>
-                      <span className={`text-sm font-medium ${activity.statusColor}`}>{activity.status}</span>
+                      <span className={`text-xs font-medium shrink-0 ml-2 ${activity.statusColor}`}>{activity.status}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-6">
-                    <p className="text-gray-400 mb-3">No recent student activity.</p>
+                  <div className="text-center py-4">
+                    <p className="text-gray-400 text-sm mb-2">No recent student activity.</p>
                     <button
                       onClick={() => navigate('/course-enrollment')}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-400 hover:text-primary-300 transition-colors"
                     >
-                      <Users size={14} /> View your courses to get students enrolled
+                      <Users size={13} /> View your courses to get students enrolled
                     </button>
                   </div>
                 )}
               </div>
             </Card>
 
-            <Card title="Upcoming Classes" icon={<Calendar size={20} className="text-amber-400" />} className="p-6">
-              <div className="space-y-4">
+            <Card title="Upcoming Classes" icon={<Calendar size={17} className="text-amber-400" />} className="p-3 sm:p-4">
+              <div className="space-y-2">
                 {upcomingClasses.length > 0 ? (
                   upcomingClasses.map((cls) => (
-                    <div key={cls.id} className={`flex items-center justify-between p-3 rounded-lg border-l-4 border-primary-500 bg-primary-900/20`}>
-                      <div>
-                        <p className="font-medium text-white">{cls.title}</p>
-                        <p className="text-sm text-gray-400">{cls.course} - {format(cls.date, 'MMM d')}</p>
+                    <div key={cls.id} className={`flex items-center justify-between px-3 py-2 rounded-lg border-l-4 border-primary-500 bg-primary-900/20`}>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{cls.title}</p>
+                        <p className="text-xs text-gray-400 truncate">{cls.course} - {format(cls.date, 'MMM d')}</p>
                       </div>
-                      <span className="text-sm text-primary-400 font-medium">{cls.startTime} - {cls.endTime}</span>
+                      <span className="text-xs text-primary-400 font-medium shrink-0 ml-2">{cls.startTime} - {cls.endTime}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-6">
-                    <p className="text-gray-400 mb-3">No upcoming classes scheduled.</p>
+                  <div className="text-center py-4">
+                    <p className="text-gray-400 text-sm mb-2">No upcoming classes scheduled.</p>
                     <button
                       onClick={() => navigate('/study-plan')}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-400 hover:text-primary-300 transition-colors"
                     >
-                      <Calendar size={14} /> Schedule a class
+                      <Calendar size={13} /> Schedule a class
                     </button>
                   </div>
                 )}
@@ -337,8 +337,8 @@ export default function TeacherDashboard() {
       )}
 
       {/* Teaching Resources */}
-      <Card title="Teaching Resources" icon={<Layers size={20} className="text-secondary-400" />} className="p-3 sm:p-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      <Card title="Teaching Resources" icon={<Layers size={17} className="text-secondary-400" />} className="p-3 sm:p-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {[
             { icon: BookOpen, color: 'text-primary-400', title: 'Lesson Plans', desc: 'Create and manage your lesson content', path: '/content' },
             { icon: Users, color: 'text-secondary-400', title: 'Topic Groups', desc: 'Organize subjects, chapters & topics', path: '/teacher-topic-groups' },
@@ -351,14 +351,13 @@ export default function TeacherDashboard() {
               tabIndex={0}
               onClick={() => navigate(path)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
-              className="p-3 sm:p-4 min-h-[88px] bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="p-2.5 min-w-0 bg-background-800 rounded-lg hover:bg-background-700 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
-              <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2">
-                <TileIcon size={18} className={`${color} shrink-0 sm:hidden`} />
-                <TileIcon size={20} className={`${color} shrink-0 hidden sm:block`} />
-                <h4 className="font-medium text-white text-sm sm:text-base truncate">{title}</h4>
+              <div className="flex items-center gap-2 mb-1">
+                <TileIcon size={15} className={`${color} shrink-0`} />
+                <h4 className="font-medium text-white text-xs truncate">{title}</h4>
               </div>
-              <p className="text-xs sm:text-sm text-gray-400">{desc}</p>
+              <p className="text-[11px] text-gray-400 line-clamp-2">{desc}</p>
             </div>
           ))}
         </div>
@@ -407,86 +406,86 @@ function NeedsAttentionCard({
   };
 
   return (
-    <Card title="Needs Your Attention" icon={<AlertTriangle size={20} className="text-warning-DEFAULT" />} className="p-6">
+    <Card title="Needs Your Attention" icon={<AlertTriangle size={17} className="text-warning-DEFAULT" />} className="p-3 sm:p-4">
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
-          <Loader size={16} className="animate-spin" />
-          <span className="text-sm">Checking what needs you...</span>
+        <div className="flex items-center justify-center gap-2 py-5 text-gray-400">
+          <Loader size={14} className="animate-spin" />
+          <span className="text-xs">Checking what needs you...</span>
         </div>
       ) : totalItems === 0 ? (
-        <div className="text-center py-8">
-          <PartyPopper size={28} className="mx-auto text-primary-400 mb-2" />
-          <p className="text-white font-medium">You're all caught up!</p>
-          <p className="text-sm text-gray-400 mt-1">No grading, questions, or deadlines need you right now.</p>
+        <div className="text-center py-5">
+          <PartyPopper size={22} className="mx-auto text-primary-400 mb-1.5" />
+          <p className="text-white text-sm font-medium">You're all caught up!</p>
+          <p className="text-xs text-gray-400 mt-0.5">No grading, questions, or deadlines need you right now.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {ungradedSubmissions.length > 0 && (
             <a
               href="/teacher-tasks"
-              className="flex items-center justify-between gap-3 p-4 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-orange-500"
+              className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-orange-500"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-orange-500/15 flex items-center justify-center shrink-0">
-                  <ClipboardCheck size={18} className="text-orange-400" />
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-md bg-orange-500/15 flex items-center justify-center shrink-0">
+                  <ClipboardCheck size={14} className="text-orange-400" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-white">
+                  <p className="text-sm font-medium text-white truncate">
                     {ungradedSubmissions.length} submission{ungradedSubmissions.length === 1 ? '' : 's'} awaiting grading
                   </p>
-                  <p className="text-xs text-gray-400 truncate">
+                  <p className="text-[11px] text-gray-400 truncate">
                     {joinNames(ungradedSubmissions.map(s => s.studentName), 0)}
                     {ungradedSubmissions[0] && ` · oldest waiting ${formatDistanceToNow(ungradedSubmissions[0].submittedAt)}`}
                   </p>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-gray-500 shrink-0" />
+              <ChevronRight size={16} className="text-gray-500 shrink-0" />
             </a>
           )}
 
           {dueSoonGroups.length > 0 && (
             <a
               href="/teacher-tasks"
-              className="flex items-center justify-between gap-3 p-4 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-red-500"
+              className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-red-500"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
-                  <Clock size={18} className="text-red-400" />
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-md bg-red-500/15 flex items-center justify-center shrink-0">
+                  <Clock size={14} className="text-red-400" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-white">
+                  <p className="text-sm font-medium text-white truncate">
                     {dueSoonGroups.length} task group{dueSoonGroups.length === 1 ? '' : 's'} due soon
                   </p>
-                  <p className="text-xs text-gray-400 truncate">
+                  <p className="text-[11px] text-gray-400 truncate">
                     {dueSoonGroups[0].title} — {dueDateLabel(dueSoonGroups[0].dueDate)}
                     {dueSoonGroups.length > 1 && ` +${dueSoonGroups.length - 1} more`}
                   </p>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-gray-500 shrink-0" />
+              <ChevronRight size={16} className="text-gray-500 shrink-0" />
             </a>
           )}
 
           {pendingQuestionsCount > 0 && (
             <a
               href="/teacher-qa"
-              className="flex items-center justify-between gap-3 p-4 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-primary-500"
+              className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-background-800 hover:bg-background-700 transition-colors border-l-4 border-primary-500"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-primary-500/15 flex items-center justify-center shrink-0">
-                  <MessageSquare size={18} className="text-primary-400" />
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-md bg-primary-500/15 flex items-center justify-center shrink-0">
+                  <MessageSquare size={14} className="text-primary-400" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-white">
+                  <p className="text-sm font-medium text-white truncate">
                     {pendingQuestionsCount} question{pendingQuestionsCount === 1 ? '' : 's'} waiting for an answer
                   </p>
-                  <p className="text-xs text-gray-400 truncate">
+                  <p className="text-[11px] text-gray-400 truncate">
                     {joinNames(pendingQuestionsPreview.map(q => q.studentName), pendingQuestionsCount - pendingQuestionsPreview.length)}
                     {pendingQuestionsPreview[0] && ` · ${pendingQuestionsPreview[0].subject}`}
                   </p>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-gray-500 shrink-0" />
+              <ChevronRight size={16} className="text-gray-500 shrink-0" />
             </a>
           )}
         </div>
@@ -508,26 +507,26 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
   const navigate = useNavigate();
 
   return (
-    <Card title="My Courses" icon={<BookOpen size={20} className="text-primary-400" />} className="p-6">
+    <Card title="My Courses" icon={<BookOpen size={17} className="text-primary-400" />} className="p-3 sm:p-4">
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-8 text-gray-400">
-          <Loader size={16} className="animate-spin" />
-          <span className="text-sm">Loading your courses...</span>
+        <div className="flex items-center justify-center gap-2 py-5 text-gray-400">
+          <Loader size={14} className="animate-spin" />
+          <span className="text-xs">Loading your courses...</span>
         </div>
       ) : courses.length === 0 ? (
-        <div className="text-center py-8">
-          <BookOpen size={28} className="mx-auto text-gray-500 mb-2" />
-          <p className="text-white font-medium">You haven't created a course yet</p>
-          <p className="text-sm text-gray-400 mt-1 mb-4">Publish your first course to start enrolling students.</p>
+        <div className="text-center py-5">
+          <BookOpen size={22} className="mx-auto text-gray-500 mb-1.5" />
+          <p className="text-white text-sm font-medium">You haven't created a course yet</p>
+          <p className="text-xs text-gray-400 mt-0.5 mb-3">Publish your first course to start enrolling students.</p>
           <button
             onClick={() => navigate('/course-creation')}
-            className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+            className="inline-flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg transition-colors text-xs font-medium"
           >
-            <Plus size={16} /> Create a Course
+            <Plus size={14} /> Create a Course
           </button>
         </div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollSnapType: 'x proximity' }}>
+        <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollSnapType: 'x proximity' }}>
           {courses.map(course => {
             const thumb = course.thumbnailUrl || course.thumbnail;
             return (
@@ -537,30 +536,30 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
                 tabIndex={0}
                 onClick={() => navigate(`/course-creation/${course.id}`)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/course-creation/${course.id}`); }}
-                className="shrink-0 w-48 sm:w-56 bg-background-800 hover:bg-background-700 rounded-xl overflow-hidden cursor-pointer transition-colors border border-white/5 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="shrink-0 w-36 sm:w-40 bg-background-800 hover:bg-background-700 rounded-lg overflow-hidden cursor-pointer transition-colors border border-white/5 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 style={{ scrollSnapAlign: 'start' }}
               >
-                <div className="h-24 bg-gradient-to-br from-primary-600/40 to-secondary-600/30 flex items-center justify-center relative">
+                <div className="h-14 bg-gradient-to-br from-primary-600/40 to-secondary-600/30 flex items-center justify-center relative">
                   {thumb ? (
                     <img src={thumb} alt={course.title} className="w-full h-full object-cover" />
                   ) : (
-                    <BookOpen size={26} className="text-white/70" />
+                    <BookOpen size={18} className="text-white/70" />
                   )}
                   <span
-                    className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    className={`absolute top-1 right-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
                       course.isPublished ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/30 text-gray-300'
                     }`}
                   >
                     {course.isPublished ? 'Published' : 'Draft'}
                   </span>
                 </div>
-                <div className="p-3">
-                  <p className="font-medium text-white text-sm truncate" title={course.title}>{course.title}</p>
-                  <p className="text-xs text-gray-400 truncate mt-0.5">{course.class || course.category}</p>
-                  <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
-                    <span className="flex items-center gap-1"><Users size={12} /> {course.studentCount || 0}</span>
+                <div className="p-2">
+                  <p className="font-medium text-white text-xs truncate" title={course.title}>{course.title}</p>
+                  <p className="text-[10px] text-gray-400 truncate mt-0.5">{course.class || course.category}</p>
+                  <div className="flex items-center justify-between mt-1 text-[10px] text-gray-400">
+                    <span className="flex items-center gap-1"><Users size={10} /> {course.studentCount || 0}</span>
                     <span className="flex items-center gap-1">
-                      <Star size={12} className={course.rating > 0 ? 'text-yellow-400 fill-yellow-400' : ''} />
+                      <Star size={10} className={course.rating > 0 ? 'text-yellow-400 fill-yellow-400' : ''} />
                       {course.rating > 0 ? course.rating.toFixed(1) : '—'}
                     </span>
                   </div>
@@ -575,11 +574,11 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
             tabIndex={0}
             onClick={() => navigate('/course-creation')}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/course-creation'); }}
-            className="shrink-0 w-48 sm:w-56 rounded-xl border-2 border-dashed border-white/10 hover:border-primary-500/50 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors text-gray-400 hover:text-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="shrink-0 w-36 sm:w-40 rounded-lg border-2 border-dashed border-white/10 hover:border-primary-500/50 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors text-gray-400 hover:text-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
             style={{ scrollSnapAlign: 'start' }}
           >
-            <Plus size={22} />
-            <span className="text-sm font-medium">New Course</span>
+            <Plus size={18} />
+            <span className="text-xs font-medium">New Course</span>
           </div>
         </div>
       )}
@@ -608,18 +607,20 @@ function OverviewStatsCard({ totalStudents, activeCourses, avgPerformance, class
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 min-w-0">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-0">
       {stats.map(({ label, value, icon: Icon, color, bg, path }) => (
         <button
           key={label}
           onClick={() => navigate(path)}
-          className="bg-background-800 border border-background-700 hover:border-primary-500/40 rounded-2xl p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-0 w-full"
+          className="bg-background-800 border border-background-700 hover:border-primary-500/40 rounded-xl p-2.5 sm:p-3 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-0 w-full flex items-center gap-2.5"
         >
-          <div className={`w-9 h-9 ${bg} rounded-xl flex items-center justify-center mb-2`}>
-            <Icon size={16} className={color} />
+          <div className={`w-8 h-8 shrink-0 ${bg} rounded-lg flex items-center justify-center`}>
+            <Icon size={15} className={color} />
           </div>
-          <p className="text-xl font-bold text-white truncate">{value}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{label}</p>
+          <div className="min-w-0">
+            <p className="text-base font-bold text-white leading-tight truncate">{value}</p>
+            <p className="text-[11px] text-gray-400 leading-tight truncate">{label}</p>
+          </div>
         </button>
       ))}
     </div>
@@ -719,38 +720,38 @@ function OnboardingChecklist({ hasCourse, hasStudents, hasClassScheduled, naviga
   const completed = steps.filter(s => s.done).length;
 
   return (
-    <Card title="Get Started" icon={<PartyPopper size={20} className="text-primary-400" />} className="p-6">
-      <div className="flex items-center justify-between mb-3 gap-4">
-        <p className="text-sm text-gray-400">Complete these steps to get your classroom up and running</p>
-        <span className="text-sm font-semibold text-primary-400 shrink-0">{completed}/{steps.length}</span>
+    <Card title="Get Started" icon={<PartyPopper size={17} className="text-primary-400" />} className="p-3 sm:p-4">
+      <div className="flex items-center justify-between mb-2 gap-3">
+        <p className="text-xs text-gray-400">Complete these steps to get your classroom up and running</p>
+        <span className="text-xs font-semibold text-primary-400 shrink-0">{completed}/{steps.length}</span>
       </div>
-      <div className="h-1.5 bg-background-800 rounded-full overflow-hidden mb-5">
+      <div className="h-1.5 bg-background-800 rounded-full overflow-hidden mb-3">
         <div
           className="h-full bg-primary-500 rounded-full transition-all duration-500"
           style={{ width: `${(completed / steps.length) * 100}%` }}
         />
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {steps.map(({ done, title, desc, icon: Icon, cta, path }) => (
           <div
             key={title}
-            className={`flex items-center gap-4 p-4 rounded-lg border transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors ${
               done ? 'bg-background-800/40 border-background-700' : 'bg-background-800 border-background-700 hover:border-primary-500/40'
             }`}
           >
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
               done ? 'bg-green-500/15 text-green-400' : 'bg-primary-500/15 text-primary-400'
             }`}>
-              {done ? <CheckCircle2 size={18} /> : <Icon size={16} />}
+              {done ? <CheckCircle2 size={14} /> : <Icon size={13} />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`font-medium ${done ? 'text-gray-400 line-through' : 'text-white'}`}>{title}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+              <p className={`text-sm font-medium truncate ${done ? 'text-gray-400 line-through' : 'text-white'}`}>{title}</p>
+              <p className="text-[11px] text-gray-500 truncate">{desc}</p>
             </div>
             {!done && (
               <button
                 onClick={() => navigate(path)}
-                className="shrink-0 text-sm font-medium text-primary-400 hover:text-primary-300 whitespace-nowrap"
+                className="shrink-0 text-xs font-medium text-primary-400 hover:text-primary-300 whitespace-nowrap"
               >
                 {cta} →
               </button>
