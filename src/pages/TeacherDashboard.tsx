@@ -258,7 +258,7 @@ export default function TeacherDashboard() {
       />
 
       {/* Needs Your Attention + Get Started/My Courses — side by side so neither card wastes width */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch">
         <NeedsAttentionCard
           loading={attentionLoading}
           ungradedSubmissions={ungradedSubmissions}
@@ -409,7 +409,7 @@ function NeedsAttentionCard({
   };
 
   return (
-    <Card title="Needs Your Attention" icon={<AlertTriangle size={17} className="text-warning-DEFAULT" />} className="p-3 sm:p-4">
+    <Card title="Needs Your Attention" icon={<AlertTriangle size={17} className="text-warning-DEFAULT" />} className="p-3 sm:p-4 h-full">
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-5 text-gray-400">
           <Loader size={14} className="animate-spin" />
@@ -510,7 +510,7 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
   const navigate = useNavigate();
 
   return (
-    <Card title="My Courses" icon={<BookOpen size={17} className="text-primary-400" />} className="p-3 sm:p-4">
+    <Card title="My Courses" icon={<BookOpen size={17} className="text-primary-400" />} className="p-3 sm:p-4 h-full">
       {loading ? (
         <div className="flex items-center justify-center gap-2 py-5 text-gray-400">
           <Loader size={14} className="animate-spin" />
@@ -699,7 +699,7 @@ function OnboardingChecklist({ hasCourse, hasStudents, hasClassScheduled, naviga
   const completed = steps.filter(s => s.done).length;
 
   return (
-    <Card title="Get Started" icon={<PartyPopper size={17} className="text-primary-400" />} className="p-3 sm:p-4">
+    <Card title="Get Started" icon={<PartyPopper size={17} className="text-primary-400" />} className="p-3 sm:p-4 h-full">
       <div className="flex items-center justify-between mb-2 gap-3">
         <p className="text-xs text-gray-400">Complete these steps to get your classroom up and running</p>
         <span className="text-xs font-semibold text-primary-400 shrink-0">{completed}/{steps.length}</span>
