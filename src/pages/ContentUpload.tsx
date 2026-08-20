@@ -3008,66 +3008,66 @@ const ContentUpload = () => {
       {viewMode === 'list' ? (
         <>
           {/* LIST VIEW */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-white">Content Management</h1>
-              <p className="text-gray-400 mt-1">Manage your educational content</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-white">Content Management</h1>
+              <p className="text-gray-400 mt-0.5 text-xs sm:text-sm">Manage your educational content</p>
             </div>
             <button
               onClick={openCreateForm}
-              className="flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors font-medium shadow-lg"
+              className="shrink-0 flex items-center gap-2 px-4 py-2 sm:px-6 sm:py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors font-medium shadow-lg text-sm sm:text-base"
             >
-              <Plus size={20} />
+              <Plus size={18} />
               <span>Create Content</span>
             </button>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-900/20 rounded-lg">
-                  <BookOpen size={24} className="text-blue-400" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
+            <Card className="p-2.5 sm:p-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 bg-blue-900/20 rounded-lg shrink-0">
+                  <BookOpen size={18} className="text-blue-400" />
                 </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Lessons</p>
-                  <p className="text-2xl font-bold text-white">{stats.lessons}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-900/20 rounded-lg">
-                  <FileText size={24} className="text-green-400" />
-                </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Notes</p>
-                  <p className="text-2xl font-bold text-white">{stats.notes}</p>
+                <div className="min-w-0">
+                  <p className="text-gray-400 text-[11px] truncate">Lessons</p>
+                  <p className="text-base font-bold text-white leading-tight">{stats.lessons}</p>
                 </div>
               </div>
             </Card>
 
-            <Card>
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-900/20 rounded-lg">
-                  <PenTool size={24} className="text-purple-400" />
+            <Card className="p-2.5 sm:p-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 bg-green-900/20 rounded-lg shrink-0">
+                  <FileText size={18} className="text-green-400" />
                 </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Tricks</p>
-                  <p className="text-2xl font-bold text-white">{stats.tricks}</p>
+                <div className="min-w-0">
+                  <p className="text-gray-400 text-[11px] truncate">Notes</p>
+                  <p className="text-base font-bold text-white leading-tight">{stats.notes}</p>
                 </div>
               </div>
             </Card>
 
-            <Card>
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-orange-900/20 rounded-lg">
-                  <BrainCircuit size={24} className="text-orange-400" />
+            <Card className="p-2.5 sm:p-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 bg-purple-900/20 rounded-lg shrink-0">
+                  <PenTool size={18} className="text-purple-400" />
                 </div>
-                <div>
-                  <p className="text-gray-400 text-sm">Exams</p>
-                  <p className="text-2xl font-bold text-white">{stats.exams}</p>
+                <div className="min-w-0">
+                  <p className="text-gray-400 text-[11px] truncate">Tricks</p>
+                  <p className="text-base font-bold text-white leading-tight">{stats.tricks}</p>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-2.5 sm:p-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 bg-orange-900/20 rounded-lg shrink-0">
+                  <BrainCircuit size={18} className="text-orange-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-gray-400 text-[11px] truncate">Exams</p>
+                  <p className="text-base font-bold text-white leading-tight">{stats.exams}</p>
                 </div>
               </div>
             </Card>
