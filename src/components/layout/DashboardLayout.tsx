@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import Navigation from './Navigation';
 import MobileNavigation from './MobileNavigation';
 import { useDashboard } from '../../contexts/DashboardContext';
@@ -144,6 +144,18 @@ const DashboardLayout = () => {
   }, [user?.uid, user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { isMobileRef.current = isMobile; }, [isMobile]);
+
+  // ── Reset scroll position on route change ──────────────────────────────
+  // The app scrolls inside #dl-scroll (not the window), so React Router's
+  // default scroll behavior never applies here. Without this, navigating to
+  // a new page keeps whatever scroll position the previous page was at,
+  // which can push a new page's header/title out of view and make the
+  // remaining content look cramped or overlapping at the top.
+  const location = useLocation();
+  useEffect(() => {
+    const el = document.getElementById('dl-scroll');
+    if (el) el.scrollTop = 0;
+  }, [location.pathname]);
 
   useEffect(() => {
     const onOpen  = () => { chatOpen.current = true; };
