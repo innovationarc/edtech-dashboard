@@ -42,7 +42,7 @@ const PageSkeleton = ({ variant = 'mixed', rows = 3 }: PageSkeletonProps) => {
   };
 
   const StatsSkeleton = () => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 20 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(140px,100%),1fr))', gap: 12, marginBottom: 20, minWidth: 0 }}>
       {[0,1,2,3].map(i => (
         <div key={i} style={{
           padding: '14px 16px', borderRadius: 14,
@@ -62,6 +62,7 @@ const PageSkeleton = ({ variant = 'mixed', rows = 3 }: PageSkeletonProps) => {
       display: 'grid',
       gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`,
       gap: 12,
+      minWidth: 0,
     }}>
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} style={{
