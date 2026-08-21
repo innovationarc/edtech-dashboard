@@ -908,6 +908,18 @@ html, body, #root {
   isolation: auto;
 }
 
+/* ── ModalShell open state ──────────────────────────────────────────────
+   Applied to <body> while any ModalShell-based modal is mounted. Hides the
+   mobile top header + bottom nav bar (so nothing peeks out from behind the
+   modal's blur) and locks background scroll. */
+body.modal-shell-open {
+  overflow: hidden !important;
+}
+body.modal-shell-open .app-mobile-header,
+body.modal-shell-open .app-mobile-bottomnav {
+  display: none !important;
+}
+
 /* Specific overrides for inputs */
 input, textarea, select, button {
   font-family: 'Outfit', sans-serif;
