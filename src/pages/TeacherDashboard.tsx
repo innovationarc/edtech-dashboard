@@ -7,7 +7,6 @@ import Card from '../components/ui/Card';
 import { getRandomQuoteByCategory } from '../utils/quotes';
 import CreateAnnouncementModal from '../components/announcements/CreateAnnouncementModal';
 import { useDashboard } from '../contexts/DashboardContext';
-import { userService } from '../services/userService';
 import { courseService, Course } from '../services/courseService';
 import { studyPlanService, StudyPlanEvent } from '../services/studyPlanService'; // Import studyPlanService
 import { qaService, Question } from '../services/qaService'; // Import qaService for real-time Q&A notifications
@@ -75,14 +74,12 @@ export default function TeacherDashboard() {
     setError('');
     try {
       const [
-        allUsers,
         teacherCourses,
         allEnrollments,
         teacherStudyPlanEvents, // Fetch study plan events
         pendingQuestions, // Fetch pending questions
         teacherTaskGroups // Fetch this teacher's task groups (for grading + due-soon widget)
       ] = await Promise.all([
-        userService.getAllUsers().catch(() => []),
         courseService.getCoursesByInstructor(user.uid).catch(() => [],),
         courseService.getAllEnrollments().catch(() => []),
         studyPlanService.getEventsByTeacher(user.uid).catch(() => []), // Fetch events for this teacher
@@ -90,8 +87,13 @@ export default function TeacherDashboard() {
         taskService.getTaskGroupsByTeacher(user.uid).catch(() => [])
       ]);
 
-      // Total Students
-      setTotalStudents(allUsers.filter(u => u.role === 'student').length);
+      // This teacher's own enrollments only (used for both the student count and the activity feed)
+      const ownEnrollments = allEnrollments.filter(enrollment =>
+        teacherCourses.some(course => course.id === enrollment.courseId)
+      );
+
+      // Total Students — unique students enrolled in THIS teacher's courses (not every student on the platform)
+      setTotalStudents(new Set(ownEnrollments.map(e => e.studentId)).size);
 
       // Active Courses (created by this teacher)
       setActiveCourses(teacherCourses.length);
@@ -101,19 +103,21 @@ export default function TeacherDashboard() {
       setAvgPerformance(0);
 
       // Recent Student Activity — enrollments only
+      const courseNameById = new Map(teacherCourses.map(course => [course.id, course.title]));
       const recentActivities: any[] = [];
-      allEnrollments.filter(enrollment =>
-        teacherCourses.some(course => course.id === enrollment.courseId)
-      ).sort((a, b) => b.enrolledAt.getTime() - a.enrolledAt.getTime()).slice(0, 2).forEach(enrollment => {
-        recentActivities.push({
-          id: `enroll-${enrollment.id}`,
-          studentName: enrollment.studentName,
-          description: `Enrolled in ${enrollment.courseId}`, // Course ID, ideally course name
-          status: 'New Enrollment',
-          statusColor: 'text-primary-400'
+      ownEnrollments
+        .sort((a, b) => b.enrolledAt.getTime() - a.enrolledAt.getTime())
+        .slice(0, 4)
+        .forEach(enrollment => {
+          recentActivities.push({
+            id: `enroll-${enrollment.id}`,
+            studentName: enrollment.studentName,
+            description: `Enrolled in ${courseNameById.get(enrollment.courseId) ?? enrollment.courseId}`,
+            status: 'New Enrollment',
+            statusColor: 'text-primary-400'
+          });
         });
-      });
-      setRecentStudentActivity(recentActivities.sort((a, b) => b.id.localeCompare(a.id)).slice(0, 4)); // Sort by ID to keep consistent order for mock data
+      setRecentStudentActivity(recentActivities); // already sorted newest-first and capped at 4 above
 
       // Upcoming Classes from Study Plan Events
       const now = new Date();
