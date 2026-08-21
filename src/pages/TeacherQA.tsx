@@ -443,20 +443,20 @@ const AnswerQuestionModal = ({ question, teacherId, teacherName, onClose, onSucc
       let fileUrl: string | undefined;
       let fileName: string | undefined;
 
-      // Upload all files to Google Drive (Q&A folder)
+      // Upload all files to Supabase storage (Q&A folder)
       if (imageFile) {
-        const driveResult = await qaService.uploadToGoogleDrive(imageFile, 'answer_images');
-        imageUrl = driveResult.webViewLink;
+        const uploadResult = await qaService.uploadToSupabase(imageFile, 'answer_images');
+        imageUrl = uploadResult.url;
       }
 
       if (audioFile) {
-        const driveResult = await qaService.uploadToGoogleDrive(audioFile, 'answer_audio');
-        audioUrl = driveResult.webViewLink;
+        const uploadResult = await qaService.uploadToSupabase(audioFile, 'answer_audio');
+        audioUrl = uploadResult.url;
       }
 
       if (docFile) {
-        const driveResult = await qaService.uploadToGoogleDrive(docFile, 'answer_documents');
-        fileUrl = driveResult.webViewLink;
+        const uploadResult = await qaService.uploadToSupabase(docFile, 'answer_documents');
+        fileUrl = uploadResult.url;
         fileName = docFile.name;
       }
 
@@ -696,16 +696,16 @@ const AddKnowledgeModal = ({ teacherId, teacherName, subjects, onClose, onSucces
       const fileUrls: string[] = [];
       const fileNames: string[] = [];
 
-      // Upload images to Google Drive (Knowledge folder)
+      // Upload images to Supabase storage (Knowledge folder)
       for (const file of imageFiles) {
-        const driveResult = await qaService.uploadToGoogleDrive(file, 'knowledge_images');
-        imageUrls.push(driveResult.webViewLink);
+        const uploadResult = await qaService.uploadToSupabase(file, 'knowledge_images');
+        imageUrls.push(uploadResult.url);
       }
 
-      // Upload documents to Google Drive (Knowledge folder)
+      // Upload documents to Supabase storage (Knowledge folder)
       for (const file of docFiles) {
-        const driveResult = await qaService.uploadToGoogleDrive(file, 'knowledge_documents');
-        fileUrls.push(driveResult.webViewLink);
+        const uploadResult = await qaService.uploadToSupabase(file, 'knowledge_documents');
+        fileUrls.push(uploadResult.url);
         fileNames.push(file.name);
       }
 
