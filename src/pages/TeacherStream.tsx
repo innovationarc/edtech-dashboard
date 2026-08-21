@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Radio, Plus, Play, Square, Eye, EyeOff, Copy, Check,
-  Calendar, Loader, AlertCircle, Trash2, X, BookOpen,
+  Calendar, Loader, AlertCircle, Trash2, BookOpen,
   ChevronDown, ChevronUp, Users, Video,
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -14,6 +14,7 @@ import {
 } from '../services/streamService';
 import { LiveStream, StreamScheduleForm, StreamProvider } from '../types/streamTypes';
 import CloudflareWebRTCStream from '../components/stream/CloudflareWebRTCStream';
+import ModalShell, { useModalFieldStyles } from '../components/shared/ModalShell';
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 
@@ -76,6 +77,7 @@ interface CreateModalProps {
 }
 
 const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, teacherId, teacherName }) => {
+  const { inputCls, inputStyle, labelStyle, primaryBtnStyle, secondaryBtnStyle } = useModalFieldStyles();
   const [form, setForm] = useState<StreamScheduleForm>({
     title: '', description: '', provider: 'youtube', mode: 'obs',
     scheduledAt: '', youtubeVideoId: '', youtubeStreamKey: '',
@@ -111,199 +113,188 @@ const CreateStreamModal: React.FC<CreateModalProps> = ({ onClose, onCreated, tea
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-start justify-center pt-20 sm:pt-24 p-4 bg-black/75 backdrop-blur-xl overflow-y-auto">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl my-4">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary-500/15 border border-primary-500/25 flex items-center justify-center shrink-0">
-              <Radio size={18} className="text-primary-400" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white leading-tight">Create Live Stream</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Configure and launch your stream</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-700 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-5 space-y-5 max-h-[72vh] overflow-y-auto">
-          {error && (
-            <div className="flex items-start gap-2 bg-red-900/30 border border-red-700/60 text-red-400 rounded-xl px-4 py-3 text-sm">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" /> {error}
-            </div>
-          )}
-
-          {/* Title */}
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Stream Title <span className="text-red-400">*</span></label>
-            <input
-              value={form.title}
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              placeholder="e.g. Chapter 5 — Live Lecture"
-              className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5">Description (optional)</label>
-            <textarea
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              rows={2}
-              placeholder="What will be covered in this stream?"
-              className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm resize-none"
-            />
-          </div>
-
-          {/* Scheduled At */}
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Scheduled Date & Time <span className="text-red-400">*</span></label>
-            <input
-              type="datetime-local"
-              value={form.scheduledAt}
-              onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))}
-              min={new Date().toISOString().slice(0, 16)}
-              className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-primary-500 text-sm"
-            />
-          </div>
-
-          {/* Provider */}
-          <div>
-            <label className="block text-sm text-gray-300 mb-2 font-medium">Streaming Provider <span className="text-red-400">*</span></label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {providers.map(p => (
-                <button
-                  type="button"
-                  key={p.id}
-                  onClick={() => setForm(f => ({ ...f, provider: p.id, mode: p.id === 'cloudflare' ? f.mode : 'obs' }))}
-                  className={`text-left p-3.5 rounded-xl border transition-all ${
-                    form.provider === p.id
-                      ? 'border-primary-500/70 bg-primary-500/10'
-                      : 'border-gray-600 hover:border-gray-500 bg-gray-800/40'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
-                    <p className={`text-sm font-semibold ${form.provider === p.id ? 'text-primary-300' : 'text-white'}`}>{p.label}</p>
-                  </div>
-                  <p className="text-xs text-gray-400 leading-snug">{p.desc}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Cloudflare mode selector */}
-          {form.provider === 'cloudflare' && (
-            <div>
-              <label className="block text-sm text-gray-300 mb-2 font-medium">Streaming Mode</label>
-              <div className="grid grid-cols-2 gap-2.5">
-                {[
-                  { id: 'obs', label: 'OBS / External', desc: 'Stream via OBS or any RTMP encoder' },
-                  { id: 'browser', label: 'Browser', desc: 'Stream live from this browser tab' },
-                ].map(m => (
-                  <button
-                    type="button"
-                    key={m.id}
-                    onClick={() => setForm(f => ({ ...f, mode: m.id as 'obs' | 'browser' }))}
-                    className={`text-left p-3.5 rounded-xl border transition-all ${
-                      form.mode === m.id ? 'border-primary-500/70 bg-primary-500/10' : 'border-gray-600 hover:border-gray-500 bg-gray-800/40'
-                    }`}
-                  >
-                    <p className={`text-sm font-semibold ${form.mode === m.id ? 'text-primary-300' : 'text-white'}`}>{m.label}</p>
-                    <p className="text-xs text-gray-400 mt-0.5 leading-snug">{m.desc}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* YouTube specific */}
-          {form.provider === 'youtube' && (
-            <div className="space-y-3 bg-red-900/10 border border-red-500/20 rounded-xl p-4">
-              <p className="text-xs text-red-400/80 font-medium leading-relaxed">
-                First create a live stream in <strong>YouTube Studio → Go Live</strong>, then paste the details below.
-              </p>
-              <div>
-                <label className="block text-sm text-gray-300 mb-1.5 font-medium">YouTube Video ID *</label>
-                <input
-                  value={form.youtubeVideoId ?? ''}
-                  onChange={e => setForm(f => ({ ...f, youtubeVideoId: e.target.value }))}
-                  placeholder="e.g. dQw4w9WgXcQ (from your YouTube URL)"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-300 mb-1.5 font-medium">YouTube Stream Key *</label>
-                <input
-                  type="password"
-                  value={form.youtubeStreamKey ?? ''}
-                  onChange={e => setForm(f => ({ ...f, youtubeStreamKey: e.target.value }))}
-                  placeholder="From YouTube Studio → Stream Key"
-                  className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Bunny/Cloudflare auto-gen info */}
-          {(form.provider === 'bunny' || form.provider === 'cloudflare') && (
-            <div className="bg-blue-900/10 border border-blue-500/20 rounded-xl p-4">
-              <p className="text-xs text-blue-400 leading-relaxed">
-                ✓ RTMP URL and Stream Key will be <strong>auto-generated</strong> when you click Create.
-                Copy them into OBS → Settings → Stream after creation.
-                {form.provider === 'cloudflare' && form.mode === 'browser' && (
-                  <> Browser streaming will also be available from your dashboard — no OBS needed.</>
-                )}
-              </p>
-            </div>
-          )}
-
-          {/* Course (optional) */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1.5">Course ID <span className="text-gray-600">(optional)</span></label>
-              <input
-                value={form.courseId ?? ''}
-                onChange={e => setForm(f => ({ ...f, courseId: e.target.value }))}
-                placeholder="Course ID"
-                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1.5">Course Name <span className="text-gray-600">(optional)</span></label>
-              <input
-                value={form.courseName ?? ''}
-                onChange={e => setForm(f => ({ ...f, courseName: e.target.value }))}
-                placeholder="Course Name"
-                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 p-5 border-t border-gray-700">
-          <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors">
-            Cancel
-          </button>
+  return (
+    <ModalShell
+      icon={<Radio size={15} />}
+      title="Create Live Stream"
+      subtitle="Configure and launch your stream"
+      onClose={onClose}
+      disableBackdropClose={loading}
+      footer={
+        <>
+          <button onClick={onClose} style={secondaryBtnStyle}>Cancel</button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="px-5 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+            style={{ ...primaryBtnStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           >
-            {loading ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+            {loading ? <Loader size={14} className="animate-spin" /> : <Check size={14} />}
             {loading ? 'Creating…' : 'Create Stream'}
           </button>
+        </>
+      }
+    >
+      {error && (
+        <div className="flex items-start gap-2 bg-red-900/30 border border-red-700/60 text-red-400 rounded-xl px-4 py-3 text-sm">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" /> {error}
+        </div>
+      )}
+
+      {/* Title */}
+      <div>
+        <label style={labelStyle}>Stream Title <span className="text-red-400">*</span></label>
+        <input
+          value={form.title}
+          onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          placeholder="e.g. Chapter 5 — Live Lecture"
+          className={inputCls}
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Description */}
+      <div>
+        <label style={labelStyle}>Description (optional)</label>
+        <textarea
+          value={form.description}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          rows={2}
+          placeholder="What will be covered in this stream?"
+          className={inputCls + ' resize-none'}
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Scheduled At */}
+      <div>
+        <label style={labelStyle}>Scheduled Date & Time <span className="text-red-400">*</span></label>
+        <input
+          type="datetime-local"
+          value={form.scheduledAt}
+          onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))}
+          min={new Date().toISOString().slice(0, 16)}
+          className={inputCls}
+          style={inputStyle}
+        />
+      </div>
+
+      {/* Provider */}
+      <div>
+        <label style={labelStyle}>Streaming Provider <span className="text-red-400">*</span></label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {providers.map(p => (
+            <button
+              type="button"
+              key={p.id}
+              onClick={() => setForm(f => ({ ...f, provider: p.id, mode: p.id === 'cloudflare' ? f.mode : 'obs' }))}
+              className={`text-left p-3.5 rounded-xl border transition-all ${
+                form.provider === p.id
+                  ? 'border-primary-500/70 bg-primary-500/10'
+                  : 'border-gray-600 hover:border-gray-500 bg-gray-800/40'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
+                <p className={`text-sm font-semibold ${form.provider === p.id ? 'text-primary-300' : 'text-white'}`}>{p.label}</p>
+              </div>
+              <p className="text-xs text-gray-400 leading-snug">{p.desc}</p>
+            </button>
+          ))}
         </div>
       </div>
-    </div>,
-    document.body
+
+      {/* Cloudflare mode selector */}
+      {form.provider === 'cloudflare' && (
+        <div>
+          <label style={labelStyle}>Streaming Mode</label>
+          <div className="grid grid-cols-2 gap-2.5">
+            {[
+              { id: 'obs', label: 'OBS / External', desc: 'Stream via OBS or any RTMP encoder' },
+              { id: 'browser', label: 'Browser', desc: 'Stream live from this browser tab' },
+            ].map(m => (
+              <button
+                type="button"
+                key={m.id}
+                onClick={() => setForm(f => ({ ...f, mode: m.id as 'obs' | 'browser' }))}
+                className={`text-left p-3.5 rounded-xl border transition-all ${
+                  form.mode === m.id ? 'border-primary-500/70 bg-primary-500/10' : 'border-gray-600 hover:border-gray-500 bg-gray-800/40'
+                }`}
+              >
+                <p className={`text-sm font-semibold ${form.mode === m.id ? 'text-primary-300' : 'text-white'}`}>{m.label}</p>
+                <p className="text-xs text-gray-400 mt-0.5 leading-snug">{m.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* YouTube specific */}
+      {form.provider === 'youtube' && (
+        <div className="space-y-3 bg-red-900/10 border border-red-500/20 rounded-xl p-4">
+          <p className="text-xs text-red-400/80 font-medium leading-relaxed">
+            First create a live stream in <strong>YouTube Studio → Go Live</strong>, then paste the details below.
+          </p>
+          <div>
+            <label style={labelStyle}>YouTube Video ID *</label>
+            <input
+              value={form.youtubeVideoId ?? ''}
+              onChange={e => setForm(f => ({ ...f, youtubeVideoId: e.target.value }))}
+              placeholder="e.g. dQw4w9WgXcQ (from your YouTube URL)"
+              className={inputCls}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>YouTube Stream Key *</label>
+            <input
+              type="password"
+              value={form.youtubeStreamKey ?? ''}
+              onChange={e => setForm(f => ({ ...f, youtubeStreamKey: e.target.value }))}
+              placeholder="From YouTube Studio → Stream Key"
+              className={inputCls}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Bunny/Cloudflare auto-gen info */}
+      {(form.provider === 'bunny' || form.provider === 'cloudflare') && (
+        <div className="bg-blue-900/10 border border-blue-500/20 rounded-xl p-4">
+          <p className="text-xs text-blue-400 leading-relaxed">
+            ✓ RTMP URL and Stream Key will be <strong>auto-generated</strong> when you click Create.
+            Copy them into OBS → Settings → Stream after creation.
+            {form.provider === 'cloudflare' && form.mode === 'browser' && (
+              <> Browser streaming will also be available from your dashboard — no OBS needed.</>
+            )}
+          </p>
+        </div>
+      )}
+
+      {/* Course (optional) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label style={labelStyle}>Course ID <span className="text-gray-600">(optional)</span></label>
+          <input
+            value={form.courseId ?? ''}
+            onChange={e => setForm(f => ({ ...f, courseId: e.target.value }))}
+            placeholder="Course ID"
+            className={inputCls}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Course Name <span className="text-gray-600">(optional)</span></label>
+          <input
+            value={form.courseName ?? ''}
+            onChange={e => setForm(f => ({ ...f, courseName: e.target.value }))}
+            placeholder="Course Name"
+            className={inputCls}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+    </ModalShell>
   );
 };
 
