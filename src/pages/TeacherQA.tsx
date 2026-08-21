@@ -9,6 +9,8 @@ import { useDashboard } from '../contexts/DashboardContext';
 import { qaService, Question, Knowledge } from '../services/qaService';
 import { notificationService } from '../services/notificationService';
 
+import ModalShell, { useModalFieldStyles } from '../components/shared/ModalShell';
+
 const TeacherQA = () => {
   const { user } = useDashboard();
   const [activeTab, setActiveTab] = useState<'questions' | 'knowledge'>('questions');
@@ -656,6 +658,7 @@ interface AddKnowledgeModalProps {
 }
 
 const AddKnowledgeModal = ({ teacherId, teacherName, subjects, onClose, onSuccess }: AddKnowledgeModalProps) => {
+  const { inputCls, inputStyle, labelStyle, primaryBtnStyle, secondaryBtnStyle } = useModalFieldStyles();
   const [subject, setSubject] = useState('');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -726,154 +729,148 @@ const AddKnowledgeModal = ({ teacherId, teacherName, subjects, onClose, onSucces
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-[9999] p-4 overflow-y-auto">
-      <div className="bg-background-900 rounded-xl w-full max-w-3xl my-8 relative">
-        <button
-          onClick={onClose}
-          disabled={loading}
-          className="absolute right-4 top-4 text-gray-400 hover:text-white z-10"
-        >
-          <X size={20} />
-        </button>
+  return (
+    <ModalShell
+      icon={<Book size={15} />}
+      title="Add Knowledge to Database"
+      subtitle="Teaching materials & solution methods the AI can draw on"
+      onClose={onClose}
+      disableBackdropClose={loading}
+      wide
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={loading} style={secondaryBtnStyle}>Cancel</button>
+          <button
+            form="add-knowledge-form"
+            type="submit"
+            disabled={loading}
+            style={{ ...primaryBtnStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+          >
+            {loading && <Loader size={14} className="animate-spin" />}
+            <Plus size={14} />
+            <span>{loading ? 'Adding Knowledge...' : 'Add Knowledge'}</span>
+          </button>
+        </>
+      }
+    >
+      <p className="text-gray-400 text-xs -mt-1">
+        Add teaching materials, solution methods, or sample Q&A that AI will use when answering student questions.
+      </p>
 
-        <div className="p-6">
-          <h2 className="text-2xl font-bold text-white mb-4">Add Knowledge to Database</h2>
-          <p className="text-gray-400 text-sm mb-6">
-            Add teaching materials, solution methods, or sample Q&A that AI will use when answering student questions.
+      {error && (
+        <div className="bg-error-dark text-error-light px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <form id="add-knowledge-form" onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label style={labelStyle}>Subject *</label>
+            <select
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className={inputCls}
+              style={inputStyle}
+              disabled={loading}
+              required
+            >
+              <option value="">Select a subject</option>
+              {subjects.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Type *</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as 'concept' | 'sample_qa' | 'procedure')}
+              className={inputCls}
+              style={inputStyle}
+              disabled={loading}
+              required
+            >
+              <option value="procedure">Solution Procedure</option>
+              <option value="concept">Concept/Theory</option>
+              <option value="sample_qa">Sample Q&A</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Title *</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className={inputCls}
+            style={inputStyle}
+            placeholder="e.g., Quadratic Formula Method, Photosynthesis Process"
+            disabled={loading}
+            required
+          />
+        </div>
+
+        <div>
+          <label style={labelStyle}>Content/Procedure *</label>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className={inputCls + ' resize-none'}
+            style={inputStyle}
+            placeholder="Enter the knowledge content, solving procedures, sample questions with answers, or teaching methods that AI should follow..."
+            rows={8}
+            disabled={loading}
+            required
+          ></textarea>
+          <p className="text-xs text-gray-500 mt-1">
+            Tip: Be specific about the steps and methods. AI will follow these exact procedures when solving similar questions.
           </p>
+        </div>
 
-          {error && (
-            <div className="bg-error-dark text-error-light px-4 py-3 rounded-lg mb-4 flex items-center gap-2">
-              <AlertCircle size={16} />
-              <span>{error}</span>
+        <div>
+          <label style={labelStyle}>Attach Images (Optional)</label>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageChange}
+            className="w-full text-sm rounded-xl px-3 py-2 border text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer file:text-xs"
+            style={{ ...inputStyle, padding: '8px 12px' }}
+            disabled={loading}
+          />
+          {imageFiles.length > 0 && (
+            <div className="text-xs text-gray-400 mt-1">
+              {imageFiles.length} image(s) selected: {imageFiles.map(f => f.name).join(', ')}
             </div>
           )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Subject *</label>
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled={loading}
-                  required
-                >
-                  <option value="">Select a subject</option>
-                  {subjects.map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Type *</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value as 'concept' | 'sample_qa' | 'procedure')}
-                  className="w-full bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled={loading}
-                  required
-                >
-                  <option value="procedure">Solution Procedure</option>
-                  <option value="concept">Concept/Theory</option>
-                  <option value="sample_qa">Sample Q&A</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Title *</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="e.g., Quadratic Formula Method, Photosynthesis Process"
-                disabled={loading}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Content/Procedure *</label>
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="w-full bg-background-800 text-white rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="Enter the knowledge content, solving procedures, sample questions with answers, or teaching methods that AI should follow..."
-                rows={10}
-                disabled={loading}
-                required
-              ></textarea>
-              <p className="text-xs text-gray-500 mt-1">
-                Tip: Be specific about the steps and methods. AI will follow these exact procedures when solving similar questions.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Attach Images (Optional)</label>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageChange}
-                className="w-full bg-background-800 text-white rounded-lg py-2 px-3 text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer"
-                disabled={loading}
-              />
-              {imageFiles.length > 0 && (
-                <div className="text-sm text-gray-400 mt-1">
-                  {imageFiles.length} image(s) selected: {imageFiles.map(f => f.name).join(', ')}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Attach Documents (PDF/DOCX) - Optional</label>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx"
-                multiple
-                onChange={handleDocChange}
-                className="w-full bg-background-800 text-white rounded-lg py-2 px-3 text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer"
-                disabled={loading}
-              />
-              {docFiles.length > 0 && (
-                <div className="text-sm text-gray-400 mt-1">
-                  {docFiles.length} document(s) selected: {docFiles.map(f => f.name).join(', ')}
-                </div>
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                Files will be uploaded to: Google Drive → Knowledge Folder (15CmR8svI9TYW8uqcCB0RbdgNkXAk1cTI)
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-4 border-t border-background-800">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-background-800 hover:bg-background-700 text-white rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-800 disabled:text-gray-500 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                {loading && <Loader size={16} className="animate-spin" />}
-                <Plus size={16} />
-                <span>{loading ? 'Adding Knowledge...' : 'Add Knowledge'}</span>
-              </button>
-            </div>
-          </form>
         </div>
-      </div>
-    </div>,
-    document.body
+
+        <div>
+          <label style={labelStyle}>Attach Documents (PDF/DOCX) - Optional</label>
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx"
+            multiple
+            onChange={handleDocChange}
+            className="w-full text-sm rounded-xl px-3 py-2 border text-gray-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-primary-600 file:text-white file:cursor-pointer file:text-xs"
+            style={{ ...inputStyle, padding: '8px 12px' }}
+            disabled={loading}
+          />
+          {docFiles.length > 0 && (
+            <div className="text-xs text-gray-400 mt-1">
+              {docFiles.length} document(s) selected: {docFiles.map(f => f.name).join(', ')}
+            </div>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            Files will be uploaded to: Google Drive → Knowledge Folder (15CmR8svI9TYW8uqcCB0RbdgNkXAk1cTI)
+          </p>
+        </div>
+      </form>
+    </ModalShell>
   );
 };
 
