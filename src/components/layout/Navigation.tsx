@@ -1060,7 +1060,7 @@ const Navigation = () => {
 
       {/* MOBILE HEADER — hidden with slide-up on notifications page */}
       <header
-        className="lg:hidden fixed top-0 left-0 right-0 z-[100] flex items-center justify-between"
+        className="app-mobile-header lg:hidden fixed top-0 left-0 right-0 z-[100] flex items-center justify-between"
         style={{
           height: 60,
           padding: '0 14px',
