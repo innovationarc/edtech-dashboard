@@ -231,7 +231,6 @@ export default function TeacherDashboard() {
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3 min-w-0">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold text-white">Teacher Dashboard</h1>
-          <h2 className="sr-only">Dashboard Overview</h2>
           <p className="text-gray-400 mt-0.5 text-xs sm:text-sm">Inspire minds, shape futures</p>
           <button
             onClick={handleCreateAnnouncement}
