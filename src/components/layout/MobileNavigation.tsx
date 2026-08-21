@@ -187,7 +187,7 @@ const MobileNavigation = () => {
 
   return (
     <nav
-      className="mobile-nav lg:hidden safe-area-bottom"
+      className="app-mobile-bottomnav mobile-nav lg:hidden safe-area-bottom"
       style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 30,
         backgroundColor: baseBg,
