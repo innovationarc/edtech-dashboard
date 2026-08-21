@@ -15,6 +15,7 @@ import { LiveClass, ScheduleClassForm, JoinInfo } from '../types/liveClassTypes'
 import { contentService, Content } from '../services/contentService';
 import JitsiRoom from '../components/liveClass/JitsiRoom';
 import HMSRoom from '../components/liveClass/HMSRoom';
+import ModalShell, { useModalFieldStyles } from '../components/shared/ModalShell';
 
 // ─── Schedule Modal ───────────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ interface ScheduleModalProps {
 const ScheduleModal: React.FC<ScheduleModalProps> = ({
   onClose, onScheduled, teacherId, teacherName,
 }) => {
+  const { inputCls, inputStyle, labelStyle, primaryBtnStyle, secondaryBtnStyle } = useModalFieldStyles();
   const [form, setForm] = useState<ScheduleClassForm>({
     title: '',
     description: '',
@@ -63,113 +65,106 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-start justify-center pt-20 sm:pt-24 p-4 overflow-y-auto bg-black/75 backdrop-blur-xl">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Calendar size={20} className="text-primary-400" />
-            Schedule Live Class
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-700 transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          {error && (
-            <div className="flex items-center gap-2 bg-red-900/30 border border-red-700 text-red-400 rounded-xl px-4 py-3 text-sm">
-              <AlertCircle size={16} /> {error}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Class Title *</label>
-            <input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="e.g. Introduction to Algebra"
-              className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-300 mb-1.5 font-medium">Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={3}
-              placeholder="What will be covered in this class?"
-              className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5 font-medium">Date & Time *</label>
-              <input
-                type="datetime-local"
-                value={form.scheduledAt}
-                onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
-                min={new Date().toISOString().slice(0, 16)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-primary-500 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5 font-medium">Duration (minutes)</label>
-              <select
-                value={form.durationMins}
-                onChange={(e) => setForm({ ...form, durationMins: parseInt(e.target.value) })}
-                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-primary-500 text-sm"
-              >
-                {[30, 45, 60, 90, 120, 180].map((d) => (
-                  <option key={d} value={d}>{d} min</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Course ID (optional)</label>
-              <input
-                value={form.courseId}
-                onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-                placeholder="Course ID"
-                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-300 mb-1.5">Course Name (optional)</label>
-              <input
-                value={form.courseName}
-                onChange={(e) => setForm({ ...form, courseName: e.target.value })}
-                placeholder="Course Name"
-                className="w-full bg-gray-800 border border-gray-600 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 px-5 pb-5">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors">
-            Cancel
-          </button>
+  return (
+    <ModalShell
+      icon={<Calendar size={15} />}
+      title="Schedule Live Class"
+      subtitle="Set up a new live session for your students"
+      onClose={onClose}
+      disableBackdropClose={loading}
+      footer={
+        <>
+          <button onClick={onClose} style={secondaryBtnStyle}>Cancel</button>
           <button
             onClick={handleSubmit}
             disabled={loading}
-            className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+            style={{ ...primaryBtnStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           >
-            {loading ? <Loader size={16} className="animate-spin" /> : <Calendar size={16} />}
+            {loading ? <Loader size={14} className="animate-spin" /> : <Calendar size={14} />}
             {loading ? 'Scheduling…' : 'Schedule Class'}
           </button>
+        </>
+      }
+    >
+      {error && (
+        <div className="flex items-center gap-2 bg-red-900/30 border border-red-700 text-red-400 rounded-xl px-4 py-3 text-sm">
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+
+      <div>
+        <label style={labelStyle}>Class Title *</label>
+        <input
+          value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+          placeholder="e.g. Introduction to Algebra"
+          className={inputCls}
+          style={inputStyle}
+        />
+      </div>
+
+      <div>
+        <label style={labelStyle}>Description</label>
+        <textarea
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          rows={3}
+          placeholder="What will be covered in this class?"
+          className={inputCls + ' resize-none'}
+          style={inputStyle}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label style={labelStyle}>Date & Time *</label>
+          <input
+            type="datetime-local"
+            value={form.scheduledAt}
+            onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })}
+            min={new Date().toISOString().slice(0, 16)}
+            className={inputCls}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Duration (minutes)</label>
+          <select
+            value={form.durationMins}
+            onChange={(e) => setForm({ ...form, durationMins: parseInt(e.target.value) })}
+            className={inputCls}
+            style={inputStyle}
+          >
+            {[30, 45, 60, 90, 120, 180].map((d) => (
+              <option key={d} value={d}>{d} min</option>
+            ))}
+          </select>
         </div>
       </div>
-    </div>,
-    document.body
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label style={labelStyle}>Course ID (optional)</label>
+          <input
+            value={form.courseId}
+            onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+            placeholder="Course ID"
+            className={inputCls}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>Course Name (optional)</label>
+          <input
+            value={form.courseName}
+            onChange={(e) => setForm({ ...form, courseName: e.target.value })}
+            placeholder="Course Name"
+            className={inputCls}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+    </ModalShell>
   );
 };
 
