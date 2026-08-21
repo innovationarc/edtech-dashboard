@@ -24,6 +24,7 @@ import { contentService, Content } from '../services/contentService';
 import { userService, User as AppUser } from '../services/userService';
 import { courseAssignmentService } from '../services/courseAssignmentService';
 import { notificationService } from '../services/notificationService';
+import ModalShell, { useModalFieldStyles } from '../components/shared/ModalShell';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -280,18 +281,25 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
     } catch (e: any) { setError(e.message); } finally { setSaving(false); }
   };
 
-  const modalBg: React.CSSProperties = { background: 'var(--color-surface, #1f2937)', border: '1px solid var(--color-border, rgba(255,255,255,0.08))' };
   const secBg: React.CSSProperties = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' };
+  const { primaryBtnStyle, secondaryBtnStyle } = useModalFieldStyles();
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col" style={modalBg}>
-        <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-          <h2 className="text-base font-semibold text-white">{editGroup ? 'Edit Task Group' : 'New Task Group'}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+  return (
+    <ModalShell
+      icon={<Users size={15} />}
+      title={editGroup ? 'Edit Task Group' : 'New Task Group'}
+      subtitle={editGroup ? 'Update this assignment bundle' : 'Bundle tasks and assign them to students'}
+      onClose={onClose}
+      disableBackdropClose={saving}
+      footer={
+        <>
+          <button onClick={onClose} style={secondaryBtnStyle}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ ...primaryBtnStyle, opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}>
+            {saving ? <><Spinner sm />Saving...</> : <><Check className="w-4 h-4" />{editGroup ? 'Update' : 'Create'}</>}
+          </button>
+        </>
+      }
+    >
           {/* Title */}
           <div>
             <SectionLabel>Group Title *</SectionLabel>
@@ -309,7 +317,7 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
           {/* Assign To */}
           <div>
             <SectionLabel>Assign To</SectionLabel>
-            <div className="grid grid-cols-4 gap-1.5 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-3">
               {([['all', 'Everyone'], ['course', 'Course'], ['class', 'Class'], ['students', 'Students']] as const).map(([val, lbl]) => (
                 <button key={val} onClick={() => set('assignType', val)}
                   className="py-2 rounded-lg text-xs font-medium transition-all border"
@@ -355,7 +363,7 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
           </div>
 
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <SectionLabel>Available From</SectionLabel>
               <input type="datetime-local" className={inputCls} style={inputStyle}
@@ -405,19 +413,7 @@ const TaskGroupModal = ({ courses, students, availableClasses, editGroup, teache
               <AlertCircle className="w-4 h-4 shrink-0" />{error}
             </div>
           )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 p-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-xl hover:bg-white/5 text-gray-400">Cancel</button>
-          <button onClick={save} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-            style={{ background: 'var(--color-primary, #6366f1)' }}>
-            {saving ? <><Spinner sm />Saving...</> : <><Check className="w-4 h-4" />{editGroup ? 'Update' : 'Create'}</>}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+    </ModalShell>
   );
 };
 
