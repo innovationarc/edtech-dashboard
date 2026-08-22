@@ -491,11 +491,15 @@ const Navigation = () => {
   const isImageBg = glitterTheme.startsWith('data:');
 
   /* ─── Sidebar ─── */
-  // For image bg: render the wallpaper directly on the sidebar with a dark overlay
-  // so it matches the root div's background — no backdrop-filter dependency
+  // For image bg: render the wallpaper directly on the sidebar with a tint overlay
+  // so it matches the root div's background — no backdrop-filter dependency.
+  // Tint must follow the selected theme (light vs dark), not always darken —
+  // a hardcoded dark tint here made the sidebar look "stuck in dark mode" for
+  // anyone using an image background with a light theme selected.
   const sbBg = isImageBg ? 'transparent' : baseBg;
+  const sbImageTint = darkMode ? 'rgba(10,12,20,0.72)' : 'rgba(255,255,255,0.72)';
   const sbSparkle = isImageBg
-    ? `linear-gradient(rgba(10,12,20,0.72), rgba(10,12,20,0.72)), url(${glitterTheme})`
+    ? `linear-gradient(${sbImageTint}, ${sbImageTint}), url(${glitterTheme})`
     : glitterBgImage
     ? glitterBgImage
     : `radial-gradient(ellipse at 20% 20%, rgba(${pRgb},0.18) 0%, transparent 60%),
@@ -509,7 +513,8 @@ const Navigation = () => {
     : `6px 0 32px rgba(0,0,0,0.10), inset 0 0 0 1px rgba(255,255,255,0.8), 0 0 40px rgba(${pRgb},0.07)`;
 
   /* ─── Header bg ─── */
-  const hdrBg = isImageBg ? 'rgba(10,12,20,0.45)' : baseBg;
+  const hdrBg = isImageBg ? (darkMode ? 'rgba(10,12,20,0.45)' : 'rgba(255,255,255,0.55)') : baseBg;
+
 
   return (
     <>
