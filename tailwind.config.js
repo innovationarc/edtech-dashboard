@@ -72,12 +72,27 @@ export default {
           200: '#e5e7eb',
           300: '#d1d5db',
           400: '#9ca3af',
-          500: '#6b7280',
-          600: '#4b5563',
-          700: '#374151',
-          800: '#1f2937',
-          900: '#111827',
+          500: 'rgb(var(--tw-surface-500) / <alpha-value>)',
+          600: 'rgb(var(--tw-surface-600) / <alpha-value>)',
+          700: 'rgb(var(--tw-surface-700) / <alpha-value>)',
+          800: 'rgb(var(--tw-surface-800) / <alpha-value>)',
+          900: 'rgb(var(--tw-surface-900) / <alpha-value>)',
           950: '#0d1117',
+        },
+        // Theme-reactive override of Tailwind's default gray scale for the
+        // shades this app uses as "muted surface / muted text" — these were
+        // hardcoded dark-only values that never adapted to light theme.
+        // 50/100/950 are intentionally left as Tailwind defaults (rarely used
+        // as theme-reactive surfaces in this codebase).
+        gray: {
+          200: 'rgb(var(--tw-text-200) / <alpha-value>)',
+          300: 'rgb(var(--tw-text-300) / <alpha-value>)',
+          400: 'rgb(var(--tw-text-400) / <alpha-value>)',
+          500: 'rgb(var(--tw-surface-500) / <alpha-value>)',
+          600: 'rgb(var(--tw-surface-600) / <alpha-value>)',
+          700: 'rgb(var(--tw-surface-700) / <alpha-value>)',
+          800: 'rgb(var(--tw-surface-800) / <alpha-value>)',
+          900: 'rgb(var(--tw-surface-900) / <alpha-value>)',
         },
         // Card colors
         card: {
