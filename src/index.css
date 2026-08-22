@@ -924,3 +924,36 @@ body.modal-shell-open .app-mobile-bottomnav {
 input, textarea, select, button {
   font-family: 'Outfit', sans-serif;
 }
+
+/* ═══════════════════════════════════════════════════════
+   NATIVE <select> DROPDOWN FIX (readability across all themes)
+   ═══════════════════════════════════════════════════════
+   Every <select> in the app is styled inline per-theme (dark
+   background, light text) for its CLOSED state, but the
+   <option> POPUP is rendered by the browser/OS as native UI
+   chrome — it ignores the app's translucent rgba backgrounds
+   and falls back to a plain white popup while the inherited
+   text color stays light. Result: light-on-white, unreadable
+   options in every theme except "light".
+
+   `color-scheme` tells the browser which built-in palette to
+   use for native controls (popup, scrollbar, etc.), and the
+   explicit <option> colors below back that up for browsers
+   that only partially honor color-scheme. Covers all 119+
+   <select> elements app-wide from one place — no per-file
+   changes needed. */
+html.theme-light select {
+  color-scheme: light;
+}
+html.theme-light select option {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+html:not(.theme-light) select {
+  color-scheme: dark;
+}
+html:not(.theme-light) select option {
+  background-color: #161b22;
+  color: #f1f5f9;
+}
