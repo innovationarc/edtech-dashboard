@@ -528,7 +528,33 @@ export const DashboardProvider = ({ children }: DashboardProviderProps) => {
     root.style.setProperty('--color-border',  isLightTheme ? 'rgba(0,0,0,0.08)'       : 'rgba(255,255,255,0.08)');
     root.style.setProperty('--color-text',    isLightTheme ? '#111827' : '#ffffff');
     root.style.setProperty('--color-text2',   isLightTheme ? '#6b7280' : '#9ca3af');
-    
+
+    // ── Theme-reactive Tailwind gray/background shades ──────────────────────
+    // The app has ~3,500 usages of hardcoded Tailwind classes like
+    // bg-background-800, text-gray-400, border-gray-700 across ~76 files.
+    // Those classes were written assuming a permanently dark UI and never
+    // adapted when light/multi-theme support was added, so they stayed dark
+    // even in light theme. Rather than hand-edit every file, tailwind.config.js
+    // now points those specific shades at these CSS vars (in "R G B" format so
+    // Tailwind's opacity modifiers like /60 still work), and we just flip the
+    // values here based on theme — every existing usage app-wide inherits the
+    // fix automatically. Dark-family theme values are unchanged from what the
+    // app already rendered before this fix (zero visual change there); only
+    // the light-theme values are new.
+    const surfaceVars: Record<string, [string, string]> = {
+      '--tw-surface-900': ['17 24 39',   '239 234 224'],
+      '--tw-surface-800': ['31 41 55',   '245 242 236'],
+      '--tw-surface-700': ['55 65 81',   '222 217 205'],
+      '--tw-surface-600': ['75 85 99',   '222 217 205'],
+      '--tw-surface-500': ['107 114 128','87 83 78'],
+      '--tw-text-400':    ['156 163 175','107 114 128'],
+      '--tw-text-300':    ['209 213 219','75 85 99'],
+      '--tw-text-200':    ['229 231 235','55 65 81'],
+    };
+    Object.entries(surfaceVars).forEach(([cssVar, [darkVal, lightVal]]) => {
+      root.style.setProperty(cssVar, isLightTheme ? lightVal : darkVal);
+    });
+
     // Update BOTH html and body — transparent when image bg so DashboardLayout's image shows through
     const resolvedIsImageBg = !GLITTER_IDS.includes(background) && background !== 'none' && !!background;
     document.documentElement.style.backgroundColor = resolvedIsImageBg ? 'transparent' : colors.bg;
