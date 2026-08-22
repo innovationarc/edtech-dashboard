@@ -13,7 +13,7 @@ import { qaService, Question } from '../services/qaService'; // Import qaService
 import { taskService, TaskGroup, Submission } from '../services/taskService';
 
 export default function TeacherDashboard() {
-  const { user } = useDashboard();
+  const { user, theme } = useDashboard();
   const navigate = useNavigate();
   const [dailyQuote, setDailyQuote] = useState(() => getRandomQuoteByCategory('education'));
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -249,6 +249,7 @@ export default function TeacherDashboard() {
         <CompactDailyInspiration
           quote={dailyQuote}
           onRefresh={() => setDailyQuote(getRandomQuoteByCategory('education'))}
+          darkMode={theme !== 'light'}
         />
       </div>
 
@@ -641,18 +642,30 @@ function OverviewStatsCard({ totalStudents, activeCourses, avgPerformance, class
 interface CompactDailyInspirationProps {
   quote: { text: string; author: string };
   onRefresh: () => void;
+  darkMode: boolean;
 }
 
-function CompactDailyInspiration({ quote, onRefresh }: CompactDailyInspirationProps) {
+function CompactDailyInspiration({ quote, onRefresh, darkMode }: CompactDailyInspirationProps) {
   return (
-    <div className="w-full lg:w-80 shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-background-800/60 border border-background-700/70 min-w-0">
+    <div
+      className="w-full lg:w-80 shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl min-w-0"
+      style={{
+        background: darkMode ? 'rgba(31,41,55,0.6)' : 'rgba(0,0,0,0.05)',
+        border: `1px solid ${darkMode ? 'rgba(55,65,81,0.7)' : 'rgba(0,0,0,0.08)'}`,
+      }}
+    >
       <Lightbulb size={15} className="text-warning-DEFAULT shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-gray-300 italic truncate">"{quote.text}" <span className="text-primary-400 not-italic">— {quote.author}</span></p>
+        <p className="text-xs italic truncate" style={{ color: darkMode ? '#d1d5db' : '#4b5563' }}>
+          "{quote.text}" <span className="text-primary-400 not-italic">— {quote.author}</span>
+        </p>
       </div>
       <button
         onClick={onRefresh}
-        className="shrink-0 text-gray-500 hover:text-gray-300 transition-colors p-1 -m-1 rounded-full"
+        className="shrink-0 transition-colors p-1 -m-1 rounded-full"
+        style={{ color: darkMode ? '#6b7280' : '#9ca3af' }}
+        onMouseEnter={e => { e.currentTarget.style.color = darkMode ? '#d1d5db' : '#374151'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = darkMode ? '#6b7280' : '#9ca3af'; }}
         title="New quote"
       >
         <RotateCcw size={13} />
