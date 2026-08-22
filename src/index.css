@@ -103,15 +103,13 @@
     border-top-color: rgba(0,0,0,0.08) !important;
     backdrop-filter: blur(20px);
   }
-  .theme-light .bg-background-900 { background-color: rgba(255,255,255,0.92) !important; }
-  .theme-light .bg-background-800 { background-color: rgba(0,0,0,0.04) !important; }
+  /* bg-background-900/800/700/950 and text-gray-300/400 now handled centrally
+     via CSS variables in tailwind.config.js + DashboardContext (covers all 8
+     themes and the shades this block used to miss — bg-background-600,
+     bg-gray-*, border-gray-*, text-gray-500/600/200 — not just light theme). */
   .theme-light .border-background-800 { border-color: rgba(0,0,0,0.08) !important; }
 
-  /* Utility dark backgrounds → crystal white */
-  .theme-light .bg-background-950,
-  .theme-light .bg-background-900,
-  .theme-light .bg-background-800,
-  .theme-light .bg-background-700,
+  /* Utility dark backgrounds → crystal white (bg-card family only; bg-background-* handled above) */
   .theme-light .bg-card,
   .theme-light .bg-card-light,
   .theme-light .bg-card-dark {
@@ -125,7 +123,6 @@
   .theme-light h1,.theme-light h2,.theme-light h3,.theme-light h4 {
     color: #111827 !important;
   }
-  .theme-light .text-gray-300,.theme-light .text-gray-400,
   .theme-light .text-slate-400,.theme-light .text-slate-500 {
     color: #6b7280 !important;
   }
