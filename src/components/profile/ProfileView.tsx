@@ -196,14 +196,14 @@ const ProfileView = ({ user, onEdit, onChangePassword, onClose }: ProfileViewPro
     <div class="card"><div class="inner">
     <div class="hd">Learning Management Portal — Official ${user.role?.toUpperCase()} ID</div>
     <div class="body">
-    <div class="photo">${user.profilePictureUrl ? `<img src="${user.profilePictureUrl}"/>` : (user.name?.charAt(0) || 'U')}</div>
+    <div class="photo">${user.profilePictureUrl ? `<img loading="lazy" src="${user.profilePictureUrl}"/>` : (user.name?.charAt(0) || 'U')}</div>
     <div class="det">
     <div class="name">${user.surname || ''} ${user.name || ''}</div>
     <div class="row">ID: ${user.userId || ''}</div>
     ${user.phoneNumber ? `<div class="row">Mobile: +880${user.phoneNumber}</div>` : ''}
     ${user.bloodGroup ? `<div class="row">Blood: ${user.bloodGroup}</div>` : ''}
     ${user.classGrade ? `<div class="row">Class: ${user.classGrade}</div>` : ''}
-    ${qrCodeUrl ? `<img src="${qrCodeUrl}" style="width:32px;height:32px;margin-top:3px"/>` : ''}
+    ${qrCodeUrl ? `<img loading="lazy" src="${qrCodeUrl}" style="width:32px;height:32px;margin-top:3px"/>` : ''}
     </div></div>
     <div class="ft">Valid Until: ${new Date(Date.now() + 365 * 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
     </div></div>
@@ -368,7 +368,7 @@ const ProfileView = ({ user, onEdit, onChangePassword, onClose }: ProfileViewPro
                 boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
               }}>
                 {user.profilePictureUrl ? (
-                  <img src={user.profilePictureUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img loading="lazy" src={user.profilePictureUrl} alt={user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <div style={{
                     width: '100%', height: '100%',

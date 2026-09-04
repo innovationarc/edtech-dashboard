@@ -200,7 +200,7 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
                 <p className="text-xs xs:text-sm font-bold text-blue-300 mb-1.5 xs:mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>
                   Password Requirements:
                 </p>
-                <ul className="text-[10px] xs:text-xs text-blue-400 space-y-0.5 xs:space-y-1 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
+                <ul className="text-[11px] xs:text-xs text-blue-400 space-y-0.5 xs:space-y-1 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                   <li>• At least 8 characters long</li>
                   <li>• Contains uppercase and lowercase letters</li>
                   <li>• Contains at least one number</li>
@@ -304,12 +304,12 @@ const ChangePasswordModal = ({ onClose, onSuccess }: ChangePasswordModalProps) =
               </button>
             </div>
             {confirmPassword && newPassword && confirmPassword !== newPassword && (
-              <p className="text-[10px] xs:text-xs text-red-400 mt-1 xs:mt-1.5 font-medium leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
+              <p className="text-[11px] xs:text-xs text-red-400 mt-1 xs:mt-1.5 font-medium leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                 Passwords do not match
               </p>
             )}
             {confirmPassword && newPassword && confirmPassword === newPassword && (
-              <p className="text-[10px] xs:text-xs text-emerald-400 mt-1 xs:mt-1.5 font-medium flex items-center gap-1 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
+              <p className="text-[11px] xs:text-xs text-emerald-400 mt-1 xs:mt-1.5 font-medium flex items-center gap-1 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                 <CheckCircle className="w-3 h-3 flex-shrink-0" />
                 Passwords match
               </p>

@@ -315,7 +315,7 @@ const Profile3 = ({ onClose }: Profile3Props) => {
                   <div className="avatar-inner" style={{ width:108,height:108,borderRadius:22,overflow:'hidden',position:'relative',zIndex:3,
                     border:'1px solid rgba(255,255,255,0.12)',boxShadow:'0 8px 30px rgba(0,0,0,0.45)' }}>
                     {user.profilePictureUrl ? (
-                      <img src={user.profilePictureUrl} alt={user.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} />
+                      <img loading="lazy" src={user.profilePictureUrl} alt={user.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} />
                     ) : (
                       <div style={{ width:'100%',height:'100%',background:gradient,
                         display:'flex',alignItems:'center',justifyContent:'center',

@@ -292,13 +292,13 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                 <div className="relative flex-shrink-0">
                   <div className="w-20 h-20 xs:w-20 xs:h-20 sm:w-24 sm:h-24 rounded-lg sm:rounded-xl overflow-hidden border-2 border-slate-700/50 shadow-md bg-slate-800">
                     {profilePicturePreview ? (
-                      <img
+                      <img loading="lazy"
                         src={profilePicturePreview}
                         alt="Preview"
                         className="w-full h-full object-cover"
                       />
                     ) : user.profilePictureUrl ? (
-                      <img
+                      <img loading="lazy"
                         src={user.profilePictureUrl}
                         alt="Current"
                         className="w-full h-full object-cover"
@@ -324,7 +324,7 @@ const ProfileEditModal1 = ({ onClose, onSuccess }: ProfileEditModal1Props) => {
                       <span className="truncate">Choose New Picture</span>
                     </div>
                   </label>
-                  <p className="text-[10px] xs:text-xs sm:text-sm text-slate-500 mt-1.5 xs:mt-2 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  <p className="text-[11px] xs:text-xs sm:text-sm text-slate-500 mt-1.5 xs:mt-2 leading-relaxed" style={{ fontFamily: 'Inter, sans-serif' }}>
                     Max 5MB. JPG, PNG, GIF
                   </p>
                 </div>

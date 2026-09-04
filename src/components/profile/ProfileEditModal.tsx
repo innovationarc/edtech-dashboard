@@ -237,13 +237,13 @@ const ProfileEditModal = ({ onClose, onSuccess }: ProfileEditModalProps) => {
                 <div className="relative group">
                   <div className="h-28 w-28 rounded-2xl overflow-hidden bg-slate-800 shadow-lg border-2 border-slate-700/60">
                     {profilePicturePreview ? (
-                      <img
+                      <img loading="lazy"
                         src={profilePicturePreview}
                         alt="Profile preview"
                         className="w-full h-full object-cover"
                       />
                     ) : user?.profilePictureUrl ? (
-                      <img
+                      <img loading="lazy"
                         src={user.profilePictureUrl}
                         alt="Current profile"
                         className="w-full h-full object-cover"

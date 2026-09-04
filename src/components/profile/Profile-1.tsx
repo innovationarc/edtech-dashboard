@@ -1,5 +1,5 @@
 // src/components/profile/Profile-1.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useDashboard } from '../../contexts/DashboardContext';
 import { 
   User, Mail, Phone, MapPin, Calendar, Shield, FileText, 
@@ -7,7 +7,11 @@ import {
 } from 'lucide-react';
 import ProfileEditModal1 from '../../components/profile/ProfileEditModal-1';
 import ChangePasswordModal from '../../components/profile/ChangePasswordModal';
-import IdCardModal1 from '../../components/profile/IdCardModal-1';
+// Lazy-loaded: pulls in html2canvas + jspdf + bwip-js (~1.5MB) purely for
+// generating a printable ID card, which most sessions never open. Loading it
+// only when the modal actually opens keeps that weight off every user's
+// initial page load instead of preloading it eagerly for everyone.
+const IdCardModal1 = lazy(() => import('../../components/profile/IdCardModal-1'));
 
 interface Profile1Props {
   onClose?: () => void;
@@ -175,7 +179,7 @@ const Profile1 = ({ onClose }: Profile1Props) => {
                     <div className="relative flex-shrink-0">
                       <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-lg sm:rounded-xl overflow-hidden border-2 border-slate-700/50 shadow-xl bg-slate-800">
                         {user.profilePictureUrl ? (
-                          <img
+                          <img loading="lazy"
                             src={user.profilePictureUrl}
                             alt="Administrator"
                             className="w-full h-full object-cover"
@@ -483,9 +487,11 @@ const Profile1 = ({ onClose }: Profile1Props) => {
       )}
 
       {showIdCardModal && (
-        <IdCardModal1
-          onClose={() => setShowIdCardModal(false)}
-        />
+        <Suspense fallback={null}>
+          <IdCardModal1
+            onClose={() => setShowIdCardModal(false)}
+          />
+        </Suspense>
       )}
     </>
   );

@@ -910,7 +910,7 @@ const handleDownloadPDF = async () => {
               <div className="id-card">
                 <div className="sidebar">
                   <div className="photo-box">
-                    <img src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
+                    <img loading="lazy" src={userPhotoUrl} alt="Photo" crossOrigin="anonymous" />
                   </div>
                   
                   <div className="id-text-container">
@@ -920,7 +920,7 @@ const handleDownloadPDF = async () => {
                   </div>
                   
                   <div className="pdf417-barcode">
-                    <img src={barcodeDataUrl} alt="PDF-417 Barcode" />
+                    <img loading="lazy" src={barcodeDataUrl} alt="PDF-417 Barcode" />
                   </div>
                 </div>
 
@@ -931,7 +931,7 @@ const handleDownloadPDF = async () => {
                       <p>Global Learning Network</p>
                     </div>
                     <div className="qr-small">
-                      <img src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
+                      <img loading="lazy" src={qrCodeUrl} alt="QR" crossOrigin="anonymous" />
                     </div>
                   </div>
 
