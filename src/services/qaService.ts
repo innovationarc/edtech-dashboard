@@ -15,7 +15,10 @@ import {
 import { getDocs, getDoc } from './firestoreMonitor';
 import { db } from '../config/firebase';
 import { uploadService } from './uploadService';
-import Tesseract from 'tesseract.js';
+// Tesseract (OCR) is dynamically imported inside extractTextFromImage() below,
+// not statically here — this file is imported by 7+ components for basic
+// Q&A CRUD, and a static import forced tesseract's ~large bundle into their
+// shared chunk even when OCR is never invoked.
 
 export interface Question {
   id: string;
@@ -144,7 +147,8 @@ export const qaService = {
   async extractTextFromImage(imageUrl: string): Promise<string> {
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
+      const { default: Tesseract } = await import('tesseract.js');
       const worker = await Tesseract.createWorker('eng', 1);
 
       try {
