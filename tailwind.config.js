@@ -163,6 +163,16 @@ export default {
         '80': '80',
         '90': '90',
         '100': '100',
+        // Named top-tier scale — replaces the ad-hoc 9999/10000/10001/10002/99999
+        // "escalating war" values that had accumulated across ~24 files with no
+        // coordination. Relative order preserved exactly from what existed
+        // before; only the magnitudes were cleaned up.
+        modal: '300',      // was 9999 — ModalShell + most dialogs/drawers
+        popover: '350',    // was 9999 — small transient popovers above modals (e.g. reCAPTCHA)
+        toast: '400',      // was 10000 — global top progress bar
+        widget: '500',     // was 10001 — floating chatbot widget
+        'widget-2': '501', // was 10002 — chatbot widget's own inner top layer
+        top: '600',        // was 99999 — tooltips, lightboxes, Dynamic Island: must always win
       },
     },
   },

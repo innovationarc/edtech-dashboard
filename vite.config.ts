@@ -125,4 +125,35 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  build: {
+    // Vite's default modulePreload conservatively <link rel="modulepreload">s
+    // every chunk reachable from the entry graph — including chunks behind
+    // React.lazy() — to avoid a waterfall delay whenever they're eventually
+    // needed. That's the right call for small chunks, but for large,
+    // feature-specific vendor bundles (PDF/ID-card generation, video/live-
+    // class SDKs, charts, KaTeX) it means downloading megabytes nobody asked
+    // for on every single page load. Only the truly universal chunks
+    // (react, firebase — used on essentially every screen) stay preloaded;
+    // everything else loads on first actual use instead.
+    modulePreload: {
+      resolveDependencies: (_filename, deps) =>
+        deps.filter(dep => !/vendor-(pdf-id|hls|100ms|katex|charts|ocr)/.test(dep)),
+    },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('firebase')) return 'vendor-firebase';
+          if (id.includes('katex')) return 'vendor-katex';
+          if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'vendor-charts';
+          if (id.includes('tesseract.js')) return 'vendor-ocr';
+          if (id.includes('hls.js')) return 'vendor-hls';
+          if (id.includes('@100mslive')) return 'vendor-100ms';
+          if (id.includes('html2canvas') || id.includes('jspdf') || id.includes('bwip-js')) return 'vendor-pdf-id';
+          if (id.includes('react-dom') || id.includes('/react/') || id.includes('react-router')) return 'vendor-react';
+          return 'vendor';
+        },
+      },
+    },
+  },
 });
