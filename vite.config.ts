@@ -143,6 +143,30 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
+
+          // React and its tightly-coupled internals MUST be checked first and
+          // matched exhaustively. react-router depends on @remix-run/router,
+          // and various UI libs elsewhere in the vendor graph depend on React
+          // itself — if any of those coupled packages fall through to the
+          // generic 'vendor' bucket below, you get a circular chunk
+          // dependency (vendor-react -> vendor -> vendor-react). Rollup then
+          // has no safe evaluation order, and whichever chunk runs first ends
+          // up calling React.forwardRef() before React has initialized,
+          // throwing "Cannot read properties of undefined (reading
+          // 'forwardRef')". Keeping the whole family together avoids the
+          // cycle entirely.
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/react-router') ||
+            id.includes('@remix-run/router') ||
+            id.includes('/scheduler/') ||
+            id.includes('/use-sync-external-store/') ||
+            id.includes('/react-is/')
+          ) {
+            return 'vendor-react';
+          }
+
           if (id.includes('firebase')) return 'vendor-firebase';
           if (id.includes('katex')) return 'vendor-katex';
           if (id.includes('chart.js') || id.includes('react-chartjs-2')) return 'vendor-charts';
@@ -150,7 +174,6 @@ export default defineConfig({
           if (id.includes('hls.js')) return 'vendor-hls';
           if (id.includes('@100mslive')) return 'vendor-100ms';
           if (id.includes('html2canvas') || id.includes('jspdf') || id.includes('bwip-js')) return 'vendor-pdf-id';
-          if (id.includes('react-dom') || id.includes('/react/') || id.includes('react-router')) return 'vendor-react';
           return 'vendor';
         },
       },
