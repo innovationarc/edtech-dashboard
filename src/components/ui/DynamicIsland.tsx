@@ -132,7 +132,7 @@ const DesktopIsland: React.FC<DProps> = ({ notif, mode, progress, recTime, prima
   const w = mode==='upload'?295 : mode==='recording'?215 : mode==='reminder'?335 : 315;
   const h = mode==='reminder'?82 : mode==='upload'?68 : 60;
   return (
-    <div className={closing?'dic':'dio'} onClick={onDismiss} style={{ position:'fixed',top:10,left:'50%',transform:'translateX(-50%)',zIndex:99999,width:w,height:h,borderRadius:20,background:'rgba(8,8,10,0.96)',backdropFilter:'blur(30px) saturate(180%)',WebkitBackdropFilter:'blur(30px) saturate(180%)',border:`1px solid rgba(${pRgb},0.28)`,boxShadow:`0 8px 40px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.04),0 0 24px rgba(${pRgb},0.14)`,cursor:'pointer',overflow:'hidden' }}>
+    <div className={closing?'dic':'dio'} onClick={onDismiss} style={{ position:'fixed',top:10,left:'50%',transform:'translateX(-50%)',zIndex: 600,width:w,height:h,borderRadius:20,background:'rgba(8,8,10,0.96)',backdropFilter:'blur(30px) saturate(180%)',WebkitBackdropFilter:'blur(30px) saturate(180%)',border:`1px solid rgba(${pRgb},0.28)`,boxShadow:`0 8px 40px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.04),0 0 24px rgba(${pRgb},0.14)`,cursor:'pointer',overflow:'hidden' }}>
       <div style={{ position:'absolute',bottom:0,left:'12%',right:'12%',height:1,background:`linear-gradient(90deg,transparent,rgba(${pRgb},0.7),transparent)`,pointerEvents:'none' }} />
       {show && <div className="di-content" style={{ height:'100%' }}>
         {mode==='notification' && notif && <NotifContent notif={notif} primary={primary} />}

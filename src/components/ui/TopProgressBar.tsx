@@ -60,7 +60,7 @@ const TopProgressBar = () => {
       position: 'fixed',
       top: 0, left: 0, right: 0,
       height: '2.5px',
-      zIndex: 10000,
+      zIndex: 400,
       pointerEvents: 'none',
     }}>
       <div style={{
