@@ -396,7 +396,7 @@ const CreateAnnouncementModal = ({ onClose, onSuccess }: CreateAnnouncementModal
                     {formData.title || 'Announcement Title'}
                   </h4>
                   {formData.priority === 'high' && (
-                    <span className="px-1.5 py-0.5 bg-error-DEFAULT text-white text-[10px] rounded-full">
+                    <span className="px-1.5 py-0.5 bg-error-DEFAULT text-white text-[11px] rounded-full">
                       Urgent
                     </span>
                   )}
