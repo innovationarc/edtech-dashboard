@@ -46,7 +46,7 @@ const PermIcon: Record<CoursePermission, React.FC<{size?: number; color?: string
 
 function ToastStack({ toasts, remove }: { toasts: ToastMsg[]; remove:(id:string)=>void }) {
   return (
-    <div style={{position:'fixed',top:20,right:20,zIndex:9999,display:'flex',flexDirection:'column',gap:10}}>
+    <div style={{position:'fixed',top:20,right:20,zIndex: 300,display:'flex',flexDirection:'column',gap:10}}>
       {toasts.map(t=>(
         <div key={t.id} style={{
           display:'flex',alignItems:'center',gap:10,padding:'12px 16px',borderRadius:10,minWidth:300,
@@ -276,7 +276,7 @@ function AssignModal({
                     <div style={{width:38,height:38,borderRadius:8,background:'#1e1e1e',flexShrink:0,
                       display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
                       {(c.thumbnail||c.thumbnailUrl)
-                        ? <img src={c.thumbnail||c.thumbnailUrl} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                        ? <img loading="lazy" src={c.thumbnail||c.thumbnailUrl} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
                         : <BookOpen size={16} color="#444"/>}
                     </div>
                     <div style={{flex:1,minWidth:0}}>
@@ -554,7 +554,7 @@ function AssignmentCard({ assignment,onEdit,onRevoke,onToggleActive,isToggling }
       <div style={{width:34,height:34,borderRadius:7,background:'#1a1a1a',flexShrink:0,
         display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
         {assignment.courseThumbnail
-          ? <img src={assignment.courseThumbnail} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+          ? <img loading="lazy" src={assignment.courseThumbnail} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
           : <BookOpen size={14} color="#444"/>}
       </div>
       {/* Info */}
@@ -628,7 +628,7 @@ function TeacherRow({ teacher,onToggleExpand,onAssign,onEditAssignment,
           background:'linear-gradient(135deg,#1e1b4b,#312e81)',
           display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:800,color:'#818cf8'}}>
           {teacher.profilePictureUrl
-            ? <img src={teacher.profilePictureUrl} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+            ? <img loading="lazy" src={teacher.profilePictureUrl} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
             : initial}
         </div>
         {/* Info */}

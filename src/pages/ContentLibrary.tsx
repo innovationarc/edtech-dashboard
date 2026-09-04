@@ -99,7 +99,7 @@ const CourseCard: React.FC<{ course: LibraryCourse; onClick: () => void; index: 
       {/* Thumbnail */}
       <div className={`relative h-48 overflow-hidden ${isLight ? 'bg-gray-100' : 'bg-gray-900/50'}`}>
         {thumb ? (
-          <img
+          <img loading="lazy"
             src={thumb}
             alt={course.title}
             className="w-full h-full object-cover transition-all duration-700 ease-out"

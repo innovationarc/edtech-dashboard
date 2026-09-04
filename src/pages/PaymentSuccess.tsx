@@ -294,7 +294,7 @@ const PaymentSuccess = () => {
           <div className="text-center mb-6">
             <p className="text-sm text-gray-600 mb-3">Verification QR Code</p>
             <div className="inline-block p-3 bg-white border-2 border-gray-300 rounded-lg">
-              <img src={qrCodeUrl} alt="Verification QR Code" className="w-32 h-32" />
+              <img loading="lazy" src={qrCodeUrl} alt="Verification QR Code" className="w-32 h-32" />
             </div>
             <p className="text-xs text-gray-500 mt-2">Scan to verify enrollment</p>
           </div>

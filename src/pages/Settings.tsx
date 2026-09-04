@@ -1121,7 +1121,7 @@ const BgPickerModal = ({
     <div
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
+        position: 'fixed', inset: 0, zIndex: 300,
         background: overlayC, display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 16,
       }}
@@ -1568,7 +1568,7 @@ const AppearanceSettings = () => {
             {/* Image preview */}
             {!['none','silver','gold','purple'].includes(background) && (() => {
               const d = bgCatalog.find(b => b.id === background)?.data;
-              return d ? <img src={d} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : null;
+              return d ? <img loading="lazy" src={d} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : null;
             })()}
             {background === 'none' && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

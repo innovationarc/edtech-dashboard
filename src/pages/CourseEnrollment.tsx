@@ -140,7 +140,7 @@ const ModalShell = ({ children, onClose, wide, narrow }: {
 
   return ReactDOM.createPortal(
     <div
-      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+      style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -414,7 +414,7 @@ const CourseOverviewModal: React.FC<CourseOverviewModalProps> = ({
 
           {selectedCourse.thumbnail && (
             <div style={{ borderRadius: 12, overflow: 'hidden', height: 200, flexShrink: 0 }}>
-              <img src={selectedCourse.thumbnail} alt={selectedCourse.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              <img loading="lazy" src={selectedCourse.thumbnail} alt={selectedCourse.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
             </div>
           )}
 

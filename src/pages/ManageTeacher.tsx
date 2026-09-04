@@ -437,7 +437,7 @@ const ManageTeacher = () => {
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       {teacher.profilePictureUrl ? (
-                        <img 
+                        <img loading="lazy" 
                           src={teacher.profilePictureUrl} 
                           alt={teacher.surname} 
                           className="h-10 w-10 rounded-lg object-cover border border-background-700/50"
@@ -771,7 +771,7 @@ const TeacherInfoModal = ({ teacher, onClose, formatDate }: TeacherInfoModalProp
             <div className="flex items-center gap-4">
               {teacher.profilePictureUrl ? (
                 <div className="h-16 w-16 rounded-2xl overflow-hidden border-2 border-background-700/50 shadow-lg">
-                  <img 
+                  <img loading="lazy" 
                     src={teacher.profilePictureUrl} 
                     alt={teacher.surname || 'Teacher'} 
                     className="w-full h-full object-cover"
@@ -926,7 +926,7 @@ const EditTeacherModal = ({ teacher, onClose, onSave }: EditTeacherModalProps) =
             <div className="flex items-center gap-4">
               {formData.profilePictureUrl ? (
                 <div className="h-20 w-20 rounded-xl overflow-hidden border-2 border-background-700/50">
-                  <img src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
+                  <img loading="lazy" src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
@@ -1363,7 +1363,7 @@ const AddTeacherModal = ({ onClose, onSuccess, currentUser }: AddTeacherModalPro
               <div className="flex items-center gap-4">
                 {formData.profilePictureUrl ? (
                   <div className="h-20 w-20 rounded-xl overflow-hidden border-2 border-background-700/50">
-                    <img src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
+                    <img loading="lazy" src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
                   </div>
                 ) : (
                   <div className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">

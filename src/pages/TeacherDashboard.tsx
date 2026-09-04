@@ -549,12 +549,12 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
               >
                 <div className="h-14 bg-gradient-to-br from-primary-600/40 to-secondary-600/30 flex items-center justify-center relative">
                   {thumb ? (
-                    <img src={thumb} alt={course.title} className="w-full h-full object-cover" />
+                    <img loading="lazy" src={thumb} alt={course.title} className="w-full h-full object-cover" />
                   ) : (
                     <BookOpen size={18} className="text-white/70" />
                   )}
                   <span
-                    className={`absolute top-1 right-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                    className={`absolute top-1 right-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${
                       course.isPublished ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/30 text-gray-300'
                     }`}
                   >
@@ -563,8 +563,8 @@ function MyCoursesStrip({ loading, courses }: MyCoursesStripProps) {
                 </div>
                 <div className="p-2">
                   <p className="font-medium text-white text-xs truncate" title={course.title}>{course.title}</p>
-                  <p className="text-[10px] text-gray-400 truncate mt-0.5">{course.class || course.category}</p>
-                  <div className="flex items-center justify-between mt-1 text-[10px] text-gray-400">
+                  <p className="text-[11px] text-gray-400 truncate mt-0.5">{course.class || course.category}</p>
+                  <div className="flex items-center justify-between mt-1 text-[11px] text-gray-400">
                     <span className="flex items-center gap-1"><Users size={10} /> {course.studentCount || 0}</span>
                     <span className="flex items-center gap-1">
                       <Star size={10} className={course.rating > 0 ? 'text-yellow-400 fill-yellow-400' : ''} />

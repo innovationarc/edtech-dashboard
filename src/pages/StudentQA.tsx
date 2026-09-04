@@ -183,7 +183,7 @@ const ModalShell = ({
   return createPortal(
     <div
       style={{
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 300,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 16, background: 'rgba(0,0,0,0.65)',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
@@ -586,7 +586,7 @@ const StudentQA = () => {
               </div>
               <h3 className="text-sm sm:text-base font-medium text-white mb-2 line-clamp-2">{question.questionText}</h3>
               {question.imageUrl && (
-                <img src={question.imageUrl} alt="Question attachment" className="max-h-32 sm:max-h-40 object-contain rounded-lg mb-2" />
+                <img loading="lazy" src={question.imageUrl} alt="Question attachment" className="max-h-32 sm:max-h-40 object-contain rounded-lg mb-2" />
               )}
               {question.audioUrl && (
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-400 mb-2">
@@ -1534,7 +1534,7 @@ ${isFollowUp ? 'Follow-up Question' : 'Question'}: ${questionToSolve}${knowledge
                               <p style={{ fontSize: 11, fontWeight: 700, color: T.primaryColor, textTransform: 'uppercase' as const, letterSpacing: '0.06em', margin: '0 0 6px' }}>Full Question:</p>
                               <p style={{ fontSize: 13, color: T.text, margin: '0 0 10px', whiteSpace: 'pre-wrap' }}>{q.questionText}</p>
                               {q.imageUrl && (
-                                <img src={q.imageUrl} alt="Question" style={{ maxHeight: 160, objectFit: 'contain', borderRadius: 8, marginBottom: 8 }} />
+                                <img loading="lazy" src={q.imageUrl} alt="Question" style={{ maxHeight: 160, objectFit: 'contain', borderRadius: 8, marginBottom: 8 }} />
                               )}
                               {q.audioUrl && (
                                 <div style={{ marginBottom: 8 }}>
@@ -1582,7 +1582,7 @@ ${isFollowUp ? 'Follow-up Question' : 'Question'}: ${questionToSolve}${knowledge
                                         {renderFormattedText(answer.answerText)}
                                       </div>
                                       {answer.imageUrl && (
-                                        <img src={answer.imageUrl} alt="Answer" style={{ marginTop: 8, maxHeight: 120, objectFit: 'contain', borderRadius: 8 }} />
+                                        <img loading="lazy" src={answer.imageUrl} alt="Answer" style={{ marginTop: 8, maxHeight: 120, objectFit: 'contain', borderRadius: 8 }} />
                                       )}
                                       {answer.audioUrl && (
                                         <div style={{ marginTop: 8 }}>

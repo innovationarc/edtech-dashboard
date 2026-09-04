@@ -258,7 +258,7 @@ const TeacherQA = () => {
                   </div>
                   <h3 className="text-lg font-medium text-white mb-2 line-clamp-2">{question.questionText}</h3>
                   {question.imageUrl && (
-                    <img src={question.imageUrl} alt="Question attachment" className="max-h-40 object-contain rounded-lg mb-2" />
+                    <img loading="lazy" src={question.imageUrl} alt="Question attachment" className="max-h-40 object-contain rounded-lg mb-2" />
                   )}
                   {question.fileName && (
                     <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
@@ -310,7 +310,7 @@ const TeacherQA = () => {
                   {item.imageUrls && item.imageUrls.length > 0 && (
                     <div className="flex gap-2 flex-wrap mb-2">
                       {item.imageUrls.map((url, idx) => (
-                        <img key={idx} src={url} alt={`Knowledge ${idx + 1}`} className="max-h-32 object-contain rounded-lg border border-background-700" />
+                        <img loading="lazy" key={idx} src={url} alt={`Knowledge ${idx + 1}`} className="max-h-32 object-contain rounded-lg border border-background-700" />
                       ))}
                     </div>
                   )}
@@ -497,7 +497,7 @@ const AnswerQuestionModal = ({ question, teacherId, teacherName, onClose, onSucc
   };
 
   return createPortal(
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-[9999] p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-start justify-center z-modal p-4 overflow-y-auto">
       <div className="bg-background-900 rounded-xl w-full max-w-4xl my-8 relative">
         <button
           onClick={onClose}
@@ -530,7 +530,7 @@ const AnswerQuestionModal = ({ question, teacherId, teacherName, onClose, onSucc
                 </div>
                 <h3 className="text-lg font-medium text-white mb-3">{question.questionText}</h3>
                 {question.imageUrl && (
-                  <img src={question.imageUrl} alt="Question" className="max-h-60 object-contain rounded-lg mb-3" />
+                  <img loading="lazy" src={question.imageUrl} alt="Question" className="max-h-60 object-contain rounded-lg mb-3" />
                 )}
                 {question.fileName && (
                   <div className="flex items-center gap-2 text-sm text-gray-400 mb-3">

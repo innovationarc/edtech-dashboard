@@ -131,7 +131,7 @@ const StatCard = ({ label, value, sub, Icon, accent }: { label: string; value: s
   <div className="relative overflow-hidden rounded-xl border border-white/5 bg-[#0f1117] p-5 flex flex-col gap-3">
     <div className={`absolute inset-0 opacity-[0.04] bg-gradient-to-br ${accent}`} />
     <div className="flex items-start justify-between relative">
-      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">{label}</span>
+      <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-widest">{label}</span>
       <span className={`p-1.5 rounded-lg bg-gradient-to-br ${accent} opacity-70`}>
         <Icon size={13} className="text-white" />
       </span>
@@ -279,7 +279,7 @@ const StatusChangeModal = ({
                   {cfg.label}
                 </span>
                 <div className="flex items-center gap-2">
-                  {isCurrent && <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">Current</span>}
+                  {isCurrent && <span className="text-[11px] text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">Current</span>}
                   {isSelected && !isCurrent && <Check size={14} className="text-primary-400" />}
                 </div>
               </button>
@@ -469,7 +469,7 @@ const DetailModal = ({
         {/* Metadata */}
         {txn.metadata && Object.keys(txn.metadata).length > 0 && (
           <div className="px-6 pb-6">
-            <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-widest mb-2">Metadata</p>
+            <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-widest mb-2">Metadata</p>
             <pre className="text-xs text-gray-300 bg-black/30 rounded-lg p-4 overflow-x-auto border border-white/5">
               {JSON.stringify(txn.metadata, null, 2)}
             </pre>
@@ -610,46 +610,46 @@ const AuditLogTab = ({ logs, loading, error, onRefresh, auditFilters, onAuditFil
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Action</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Action</label>
               <select value={auditFilters.action} onChange={e => onAuditFilterChange('action', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All Actions</option>
                 {Object.entries(AUDIT_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Role</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Role</label>
               <select value={auditFilters.role} onChange={e => onAuditFilterChange('role', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All Roles</option>
                 {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Performed By</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Performed By</label>
               <select value={auditFilters.performedBy} onChange={e => onAuditFilterChange('performedBy', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All Actors</option>
                 {allActors.map(a => <option key={a.key} value={a.key}>{a.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Course</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Course</label>
               <select value={auditFilters.courseId} onChange={e => onAuditFilterChange('courseId', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All Courses</option>
                 {allCourses.map(c => <option key={c.productId} value={c.productId}>{trunc(c.productName, 28)}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Gateway</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Gateway</label>
               <select value={auditFilters.gateway} onChange={e => onAuditFilterChange('gateway', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All Gateways</option>
                 {allGateways.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Date From</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Date From</label>
               <input type="date" value={auditFilters.dateFrom} onChange={e => onAuditFilterChange('dateFrom', e.target.value)} className={`${sel} w-full`} />
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Date To</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Date To</label>
               <input type="date" value={auditFilters.dateTo} onChange={e => onAuditFilterChange('dateTo', e.target.value)} className={`${sel} w-full`} />
             </div>
           </div>
@@ -694,7 +694,7 @@ const AuditLogTab = ({ logs, loading, error, onRefresh, auditFilters, onAuditFil
                     </div>
                     <div>
                       <span className={`text-xs font-semibold ${cfg.cls}`}>{cfg.label}</span>
-                      <p className="text-[10px] text-gray-500 mt-0.5">
+                      <p className="text-[11px] text-gray-500 mt-0.5">
                         by{' '}
                         <span className="text-gray-300 font-medium">
                           {log.performedBySurname
@@ -710,12 +710,12 @@ const AuditLogTab = ({ logs, loading, error, onRefresh, auditFilters, onAuditFil
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[10px] text-gray-400">{fmtDate(log.timestamp)}</p>
+                    <p className="text-[11px] text-gray-400">{fmtDate(log.timestamp)}</p>
                   </div>
                 </div>
 
                 {/* Transaction ref */}
-                <div className="flex items-center gap-2 text-[10px]">
+                <div className="flex items-center gap-2 text-[11px]">
                   <span className="text-gray-600">TXN:</span>
                   <span className="font-mono text-gray-400">{trunc(log.transactionId, 36)}</span>
                   <CopyBtn text={log.transactionId} />
@@ -732,7 +732,7 @@ const AuditLogTab = ({ logs, loading, error, onRefresh, auditFilters, onAuditFil
                 {/* Changes */}
                 {log.changes && log.changes.length > 0 && (
                   <div className="space-y-1.5 pt-1 border-t border-white/5">
-                    <p className="text-[10px] text-gray-600 uppercase tracking-widest font-medium">Changes</p>
+                    <p className="text-[11px] text-gray-600 uppercase tracking-widest font-medium">Changes</p>
                     {log.changes.map((c, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs bg-white/[0.02] rounded-lg px-3 py-2">
                         <span className="text-gray-500 font-medium w-28 shrink-0">{c.field}</span>
@@ -778,47 +778,47 @@ const FiltersPanel = ({
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-2">
         <div>
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Status</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Status</label>
           <select value={filters.status} onChange={e => onChange('status', e.target.value)} className={sel}>
             <option value="all">All</option>
             {ALL_STATUSES.map(s => <option key={s} value={s}>{STATUS_CFG[s].label}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Gateway</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Gateway</label>
           <select value={filters.gateway} onChange={e => onChange('gateway', e.target.value)} className={sel}>
             <option value="all">All</option>
             {gateways.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Product Type</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Product Type</label>
           <select value={filters.productType} onChange={e => onChange('productType', e.target.value)} className={sel}>
             <option value="all">All</option>
             {productTypes.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div className="col-span-2 sm:col-span-1">
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Course</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Course</label>
           <select value={filters.courseId} onChange={e => onChange('courseId', e.target.value)} className={sel}>
             <option value="all">All Courses</option>
             {courses.map(c => <option key={c.productId} value={c.productId}>{trunc(c.productName, 30)}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Date From</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Date From</label>
           <input type="date" value={filters.dateFrom} onChange={e => onChange('dateFrom', e.target.value)} className={sel} />
         </div>
         <div>
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Date To</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Date To</label>
           <input type="date" value={filters.dateTo} onChange={e => onChange('dateTo', e.target.value)} className={sel} />
         </div>
         <div>
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Min Amount</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Min Amount</label>
           <input type="number" placeholder="0" value={filters.amountMin} onChange={e => onChange('amountMin', e.target.value)} className={sel} />
         </div>
         <div>
-          <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Max Amount</label>
+          <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Max Amount</label>
           <input type="number" placeholder="∞" value={filters.amountMax} onChange={e => onChange('amountMax', e.target.value)} className={sel} />
         </div>
       </div>
@@ -1244,7 +1244,7 @@ const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
                     <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
                       <div className="h-full bg-gradient-to-r from-primary-600 to-primary-400 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
-                    <p className="text-[10px] text-gray-600">{p.count} sale{p.count !== 1 ? 's' : ''} · {pct.toFixed(1)}% of revenue</p>
+                    <p className="text-[11px] text-gray-600">{p.count} sale{p.count !== 1 ? 's' : ''} · {pct.toFixed(1)}% of revenue</p>
                   </div>
                 );
               })}
@@ -1265,11 +1265,11 @@ const StatisticsTab = ({ transactions }: { transactions: Transaction[] }) => {
                   <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/[0.02]">
                     <div>
                       <p className="text-white font-semibold text-sm">{g.gateway}</p>
-                      <p className="text-[10px] text-gray-500">{g.count} txns · {successRate}% success</p>
+                      <p className="text-[11px] text-gray-500">{g.count} txns · {successRate}% success</p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-bold text-sm">৳{g.revenue.toLocaleString('en-BD', { maximumFractionDigits: 0 })}</p>
-                      <p className="text-[10px] text-gray-500">Revenue</p>
+                      <p className="text-[11px] text-gray-500">Revenue</p>
                     </div>
                   </div>
                 );
@@ -1409,9 +1409,9 @@ const TrashTab = ({
                         : viewRecord.deletedByName}
                     </p>
                     {viewRecord.deletedByUserId
-                      ? <p className="font-mono text-emerald-400 text-[10px]">({viewRecord.deletedByUserId})</p>
+                      ? <p className="font-mono text-emerald-400 text-[11px]">({viewRecord.deletedByUserId})</p>
                       : null}
-                    <p className="text-gray-500 text-[10px]">{viewRecord.deletedByRole}</p>
+                    <p className="text-gray-500 text-[11px]">{viewRecord.deletedByRole}</p>
                   </div>
                   <div>
                     <span className="text-gray-600">Deleted at</span>
@@ -1467,8 +1467,8 @@ const TrashTab = ({
               {/* Metadata section */}
               {viewRecord.transaction.metadata && Object.keys(viewRecord.transaction.metadata).length > 0 && (
                 <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-                  <p className="text-[10px] text-gray-600 uppercase tracking-widest font-medium mb-2">Metadata</p>
-                  <pre className="text-[10px] text-gray-400 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+                  <p className="text-[11px] text-gray-600 uppercase tracking-widest font-medium mb-2">Metadata</p>
+                  <pre className="text-[11px] text-gray-400 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
                     {JSON.stringify(viewRecord.transaction.metadata, null, 2)}
                   </pre>
                 </div>
@@ -1544,39 +1544,39 @@ const TrashTab = ({
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Status</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Status</label>
               <select value={trashFilters.status} onChange={e => onTrashFilterChange('status', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All</option>
                 {ALL_STATUSES.map(s => <option key={s} value={s}>{STATUS_CFG[s].label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Gateway</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Gateway</label>
               <select value={trashFilters.gateway} onChange={e => onTrashFilterChange('gateway', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All</option>
                 {trashGateways.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Course</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider flex items-center gap-1"><BookOpen size={9} /> Course</label>
               <select value={trashFilters.courseId} onChange={e => onTrashFilterChange('courseId', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All Courses</option>
                 {trashCourses.map(c => <option key={c.productId} value={c.productId}>{trunc(c.productName, 28)}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Deleted By</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Deleted By</label>
               <select value={trashFilters.deletedBy} onChange={e => onTrashFilterChange('deletedBy', e.target.value)} className={`${sel} w-full`}>
                 <option value="all">All Users</option>
                 {trashActors.map(a => <option key={a.key} value={a.key}>{a.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Deleted From</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Deleted From</label>
               <input type="date" value={trashFilters.dateFrom} onChange={e => onTrashFilterChange('dateFrom', e.target.value)} className={`${sel} w-full`} />
             </div>
             <div>
-              <label className="text-[10px] text-gray-600 mb-1 block uppercase tracking-wider">Deleted To</label>
+              <label className="text-[11px] text-gray-600 mb-1 block uppercase tracking-wider">Deleted To</label>
               <input type="date" value={trashFilters.dateTo} onChange={e => onTrashFilterChange('dateTo', e.target.value)} className={`${sel} w-full`} />
             </div>
           </div>
@@ -1635,9 +1635,9 @@ const TrashTab = ({
                         : record.deletedByName}
                     </p>
                     {record.deletedByUserId
-                      ? <p className="font-mono text-emerald-400 text-[10px]">({record.deletedByUserId})</p>
+                      ? <p className="font-mono text-emerald-400 text-[11px]">({record.deletedByUserId})</p>
                       : null}
-                    <p className="text-gray-600 text-[10px]">{record.deletedByRole}</p>
+                    <p className="text-gray-600 text-[11px]">{record.deletedByRole}</p>
                   </div>
                   <div>
                     <span className="text-gray-600">Deleted at</span>
@@ -2123,7 +2123,7 @@ const handleViewReceipt = async (transactionId: string) => {
           >
             {tab.label}
             {tab.count !== null && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-primary-500/20 text-primary-400' : 'bg-white/5 text-gray-500'}`}>
+              <span className={`text-[11px] px-1.5 py-0.5 rounded-full ${activeTab === tab.id ? 'bg-primary-500/20 text-primary-400' : 'bg-white/5 text-gray-500'}`}>
                 {tab.count}
               </span>
             )}
@@ -2237,15 +2237,15 @@ const handleViewReceipt = async (transactionId: string) => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/5 bg-white/[0.015]">
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="transactionId" label="TXN ID" /></th>
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider">User ID</th>
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="userName" label="User" /></th>
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Product</th>
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="amount" label="Amount" /></th>
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="status" label="Status" /></th>
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Gateway</th>
-                    <th className="text-left px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="createdAt" label="Date" /></th>
-                    <th className="text-right px-4 py-3 text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Actions</th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="transactionId" label="TXN ID" /></th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">User ID</th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="userName" label="User" /></th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Product</th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="amount" label="Amount" /></th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="status" label="Status" /></th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Gateway</th>
+                    <th className="text-left px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider"><SortBtn field="createdAt" label="Date" /></th>
+                    <th className="text-right px-4 py-3 text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2282,7 +2282,7 @@ const handleViewReceipt = async (transactionId: string) => {
                         {/* User (name + phone) */}
                         <td className="px-4 py-3.5">
                           <p className="text-gray-200 text-xs font-medium">{txn.userName || '—'}</p>
-                          <p className="text-gray-500 text-[10px] flex items-center gap-1">
+                          <p className="text-gray-500 text-[11px] flex items-center gap-1">
                             {phoneNumbers[txn.userId]
                               ? <><Phone size={9} className="text-gray-600" />{phoneNumbers[txn.userId]}</>
                               : <span className="text-gray-700">No phone</span>}
@@ -2292,14 +2292,14 @@ const handleViewReceipt = async (transactionId: string) => {
                         {/* Product */}
                         <td className="px-4 py-3.5">
                           <p className="text-gray-200 text-xs">{trunc(txn.productName || '—', 20)}</p>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.05] text-gray-500 capitalize">{txn.productType}</span>
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/[0.05] text-gray-500 capitalize">{txn.productType}</span>
                         </td>
 
                         {/* Amount */}
                         <td className="px-4 py-3.5">
                           <span className="text-white font-bold text-xs">৳{txn.amount.toLocaleString('en-BD', { minimumFractionDigits: 2 })}</span>
                           {txn.appliedDiscounts?.couponCode && (
-                            <p className="text-[10px] text-amber-500 flex items-center gap-0.5 mt-0.5">
+                            <p className="text-[11px] text-amber-500 flex items-center gap-0.5 mt-0.5">
                               <Tag size={9} />{txn.appliedDiscounts.couponCode}
                             </p>
                           )}

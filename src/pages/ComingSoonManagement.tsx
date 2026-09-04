@@ -107,7 +107,7 @@ const Spinner = () => (
 
 const IdBadge = ({ id }: { id?: string }) =>
   id ? (
-    <span className="text-[10px] font-mono bg-background-900 border border-background-700 text-primary-400 px-1.5 py-0.5 rounded">
+    <span className="text-[11px] font-mono bg-background-900 border border-background-700 text-primary-400 px-1.5 py-0.5 rounded">
       {id}
     </span>
   ) : null;
@@ -210,7 +210,7 @@ const FeatureFormModal = ({ feature, existingCount, actor, onSave, onClose }: Fe
                       ? 'border-primary-500 bg-primary-500/15 text-primary-400'
                       : 'border-background-700 bg-background-900 text-gray-400 hover:border-background-600 hover:text-white'}`}>
                   {ICON_COMPONENTS[i]}
-                  <span className="text-[9px] leading-none truncate w-full text-center opacity-70">{i}</span>
+                  <span className="text-[11px] leading-none truncate w-full text-center opacity-70">{i}</span>
                 </button>
               ))}
             </div>
@@ -579,7 +579,7 @@ const EarlyAccessPanel = ({ featureId, featureTitle, actor }: EarlyAccessPanelPr
                     <p className="text-white text-sm font-medium">{r.studentName}</p>
                     <IdBadge id={r.studentUserId} />
                     {r.rejectionCount > 0 && (
-                      <span className="text-[10px] bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 rounded">
                         Rejected {r.rejectionCount}×{r.rejectionCount >= 3 ? ' (final)' : ''}
                       </span>
                     )}
@@ -678,7 +678,7 @@ const FeatureRow = ({ feature, actor, onEdit, onDelete }: FeatureRowProps) => {
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-background-900 hover:bg-background-700 border border-background-700 px-3 py-1.5 rounded-lg transition-colors">
             <Users size={12} /> Requests
             {pendingCount !== null && pendingCount > 0 && (
-              <span className="bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+              <span className="bg-yellow-500 text-black text-[11px] font-bold px-1.5 py-0.5 rounded-full leading-none">
                 {pendingCount}
               </span>
             )}
@@ -970,7 +970,7 @@ const ComingSoonManagement = () => {
               ${activeTab === tab.id ? 'border-primary-500 text-primary-400' : 'border-transparent text-gray-400 hover:text-white'}`}>
             {tab.icon} {tab.label}
             {tab.badge !== undefined && tab.badge > 0 && (
-              <span className="bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+              <span className="bg-yellow-500 text-black text-[11px] font-bold px-1.5 py-0.5 rounded-full leading-none">
                 {tab.badge}
               </span>
             )}

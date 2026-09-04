@@ -350,7 +350,7 @@ const ScheduledLockScreen: React.FC<{
             {[{ v: h, l: 'hrs' }, { v: m, l: 'min' }, { v: s, l: 'sec' }].map(({ v, l }) => (
               <div key={l} className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 min-w-[60px]">
                 <p className="text-amber-400 font-black text-2xl font-mono leading-none">{String(v).padStart(2,'0')}</p>
-                <p className="text-amber-400/40 text-[10px] mt-1">{l}</p>
+                <p className="text-amber-400/40 text-[11px] mt-1">{l}</p>
               </div>
             ))}
           </div>
@@ -397,7 +397,7 @@ const BlockedScreen: React.FC<{
             {[{ v: h, l: 'hrs' }, { v: m, l: 'min' }, { v: s, l: 'sec' }].map(({ v, l }) => (
               <div key={l} className="rounded-xl bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 min-w-[52px]">
                 <p className="text-indigo-300 font-black text-xl font-mono leading-none">{String(v).padStart(2,'0')}</p>
-                <p className="text-indigo-400/40 text-[10px] mt-1">{l}</p>
+                <p className="text-indigo-400/40 text-[11px] mt-1">{l}</p>
               </div>
             ))}
           </div>
@@ -1200,7 +1200,7 @@ const ExamViewer: React.FC = () => {
   const Lightbox = () => lightboxUrl ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur"
       onClick={() => setLightboxUrl(null)}>
-      <img src={lightboxUrl} alt="enlarged" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
+      <img loading="lazy" src={lightboxUrl} alt="enlarged" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
       <button className="absolute top-4 right-4 text-white/60 hover:text-white"><X size={24} /></button>
     </div>
   ) : null;
@@ -1450,7 +1450,7 @@ const ExamViewer: React.FC = () => {
         <div className="flex h-[calc(100vh-57px)]">
           {/* Desktop sidebar */}
           <div className="hidden lg:flex flex-col w-52 border-r border-white/6 bg-[#0a0c14] p-3 gap-2 overflow-y-auto shrink-0">
-            <p className="text-[10px] uppercase tracking-widest text-white/25 px-1 mb-1">Questions</p>
+            <p className="text-[11px] uppercase tracking-widest text-white/25 px-1 mb-1">Questions</p>
             <div className="grid grid-cols-5 gap-1">
               {mcqQuestions.map((_, i) => {
                 const st = mcqStatus(i);
@@ -1498,16 +1498,16 @@ const ExamViewer: React.FC = () => {
                 <div className="mb-6">
                   <div className="flex flex-wrap items-center gap-2 mb-3">
                     <span className="text-[11px] uppercase tracking-wider text-rose-400 font-semibold">Question {mcqIndex + 1}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/6 text-white/40">
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-white/6 text-white/40">
                       +{q.correctMarks} / -{q.wrongMarks ?? 0} marks
                     </span>
                     {q.correctOptions.length > 1 && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-violet-500/15 text-violet-300">Multiple correct</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-violet-500/15 text-violet-300">Multiple correct</span>
                     )}
                   </div>
                   <MathText text={q.question} className="text-white text-[15px] leading-relaxed" />
                   {q.questionImage && (
-                    <img src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
+                    <img loading="lazy" src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
                       className="mt-3 max-h-56 rounded-xl object-contain cursor-pointer" />
                   )}
                 </div>
@@ -1618,7 +1618,7 @@ const ExamViewer: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-amber-200/60 text-xs">Time remaining to start Written section</p>
-                <p className="text-white/30 text-[10px] mt-1">This timer runs even if you close the browser</p>
+                <p className="text-white/30 text-[11px] mt-1">This timer runs even if you close the browser</p>
               </div>
               <button onClick={startWrittenPart} disabled={submitting}
                 className="flex items-center gap-3 px-8 py-3.5 rounded-2xl bg-violet-500 hover:bg-violet-600
@@ -1666,7 +1666,7 @@ const ExamViewer: React.FC = () => {
               <Clock size={13} /> {fmtTime(writtenRemaining)}
             </div>
           )}
-          <div className="flex items-center gap-1 text-[10px]">
+          <div className="flex items-center gap-1 text-[11px]">
             {writtenSaveStatus === 'saving'  && <span className="text-white/30 flex items-center gap-1"><Loader2 size={10} className="animate-spin"/>Saving…</span>}
             {writtenSaveStatus === 'saved'   && <span className="text-emerald-400/60 flex items-center gap-1"><Check size={10}/>Saved</span>}
             {writtenSaveStatus === 'unsaved' && <span className="text-amber-400/60">Unsaved</span>}
@@ -1679,7 +1679,7 @@ const ExamViewer: React.FC = () => {
 
         <div className="flex h-[calc(100vh-57px)]">
           <div className="hidden lg:flex flex-col w-52 border-r border-white/6 bg-[#0a0c14] p-3 gap-2 overflow-y-auto shrink-0">
-            <p className="text-[10px] uppercase tracking-widest text-white/25 px-1 mb-1">Questions</p>
+            <p className="text-[11px] uppercase tracking-widest text-white/25 px-1 mb-1">Questions</p>
             <div className="grid grid-cols-5 gap-1">
               {writtenQuestions.map((_, i) => {
                 const st = writtenStatus(i);
@@ -1723,11 +1723,11 @@ const ExamViewer: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[11px] uppercase tracking-wider text-violet-400 font-semibold">Question {writtenIndex + 1}</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-400">{wq.marks} marks</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-violet-500/10 text-violet-400">{wq.marks} marks</span>
                   </div>
                   <MathText text={wq.question} className="text-white text-[15px] leading-relaxed" />
                   {wq.questionImage && (
-                    <img src={wq.questionImage} alt="q" onClick={() => setLightboxUrl(wq.questionImage!)}
+                    <img loading="lazy" src={wq.questionImage} alt="q" onClick={() => setLightboxUrl(wq.questionImage!)}
                       className="mt-3 max-h-56 rounded-xl object-contain cursor-pointer" />
                   )}
                 </div>
@@ -1757,7 +1757,7 @@ const ExamViewer: React.FC = () => {
                     <div className="flex flex-wrap gap-2 mb-3">
                       {(wa.attachmentUrls || []).map((url, ui) => (
                         <div key={ui} className="relative group">
-                          <img src={url} alt={`att-${ui}`} onClick={() => setLightboxUrl(url)}
+                          <img loading="lazy" src={url} alt={`att-${ui}`} onClick={() => setLightboxUrl(url)}
                             className="w-24 h-24 object-cover rounded-xl border border-white/10 cursor-pointer" />
                           <button onClick={() => removeAttachment(writtenIndex, url)}
                             className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
@@ -1904,7 +1904,7 @@ const ResultsPage: React.FC<{
         style={{ background: 'radial-gradient(ellipse 70% 35% at 50% -10%,rgba(16,185,129,.07) 0%,transparent 65%)' }} />
       {lightboxUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur" onClick={() => setLightboxUrl(null)}>
-          <img src={lightboxUrl} alt="enlarged" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
+          <img loading="lazy" src={lightboxUrl} alt="enlarged" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
         </div>
       )}
       <div className="relative max-w-4xl mx-auto px-4 py-8">
@@ -2050,19 +2050,19 @@ const ResultsPage: React.FC<{
                         <div className={`grid divide-x divide-white/6`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
                           {showPosition && (
                             <div className="py-3 px-2 text-center">
-                              <p className="text-[10px] text-white/35 mb-0.5">Your Position</p>
+                              <p className="text-[11px] text-white/35 mb-0.5">Your Position</p>
                               <p className="text-emerald-400 font-bold text-base">#{myRank}</p>
                             </div>
                           )}
                           {showClassBest && (
                             <div className="py-3 px-2 text-center">
-                              <p className="text-[10px] text-white/35 mb-0.5">Class Highest</p>
+                              <p className="text-[11px] text-white/35 mb-0.5">Class Highest</p>
                               <p className="text-amber-400 font-bold text-base">{highestMarks}/{mcqMax}</p>
                             </div>
                           )}
                           {showPersonal && (
                             <div className="py-3 px-2 text-center">
-                              <p className="text-[10px] text-white/35 mb-0.5">Your Best</p>
+                              <p className="text-[11px] text-white/35 mb-0.5">Your Best</p>
                               <p className="text-violet-400 font-bold text-base">{personalBestMcq}/{mcqMax}</p>
                             </div>
                           )}
@@ -2083,7 +2083,7 @@ const ResultsPage: React.FC<{
                         <div>
                           <p className="text-[11px] text-emerald-400/60">Correct</p>
                           <p className="text-emerald-400 font-black text-2xl leading-none">{correctCount}</p>
-                          <p className="text-emerald-400/40 text-[10px] mt-0.5">+{correctMarks} marks</p>
+                          <p className="text-emerald-400/40 text-[11px] mt-0.5">+{correctMarks} marks</p>
                         </div>
                       </div>
                       {/* Incorrect */}
@@ -2094,7 +2094,7 @@ const ResultsPage: React.FC<{
                         <div>
                           <p className="text-[11px] text-red-400/60">Incorrect</p>
                           <p className="text-red-400 font-black text-2xl leading-none">{wrongCount}</p>
-                          <p className="text-red-400/40 text-[10px] mt-0.5">{wrongMarks} marks</p>
+                          <p className="text-red-400/40 text-[11px] mt-0.5">{wrongMarks} marks</p>
                         </div>
                       </div>
                       {/* Skipped */}
@@ -2105,7 +2105,7 @@ const ResultsPage: React.FC<{
                         <div>
                           <p className="text-[11px] text-white/35">Skipped</p>
                           <p className="text-white/60 font-black text-2xl leading-none">{skippedCount}</p>
-                          <p className="text-white/25 text-[10px] mt-0.5">0 marks</p>
+                          <p className="text-white/25 text-[11px] mt-0.5">0 marks</p>
                         </div>
                       </div>
                       {/* Accuracy */}
@@ -2116,7 +2116,7 @@ const ResultsPage: React.FC<{
                         <div>
                           <p className="text-[11px] text-violet-400/60">Accuracy</p>
                           <p className="text-violet-400 font-black text-2xl leading-none">{accuracy}%</p>
-                          <p className="text-violet-400/40 text-[10px] mt-0.5">of attempted</p>
+                          <p className="text-violet-400/40 text-[11px] mt-0.5">of attempted</p>
                         </div>
                       </div>
                     </div>
@@ -2126,7 +2126,7 @@ const ResultsPage: React.FC<{
                       <div className="bg-red-500 h-full"     style={{ width: `${totalQ > 0 ? (wrongCount/totalQ)*100 : 0}%` }} />
                       <div className="bg-white/20 h-full"   style={{ width: `${totalQ > 0 ? (skippedCount/totalQ)*100 : 0}%` }} />
                     </div>
-                    <div className="flex items-center justify-center gap-4 text-[10px] text-white/30">
+                    <div className="flex items-center justify-center gap-4 text-[11px] text-white/30">
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Correct</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Wrong</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-white/20 inline-block" /> Skipped</span>
@@ -2151,10 +2151,10 @@ const ResultsPage: React.FC<{
                           <div className="flex items-center gap-2">
                             {statusCfg.icon}
                             <span className="text-[11px] text-white/40 font-medium">Q{i + 1}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${statusCfg.badge}`}>{statusCfg.label}</span>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${statusCfg.badge}`}>{statusCfg.label}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-white/30">+{q.correctMarks} / −{q.wrongMarks ?? 0}</span>
+                            <span className="text-[11px] text-white/30">+{q.correctMarks} / −{q.wrongMarks ?? 0}</span>
                             <span className={`text-xs font-bold px-2 py-0.5 rounded-lg
                               ${(ans.marksAwarded ?? 0) > 0 ? 'text-emerald-400 bg-emerald-500/10' :
                                 (ans.marksAwarded ?? 0) < 0 ? 'text-red-400 bg-red-500/10' : 'text-white/30 bg-white/5'}`}>
@@ -2166,7 +2166,7 @@ const ResultsPage: React.FC<{
                         <div className="p-4">
                           <MathText text={q.question} className="text-white text-sm leading-relaxed mb-3" />
                           {q.questionImage && (
-                            <img src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
+                            <img loading="lazy" src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
                               className="mb-3 max-h-40 rounded-xl object-contain cursor-pointer" />
                           )}
                           <div className="space-y-1.5">
@@ -2191,16 +2191,16 @@ const ResultsPage: React.FC<{
                                     {optStatus === 'wrong_picked'   && <X size={12} strokeWidth={3} />}
                                   </span>
                                   <MathText text={opt} className="flex-1" />
-                                  {optStatus === 'correct_picked' && <span className="text-[10px] text-emerald-400/60 shrink-0">Your answer ✓</span>}
-                                  {optStatus === 'correct_missed' && <span className="text-[10px] text-emerald-400/50 shrink-0">Correct answer</span>}
-                                  {optStatus === 'wrong_picked'   && <span className="text-[10px] text-red-400/60 shrink-0">Your answer ✗</span>}
+                                  {optStatus === 'correct_picked' && <span className="text-[11px] text-emerald-400/60 shrink-0">Your answer ✓</span>}
+                                  {optStatus === 'correct_missed' && <span className="text-[11px] text-emerald-400/50 shrink-0">Correct answer</span>}
+                                  {optStatus === 'wrong_picked'   && <span className="text-[11px] text-red-400/60 shrink-0">Your answer ✗</span>}
                                 </div>
                               );
                             })}
                           </div>
                           {q.solution && (
                             <div className="mt-3 pt-3 border-t border-white/8">
-                              <p className="text-[10px] text-white/25 uppercase tracking-wider mb-1.5">Solution</p>
+                              <p className="text-[11px] text-white/25 uppercase tracking-wider mb-1.5">Solution</p>
                               <p className="text-white/60 text-sm leading-relaxed">{q.solution}</p>
                             </div>
                           )}
@@ -2256,49 +2256,49 @@ const ResultsPage: React.FC<{
                   </div>
                   <div className="p-5 space-y-4">
                     <MathText text={q.question} className="text-white text-sm leading-relaxed" />
-                    {q.questionImage && <img src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
+                    {q.questionImage && <img loading="lazy" src={q.questionImage} alt="q" onClick={() => setLightboxUrl(q.questionImage!)}
                       className="max-h-40 rounded-xl object-contain cursor-pointer" />}
                     {wa.answerText && (
                       <div className="bg-white/4 rounded-xl px-4 py-3">
-                        <p className="text-[10px] uppercase tracking-wider text-white/25 mb-1">Your answer</p>
+                        <p className="text-[11px] uppercase tracking-wider text-white/25 mb-1">Your answer</p>
                         <p className="text-white/70 text-sm whitespace-pre-wrap leading-relaxed">{wa.answerText}</p>
                       </div>
                     )}
                     {(wa.attachmentUrls||[]).length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         {wa.attachmentUrls!.map((url,ui) => (
-                          <img key={ui} src={url} alt={`att-${ui}`} onClick={() => setLightboxUrl(url)}
+                          <img loading="lazy" key={ui} src={url} alt={`att-${ui}`} onClick={() => setLightboxUrl(url)}
                             className="h-28 object-cover rounded-xl border border-white/10 cursor-pointer" />
                         ))}
                       </div>
                     )}
                     {wa.evaluatorComment && (
                       <div className="bg-emerald-500/8 border border-emerald-500/15 rounded-xl px-4 py-3">
-                        <p className="text-[10px] uppercase tracking-wider text-emerald-400 mb-1">Evaluator feedback</p>
+                        <p className="text-[11px] uppercase tracking-wider text-emerald-400 mb-1">Evaluator feedback</p>
                         <p className="text-white/70 text-sm">{wa.evaluatorComment}</p>
                       </div>
                     )}
                     {q.solution && (
                       <div className="bg-indigo-500/8 border border-indigo-500/15 rounded-xl px-4 py-3">
-                        <p className="text-[10px] uppercase tracking-wider text-indigo-400 mb-1">Model Solution</p>
+                        <p className="text-[11px] uppercase tracking-wider text-indigo-400 mb-1">Model Solution</p>
                         <p className="text-white/70 text-sm leading-relaxed">{q.solution}</p>
-                        {q.solutionImage && <img src={q.solutionImage} alt="sol" onClick={() => setLightboxUrl(q.solutionImage!)}
+                        {q.solutionImage && <img loading="lazy" src={q.solutionImage} alt="sol" onClick={() => setLightboxUrl(q.solutionImage!)}
                           className="mt-2 max-h-40 rounded-xl object-contain cursor-pointer" />}
                       </div>
                     )}
                     {/* Review history */}
                     {existingRequests.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[10px] uppercase tracking-wider text-white/25">Review History</p>
+                        <p className="text-[11px] uppercase tracking-wider text-white/25">Review History</p>
                         {existingRequests.map((rr, ri) => (
                           <div key={ri} className={`rounded-xl px-4 py-3 border text-sm
                             ${rr.status==='resolved' ? 'bg-emerald-500/5 border-emerald-500/15' : 'bg-amber-500/5 border-amber-500/15'}`}>
                             <div className="flex items-center justify-between mb-1">
-                              <span className={`text-[10px] font-semibold uppercase tracking-wider
+                              <span className={`text-[11px] font-semibold uppercase tracking-wider
                                 ${rr.status==='resolved' ? 'text-emerald-400' : 'text-amber-400'}`}>
                                 {rr.status==='resolved' ? '✓ Resolved' : '⏳ Pending review'}
                               </span>
-                              <span className="text-[10px] text-white/25">{new Date(rr.requestedAt).toLocaleDateString()}</span>
+                              <span className="text-[11px] text-white/25">{new Date(rr.requestedAt).toLocaleDateString()}</span>
                             </div>
                             <p className="text-white/60 text-xs">"{rr.message}"</p>
                             {rr.resolvedComment && (
@@ -2387,14 +2387,14 @@ const ResultsPage: React.FC<{
                         <button key={att.id}
                           onClick={() => setSelectedAttempt(selectedAttempt?.id === att.id ? null : att)}
                           className="flex-1 flex flex-col items-center gap-1 group transition">
-                          <span className={`text-[10px] font-bold transition
+                          <span className={`text-[11px] font-bold transition
                             ${selectedAttempt?.id === att.id ? 'text-white' : 'text-white/40 group-hover:text-white/70'}`}>
                             {attPct.toFixed(0)}%
                           </span>
                           <div className={`w-full rounded-t-lg transition-all ${color}
                             ${selectedAttempt?.id === att.id ? 'opacity-100 ring-2 ring-white/40' : 'opacity-60 group-hover:opacity-90'}`}
                             style={{ height: `${barH}%` }} />
-                          <span className={`text-[9px] transition
+                          <span className={`text-[11px] transition
                             ${isLast ? 'text-rose-400 font-bold' : selectedAttempt?.id === att.id ? 'text-white' : 'text-white/30'}`}>
                             #{att.attemptNumber}
                           </span>
@@ -2402,7 +2402,7 @@ const ResultsPage: React.FC<{
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-4 mt-4 text-[10px] text-white/30">
+                  <div className="flex items-center gap-4 mt-4 text-[11px] text-white/30">
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> ≥80%</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> 60–79%</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> 40–59%</span>
@@ -2452,13 +2452,13 @@ const ResultsPage: React.FC<{
                         const skipped = att.mcqAnswers.filter(a => !a.selectedOptions?.length).length;
                         return (
                           <div key={att.id} className="flex items-center gap-3">
-                            <span className="text-[10px] text-white/30 w-8 shrink-0">#{att.attemptNumber}</span>
+                            <span className="text-[11px] text-white/30 w-8 shrink-0">#{att.attemptNumber}</span>
                             <div className="flex-1 h-4 bg-white/5 rounded-full overflow-hidden flex">
                               <div className="bg-emerald-500/70 h-full" style={{ width: `${(correct / total) * 100}%` }} />
                               <div className="bg-red-500/70 h-full" style={{ width: `${(wrong / total) * 100}%` }} />
                               <div className="bg-white/10 h-full" style={{ width: `${(skipped / total) * 100}%` }} />
                             </div>
-                            <span className="text-[10px] text-white/30 shrink-0 w-24 text-right">
+                            <span className="text-[11px] text-white/30 shrink-0 w-24 text-right">
                               {correct}✓ {wrong}✗ {skipped}—
                             </span>
                           </div>
@@ -2487,7 +2487,7 @@ const ResultsPage: React.FC<{
                             <div>
                               <p className="text-sm font-medium text-white">
                                 Attempt #{att.attemptNumber}
-                                {isLatest && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400">Latest</span>}
+                                {isLatest && <span className="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400">Latest</span>}
                               </p>
                               <p className="text-xs text-white/35">{fmtDate(att.submittedAt || att.startedAt)}</p>
                             </div>
@@ -2502,7 +2502,7 @@ const ResultsPage: React.FC<{
                           <div className="mt-4 pt-4 border-t border-white/8 grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {att.mcqAnswers?.length > 0 && (
                               <div className="rounded-xl bg-white/4 p-3">
-                                <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">MCQ</p>
+                                <p className="text-[11px] text-white/35 uppercase tracking-wider mb-1">MCQ</p>
                                 <p className="font-bold">{att.mcqMarks} marks</p>
                                 <p className="text-xs text-white/40">
                                   {att.mcqAnswers.filter(a => a.isCorrect).length} correct,{' '}
@@ -2512,12 +2512,12 @@ const ResultsPage: React.FC<{
                             )}
                             {att.writtenAnswers?.length > 0 && (
                               <div className="rounded-xl bg-white/4 p-3">
-                                <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Written</p>
+                                <p className="text-[11px] text-white/35 uppercase tracking-wider mb-1">Written</p>
                                 <p className="font-bold">{att.writtenEvaluationPending ? 'Pending' : `${att.writtenMarks} marks`}</p>
                               </div>
                             )}
                             <div className="rounded-xl bg-white/4 p-3">
-                              <p className="text-[10px] text-white/35 uppercase tracking-wider mb-1">Anti-cheat</p>
+                              <p className="text-[11px] text-white/35 uppercase tracking-wider mb-1">Anti-cheat</p>
                               <p className="font-bold">{att.tabSwitchCount} tab switches</p>
                               <p className="text-xs text-white/40">{att.focusLostCount} focus lost</p>
                             </div>

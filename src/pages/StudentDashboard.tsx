@@ -1265,7 +1265,7 @@ const StudentDashboard = () => {
       {continueLearning && (
         <div style={{ padding: 'clamp(12px,1.8vw,16px)', borderRadius: 16, background: `linear-gradient(135deg,${primaryColor}12 0%,${primaryColor}06 100%)`, border: `1px solid ${primaryColor}28`, display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 42, height: 42, borderRadius: 11, flexShrink: 0, overflow: 'hidden', background: `${primaryColor}20`, border: `1px solid ${primaryColor}30`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {continueLearning.thumbnail ? <img src={continueLearning.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <BookMarked size={18} color={primaryColor} />}
+            {continueLearning.thumbnail ? <img loading="lazy" src={continueLearning.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <BookMarked size={18} color={primaryColor} />}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 700, color: `${primaryColor}bb`, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 2px' }}>Continue Learning</p>
@@ -1885,7 +1885,7 @@ const StudentDashboard = () => {
 
       {/* Goal Modal */}
       {showGoalModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16, overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16, overflowY: 'auto' }}>
           <div style={{ background: '#0d1018', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 22, width: '100%', maxWidth: 500, position: 'relative', fontFamily: "'Outfit',sans-serif", maxHeight: '90vh', overflowY: 'auto' }}>
             <button onClick={() => { setShowGoalModal(false); resetGoalForm(); }} style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.55)' }}><X size={13} /></button>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', margin: '0 0 16px' }}>Add Study Goal</h2>
@@ -2192,7 +2192,7 @@ const HeatmapCard = ({
         const col  = dark ? 'rgba(255,255,255,0.9)' : '#111';
         const col2 = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)';
         return (
-          <div style={{ position:'fixed', left:tooltip.x, top:tooltip.y - 8, transform:'translate(-50%,-100%)', zIndex:99999, pointerEvents:'none',
+          <div style={{ position:'fixed', left:tooltip.x, top:tooltip.y - 8, transform:'translate(-50%,-100%)', zIndex: 600, pointerEvents:'none',
             background:bg, border:bdr, borderRadius:10, padding: hasSrc ? '10px 14px' : '7px 11px',
             boxShadow:'0 4px 20px rgba(0,0,0,0.35)', minWidth: hasSrc ? 180 : 140,
             textAlign: hasSrc ? 'left' : 'center', fontFamily:"'Outfit',sans-serif" }}>
@@ -2245,7 +2245,7 @@ const ObjModal = ({ onClose, onAdd }: { onClose: () => void; onAdd: (t: string, 
   const color = (p: string) => p === 'high' ? '#ef4444' : p === 'medium' ? '#f59e0b' : '#10b981';
   const GI: React.CSSProperties = { width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '8px 12px', color: 'rgba(255,255,255,0.9)', fontSize: 13, fontFamily: "'Outfit',sans-serif", outline: 'none' };
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
       <div style={{ background: '#0d1018', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 22, width: '100%', maxWidth: 380, position: 'relative', fontFamily: "'Outfit',sans-serif" }}>
         <button onClick={onClose} style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 7, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.55)' }}><X size={13} /></button>
         <h2 style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', margin: '0 0 16px' }}>Add Objective</h2>

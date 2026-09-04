@@ -212,7 +212,7 @@ const VerifyId = () => {
             {/* User Photo and Basic Info */}
             <div className="flex flex-col md:flex-row gap-6 mb-8 pb-8 border-b border-slate-700">
               <div className="flex-shrink-0">
-                <img
+                <img loading="lazy"
                   src={verifiedUser.profilePictureUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(verifiedUser.fullName)}&size=300&background=3b82f6&color=ffffff`}
                   alt={verifiedUser.fullName}
                   className="w-32 h-32 rounded-lg object-cover border-2 border-slate-600"

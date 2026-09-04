@@ -252,7 +252,7 @@ function CourseLeaderboardPanel({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           {(course.thumbnailUrl || course.thumbnail)
-            ? <img src={course.thumbnailUrl ?? course.thumbnail} alt={course.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <img loading="lazy" src={course.thumbnailUrl ?? course.thumbnail} alt={course.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : <BookOpen size={20} color="#333" />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -589,7 +589,7 @@ const Leaderboard = () => {
                   >
                     <div style={{ width: 40, height: 40, borderRadius: 8, overflow: 'hidden', flexShrink: 0, background: '#1a1a2e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       {(course.thumbnailUrl || course.thumbnail)
-                        ? <img src={course.thumbnailUrl ?? course.thumbnail} alt={course.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ? <img loading="lazy" src={course.thumbnailUrl ?? course.thumbnail} alt={course.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         : <BookOpen size={16} color="#333" />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>

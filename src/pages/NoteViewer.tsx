@@ -221,7 +221,7 @@ const ViewerShell: React.FC<ViewerShellProps> = ({
   const portal = (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 99999,
+        position: 'fixed', inset: 0, zIndex: 600,
         display: 'flex', flexDirection: 'column',
         background: baseBg,
       }}
@@ -459,7 +459,7 @@ const InfoPill: React.FC<InfoPillProps> = ({ icon, label, value, valueClassName 
     >
       <div style={{ color: darkMode ? '#475569' : '#9ca3af', flexShrink: 0 }}>{icon}</div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] uppercase tracking-widest font-semibold mb-0.5" style={{ color: textMuted }}>
+        <p className="text-[11px] uppercase tracking-widest font-semibold mb-0.5" style={{ color: textMuted }}>
           {label}
         </p>
         <p
@@ -863,7 +863,7 @@ const NoteViewer: React.FC = () => {
               {content.description && (
                 <div className="space-y-1.5">
                   <p
-                    className="text-[10px] uppercase tracking-widest font-semibold"
+                    className="text-[11px] uppercase tracking-widest font-semibold"
                     style={{ color: darkMode ? '#475569' : '#9ca3af' }}
                   >
                     Description
@@ -917,7 +917,7 @@ const NoteViewer: React.FC = () => {
               {(content as any).tags && (content as any).tags.length > 0 && (
                 <div className="space-y-2">
                   <p
-                    className="text-[10px] uppercase tracking-widest font-semibold"
+                    className="text-[11px] uppercase tracking-widest font-semibold"
                     style={{ color: darkMode ? '#475569' : '#9ca3af' }}
                   >
                     Tags

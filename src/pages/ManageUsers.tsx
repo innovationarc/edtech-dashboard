@@ -578,7 +578,7 @@ const ManageUsers = () => {
                         <div className="relative">
                           {user.profilePictureUrl ? (
                             <div className="h-11 w-11 rounded-xl overflow-hidden border-2 border-background-700/50 shadow-lg group-hover:scale-110 transition-transform duration-200">
-                              <img 
+                              <img loading="lazy" 
                                 src={user.profilePictureUrl} 
                                 alt={user.name || 'User'} 
                                 className="w-full h-full object-cover"
@@ -752,7 +752,7 @@ const UserInfoModal = ({ user, onClose, getRoleGradient }: UserInfoModalProps) =
             <div className="flex items-center gap-4">
               {user.profilePictureUrl ? (
                 <div className="h-16 w-16 rounded-2xl overflow-hidden border-2 border-background-700/50 shadow-lg">
-                  <img 
+                  <img loading="lazy" 
                     src={user.profilePictureUrl} 
                     alt={user.name || 'User'} 
                     className="w-full h-full object-cover"

@@ -195,7 +195,7 @@ const VerifyProfile = () => {
               <div className="relative group">
                 <div className="h-32 w-32 rounded-2xl overflow-hidden bg-white shadow-xl ring-4 ring-white">
                   {user.profilePictureUrl ? (
-                    <img
+                    <img loading="lazy"
                       src={user.profilePictureUrl}
                       alt={user.name}
                       className="w-full h-full object-cover"

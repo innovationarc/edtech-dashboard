@@ -536,7 +536,7 @@ const TaskModal = ({ groupId, teacherId, existingTasks, editTask, onClose, onSav
   const TypeIcon = typeMeta.icon;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" style={modalBg}>
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
@@ -909,7 +909,7 @@ const GradingModal = ({ sub, task, teacherId, teacherName, onClose, onGraded }: 
   const secBg: React.CSSProperties = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" style={modalBg}>
         <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
           <div>

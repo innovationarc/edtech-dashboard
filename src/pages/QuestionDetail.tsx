@@ -176,7 +176,7 @@ const ModalShell = ({ children, onClose, wide }: {
   return createPortal(
     <div
       style={{
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 300,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 16, background: 'rgba(0,0,0,0.65)',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
@@ -490,7 +490,7 @@ const AnswerCard = ({ answer, questionId, isStudentQuestion, courseId, onViewDoc
 
         {/* Image */}
         {answer.imageUrl && (
-          <img
+          <img loading="lazy"
             src={answer.imageUrl} alt="Answer attachment"
             onClick={() => onViewImage(answer.imageUrl!)}
             style={{ maxHeight: 320, objectFit: 'contain', borderRadius: 10, border: `1px solid ${T.border}`, cursor: 'pointer', transition: 'opacity 0.15s' }}
@@ -548,7 +548,7 @@ const FollowUpAnswerCard = ({ answer, questionId, isOwnQuestion, courseId, onVie
       <div style={{ color: T.text2, fontSize: 13, lineHeight: 1.65 }}>{renderFormattedText(answer.answerText)}</div>
 
       {answer.imageUrl && (
-        <img src={answer.imageUrl} alt="Answer" onClick={() => onViewImage(answer.imageUrl!)}
+        <img loading="lazy" src={answer.imageUrl} alt="Answer" onClick={() => onViewImage(answer.imageUrl!)}
           style={{ maxHeight: 220, objectFit: 'contain', borderRadius: 8, cursor: 'pointer', transition: 'opacity 0.15s' }}
           onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
@@ -599,7 +599,7 @@ const FollowUpQuestionCard = ({ question, courseId, onViewDocument, onViewImage 
         </div>
 
         {question.imageUrl && (
-          <img src={question.imageUrl} alt="Follow-up attachment" onClick={() => onViewImage(question.imageUrl!)}
+          <img loading="lazy" src={question.imageUrl} alt="Follow-up attachment" onClick={() => onViewImage(question.imageUrl!)}
             style={{ maxHeight: 280, objectFit: 'contain', borderRadius: 10, border: `1px solid ${T.border}`, cursor: 'pointer' }}
           />
         )}
@@ -768,7 +768,7 @@ const EditQuestionModal = ({ question, onClose, onSuccess }: EditQuestionModalPr
               <span style={{ ...labelStyle, marginBottom: 0 }}>Current Image</span>
               <button onClick={() => setExistingImageUrl(undefined)} style={{ fontSize: 12, color: T.danger, background: 'none', border: 'none', cursor: 'pointer' }}>Remove</button>
             </div>
-            <img src={existingImageUrl} alt="Current" style={{ maxHeight: 140, objectFit: 'contain', borderRadius: 8 }} />
+            <img loading="lazy" src={existingImageUrl} alt="Current" style={{ maxHeight: 140, objectFit: 'contain', borderRadius: 8 }} />
           </div>
         ) : existingFileUrl && existingFileName && !attachedFile ? (
           <div style={{ padding: '12px 14px', background: T.surface, borderRadius: 10, border: `1px solid ${T.border}` }}>
@@ -1111,7 +1111,7 @@ const DocumentViewer = ({ url, fileName, type, onClose }: {
 }) => {
   const T = useT();
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }}>
       <div style={{ background: T.baseBg, borderRadius: 16, width: '100%', maxWidth: 960, height: '90vh', display: 'flex', flexDirection: 'column', border: `1px solid ${T.border}`, overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: `1px solid ${T.divider}`, background: T.surface, flexShrink: 0 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: T.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 12 }}>{fileName}</h2>
@@ -1155,7 +1155,7 @@ const DocumentViewer = ({ url, fileName, type, onClose }: {
 const ImageViewer = ({ url, onClose }: { url: string; onClose: () => void; }) => {
   const T = useT();
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: 16 }} onClick={onClose}>
       <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '90vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <button
           onClick={onClose}
@@ -1163,7 +1163,7 @@ const ImageViewer = ({ url, onClose }: { url: string; onClose: () => void; }) =>
         >
           <X size={18} style={{ color: T.text2 }} />
         </button>
-        <img src={url} alt="Full size" onClick={e => e.stopPropagation()}
+        <img loading="lazy" src={url} alt="Full size" onClick={e => e.stopPropagation()}
           style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 12 }} />
       </div>
     </div>
@@ -1546,7 +1546,7 @@ const QuestionDetail = () => {
 
               {/* Image */}
               {question.imageUrl && (
-                <img src={question.imageUrl} alt="Question attachment" onClick={() => handleViewImage(question.imageUrl!)}
+                <img loading="lazy" src={question.imageUrl} alt="Question attachment" onClick={() => handleViewImage(question.imageUrl!)}
                   style={{ maxHeight: 320, objectFit: 'contain', borderRadius: 10, border: `1px solid ${T.border}`, cursor: 'pointer', transition: 'opacity 0.15s' }}
                   onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
                   onMouseLeave={e => (e.currentTarget.style.opacity = '1')}

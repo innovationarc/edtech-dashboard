@@ -115,7 +115,7 @@ const pendingReviewsInSession = (s: ExamSession): number =>
 
 const StatusBadge: React.FC<{ pending: boolean; tiny?: boolean }> = ({ pending, tiny }) => (
   <span className={`font-bold uppercase tracking-wider rounded-full border whitespace-nowrap
-    ${tiny ? 'text-[9px] px-1.5 py-0.5' : 'text-[10px] px-2 py-0.5'}
+    ${tiny ? 'text-[11px] px-1.5 py-0.5' : 'text-[11px] px-2 py-0.5'}
     ${pending
       ? 'bg-amber-500/15 text-amber-400 border-amber-500/25'
       : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25'}`}>
@@ -140,7 +140,7 @@ const StatCard: React.FC<{
   <div className="rounded-xl bg-white/3 border border-white/7 px-3 py-3 text-center min-w-[80px] shrink-0 sm:min-w-0 sm:shrink sm:p-3.5">
     <div className="flex justify-center mb-1 text-white/40">{icon}</div>
     <p className={`text-base sm:text-lg font-bold leading-tight ${valueClass}`}>{value}</p>
-    <p className="text-[9px] sm:text-[10px] text-white/30 mt-0.5">{label}</p>
+    <p className="text-[11px] sm:text-[11px] text-white/30 mt-0.5">{label}</p>
   </div>
 );
 
@@ -201,17 +201,17 @@ const ExamCard: React.FC<{ summary: ExamSummary; onOpen: () => void }> = ({ summ
       <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/6 mb-3">
         <div className="text-center">
           <p className="text-base font-bold text-white">{totalSessions}</p>
-          <p className="text-[10px] text-white/25">submissions</p>
+          <p className="text-[11px] text-white/25">submissions</p>
         </div>
         <div className="text-center">
           <p className={`text-base font-bold ${hasPending ? 'text-amber-400' : 'text-emerald-400'}`}>{pendingCount}</p>
-          <p className="text-[10px] text-white/25">pending</p>
+          <p className="text-[11px] text-white/25">pending</p>
         </div>
         <div className="text-center">
           <p className={`text-base font-bold ${gradeColor(avgScore)}`}>
             {totalSessions > 0 ? `${avgScore.toFixed(0)}%` : '—'}
           </p>
-          <p className="text-[10px] text-white/25">avg</p>
+          <p className="text-[11px] text-white/25">avg</p>
         </div>
       </div>
 
@@ -219,7 +219,7 @@ const ExamCard: React.FC<{ summary: ExamSummary; onOpen: () => void }> = ({ summ
         <div className="flex items-center gap-2">
           <ProgressBar value={evaluatedCount} max={totalSessions}
             colorClass={hasPending ? 'bg-amber-400/50' : 'bg-emerald-400/60'} />
-          <span className={`text-[10px] font-medium shrink-0 ${hasPending ? 'text-amber-400' : 'text-emerald-400'}`}>
+          <span className={`text-[11px] font-medium shrink-0 ${hasPending ? 'text-amber-400' : 'text-emerald-400'}`}>
             {evaluatedCount}/{totalSessions}
           </span>
         </div>
@@ -260,7 +260,7 @@ const SessionCard: React.FC<{
     <div className="text-right shrink-0 space-y-1">
       <div className="flex items-center gap-1.5 justify-end">
         {pendingReviews > 0 && (
-          <span className="flex items-center gap-0.5 text-[10px] text-rose-400">
+          <span className="flex items-center gap-0.5 text-[11px] text-rose-400">
             <MessageSquare size={9} /> {pendingReviews}
           </span>
         )}
@@ -819,7 +819,7 @@ const ExamEvaluation: React.FC = () => {
       {lightboxUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
           onClick={() => setLightboxUrl(null)}>
-          <img src={lightboxUrl} alt="attachment" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
+          <img loading="lazy" src={lightboxUrl} alt="attachment" className="max-w-4xl max-h-[90vh] object-contain rounded-2xl" />
           <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition"
             onClick={() => setLightboxUrl(null)}>
             <X size={18} />
@@ -908,7 +908,7 @@ const ExamEvaluation: React.FC = () => {
                 </div>
                 {scoreDist.some(v => v > 0) && (
                   <div className="rounded-xl bg-white/3 border border-white/7 p-4">
-                    <p className="text-[10px] uppercase tracking-widest text-white/25 mb-3">Score Distribution</p>
+                    <p className="text-[11px] uppercase tracking-widest text-white/25 mb-3">Score Distribution</p>
                     <div className="flex items-end gap-3 h-16">
                       {[
                         { label: '<40%',  color: 'bg-red-500/60',     i: 0 },
@@ -918,10 +918,10 @@ const ExamEvaluation: React.FC = () => {
                         { label: '90+',   color: 'bg-teal-500/60',    i: 4 },
                       ].map(({ label, color, i }) => (
                         <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                          <span className="text-[9px] text-white/40">{scoreDist[i] || ''}</span>
+                          <span className="text-[11px] text-white/40">{scoreDist[i] || ''}</span>
                           <div className={`w-full rounded-t transition-all ${color}`}
                             style={{ height: `${(scoreDist[i] / maxBucket) * 52}px`, minHeight: scoreDist[i] > 0 ? 3 : 0 }} />
-                          <span className="text-[9px] text-white/30">{label}</span>
+                          <span className="text-[11px] text-white/30">{label}</span>
                         </div>
                       ))}
                     </div>
@@ -955,7 +955,7 @@ const ExamEvaluation: React.FC = () => {
                           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs transition
                             ${sessFilter === f ? 'bg-violet-500/20 border border-violet-500/30 text-violet-300' : 'bg-white/4 border border-white/8 text-white/40 hover:text-white/70'}`}>
                           {label}
-                          {cnt > 0 && <span className={`px-1.5 rounded-full text-[10px] font-bold
+                          {cnt > 0 && <span className={`px-1.5 rounded-full text-[11px] font-bold
                             ${sessFilter === f ? 'bg-violet-500/30 text-violet-200' : (f === 'pending' || f === 'reviews') ? 'bg-amber-500/15 text-amber-400' : 'bg-white/8 text-white/35'}`}>
                             {cnt}
                           </span>}
@@ -1006,7 +1006,7 @@ const ExamEvaluation: React.FC = () => {
                             <p className="font-semibold text-white">{selectedSession.studentName}</p>
                             <StatusBadge pending={selectedSession.writtenEvaluationPending}/>
                             {selectedSession.attemptNumber > 1 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/8 text-white/40 border border-white/8">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-white/8 text-white/40 border border-white/8">
                                 Attempt #{selectedSession.attemptNumber}
                               </span>
                             )}
@@ -1060,7 +1060,7 @@ const ExamEvaluation: React.FC = () => {
                                   <span className="text-emerald-400/30">· {(user as any).surname}</span>
                                 )}
                                 {(user as any)?.userId && selectedSession.writtenEvaluatedBy === user?.uid && (
-                                  <span className="text-emerald-400/30 font-mono text-[10px]">#{(user as any).userId}</span>
+                                  <span className="text-emerald-400/30 font-mono text-[11px]">#{(user as any).userId}</span>
                                 )}
                               </p>
                             )}
@@ -1073,7 +1073,7 @@ const ExamEvaluation: React.FC = () => {
 
                       {/* Bulk fill */}
                       <div className="mx-4 mt-3 flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] text-white/25 uppercase tracking-wider">Bulk fill:</span>
+                        <span className="text-[11px] text-white/25 uppercase tracking-wider">Bulk fill:</span>
                         {[
                           { label: 'Full', t: 'full'  as const, cls: 'text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/20' },
                           { label: '½',   t: 'half'  as const, cls: 'text-amber-400 hover:bg-amber-500/10 border-amber-500/20' },
@@ -1112,10 +1112,10 @@ const ExamEvaluation: React.FC = () => {
                                 })}
                                 className="w-full flex items-center justify-between px-4 py-3 bg-white/3 hover:bg-white/5 transition text-left gap-3">
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <span className="text-[10px] uppercase tracking-wider text-violet-400 font-semibold shrink-0">Q{i+1}</span>
+                                  <span className="text-[11px] uppercase tracking-wider text-violet-400 font-semibold shrink-0">Q{i+1}</span>
                                   {q && <span className="text-white/55 text-sm truncate">{q.question}</span>}
                                   {pendRevs.length > 0 && (
-                                    <span className="shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-[10px] border border-rose-500/20">
+                                    <span className="shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 text-[11px] border border-rose-500/20">
                                       <MessageSquare size={9}/> {pendRevs.length}
                                     </span>
                                   )}
@@ -1134,7 +1134,7 @@ const ExamEvaluation: React.FC = () => {
                                   {/* Student answer */}
                                   {wa.answerText ? (
                                     <div className="bg-white/4 rounded-lg px-3 py-3">
-                                      <p className="text-[10px] uppercase tracking-wider text-white/25 mb-2">Student's Answer</p>
+                                      <p className="text-[11px] uppercase tracking-wider text-white/25 mb-2">Student's Answer</p>
                                       <p className="text-white/75 text-sm whitespace-pre-wrap leading-relaxed">{wa.answerText}</p>
                                     </div>
                                   ) : (
@@ -1147,11 +1147,11 @@ const ExamEvaluation: React.FC = () => {
                                   {/* Attachments */}
                                   {(wa.attachmentUrls || []).length > 0 && (
                                     <div>
-                                      <p className="text-[10px] uppercase tracking-wider text-white/25 mb-2">Attachments ({wa.attachmentUrls!.length})</p>
+                                      <p className="text-[11px] uppercase tracking-wider text-white/25 mb-2">Attachments ({wa.attachmentUrls!.length})</p>
                                       <div className="flex flex-wrap gap-2">
                                         {wa.attachmentUrls!.map((url, ui) => (
                                           <div key={ui} className="relative group">
-                                            <img src={url} alt={`att-${ui}`} className="w-20 h-20 object-cover rounded-lg border border-white/10 cursor-pointer"/>
+                                            <img loading="lazy" src={url} alt={`att-${ui}`} className="w-20 h-20 object-cover rounded-lg border border-white/10 cursor-pointer"/>
                                             <button onClick={() => setLightboxUrl(url)}
                                               className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition rounded-lg">
                                               <ZoomIn size={16} className="text-white"/>
@@ -1165,7 +1165,7 @@ const ExamEvaluation: React.FC = () => {
                                   {/* Model solution */}
                                   {q?.solution && (
                                     <div className="bg-indigo-500/8 border border-indigo-500/15 rounded-lg px-3 py-2.5">
-                                      <p className="text-[10px] uppercase tracking-wider text-indigo-400 mb-1.5">Model Solution</p>
+                                      <p className="text-[11px] uppercase tracking-wider text-indigo-400 mb-1.5">Model Solution</p>
                                       <p className="text-white/60 text-sm leading-relaxed">{q.solution}</p>
                                     </div>
                                   )}
@@ -1173,15 +1173,15 @@ const ExamEvaluation: React.FC = () => {
                                   {/* Review requests */}
                                   {allRevs.length > 0 && (
                                     <div className="space-y-2">
-                                      <p className="text-[10px] uppercase tracking-wider text-white/25">Review Requests ({allRevs.length})</p>
+                                      <p className="text-[11px] uppercase tracking-wider text-white/25">Review Requests ({allRevs.length})</p>
                                       {allRevs.map((rr, ri) => (
                                         <div key={ri} className={`rounded-lg border p-3
                                           ${rr.status === 'resolved' ? 'bg-emerald-500/5 border-emerald-500/15' : 'bg-rose-500/8 border-rose-500/20'}`}>
                                           <div className="flex items-center justify-between mb-1.5 gap-2">
-                                            <span className={`text-[10px] font-bold uppercase tracking-wider ${rr.status === 'resolved' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            <span className={`text-[11px] font-bold uppercase tracking-wider ${rr.status === 'resolved' ? 'text-emerald-400' : 'text-rose-400'}`}>
                                               {rr.status === 'resolved' ? '✓ Resolved' : '⟳ Pending'}
                                             </span>
-                                            <span className="text-[10px] text-white/25 shrink-0">
+                                            <span className="text-[11px] text-white/25 shrink-0">
                                               {fmtShortDate(rr.requestedAt)}
                                             </span>
                                           </div>
@@ -1224,7 +1224,7 @@ const ExamEvaluation: React.FC = () => {
                                   {/* Marks input */}
                                   <div className="space-y-3 pt-1">
                                     <div>
-                                      <label className="text-[10px] uppercase tracking-wider text-white/35 mb-2 block">Marks Awarded</label>
+                                      <label className="text-[11px] uppercase tracking-wider text-white/35 mb-2 block">Marks Awarded</label>
                                       <div className="flex items-center gap-3 flex-wrap">
                                         <input type="number" min={0} max={maxM} step={0.5}
                                           value={draft.marks}
@@ -1255,7 +1255,7 @@ const ExamEvaluation: React.FC = () => {
                                     </div>
 
                                     <div>
-                                      <label className="text-[10px] uppercase tracking-wider text-white/35 mb-2 block">Feedback (optional)</label>
+                                      <label className="text-[11px] uppercase tracking-wider text-white/35 mb-2 block">Feedback (optional)</label>
                                       <textarea value={draft.comment} rows={2}
                                         onChange={e => updateDraft(wa.questionId, 'comment', e.target.value)}
                                         placeholder="Write feedback for the student…"
@@ -1355,7 +1355,7 @@ const ExamEvaluation: React.FC = () => {
               {/* Course / Subject — 2-col grid on mobile, inline on larger screens */}
               <div className={`grid gap-3 ${allSubjects.length > 0 ? 'grid-cols-2' : 'grid-cols-1'} sm:flex sm:flex-wrap sm:items-end`}>
                 <div className="sm:min-w-36">
-                  <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Course</p>
+                  <p className="text-[11px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Course</p>
                   <select value={filterCourse} onChange={e => setFilterCourse(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none appearance-none">
                     <option value="all">All Courses</option>
@@ -1364,7 +1364,7 @@ const ExamEvaluation: React.FC = () => {
                 </div>
                 {allSubjects.length > 0 && (
                   <div className="sm:min-w-32">
-                    <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Subject</p>
+                    <p className="text-[11px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Subject</p>
                     <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none appearance-none">
                       <option value="all">All Subjects</option>
@@ -1376,7 +1376,7 @@ const ExamEvaluation: React.FC = () => {
 
               {/* Status — horizontally scrollable chip row on mobile, wraps freely on larger screens */}
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Status</p>
+                <p className="text-[11px] uppercase tracking-wider text-white/40 mb-1 font-semibold">Status</p>
                 <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap pb-1 sm:pb-0 -mx-1 px-1 scrollbar-none">
                   {([
                     { val: 'all'           as const, label: 'All'         },

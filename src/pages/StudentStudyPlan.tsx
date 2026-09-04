@@ -224,7 +224,7 @@ const ModalShell = ({
   return createPortal(
     <div
       style={{
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 300,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 16, background: 'rgba(0,0,0,0.65)',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
@@ -2463,12 +2463,12 @@ const StudentStudyPlan = () => {
             <div key={subj}>
               <div className="flex items-center gap-1 mb-0.5">
                 <BookOpen size={9} className="text-primary-400 flex-shrink-0" />
-                <span className="text-[10px] font-semibold text-primary-300 uppercase tracking-wide">{subj}</span>
+                <span className="text-[11px] font-semibold text-primary-300 uppercase tracking-wide">{subj}</span>
               </div>
               {Object.entries(chapters).map(([chap, topics]) => (
                 <div key={chap} className="pl-3">
                   {chap && <span style={{ fontSize: 10, color: "var(--sp-text3,#475569)" }}>{chap} · </span>}
-                  <span className="text-[10px] text-teal-400/80">{topics.join(' · ')}</span>
+                  <span className="text-[11px] text-teal-400/80">{topics.join(' · ')}</span>
                 </div>
               ))}
             </div>
@@ -2483,7 +2483,7 @@ const StudentStudyPlan = () => {
     return (
       <div className="flex items-center gap-1 mt-1 flex-wrap">
         <Tag size={9} className="text-teal-400 flex-shrink-0" />
-        <span className="text-[10px] text-teal-400/80">{shown.join(' · ')}</span>
+        <span className="text-[11px] text-teal-400/80">{shown.join(' · ')}</span>
         {extra > 0 && <span style={{ fontSize: 10, color: "var(--sp-text3,#475569)" }}>+{extra}</span>}
       </div>
     );
@@ -4064,7 +4064,7 @@ const StudentStudyPlan = () => {
           {/* Image preview */}
           {(chatImagePreview || chatImageOCRLoading) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '8px 12px', marginBottom: 10 }}>
-              {chatImagePreview && <img src={chatImagePreview} alt="Uploaded" style={{ height: 40, width: 56, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />}
+              {chatImagePreview && <img loading="lazy" src={chatImagePreview} alt="Uploaded" style={{ height: 40, width: 56, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 {chatImageOCRLoading ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Loader size={11} className="animate-spin" style={{ color: T.primaryColor }} /><span style={{ fontSize: 12, color: T.text2 }}>Reading schedule image…</span></div>

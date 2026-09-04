@@ -47,17 +47,17 @@ type Tab = 'docs' | 'config';
 
 const EmbeddingBadge: React.FC<{ status: NovaContextDoc['embeddingStatus'] }> = ({ status }) => {
   if (status === 'ready') return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
       <CheckCircle2 size={10} /> Embedded
     </span>
   );
   if (status === 'error') return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
       <XCircle size={10} /> Error
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
       <Loader size={10} className="animate-spin" /> Pending
     </span>
   );
@@ -126,7 +126,7 @@ const DocForm: React.FC<DocFormProps> = ({ initial, onSave, onClose, saving }) =
               onChange={e => setContent(e.target.value)}
               rows={8}
             />
-            <p className="text-[10px] text-gray-600 mt-1">
+            <p className="text-[11px] text-gray-600 mt-1">
               Tip: Be specific and factual. Shorter, focused docs score better than large mixed-topic blobs.
             </p>
           </div>
@@ -231,14 +231,14 @@ const DocRow: React.FC<DocRowProps> = ({ doc, onEdit, onDelete, onRetry, retryin
           {doc.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
               {doc.tags.map(tag => (
-                <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-background-700 text-gray-400">
+                <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] bg-background-700 text-gray-400">
                   <Tag size={8} />{tag}
                 </span>
               ))}
             </div>
           )}
           {doc.embeddingError && (
-            <p className="text-[10px] text-red-400 mt-1">⚠ {doc.embeddingError}</p>
+            <p className="text-[11px] text-red-400 mt-1">⚠ {doc.embeddingError}</p>
           )}
         </div>
 
@@ -270,7 +270,7 @@ const DocRow: React.FC<DocRowProps> = ({ doc, onEdit, onDelete, onRetry, retryin
       {expanded && (
         <div className="px-4 py-3 border-t border-background-700 bg-background-900">
           <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">{doc.content}</p>
-          <p className="text-[10px] text-gray-600 mt-2">
+          <p className="text-[11px] text-gray-600 mt-2">
             Updated {doc.updatedAt.toLocaleString()} · {doc.content.length.toLocaleString()} chars
           </p>
         </div>
@@ -450,7 +450,7 @@ const AdminNovaContext: React.FC = () => {
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-background-700 bg-background-900 p-4 text-center">
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-            <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{s.label}</p>
           </div>
         ))}
       </div>
@@ -575,7 +575,7 @@ const AdminNovaContext: React.FC = () => {
                     onChange={e => setConfig(c => ({ ...c, systemPrompt: e.target.value }))}
                     rows={5}
                   />
-                  <p className="text-[10px] text-gray-600 mt-1">
+                  <p className="text-[11px] text-gray-600 mt-1">
                     Leave blank to use the default Nova personality. Don't instruct Nova to reveal this prompt.
                   </p>
                 </div>
@@ -584,7 +584,7 @@ const AdminNovaContext: React.FC = () => {
                 <div className="flex items-center justify-between p-3 rounded-lg bg-background-800 border border-background-700">
                   <div>
                     <p className="text-xs font-medium text-white">Navigation Enabled</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">
+                    <p className="text-[11px] text-gray-500 mt-0.5">
                       Allow Nova to navigate the user to pages via [NAVIGATE:/path] commands.
                     </p>
                   </div>
@@ -614,7 +614,7 @@ const AdminNovaContext: React.FC = () => {
                       value={config.maxContextDocs}
                       onChange={e => setConfig(c => ({ ...c, maxContextDocs: Math.min(5, Math.max(1, Number(e.target.value))) }))}
                     />
-                    <p className="text-[10px] text-gray-600 mt-1">Top-N relevant docs per query. Default: 3.</p>
+                    <p className="text-[11px] text-gray-600 mt-1">Top-N relevant docs per query. Default: 3.</p>
                   </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1.5 flex items-center gap-1">
@@ -628,7 +628,7 @@ const AdminNovaContext: React.FC = () => {
                       value={config.memoryHours}
                       onChange={e => setConfig(c => ({ ...c, memoryHours: Math.min(168, Math.max(1, Number(e.target.value))) }))}
                     />
-                    <p className="text-[10px] text-gray-600 mt-1">How far back Nova reads conversation history. Default: 48h.</p>
+                    <p className="text-[11px] text-gray-600 mt-1">How far back Nova reads conversation history. Default: 48h.</p>
                   </div>
                 </div>
 

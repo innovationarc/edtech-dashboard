@@ -42,7 +42,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
         <div className="cr-receipt-label">
           <h2>RECEIPT</h2>
           <div className="cr-header-barcode">
-            <img src={barcodeUrl} alt={`Barcode: ${data.receiptNumber}`} className="cr-header-barcode-img" />
+            <img loading="lazy" src={barcodeUrl} alt={`Barcode: ${data.receiptNumber}`} className="cr-header-barcode-img" />
             <span className="cr-header-barcode-text">#{data.receiptNumber}</span>
           </div>
         </div>
@@ -111,7 +111,7 @@ const ReceiptDocument: React.FC<{ data: ReceiptData }> = ({ data }) => {
       {/* Summary — left-aligned to match table's left edge */}
       <div className="cr-summary-container">
         <div className="cr-qr-box">
-          <img src={qrUrl} alt="Verification QR Code" />
+          <img loading="lazy" src={qrUrl} alt="Verification QR Code" />
           <span>Scan to Verify Receipt</span>
         </div>
 

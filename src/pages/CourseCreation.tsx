@@ -1199,7 +1199,7 @@ const CourseCreation = () => {
             {/* Thumbnail */}
             <div className="relative mb-4 rounded-lg overflow-hidden h-40 bg-background-800">
               {course.thumbnail ? (
-                <img 
+                <img loading="lazy" 
                   src={course.thumbnail} 
                   alt={course.title}
                   className="w-full h-full object-cover"
@@ -1281,7 +1281,7 @@ const CourseCreation = () => {
             {/* Thumbnail */}
             <div className="w-32 h-20 rounded-lg overflow-hidden bg-background-800 flex-shrink-0">
               {course.thumbnail ? (
-                <img 
+                <img loading="lazy" 
                   src={course.thumbnail} 
                   alt={course.title}
                   className="w-full h-full object-cover"
@@ -2307,7 +2307,7 @@ const CourseCreation = () => {
           <div className="space-y-4">
             {thumbnailPreview && (
               <div className="relative inline-block">
-                <img
+                <img loading="lazy"
                   src={thumbnailPreview}
                   alt="Thumbnail preview"
                   className="w-64 h-40 object-cover rounded-lg"

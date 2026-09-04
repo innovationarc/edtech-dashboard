@@ -670,7 +670,7 @@ function CourseCard({ summary, onOpen }: { summary: CourseSummary; onOpen: () =>
         {/* Thumbnail */}
         <div style={{ position: 'relative', height: 100, background: T.isLight ? '#e5e7eb' : 'var(--color-surface)', overflow: 'hidden' }}>
           {(course.thumbnailUrl || course.thumbnail) ? (
-            <img src={course.thumbnailUrl ?? course.thumbnail} alt={course.title}
+            <img loading="lazy" src={course.thumbnailUrl ?? course.thumbnail} alt={course.title}
               style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.65 }} />
           ) : (
             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `linear-gradient(135deg, ${T.surface}, ${T.primary}12)` }}>

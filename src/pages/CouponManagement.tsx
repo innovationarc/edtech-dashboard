@@ -229,7 +229,7 @@ const MultiSelect: React.FC<{
   const dropdown = open ? ReactDOM.createPortal(
     <div
       ref={dropRef}
-      style={{ position: 'absolute', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+      style={{ position: 'absolute', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 300 }}
       className="bg-gray-800 border border-gray-600 rounded-xl shadow-2xl overflow-hidden"
     >
       {searchable && (
@@ -1133,7 +1133,7 @@ const AuditLogModal: React.FC<{
                     <p className="text-gray-300 text-xs">
                       <span className="text-gray-400">By: </span>
                       <span className="text-white font-medium">{log.actorName || log.actorUserId}</span>
-                      <span className="text-gray-500 font-mono text-[10px] ml-1">({log.actorUserId})</span>
+                      <span className="text-gray-500 font-mono text-[11px] ml-1">({log.actorUserId})</span>
                       {/* BUG FIX 3: couponCode is now always present for single-coupon actions */}
                       {log.couponCode && <><span className="text-gray-400"> · Code: </span><span className="text-indigo-400 font-mono font-bold">{log.couponCode}</span></>}
                       {log.groupId && <><span className="text-gray-400"> · Group: </span><span className="text-purple-400 font-mono">{log.groupId}</span></>}

@@ -380,7 +380,7 @@ const ManageAdmin = () => {
                       <div className="relative">
                         {admin.profilePictureUrl ? (
                           <div className="h-11 w-11 rounded-xl overflow-hidden border-2 border-background-700/50 shadow-lg group-hover:scale-110 transition-transform duration-200">
-                            <img 
+                            <img loading="lazy" 
                               src={admin.profilePictureUrl} 
                               alt={admin.surname || 'Admin'} 
                               className="w-full h-full object-cover"
@@ -781,7 +781,7 @@ const AdminInfoModal = ({ admin, onClose, formatDate }: AdminInfoModalProps) => 
             <div className="flex items-center gap-4">
               {admin.profilePictureUrl ? (
                 <div className="h-16 w-16 rounded-2xl overflow-hidden border-2 border-background-700/50 shadow-lg">
-                  <img 
+                  <img loading="lazy" 
                     src={admin.profilePictureUrl} 
                     alt={admin.surname || 'Admin'} 
                     className="w-full h-full object-cover"
@@ -937,7 +937,7 @@ const EditAdminModal = ({ admin, onClose, onSave }: EditAdminModalProps) => {
             <div className="flex items-center gap-4">
               {formData.profilePictureUrl ? (
                 <div className="h-20 w-20 rounded-xl overflow-hidden border-2 border-background-700/50">
-                  <img src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
+                  <img loading="lazy" src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
                 </div>
               ) : (
                 <div className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
@@ -1422,7 +1422,7 @@ const AddAdminModal = ({ onClose, onSuccess, currentAdmin }: AddAdminModalProps)
               <div className="flex items-center gap-4">
                 {formData.profilePictureUrl ? (
                   <div className="h-20 w-20 rounded-xl overflow-hidden border-2 border-background-700/50">
-                    <img src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
+                    <img loading="lazy" src={formData.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
                   </div>
                 ) : (
                   <div className="h-20 w-20 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
