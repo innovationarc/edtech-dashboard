@@ -453,14 +453,14 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                            <span className={`px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold backdrop-blur-sm ${roleStyle.badge}`}>
+                            <span className={`px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[11px] sm:text-xs font-bold backdrop-blur-sm ${roleStyle.badge}`}>
                               {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                             </span>
-                            <span className={`px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold backdrop-blur-sm ${getStatusBadgeColor(user.status)}`}>
+                            <span className={`px-2 sm:px-2.5 md:px-3 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[11px] sm:text-xs font-bold backdrop-blur-sm ${getStatusBadgeColor(user.status)}`}>
                               {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                             </span>
                           </div>
-                          <p className="text-[10px] sm:text-xs font-medium" style={{color:"#9ca3af"}}>Account #{index + 1}</p>
+                          <p className="text-[11px] sm:text-xs font-medium" style={{color:"#9ca3af"}}>Account #{index + 1}</p>
                         </div>
                       </div>
                     </div>
@@ -475,7 +475,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
                               <CreditCard size={16} className="sm:w-5 sm:h-5 text-primary-400" />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-[10px] sm:text-xs font-medium mb-0.5" style={{color:"#9ca3af"}}>User ID</p>
+                              <p className="text-[11px] sm:text-xs font-medium mb-0.5" style={{color:"#9ca3af"}}>User ID</p>
                               <p className="text-base sm:text-lg md:text-xl font-bold text-white tracking-wide truncate">{user.userId}</p>
                             </div>
                           </div>
@@ -487,14 +487,14 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
                         <div className="space-y-1.5 sm:space-y-2">
                           {(user.fullName || user.name) && (
                             <div className="flex items-start gap-2">
-                              <p className="text-[10px] sm:text-xs font-semibold min-w-[60px] sm:min-w-[70px]" style={{color:"#6b7280"}}>Name:</p>
+                              <p className="text-[11px] sm:text-xs font-semibold min-w-[60px] sm:min-w-[70px]" style={{color:"#6b7280"}}>Name:</p>
                               <p className="text-xs sm:text-sm font-medium break-words" style={{color:"#e5e7eb"}}>{user.fullName || user.name}</p>
                             </div>
                           )}
                           
                           {user.surname && (
                             <div className="flex items-start gap-2">
-                              <p className="text-[10px] sm:text-xs font-semibold min-w-[60px] sm:min-w-[70px]" style={{color:"#6b7280"}}>Surname:</p>
+                              <p className="text-[11px] sm:text-xs font-semibold min-w-[60px] sm:min-w-[70px]" style={{color:"#6b7280"}}>Surname:</p>
                               <p className="text-xs sm:text-sm font-medium break-words" style={{color:"#e5e7eb"}}>{user.surname}</p>
                             </div>
                           )}
@@ -537,7 +537,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
               {/* Info Box */}
               <div className="bg-blue-900/40 border border-blue-700/50 rounded-lg sm:rounded-xl p-3 sm:p-4 backdrop-blur-sm">
-                <p className="text-[10px] sm:text-xs text-blue-200 flex items-center justify-center gap-1.5 sm:gap-2">
+                <p className="text-[11px] sm:text-xs text-blue-200 flex items-center justify-center gap-1.5 sm:gap-2">
                   <Shield size={12} className="sm:w-[14px] sm:h-[14px]" />
                   Keep your User ID safe and secure
                 </p>
@@ -647,7 +647,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
             </div>
 
             <div className="mt-4 sm:mt-6 bg-gray-800/40 backdrop-blur-xl rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/30">
-              <p className="text-[10px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2" style={{color:"#9ca3af"}}>
+              <p className="text-[11px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2" style={{color:"#9ca3af"}}>
                 <Shield size={12} className="sm:w-[14px] sm:h-[14px]" />
                 OTP expires in 2 minutes
               </p>
@@ -720,7 +720,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
                 />
                 <Phone size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
-              <p className="text-[10px] sm:text-xs mt-1 sm:mt-1.5" style={{color:"#6b7280"}}>
+              <p className="text-[11px] sm:text-xs mt-1 sm:mt-1.5" style={{color:"#6b7280"}}>
                 Enter 11 digits starting with 0 (e.g., 01712345678) or 10 digits starting with 1 (e.g., 1712345678)
               </p>
             </div>
@@ -766,7 +766,7 @@ const ForgotUserIdModal = ({ onClose, onSignInClick }: ForgotUserIdModalProps) =
 
           <div className="mt-4 sm:mt-6 text-center">
             {captchaReady && (
-              <div className="mb-3 flex items-center justify-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs" style={{color:"#6b7280"}}>
+              <div className="mb-3 flex items-center justify-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs" style={{color:"#6b7280"}}>
                 <Shield size={12} className="sm:w-[14px] sm:h-[14px]" style={{color:"#22c55e"}} />
                 <span>Protected by reCAPTCHA</span>
               </div>

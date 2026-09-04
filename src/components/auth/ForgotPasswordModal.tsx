@@ -474,7 +474,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess, onSwitchToForgotUserId }: For
                 {newPassword && (
                   <div className="mt-2 sm:mt-3">
                     <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                      <span className="text-[10px] sm:text-xs text-gray-400">Password Strength</span>
+                      <span className="text-[11px] sm:text-xs text-gray-400">Password Strength</span>
                       <span style={{color: (
                         passwordStrength.strength === 'very-strong' ? '#22c55e' :
                         passwordStrength.strength === 'strong' ? '#60a5fa' :
@@ -490,7 +490,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess, onSwitchToForgotUserId }: For
                       <div className={`h-full ${strengthColors[passwordStrength.strength]} ${strengthWidths[passwordStrength.strength]} transition-all duration-300`}></div>
                     </div>
                     {passwordStrength.issues.length > 0 && (
-                      <ul className="mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-400 space-y-0.5 sm:space-y-1">
+                      <ul className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-gray-400 space-y-0.5 sm:space-y-1">
                         {passwordStrength.issues.map((issue, idx) => (
                           <li key={idx} className="flex items-center gap-1">
                             <span className="text-red-400">•</span>
@@ -637,7 +637,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess, onSwitchToForgotUserId }: For
             </div>
 
             <div className="mt-4 sm:mt-6 bg-gray-800/40 backdrop-blur-xl rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/30">
-              <p className="text-[10px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2" style={{color:"#9ca3af"}}>
+              <p className="text-[11px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2" style={{color:"#9ca3af"}}>
                 <Shield size={12} className="sm:w-[14px] sm:h-[14px]" />
                 OTP expires in 2 minutes
               </p>
@@ -708,7 +708,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess, onSwitchToForgotUserId }: For
                 <CreditCard size={16} className="sm:w-[18px] sm:h-[18px] absolute left-2.5 sm:left-3.5 top-2.5 sm:top-3.5 text-gray-400 group-hover:text-primary-400 transition-colors" />
               </div>
               <div className="flex items-center justify-between mt-1 sm:mt-1.5">
-                <p className="text-[10px] sm:text-xs text-gray-500">Format: XX-YYMM-XXXXX</p>
+                <p className="text-[11px] sm:text-xs text-gray-500">Format: XX-YYMM-XXXXX</p>
                 <button 
                   type="button"
                   onClick={() => {
@@ -718,7 +718,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess, onSwitchToForgotUserId }: For
                       onClose();
                     }
                   }}
-                  className="text-[10px] sm:text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
+                  className="text-[11px] sm:text-xs text-primary-400 hover:text-primary-300 transition-colors duration-200 font-medium hover:underline underline-offset-2"
                   disabled={loading}
                 >
                   Forgot User ID?
@@ -746,7 +746,7 @@ const ForgotPasswordModal = ({ onClose, onSuccess, onSwitchToForgotUserId }: For
           </div>
 
           {captchaReady && (
-            <div className="mt-3 sm:mt-4 md:mt-5 flex items-center justify-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs" style={{color:"#6b7280"}}>
+            <div className="mt-3 sm:mt-4 md:mt-5 flex items-center justify-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs" style={{color:"#6b7280"}}>
               <Shield size={12} className="sm:w-[14px] sm:h-[14px]" style={{color:"#22c55e"}} />
               <span>Protected by reCAPTCHA</span>
             </div>

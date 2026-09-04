@@ -989,10 +989,10 @@ const RegisterModal = ({ onClose, onSuccess, onSwitchToSignIn }: RegisterModalPr
                         <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                           <div className={`h-full transition-all duration-300 ${getStrengthColor()} ${getStrengthWidth()}`}></div>
                         </div>
-                        <span className="text-[10px] sm:text-xs capitalize whitespace-nowrap" style={{color:"#9ca3af"}}>{passwordStrength.strength.replace('-', ' ')}</span>
+                        <span className="text-[11px] sm:text-xs capitalize whitespace-nowrap" style={{color:"#9ca3af"}}>{passwordStrength.strength.replace('-', ' ')}</span>
                       </div>
                       {passwordStrength.issues.length > 0 && (
-                        <div className="text-[10px] sm:text-xs space-y-0.5" style={{color:"#fca5a5"}}>
+                        <div className="text-[11px] sm:text-xs space-y-0.5" style={{color:"#fca5a5"}}>
                           {passwordStrength.issues.map((issue, idx) => (
                             <div key={idx} className="flex items-center gap-1">
                               <span className="text-red-400">•</span> {issue}
@@ -1112,7 +1112,7 @@ const RegisterModal = ({ onClose, onSuccess, onSwitchToSignIn }: RegisterModalPr
                   </div>
                   <div>
                     <p className="text-xs sm:text-sm text-green-100 font-semibold">Instant Account Activation</p>
-                    <p className="text-[10px] sm:text-xs text-green-200/80 mt-0.5 sm:mt-1">
+                    <p className="text-[11px] sm:text-xs text-green-200/80 mt-0.5 sm:mt-1">
                       Student accounts are automatically approved. Sign in immediately after verification!
                     </p>
                   </div>

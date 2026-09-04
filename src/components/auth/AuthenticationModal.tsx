@@ -124,7 +124,7 @@ const AuthenticationModal: React.FC<AuthenticationModalProps> = ({ onClose }) =>
                 <p className="text-[11px] sm:text-xs font-medium leading-snug" style={{color: '#fde68a'}}>
                   Session Terminated
                 </p>
-                <p className="text-[10px] sm:text-[11px] leading-snug mt-0.5" style={{color: '#fcd34d'}}>
+                <p className="text-[11px] sm:text-[11px] leading-snug mt-0.5" style={{color: '#fcd34d'}}>
                   {(() => {
                     const ipMatch = forcedLogoutMessage?.match(/\[IP:\s*([\d.a-fA-F:]+)\]/);
                     if (!ipMatch) return forcedLogoutMessage;
@@ -224,12 +224,12 @@ const AuthenticationModal: React.FC<AuthenticationModalProps> = ({ onClose }) =>
           {/* Security Badge */}
           <div className="mt-4 sm:mt-5 md:mt-6 flex items-center justify-center gap-1.5 sm:gap-2">
             <Shield size={12} className="sm:w-3.5 sm:h-3.5" style={{color: C.green500}} />
-            <span className="text-[10px] sm:text-xs" style={{color: C.gray500}}>Protected by reCAPTCHA & SSL encryption</span>
+            <span className="text-[11px] sm:text-xs" style={{color: C.gray500}}>Protected by reCAPTCHA & SSL encryption</span>
           </div>
 
           {/* Terms and Privacy */}
           <div className="mt-4 sm:mt-5 md:mt-6 text-center">
-            <p className="text-[10px] sm:text-xs leading-relaxed px-2" style={{color: C.gray500}}>
+            <p className="text-[11px] sm:text-xs leading-relaxed px-2" style={{color: C.gray500}}>
               By continuing, you agree to our{' '}
               <a href="/terms-of-service" target="_blank" rel="noopener noreferrer" className="auth-link">
                 Terms of Service

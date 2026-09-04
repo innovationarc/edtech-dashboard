@@ -77,7 +77,7 @@ const RecaptchaV2Modal = ({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 350,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

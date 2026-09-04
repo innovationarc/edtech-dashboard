@@ -320,7 +320,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                 <h2 className="text-lg sm:text-xl md:text-2xl font-bold" style={{background: `linear-gradient(to right, ${C.primary300}, ${C.purple400})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'}}>
                   Welcome Back
                 </h2>
-                <p className="text-[10px] sm:text-xs mt-0.5" style={{color: C.gray400}}>Sign in to continue</p>
+                <p className="text-[11px] sm:text-xs mt-0.5" style={{color: C.gray400}}>Sign in to continue</p>
               </div>
             </div>
             <button
@@ -344,7 +344,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   <p className="text-[11px] sm:text-xs md:text-sm leading-snug font-medium" style={{color: '#fde68a'}}>
                     Session Terminated
                   </p>
-                  <p className="text-[10px] sm:text-[11px] leading-snug mt-0.5" style={{color: '#fcd34d'}}>
+                  <p className="text-[11px] sm:text-[11px] leading-snug mt-0.5" style={{color: '#fcd34d'}}>
                     {(() => {
                       const ipMatch = forcedLogoutMessage?.match(/\[IP:\s*([\d.a-fA-F:]+)\]/);
                       if (!ipMatch) return forcedLogoutMessage;
@@ -397,11 +397,11 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   <CreditCard size={14} className="sin-icon-hover md:w-[18px] md:h-[18px] absolute left-2.5 md:left-4 top-2 md:top-3.5 transition-colors pointer-events-none" style={{color: C.gray500}} />
                 </div>
                 <div className="flex items-center justify-between -mt-2 md:mt-1">
-                  <p className="text-[10px] md:text-xs" style={{color: C.gray500}}>Format: XX-YYMM-XXXXX</p>
+                  <p className="text-[11px] md:text-xs" style={{color: C.gray500}}>Format: XX-YYMM-XXXXX</p>
                   <button 
                     type="button"
                     onClick={() => setShowForgotUserId(true)}
-                    className="sin-link text-[10px] md:text-xs transition-colors duration-200"
+                    className="sin-link text-[11px] md:text-xs transition-colors duration-200"
                     disabled={loading}
                   >
                     Forgot User ID?
@@ -440,11 +440,11 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
                   </button>
                 </div>
                 <div className="flex items-center justify-between -mt-2 md:mt-1">
-                  <p className="text-[10px] md:text-xs" style={{color: C.gray500}}>Use a strong password</p>
+                  <p className="text-[11px] md:text-xs" style={{color: C.gray500}}>Use a strong password</p>
                   <button 
                     type="button"
                     onClick={() => setShowForgotPassword(true)}
-                    className="sin-link text-[10px] md:text-xs transition-colors duration-200"
+                    className="sin-link text-[11px] md:text-xs transition-colors duration-200"
                     disabled={loading}
                   >
                     Forgot Password?
@@ -516,7 +516,7 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-700/50"></div>
               </div>
-              <div className="relative flex justify-center text-[10px] md:text-xs">
+              <div className="relative flex justify-center text-[11px] md:text-xs">
                 <span className="px-2.5 md:px-4 bg-gray-900 font-medium" style={{color: C.gray300}}>New to our platform?</span>
               </div>
             </div>
@@ -542,10 +542,10 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
             <div className="sin-info-box mt-3.5 md:mt-5.5 border rounded-xl p-2.5 md:p-4 shadow-lg" style={{background: 'linear-gradient(to bottom right, rgba(30,58,138,0.2), rgba(88,28,135,0.2))', borderColor: 'rgba(59,130,246,0.2)'}}>
               <div className="flex items-start gap-2 md:gap-2.5">
                 <div className="h-5 w-5 md:h-7 md:w-7 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg" style={{background: 'linear-gradient(to bottom right, #3b82f6, #9333ea)'}}>
-                  <span className="text-[10px] md:text-sm font-bold" style={{color: C.white}}>i</span>
+                  <span className="text-[11px] md:text-sm font-bold" style={{color: C.white}}>i</span>
                 </div>
                 <div className="flex-1">
-                  <p className="text-[10px] md:text-xs leading-relaxed" style={{color: 'rgba(219,234,254,0.9)'}}>
+                  <p className="text-[11px] md:text-xs leading-relaxed" style={{color: 'rgba(219,234,254,0.9)'}}>
                     <strong className="font-semibold block mb-0.5 md:mb-1" style={{color: '#eff6ff'}}>First time signing in?</strong>
                     Use the User ID provided during registration along with your password to access your account.
                   </p>
@@ -557,13 +557,13 @@ const SignInModal = ({ onClose }: SignInModalProps) => {
             {captchaReady && (
               <div className="mt-2.5 md:mt-3.5 flex items-center justify-center gap-1 md:gap-1.5 text-xs">
                 <Shield size={11} className="md:w-3.5 md:h-3.5" style={{color: C.green500}} />
-                <span className="text-[9px] md:text-xs" style={{color: C.gray500}}>Protected by reCAPTCHA</span>
+                <span className="text-[11px] md:text-xs" style={{color: C.gray500}}>Protected by reCAPTCHA</span>
               </div>
             )}
 
             {/* Terms and Privacy Notice */}
             <div className="mt-2.5 md:mt-4.5 text-center pb-1">
-              <p className="text-[9px] md:text-xs leading-relaxed px-1" style={{color: C.gray500}}>
+              <p className="text-[11px] md:text-xs leading-relaxed px-1" style={{color: C.gray500}}>
                 By continuing, you agree to our{' '}
                 <a 
                   href="/terms-of-service" 
