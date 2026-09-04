@@ -900,7 +900,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
 
       {/* ── Info Modal ── */}
       {showInfo && (
-        <div onClick={()=>setShowInfo(false)} style={{ position:'fixed',inset:0,zIndex:10001,background:'rgba(0,0,0,0.82)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'nv-fade .16s ease',fontFamily:"'Outfit',sans-serif" }}>
+        <div onClick={()=>setShowInfo(false)} style={{ position:'fixed',inset:0,zIndex:501,background:'rgba(0,0,0,0.82)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'nv-fade .16s ease',fontFamily:"'Outfit',sans-serif" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:mBg,backdropFilter:'blur(40px)',border:`1px solid ${mBdr}`,borderRadius:24,width:'min(420px,100%)',overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,.85)',animation:'nv-in .22s cubic-bezier(.22,1,.36,1)' }}>
             <div style={{ padding:'16px 18px',borderBottom:`1px solid ${mBdr}`,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
               <div style={{ display:'flex',alignItems:'center',gap:11 }}>
@@ -934,7 +934,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
 
       {/* ── Error Modal ── */}
       {errorDetails && (
-        <div onClick={()=>setErrorDetails('')} style={{ position:'fixed',inset:0,zIndex:10001,background:'rgba(0,0,0,0.82)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'nv-fade .16s ease',fontFamily:"'Outfit',sans-serif" }}>
+        <div onClick={()=>setErrorDetails('')} style={{ position:'fixed',inset:0,zIndex:501,background:'rgba(0,0,0,0.82)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'nv-fade .16s ease',fontFamily:"'Outfit',sans-serif" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:mBg,backdropFilter:'blur(40px)',border:`1px solid ${mBdr}`,borderRadius:24,width:'min(420px,100%)',overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,.85)',animation:'nv-in .22s cubic-bezier(.22,1,.36,1)' }}>
             <div style={{ padding:'16px 18px',borderBottom:`1px solid ${mBdr}`,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
               <div style={{ display:'flex',alignItems:'center',gap:9 }}><AlertTriangle size={16} style={{ color:'#f87171' }}/><span style={{ color:mTxt,fontWeight:700,fontSize:15 }}>Error Details</span></div>
@@ -950,7 +950,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
 
       {/* ── Clear Confirm Modal ── */}
       {showClearConfirm && (
-        <div onClick={()=>setShowClearConfirm(false)} style={{ position:'fixed',inset:0,zIndex:10001,background:'rgba(0,0,0,0.82)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'nv-fade .16s ease',fontFamily:"'Outfit',sans-serif" }}>
+        <div onClick={()=>setShowClearConfirm(false)} style={{ position:'fixed',inset:0,zIndex:501,background:'rgba(0,0,0,0.82)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,animation:'nv-fade .16s ease',fontFamily:"'Outfit',sans-serif" }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:mBg,backdropFilter:'blur(40px)',border:`1px solid ${mBdr}`,borderRadius:24,width:'min(340px,100%)',overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,.85)',animation:'nv-in .22s cubic-bezier(.22,1,.36,1)' }}>
             <div style={{ padding:'20px 20px 8px',textAlign:'center' }}>
               <div style={{ width:48,height:48,borderRadius:16,background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px' }}>
@@ -990,7 +990,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
           ...(isMobile
             ? { top:0, bottom:0, left:0, right:0 }
             : { bottom:16, right:24, width:desktopPanelW, top:desktopPanelTop, borderRadius:28 }),
-          zIndex:10002,
+          zIndex:500,
           overflow:'hidden',
           backgroundColor: baseBg,
           backgroundImage: glitterBgImage || sbSparkle,
@@ -1300,7 +1300,7 @@ const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({ eyeOffset: _eyeOffset }) 
           ...(isMobile
             ? { top:0, bottom:0, left:0, right:0 }
             : { bottom:16, right:24, width:desktopPanelW, top:desktopPanelTop, borderRadius:28, border: panelBorder }),
-          zIndex:9999,
+          zIndex:500,
           backgroundColor: cosmicBg,
           backgroundImage: glitterBgImage || sbSparkle,
           backgroundSize: glitterBgImage ? glitterBgSize : 'auto',
