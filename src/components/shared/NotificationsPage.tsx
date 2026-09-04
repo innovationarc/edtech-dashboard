@@ -593,7 +593,7 @@ const ConfirmSheet: React.FC<{
   onOk: () => void; onCancel: () => void;
 }> = ({ sv, title, body, confirmLabel, confirmColor, onOk, onCancel }) => (
   <div onClick={onCancel} style={{
-    position: 'fixed', inset: 0, zIndex: 9999,
+    position: 'fixed', inset: 0, zIndex: 300,
     display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)',
   }}>

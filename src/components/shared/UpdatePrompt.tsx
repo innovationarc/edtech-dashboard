@@ -50,7 +50,7 @@ const UpdatePrompt: React.FC = () => {
 
   return (
     <div
-      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] w-[calc(100vw-2rem)] max-w-sm
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-modal w-[calc(100vw-2rem)] max-w-sm
                  animate-in slide-in-from-bottom-4 duration-300"
       role="alert"
       aria-live="polite"
