@@ -111,7 +111,7 @@ export const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
             {showSizeMenu && (
               <div className="absolute top-full right-0 mt-2 p-2 bg-background-950/98 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 w-48"
                 style={{ animation: 'slideDown 0.15s cubic-bezier(0.34,1.56,0.64,1) forwards' }}>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest px-2 mb-2">Widget Size</p>
+                <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest px-2 mb-2">Widget Size</p>
                 <div className="grid grid-cols-2 gap-1.5">
                   {SIZE_OPTIONS.map(opt => (
                     <button
@@ -125,7 +125,7 @@ export const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
                     >
                       <span className="text-base leading-none">{opt.icon}</span>
                       <span className="font-semibold">{opt.label}</span>
-                      <span className="text-[9px] opacity-50">{opt.desc}</span>
+                      <span className="text-[11px] opacity-50">{opt.desc}</span>
                     </button>
                   ))}
                 </div>

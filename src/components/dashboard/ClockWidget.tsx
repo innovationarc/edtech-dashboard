@@ -118,7 +118,7 @@ const ClockWidget = () => {
           </span>
           <div className="flex flex-col items-start mb-1 ml-1">
             <span className="text-xs font-bold text-primary-400 leading-none">{ampm}</span>
-            <span className="text-[10px] leading-none mt-0.5" style={{ color: isLight ? '#9ca3af' : '#6b7280' }}>{pad(seconds)}</span>
+            <span className="text-[11px] leading-none mt-0.5" style={{ color: isLight ? '#9ca3af' : '#6b7280' }}>{pad(seconds)}</span>
           </div>
         </div>
 

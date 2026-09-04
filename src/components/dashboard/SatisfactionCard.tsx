@@ -26,7 +26,7 @@ const SatisfactionCard = ({ satisfactionRate }: SatisfactionCardProps) => {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-2xl font-bold text-white">{satisfactionRate}%</span>
-            <span className="text-[10px] text-gray-500">avg rating</span>
+            <span className="text-[11px] text-gray-500">avg rating</span>
           </div>
         </div>
         <div className="flex items-center gap-3 mt-3 text-xs">
