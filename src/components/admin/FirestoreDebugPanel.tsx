@@ -232,7 +232,7 @@ const FirestoreDebugPanelInner: React.FC = () => {
   };
 
   const panelStyle: React.CSSProperties = fullscreen
-    ? { position: 'fixed', inset: 0, zIndex: 9999, borderRadius: 0, display: 'flex', flexDirection: 'column' }
+    ? { position: 'fixed', inset: 0, zIndex: 300, borderRadius: 0, display: 'flex', flexDirection: 'column' }
     : {
         position: 'fixed',
         bottom: 20, left: 20,
