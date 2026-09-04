@@ -95,7 +95,7 @@ const MyQAActivity = () => {
               </div>
               <h3 className="text-lg font-medium text-white mb-2 line-clamp-2">{question.questionText}</h3>
               {question.imageUrl && (
-                <img src={question.imageUrl} alt="Question attachment" className="max-h-40 object-contain rounded-lg mb-2" />
+                <img loading="lazy" src={question.imageUrl} alt="Question attachment" className="max-h-40 object-contain rounded-lg mb-2" />
               )}
               <div className="flex items-center gap-3 text-sm text-gray-400">
                 <div className="flex items-center gap-1">
