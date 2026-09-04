@@ -161,7 +161,7 @@ const MiniBarChart: React.FC<{ data: { date: string; count: number }[] }> = ({ d
           );
         })}
       </div>
-      <div className="flex justify-between text-gray-600 text-[10px] mt-1">
+      <div className="flex justify-between text-gray-600 text-[11px] mt-1">
         <span>{data[0]?.date.slice(5)}</span>
         <span>Today</span>
       </div>
@@ -634,7 +634,7 @@ const CouponStatisticsModal: React.FC<Props> = ({
                             style={{ width: `${clamp(((stats.daysTotal - stats.daysRemaining) / stats.daysTotal) * 100, 0, 100)}%` }}
                           />
                         </div>
-                        <div className="flex justify-between text-[10px] text-gray-600 mt-1">
+                        <div className="flex justify-between text-[11px] text-gray-600 mt-1">
                           <span>{ref ? fmt(ref.startDate) : ''}</span>
                           <span>{ref ? fmt(ref.endDate) : ''}</span>
                         </div>
@@ -660,7 +660,7 @@ const CouponStatisticsModal: React.FC<Props> = ({
                           )}
                         </div>
                         {ref && (
-                          <p className="text-[10px] text-gray-600 mt-1">
+                          <p className="text-[11px] text-gray-600 mt-1">
                             {ref.usageCount} used
                             {ref.usageLimit !== 'unlimited' ? ` / ${ref.usageLimit} limit` : ' (unlimited)'}
                           </p>
@@ -739,8 +739,8 @@ const CouponStatisticsModal: React.FC<Props> = ({
                                 style={{ height: `${(counts[i] / max) * 64}px` }}
                                 title={`${day}: ${counts[i]}`}
                               />
-                              <span className="text-[10px] text-gray-500">{day}</span>
-                              <span className="text-[10px] text-gray-400">{counts[i]}</span>
+                              <span className="text-[11px] text-gray-500">{day}</span>
+                              <span className="text-[11px] text-gray-400">{counts[i]}</span>
                             </div>
                           ))}
                         </div>
@@ -770,7 +770,7 @@ const CouponStatisticsModal: React.FC<Props> = ({
                               />
                             ))}
                           </div>
-                          <div className="flex justify-between text-[10px] text-gray-600 mt-1">
+                          <div className="flex justify-between text-[11px] text-gray-600 mt-1">
                             <span>0:00</span>
                             <span>12:00</span>
                             <span>23:00</span>
