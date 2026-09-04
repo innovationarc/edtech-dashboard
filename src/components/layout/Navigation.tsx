@@ -617,7 +617,7 @@ const Navigation = () => {
             fontWeight: 700, fontSize: 11, overflow: 'hidden',
           }}>
             {user?.profilePictureUrl
-              ? <img src={user.profilePictureUrl} alt={user.name} width={30} height={30} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img loading="lazy" src={user.profilePictureUrl} alt={user.name} width={30} height={30} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : user && getInitials(user.name)}
           </div>
           {sidebarExpanded && (
@@ -772,7 +772,7 @@ const Navigation = () => {
           style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 12, width: '100%', marginBottom: 8, flexShrink: 0, background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', border: darkMode ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.07)', cursor: 'pointer', transition: 'all 0.18s ease' }}>
           <div style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, background: gradient, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, overflow: 'hidden' }}>
             {user?.profilePictureUrl
-              ? <img src={user.profilePictureUrl} alt={user.name} width={32} height={32} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img loading="lazy" src={user.profilePictureUrl} alt={user.name} width={32} height={32} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : user && getInitials(user.name)}
           </div>
           <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
@@ -1039,7 +1039,7 @@ const Navigation = () => {
             >
               <div style={{ width: 28, height: 28, borderRadius: 8, background: gradient, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11, flexShrink: 0, overflow: 'hidden' }}>
                 {user?.profilePictureUrl
-                  ? <img src={user.profilePictureUrl} alt={user.name} width={28} height={28} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img loading="lazy" src={user.profilePictureUrl} alt={user.name} width={28} height={28} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : user && getInitials(user.name)}
               </div>
               <span style={{ fontSize: 13, fontWeight: 600, color: darkMode ? '#e2e8f0' : '#111827', whiteSpace: 'nowrap', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1146,7 +1146,7 @@ const Navigation = () => {
               fontWeight: 700, fontSize: 11, border: 'none', cursor: 'pointer', overflow: 'hidden',
             }}>
               {user?.profilePictureUrl
-                ? <img src={user.profilePictureUrl} alt={user.name} width={32} height={32} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ? <img loading="lazy" src={user.profilePictureUrl} alt={user.name} width={32} height={32} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : user && getInitials(user.name)}
             </button>
           </div>
@@ -1179,7 +1179,7 @@ const Navigation = () => {
             border: `1.5px solid ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.65)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.65)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.65)' : `rgba(${pRgb},0.65)`}`,
             boxShadow: `0 ${islandFullExpand ? 16 : 4}px ${islandFullExpand ? 48 : 24}px ${islandNotif.type === 'success' ? 'rgba(34,197,94,0.22)' : islandNotif.type === 'error' ? 'rgba(239,68,68,0.22)' : islandNotif.type === 'warning' ? 'rgba(245,158,11,0.22)' : `rgba(${pRgb},0.22)`}`,
             overflow: 'hidden', cursor: 'pointer',
-            zIndex: 9999,
+            zIndex: 300,
             opacity: islandActive ? 1 : 0,
             transition: 'width 1s cubic-bezier(0.16,1,0.3,1), height 0.5s cubic-bezier(0.16,1,0.3,1), opacity 0.4s ease',
           }}
